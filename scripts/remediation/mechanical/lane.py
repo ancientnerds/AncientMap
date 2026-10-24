@@ -2832,6 +2832,9 @@ def identity_lane(name: str) -> Lane | None:
 #: Lane WB's disclosure correction (`card_disclosure.py`): one step of at most 100 sites per lane,
 #: `card-disclosure-sNNN`, built by `card_disclosure.lane_of` (it needs the pinned site list).
 CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
+#: Lane WB's exact-disclosure correction (`card_disclosure_exact.py`, owner decision D56 of
+#: 2026-10-24): `card-exact-sNNN`, built by `card_disclosure_exact.lane_of` (the pinned site list).
+CARD_EXACT_LANE = re.compile(r"^card-exact-s(\d{3})\Z")
 #: The identity package's wave lanes (`mechanical/identity_lanes.py`, owner decisions D13, D20, D23 of
 #: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`.
 IDENTITY_WAVE_LANE = re.compile(
@@ -2841,7 +2844,8 @@ IDENTITY_WAVE_LANE = re.compile(
 
 def resolve_lane(name: str) -> Lane:
     """The lane called `name`: a registered one, a scope-review wave, a WD1/WD3/WD4/wd5 fields step,
-    a residue period-label step, a lane-WB teaser step or disclosure-correction step, a period or
+    a residue period-label step, a lane-WB teaser step or disclosure-correction step (either
+    correction), a period or
     point provenance-marker step, a duplicate merge (`dup-merge-move-<wave>`,
     `dup-merge-retire-<wave>`; both read the wave's `PAIRS.json`) or parent (`parent-<wave>`) wave,
     or a card_stats wave. `KeyError` otherwise.
@@ -2879,6 +2883,10 @@ def resolve_lane(name: str) -> Lane:
         from mechanical.card_disclosure import lane_of as disclosure_lane_of
 
         return disclosure_lane_of(name)
+    if CARD_EXACT_LANE.match(name):
+        from mechanical.card_disclosure_exact import lane_of as exact_lane_of
+
+        return exact_lane_of(name)
     if IDENTITY_WAVE_LANE.match(name):
         from mechanical.identity_lanes import lane_of as identity_wave_lane_of
 

@@ -109,7 +109,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import (
-    model4 as M,  # noqa: E402 - AI_SYSTEMS: the disclosures a write may carry; the correction pair is AI_SYSTEM_OPUS -> AI_SYSTEM_CLAUDE
+    model4 as M,  # noqa: E402 - AI_SYSTEMS: the disclosures a write may carry; the correction pairs (CORRECTIONS)
 )
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
@@ -204,14 +204,75 @@ _CURATED = "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
 #: that one key only (`corrected_cell`): a later lane that moved anything else is a deviation.
 CORRECTION_STAMP_PREFIX = "wb-card-disclosure-s"
 CORRECTION_STAMP = re.compile(r"^wb-card-disclosure-s\d{3}\Z")
+#: The exact-disclosure correction (`mechanical/card_disclosure_exact.py`, owner decision D56 of
+#: 2026-10-24): the version-3 cards whose models are all Opus while their provenance names Opus and
+#: Sonnet (`M.AI_SYSTEM_CLAUDE`) get the Opus-only string `M.AI_SYSTEM_CLAUDE_OPUS` - the same one
+#: key, under the stamps `wb-card-exact-sNNN`, read by the acceptance the same way.
+EXACT_STAMP_PREFIX = "wb-card-exact-s"
+EXACT_STAMP = re.compile(r"^wb-card-exact-s\d{3}\Z")
 ROLLBACK_SUFFIX = "-rollback"
+
+
+@dataclass(frozen=True)
+class Correction:
+    """A disclosure correction lane: its stamps, and the one value of `_card_provenance.ai_system`
+    it replaces with the other. Pinned to strings in production, never to an alias."""
+
+    stamp: re.Pattern[str]
+    prefix: str
+    old: str
+    new: str
+
+
+DISCLOSURE_CORRECTION = Correction(
+    CORRECTION_STAMP, CORRECTION_STAMP_PREFIX, M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE
+)
+EXACT_CORRECTION = Correction(
+    EXACT_STAMP, EXACT_STAMP_PREFIX, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM_CLAUDE_OPUS
+)
+#: The later lanes an acceptance of this module reads by name, for the one key only.
+CORRECTIONS = (DISCLOSURE_CORRECTION, EXACT_CORRECTION)
+
+
+def correction_of(stamp: str) -> Correction | None:
+    """The correction lane whose own stamp `stamp` is (its reversals are not), else `None`."""
+    return next((c for c in CORRECTIONS if c.stamp.match(stamp)), None)
+
+
+def names_disclosure(raw: Mapping[str, Any] | None, value: str) -> bool:
+    """Whether `raw` carries a teaser provenance whose `ai_system` is `value`."""
+    teaser = None if raw is None else raw.get(CP.CARD_PROVENANCE_KEY)
+    return isinstance(teaser, dict) and teaser.get("ai_system") == value
+
+
+def rewrite_disclosure(raw: Mapping[str, Any], correction: Correction) -> dict[str, Any]:
+    """`raw` with `_card_provenance.ai_system` set to the correction's new value and nothing else
+    changed; the value it replaces must be the correction's old one (the old-value rule)."""
+    if not names_disclosure(raw, correction.old):
+        raise PlanError(f"{CP.CARD_PROVENANCE_KEY}.ai_system is not {correction.old!r}")
+    return {
+        **raw,
+        CP.CARD_PROVENANCE_KEY: {**raw[CP.CARD_PROVENANCE_KEY], "ai_system": correction.new},
+    }
+
+
+def moves_disclosure_key(old: str | None, new: str | None, correction: Correction) -> bool:
+    """Whether `old` -> `new` (two `raw_data` texts) is exactly `correction`: the provenance names
+    its old value before and, with that one key set to its new value, every other key at every
+    depth as it was, after."""
+    if old is None or new is None:
+        return False
+    before = json.loads(old)
+    # canonical text, not dict equality: Python reads 1 == True == 1.0, the journal does not
+    return names_disclosure(before, correction.old) and canonical(
+        reprint(rewrite_disclosure(before, correction))
+    ) == canonical(new)
 
 
 def names_opus_only(raw: Mapping[str, Any] | None) -> bool:
     """Whether `raw` carries a teaser provenance that names `M.AI_SYSTEM_OPUS` - the one value the
-    correction lane replaces."""
-    teaser = None if raw is None else raw.get(CP.CARD_PROVENANCE_KEY)
-    return isinstance(teaser, dict) and teaser.get("ai_system") == M.AI_SYSTEM_OPUS
+    correction lane of 2026-10-01 replaces."""
+    return names_disclosure(raw, DISCLOSURE_CORRECTION.old)
 
 
 def correct_disclosure(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -219,54 +280,45 @@ def correct_disclosure(raw: Mapping[str, Any]) -> dict[str, Any]:
     the value it replaces must be `M.AI_SYSTEM_OPUS`, the two strings the correction lane owns (it
     wrote 185 provenances with that pair on 2026-10-01; `M.AI_SYSTEM` moved on 2026-10-03 and names
     the disclosure of a new write)."""
-    if not names_opus_only(raw):
-        raise PlanError(f"{CP.CARD_PROVENANCE_KEY}.ai_system is not {M.AI_SYSTEM_OPUS!r}")
-    return {
-        **raw,
-        CP.CARD_PROVENANCE_KEY: {**raw[CP.CARD_PROVENANCE_KEY], "ai_system": M.AI_SYSTEM_CLAUDE},
-    }
+    return rewrite_disclosure(raw, DISCLOSURE_CORRECTION)
 
 
 def moves_one_key(old: str | None, new: str | None) -> bool:
-    """Whether `old` -> `new` (two `raw_data` texts) is exactly the disclosure correction: the
-    provenance names `M.AI_SYSTEM_OPUS` before and, with that one key set to `M.AI_SYSTEM_CLAUDE`,
-    every other key at every depth as it was, after."""
-    if old is None or new is None:
-        return False
-    before = json.loads(old)
-    # canonical text, not dict equality: Python reads 1 == True == 1.0, the journal does not
-    return names_opus_only(before) and canonical(reprint(correct_disclosure(before))) == canonical(
-        new
-    )
+    """Whether `old` -> `new` (two `raw_data` texts) is exactly the disclosure correction of
+    2026-10-01 (`moves_disclosure_key`)."""
+    return moves_disclosure_key(old, new, DISCLOSURE_CORRECTION)
 
 
 def corrected_cell(
     site_id: str, planned_raw: str | None, journal: Sequence[Mapping[str, Any]]
 ) -> str | None:
-    """The `raw_data` a site holds after the disclosure correction lane wrote it, as a step's
-    acceptance may expect it - or `None` when no such write stands.
+    """The `raw_data` a site holds after a disclosure correction lane (`CORRECTIONS`) wrote it, as a
+    step's acceptance may expect it - or `None` when no such write stands.
 
-    Only the correction lane's own stamp (`CORRECTION_STAMP`) counts. The journal row must be a
-    transition from exactly the raw_data this step planned to exactly that value with the one key
-    corrected (`correct_disclosure`), written once and not reversed; any other later value of the
-    cell stays what it is - a deviation of the step."""
+    Only a correction lane's own stamp counts, and one standing write of all of them. The journal
+    row must be a transition from exactly the raw_data this step planned to exactly that value with
+    the one key corrected by that lane's pair (`rewrite_disclosure`), written once and not reversed;
+    any other later value of the cell stays what it is - a deviation of the step."""
     writes = [
-        j
+        (j, correction)
         for j in journal
         if j["row_pk"] == site_id
         and j["column_name"] == "raw_data"
-        and CORRECTION_STAMP.match(j["run_stamp"])
+        and (correction := correction_of(j["run_stamp"])) is not None
     ]
     undone = {
         j["run_stamp"]
         for j in journal
         if j["row_pk"] == site_id and j["run_stamp"].endswith(ROLLBACK_SUFFIX)
     }
-    standing = [j for j in writes if j["run_stamp"] + ROLLBACK_SUFFIX not in undone]
-    if planned_raw is None or len(standing) != 1 or not names_opus_only(json.loads(planned_raw)):
+    standing = [(j, c) for j, c in writes if j["run_stamp"] + ROLLBACK_SUFFIX not in undone]
+    if planned_raw is None or len(standing) != 1:
         return None
-    entry = standing[0]
-    wanted = canonical(reprint(correct_disclosure(json.loads(planned_raw))))
+    ((entry, correction),) = standing
+    planned = json.loads(planned_raw)
+    if not names_disclosure(planned, correction.old):
+        return None
+    wanted = canonical(reprint(rewrite_disclosure(planned, correction)))
     if (
         canonical(entry["old_value"]) != canonical(planned_raw)
         or canonical(entry["new_value"]) != wanted
@@ -974,13 +1026,14 @@ def plan_step(
 
 
 # ------------------------------------------------------------------------------ the acceptance
-#: The journal rows of a step's four stamps, and the disclosure correction's rows on the step's
-#: sites (`corrected_cell`): the one later lane an acceptance names.
+#: The journal rows of a step's four stamps, and the disclosure corrections' rows on the step's
+#: sites (`corrected_cell`): the later lanes an acceptance names (`CORRECTIONS`).
 ACCEPT_JOURNAL_SQL = (
     "SELECT l.row_pk, l.column_name, l.run_stamp, l.old_value, l.new_value "
-    "FROM remediation_change_log l WHERE l.run_stamp IN ({stamps}) OR (l.run_stamp LIKE "
-    "'" + CORRECTION_STAMP_PREFIX + "%' AND l.table_name = 'unified_sites' AND l.column_name = "
-    "'raw_data' AND l.row_pk IN ({sites})) ORDER BY l.id"
+    "FROM remediation_change_log l WHERE l.run_stamp IN ({stamps}) OR (("
+    + " OR ".join(f"l.run_stamp LIKE '{c.prefix}%'" for c in CORRECTIONS)
+    + ") AND l.table_name = 'unified_sites' AND l.column_name = 'raw_data' AND l.row_pk IN "
+    "({sites})) ORDER BY l.id"
 )
 
 

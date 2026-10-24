@@ -12478,6 +12478,179 @@ WD5R_CASES: list[Case] = [
 CASES += WD5R_CASES
 
 
+# ------------------------------- lane WB's exact-disclosure correction (owner decision D56, 2026-10-24)
+#: `card_disclosure_exact.py` (the list, the one-key decision, the step, the acceptance), the
+#: correction pair it shares with lane WB's acceptance (`teaser.py`), its registration in
+#: `lane.py`/`apply.py`, and `verify_writes4`'s key rule for its stamp.
+CARD_EXACT = MECHANICAL / "card_disclosure_exact.py"
+CARD_EXACT_TESTS = "tests/remediation/test_card_disclosure_exact.py"
+VERIFY_WRITES4 = REPO / "output/remediation/tools/verify_writes4.py"
+CARD_EXACT_CASES: list[Case] = [
+    *(
+        guard(f"card exact: {label}", path, needle, test, CARD_EXACT_TESTS)
+        for label, path, needle, test in (
+            (
+                "a version-2 provenance is read as one with models",
+                CARD_EXACT,
+                '        if provenance.get("v") != CP.VERSION_3:',
+                "test_a_card_whose_disclosure_its_models_derive_is_not_listed",
+            ),
+            (
+                "a card whose disclosure its models derive is listed",
+                CARD_EXACT,
+                "        if held == derived:",
+                "test_a_card_whose_disclosure_its_models_derive_is_not_listed",
+            ),
+            (
+                "another pair of disclosures is corrected by a guess",
+                CARD_EXACT,
+                "        if (held, derived) != (OLD, NEW):",
+                "test_another_pair_is_refused_never_guessed",
+            ),
+            (
+                "raw_data spelled otherwise is written",
+                CARD_EXACT,
+                "    if reprint(raw) != live.raw_data:",
+                "test_a_site_that_cannot_be_corrected_is_listed_not_written",
+            ),
+            (
+                "a corrected site is planned again",
+                CARD_EXACT,
+                '    if held == {**item.provenance, "ai_system": NEW}:',
+                "test_a_site_that_cannot_be_corrected_is_listed_not_written",
+            ),
+            (
+                "a provenance written again since is corrected",
+                CARD_EXACT,
+                "    if held != item.provenance:",
+                "test_a_site_that_cannot_be_corrected_is_listed_not_written",
+            ),
+            (
+                "the live models are not asked again",
+                CARD_EXACT,
+                "    if derived_of(held) != NEW:",
+                "test_a_provenance_whose_models_no_longer_derive_the_opus_only_string_is_listed",
+            ),
+            (
+                "an export of two snapshots is planned",
+                CARD_EXACT,
+                "    if live.premise != C.premise_of(held):",
+                "test_an_export_that_is_not_one_snapshot_is_refused",
+            ),
+            (
+                "a list that is not the pinned one is planned",
+                CARD_EXACT,
+                "    if sorted(by_site) != sorted(set(LIST.SITE_IDS)) or len(by_site) != len(listed):",
+                "test_a_list_that_is_not_the_pinned_one_is_refused",
+            ),
+            (
+                "a step is planned twice",
+                CARD_EXACT,
+                "    if out.exists():",
+                "test_a_step_is_planned_once_and_the_next_waits",
+            ),
+            (
+                "a rollback row is accepted",
+                CARD_EXACT,
+                "    if undone:",
+                "test_a_rollback_row_is_a_deviation",
+            ),
+            (
+                "a plan that moves a second key is accepted",
+                CARD_EXACT,
+                '        if not W.moves_disclosure_key(row["old_value"], row["new_value"], CORRECTION):',
+                "test_a_correction_that_moved_more_than_one_key_is_a_deviation",
+            ),
+            (
+                "an acceptance is recorded at deviations, or twice",
+                CARD_EXACT,
+                "    if not found and not path.exists():",
+                "test_the_written_step_is_accepted_once",
+            ),
+            (
+                "rewrite_disclosure writes over another value",
+                TEASER,
+                "    if not names_disclosure(raw, correction.old):",
+                "test_rewrite_disclosure_holds_the_old_value",
+            ),
+            (
+                "lane WB's acceptance takes two standing corrections",
+                TEASER,
+                "    if planned_raw is None or len(standing) != 1:",
+                "test_two_standing_corrections_are_not_the_steps",
+            ),
+            (
+                "the lane does not resolve for apply.py",
+                LANE,
+                "    if CARD_EXACT_LANE.match(name):",
+                "test_the_lanes_resolve_by_name_for_apply",
+            ),
+            (
+                "apply.py reads another lane's read-back",
+                APPLY,
+                "    if CARD_EXACT_LANE.match(lane.name):",
+                "test_the_lanes_resolve_by_name_for_apply",
+            ),
+        )
+    ),
+    *(
+        Case(f"card exact: {label}", path, old, new, test, CARD_EXACT_TESTS)
+        for label, path, old, new, test in (
+            (
+                "the acceptance does not derive the disclosure from the models again",
+                CARD_EXACT,
+                "        elif derived_of(provenance) != NEW:",
+                "        elif False:",
+                "test_a_disclosure_its_models_do_not_derive_is_a_deviation",
+            ),
+            (
+                "a journal row that moved a second key is accepted",
+                CARD_EXACT,
+                '        elif not W.moves_disclosure_key(entry["old_value"], entry["new_value"], CORRECTION):',
+                "        elif False:",
+                "test_a_correction_that_moved_more_than_one_key_is_a_deviation",
+            ),
+            (
+                "the lane corrects to the 2026-09 Opus string",
+                TEASER,
+                "    EXACT_STAMP, EXACT_STAMP_PREFIX, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM_CLAUDE_OPUS",
+                "    EXACT_STAMP, EXACT_STAMP_PREFIX, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM_OPUS",
+                "test_the_lane_owns_the_claude_string_and_the_opus_only_string_of_d56",
+            ),
+            (
+                "every stamp is read as the exact lane's",
+                TEASER,
+                "    return next((c for c in CORRECTIONS if c.stamp.match(stamp)), None)",
+                "    return EXACT_CORRECTION",
+                "test_the_two_corrections_have_their_own_stamps",
+            ),
+            (
+                "lane WB's acceptance forgets the exact lane",
+                TEASER,
+                "CORRECTIONS = (DISCLOSURE_CORRECTION, EXACT_CORRECTION)",
+                "CORRECTIONS = (DISCLOSURE_CORRECTION,)",
+                "test_the_step_after_its_site_was_corrected_is_still_accepted",
+            ),
+            (
+                "lane WB's acceptance takes a correction from another value",
+                TEASER,
+                "    if not names_disclosure(planned, correction.old):\n        return None\n",
+                "    if False:\n        return None\n",
+                "test_a_cell_that_names_another_value_is_not_corrected_by_this_lane",
+            ),
+            (
+                "verify_writes4 takes the exact lane's stamp for any keys",
+                VERIFY_WRITES4,
+                "        and not WB.moves_disclosure_key(link.old, link.new, correction)",
+                "        and False",
+                "test_a_correction_that_moved_a_second_key_is_never_superseding",
+            ),
+        )
+    ),
+]
+CASES += CARD_EXACT_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""
