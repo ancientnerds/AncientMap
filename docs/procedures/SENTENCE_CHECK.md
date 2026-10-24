@@ -1477,7 +1477,7 @@ refuses with "is no verification round", and the briefs need the shared Wikipedi
 | wc-fc-3 | `fact_checker` (Sonnet) | - | sealed and prepared, never compared: its seal binds the Sonnet entry, so it can no longer be compared or closed |
 | wc-wv-1 | `web_verifier` (Sonnet) | 0.8193 (68/83) of 0.95 | failed; tier move to Opus |
 | wc-wv-2 | `web_verifier` (Sonnet) | 0.8986 (62/69) of 0.95 | failed; tier move to Opus |
-| wc-pj-1/2 | `pilot_judge` (Opus) | 0.9565 / 0.8966 | failed, `held` (no tier above Opus): the owner decides; untouched here |
+| wc-pj-1/2 | `pilot_judge` (Opus) | 0.9565 / 0.8966 | failed, `held` (no tier above Opus); not released: the judge question is sharpened and recalibrated as wc-pj-1o/2o (X15, 15.2a) |
 
 - **`fact_checker` moved to Opus** (D51, the D6 tier rule): it answers lane WC only - the check rounds of every run
   kind and lane WN's write round (`cli.check_role`; `test_the_fact_checker_and_lane_wcs_web_verifier_answer_lane_wc_only`
@@ -1529,6 +1529,90 @@ high, with 10/15/5 and 20/15 cases and known errors 1/2/0 and none; the five pre
 `brief` prints "You are Opus checker wc-0001 ... --answered-by opus-check-r1-wc-0001 --model claude-opus-5-5 --role
 fact_checker" and `verify-brief` "You are Opus verifier verify-0001 ... --answered-by opus-wc-verify-0001 --model
 claude-opus-5-5 --role wc_web_verifier".
+
+### 15.2a The pilot judge's question sharpened (X15, 2026-10-25; worktree `cx-wc-judge`)
+
+**What failed.** wc-pj-1 reached 0.9565 but called the seeded WRONG sentence `5facc061.../kept-3` (Cloghanmore,
+"Uniquely for a court tomb ... passage tomb-style rock art") UNSUPPORTED: it looked for support, found only
+self-published pages, and did not look for the scholarly corpus that says the carvings differ from passage tomb art.
+wc-pj-2 reached 0.8966 and called the seeded incoherent text `2caba95a...` (Nyons) coherent: "The ancient name"
+lost its referent when K1's piece about Nyrax was cut, and the judge re-read the phrase as the town's own name. In the
+gate (`cli.judge_result`, `J_THRESHOLDS` wrong 0 / unsupported share 0.05 / incoherent 0) a WRONG with a found quote
+and an incoherent text are hard failures, an UNSUPPORTED only counts toward the 5 % share: the first miss turns a
+failure into an allowance, the second hides one. Opus is the top tier, so the verdicts are `held`. Orchestrator
+decision X15 (`final-2026-10-08/MASTER_PLAN.md`, precedent D52): no release (its reason would be false), no softer
+gate - sharpen the question and recalibrate under new seals. `J_THRESHOLDS` are unchanged (a test holds them).
+
+**What the question says now** (`wc/prompts.py` `JUDGE_QUESTION`, re-pinned in `test_wc.py`; lane WN's
+`JUDGE_QUESTION_WN` is derived from it and re-pinned in `test_wn.py`, without the comparison with an old sentence a
+written text does not have). It decides in three steps, in order:
+
+1. Each kept sentence. A claim is taken as worded - tense, "still"/"today"/"now", every qualifier and hedge (D52's
+   rule: a present-tense state that held only in the past is contradicted). The judge searches for what contradicts a
+   claim as well as for what supports it (superlative, uniqueness and style claims named). **WRONG**: a reputable
+   source contradicts a claim as worded, with that quote; the answer has no DISPUTED verdict, so a sentence that
+   states as settled what reputable sources dispute is WRONG too unless it carries the sources' own hedge, and a
+   claim only non-reputable pages state that a reputable source contradicts is WRONG, not UNSUPPORTED.
+   **UNSUPPORTED**: no reputable source states the claim either way - the verdict of a search for both that found
+   neither. **SUPPORTED**: reputable sources support every claim and none contradicts it as worded.
+   `web_rules.CONTRADICTION_RULE` follows verbatim, then what it means here: a rounding, an overlapping range, an
+   estimate or variance the claim's own hedge covers, another spelling and the same fact in other words stay
+   SUPPORTED, and two sources disagree only when they state the same thing (a route's length and a straight-line
+   distance, an arch's span and a bridge's length, a founding and a first mention are different facts).
+2. Each dropped sentence (DROP_OK / DROP_WRONG, unchanged).
+3. Coherence, a step of its own: the kept sentences read alone, in order, beside each trimmed sentence's old wording
+   and the dropped sentences. Incoherent when (a) a pronoun or definite phrase lost its referent to a drop or a cut
+   piece - also when a reader could now take it to mean something still in the text; (b) a sentence now says
+   something else than in the old text; (c) a sentence is no longer grammatical or ends mid-sentence; (d) the text
+   contradicts itself, a kept sentence states what another denies; (e) the sentences describe two different sites.
+   Coherence is decided apart from the verdicts; the closing note names which of (a)-(e) fails.
+
+The rules are general - neither case is named - and they decide both misses: Cloghanmore's kept-3 has a reputable
+source against "passage tomb-style" and none for it (WRONG, not UNSUPPORTED), and Nyons' "The ancient name" was
+written about the Nyrax of the cut piece shown in K1's "trimmed from" line (rule (a), and (b)). The brief
+(`JUDGE_BRIEF`, re-pinned) asks every point in the prompt's order and a search for contradiction for each kept
+sentence; it is also lane E's judge brief, whose own question (`prompts_enrich.JUDGE_QUESTION_ENRICH`) is not changed.
+No judge round was open (the three pilots' rounds are imported), so no exported answer went stale.
+
+**The seal binds the texts** (`wc/calibration.py`). A lane WC seal records `lane.templates`: the sha256 of its
+kind's question, brief and cache note (`KIND_TEMPLATES`: check - `CHECK_QUESTION`, `REASK_BLOCK`, `CHECK_BRIEF`;
+verify - `VERIFY_QUESTION`, `VERIFY_BRIEF`; judge - `JUDGE_QUESTION`, `JUDGE_BRIEF`; each with `WIKI_CACHE_NOTE`), as a
+teaser seal binds its prompt modules. `prepare` and `compare` refuse a calibration whose texts changed after its seal
+("... changed after <id> was sealed: its agents answer another prompt"). A seal made before the binding carries no
+`templates` and binds `TEMPLATES_BEFORE_X15`, the texts of 2026-10-24: wc-fc-1o/2o/3o and wc-wv-1o/2o stand on
+unchanged texts and go on as sealed, while wc-pj-1/2 are refused - their agents answered the old question. A judge
+pool's copy is **asked the question the code builds now** (`register_judge_pool` exports the calibrated batches'
+questions again from the calibration run's `FINAL.jsonl` and `SITES.jsonl`; measured 2026-10-25: the old code rebuilt
+all 40 questions of the two pilots' judge rounds byte for byte, so only the template differs), the recorded answers
+stay the gold, and `compare` refuses a copy that asks another judge question and a fresh answer to another prompt
+(stale). Known limit: a check or verify pool is copied with its prompts as exported (wc-fc-1o's pool,
+`wc-pilot-2026-09-27-r1`, carries the check question from before the 2026-09-27 re-pin); the binding refuses a later
+edit of those texts but does not re-ask such a pool.
+
+The re-run, new ids sealed before any agent answers, same pools, thresholds and known errors (variables of 11.3 and
+15.2, main checkout as the working directory):
+
+    $K seal --id wc-pj-1o --kind judge --handoff $H/wc-pilot-2026-09-27-judge  --batches judge-0002 --threshold 0.9 --run $RUNS/pilot-2026-09-27
+    $K seal --id wc-pj-2o --kind judge --handoff $H/wc-pilot-2026-09-27b-judge --batches judge-0001 judge-0004 --threshold 0.9 --run $RUNS/pilot-2026-09-27b
+    #   read "lane" in $CAL/THRESHOLDS.json: 1 and 2 expectations (5facc061/kept-3 WRONG; 2caba95a coherent False,
+    #   fedd9198/kept-3 WRONG), "templates" JUDGE_QUESTION e6dd6284..., JUDGE_BRIEF 22fa321b...; role pilot_judge, claude-opus-5-5, xhigh
+    $K prepare --id wc-pj-1o --run $RUNS/pilot-2026-09-27
+    $K prepare --id wc-pj-2o --run $RUNS/pilot-2026-09-27b
+    grep -L "STEP 3 - coherence" $CAL/wc-pj-1o/judge-0002/judge/*.prompt.txt $CAL/wc-pj-2o/judge-000[14]/judge/*.prompt.txt   # prints nothing
+    #   one fresh Opus xhigh agent per batch - none that answered wc-pj-1/2 or any lane WC batch - its instruction:
+    $C judge-brief --run-dir $CAL/wc-pj-1o-run --handoff $CAL/wc-pj-1o --batch-id judge-0002
+    $C judge-brief --run-dir $CAL/wc-pj-2o-run --handoff $CAL/wc-pj-2o --batch-id judge-0001
+    $C judge-brief --run-dir $CAL/wc-pj-2o-run --handoff $CAL/wc-pj-2o --batch-id judge-0004
+    $OH validate --dir $CAL/wc-pj-1o ; $OH validate --dir $CAL/wc-pj-2o
+    $K compare --id wc-pj-1o ; $K compare --id wc-pj-2o
+    #   spot-check the URL and quote of every disagreement in each COMPARISON.json (O18), count the false ones
+    $CC verdict --id wc-pj-1o --false-sources <n>
+    $CC verdict --id wc-pj-2o --false-sources <n>
+
+A pass needs the agreement of 0.9 and every known error found again (`lane_failures` empty, at most one extra WRONG).
+A miss is `held` again: the owner decides. The lane's judge rounds (pilots, sampled judges) wait for that verdict (D6:
+a role calibrates before its first answer); no code of lane WC asks `require_passed` for the pilot judge, so the
+operator holds that order.
 
 **Lane E's writer, `enrich-writer`** (`scripts/remediation/wc/enrich_calibration.py`; `enrich.require_writer_calibration`
 blocks every lane-E pilot until its verdict stands). A leave-one-out truth pool: texts lane E would enrich whose sentence
@@ -1735,6 +1819,12 @@ pool's round role) are thirteen more cases in the same families, `mutation_sweep
 over `test_roles.py`, `test_wc_roles.py` and `test_wc_calibration.py`; the registry's own guards stay
 `mutation_sweep.py "claude roles"`, `mechanical/mutation_sweep.py "wd5-adv" "d36:"` and
 `teaser/mutation_sweep.py "teaser card-adversarial"`.
+X15 (15.2a) adds eighteen cases: eight in `"wc calibration"` (the seal records the texts; prepare and compare refuse
+a changed text; a seal without texts binds `TEMPLATES_BEFORE_X15`; the judge pool is asked the current question; a
+copy asking another question and a stale fresh answer are refused; over `test_wc_calibration.py`) and ten in
+`"wc judge question"` (the contradiction rule, the UNSUPPORTED definition, the DISPUTED-as-fact rule, the tense
+rule, the coherence step and its (a), (d) and (e), the brief's search for contradiction, over `test_wc.py`; lane
+WN's derived question, over `test_wn.py`). Every earlier anchor of the `"wc "` families still matches.
 
 ### 15.10 Closed batches and stale reads (2026-10-24)
 

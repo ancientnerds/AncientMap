@@ -564,3 +564,152 @@ def test_the_kinds_are_bound_to_the_roles_the_lanes_rounds_answer_in() -> None:
         }
         == {"check": "fact_checker", "verify": "wc_web_verifier", "judge": "pilot_judge"}
     )
+
+
+# ------------------------------------------- the seal binds the question (X15, 2026-10-25)
+#: The judge question as it stood before X15 in the one respect these tests need: without the
+#: coherence step. A pilot exported under it holds questions the code no longer builds.
+def _without_the_coherence_step(question: str) -> str:
+    start, end = question.index("STEP 3 - coherence"), question.index("Sources follow the same")
+    return question[:start] + question[end:]
+
+
+def _pilot_under_an_older_question(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    from wc import prompts as P
+
+    with monkeypatch.context() as patch:
+        patch.setattr(P, "JUDGE_QUESTION", _without_the_coherence_step(P.JUDGE_QUESTION))
+        return _pilot(tmp_path)
+
+
+def test_a_seal_binds_the_kinds_texts_and_a_judge_pool_is_asked_the_current_question(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The seal records the sha256 of the question, the brief and the cache note of its kind; the
+    judge pool's copy asks the question as the code builds it now - not as the pilot's round asked
+    it - while the recorded answers stay the gold."""
+    run = _pilot_under_an_older_question(tmp_path, monkeypatch)
+    root = _seal(tmp_path, run, "judge")
+    lane = CC._sealed(root, "c1")["lane"]
+    assert lane["templates"] == K.templates("judge")
+    assert sorted(lane["templates"]) == ["JUDGE_BRIEF", "JUDGE_QUESTION", "WIKI_CACHE_NOTE"]
+    prepared = K.prepare(root, calibration_id="c1", run=run)
+    out, calibration_run = Path(prepared["prepared"]), Path(prepared["calibration_run"])
+    source = _handoff(tmp_path, "judge")
+    finals, sites = C._finals(calibration_run), C.read_sites(calibration_run)
+    for line in OH.manifest(out):
+        asked = (out / line["prompt_path"]).read_text(encoding="utf-8")
+        site = C.M.PlanSite.from_dict(sites[line["label"]]["plan_site"])
+        assert asked == C.judge_prompt(finals[line["label"]], site)
+        assert line["prompt_sha256"] == OH.prompt_sha256(asked)
+        assert "STEP 3 - coherence" in asked
+        assert "STEP 3 - coherence" not in (source / line["prompt_path"]).read_text(
+            encoding="utf-8"
+        )
+    recorded = json.loads((out / CC.RECORDED_FILE).read_text(encoding="utf-8"))
+    assert sorted(recorded) == sorted(C._finals(run))
+    # answered under the current question, the pool compares as before
+    answers = {
+        site: _judgement(site, ["SUPPORTED"] * C._judge_counts(final)[0], C._judge_counts(final)[1])
+        for site, final in finals.items()
+    }
+    FX.record_answers(out, answers, by="pilot_judge:opus-judge", model=OH.OPUS_MODEL)
+    assert K.compare(root, calibration_id="c1")["units"] > 0
+
+
+def test_a_question_changed_after_the_seal_refuses_its_prepare_and_its_compare(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A prompt edit after the seal: the agents would answer, or answered, another prompt than the
+    sealed one, so neither prepare nor compare measures them."""
+    from wc import prompts as P
+
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "judge", cid="early")
+    _seal(tmp_path, run, "judge", cid="late", root=root)
+    out = _prepare(root, run, cid="late")
+    finals = C._finals(run)
+    FX.record_answers(
+        out,
+        {s: _judgement(s, ["SUPPORTED"] * C._judge_counts(f)[0], C._judge_counts(f)[1])
+         for s, f in finals.items()},
+        by="pilot_judge:opus-judge", model=OH.OPUS_MODEL,
+    )  # fmt: skip
+    monkeypatch.setattr(P, "JUDGE_QUESTION", _without_the_coherence_step(P.JUDGE_QUESTION))
+    with pytest.raises(K.WcCalibrationError, match="JUDGE_QUESTION changed after early"):
+        K.prepare(root, calibration_id="early", run=run)
+    assert not (root / "early").exists()
+    with pytest.raises(K.WcCalibrationError, match="JUDGE_QUESTION changed after late"):
+        K.compare(root, calibration_id="late")
+    assert not (out / CC.COMPARISON_FILE).exists()
+
+
+def test_a_copy_that_asks_the_pilots_old_question_is_not_compared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A judge pool copied as the pilot's round asked it - before the copy was asked the current
+    question - is refused by compare, and so is a fresh answer to that old question."""
+    run = _pilot_under_an_older_question(tmp_path, monkeypatch)
+    root = _seal(tmp_path, run, "judge")
+    out = _prepare(root, run)
+    source = _handoff(tmp_path, "judge")
+    batch = POOLS["judge"][1][0]
+    shutil.copyfile(source / batch / OH.MANIFEST_FILE, out / batch / OH.MANIFEST_FILE)
+    for line in OH.manifest(out):
+        shutil.copyfile(source / line["prompt_path"], out / line["prompt_path"])
+    with pytest.raises(K.WcCalibrationError, match="is not the one the code builds now"):
+        K.compare(root, calibration_id="c1")
+    assert not (out / CC.COMPARISON_FILE).exists()
+
+
+def test_a_fresh_judge_answer_to_another_prompt_is_stale(tmp_path: Path) -> None:
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "judge")
+    out = _prepare(root, run)
+    line = OH.manifest(out)[0]
+    finals = C._finals(run)
+    kept, dropped = C._judge_counts(finals[line["label"]])
+    body = {
+        "prompt_sha256": "0" * 64,
+        "text": _judgement(line["label"], ["SUPPORTED"] * kept, dropped),
+        "model": OH.OPUS_MODEL,
+        "answered_at": NOW,
+        "answered_by": "pilot_judge:opus-judge-judge-0001",
+    }
+    (out / line["answer_path"]).write_text(json.dumps(body), encoding="utf-8")
+    with pytest.raises(OH.HandoffError, match="stale"):
+        K.compare(root, calibration_id="c1")
+
+
+@pytest.mark.parametrize(("kind", "stands"), [("check", True), ("verify", True), ("judge", False)])
+def test_a_seal_made_before_the_texts_were_bound_binds_the_texts_of_its_day(
+    tmp_path: Path, kind: str, stands: bool
+) -> None:
+    """Every lane WC seal of 2026-10-24 carries no `templates`: it binds `TEMPLATES_BEFORE_X15`. The
+    check and verify texts are unchanged, so wc-fc-*o and wc-wv-*o stand; the judge question and
+    brief were sharpened, so a pilot judge seal of that day (wc-pj-1/2) is refused - its agents
+    answered the old question. The re-run is sealed anew (wc-pj-1o/2o)."""
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, kind)
+    path = root / CC.THRESHOLDS_FILE
+    seals = json.loads(path.read_text(encoding="utf-8"))
+    del seals["c1"]["lane"]["templates"]
+    path.write_text(json.dumps(seals), encoding="utf-8")
+    moved = sorted(
+        name
+        for name, digest in K.TEMPLATES_BEFORE_X15[kind].items()
+        if K.templates(kind)[name] != digest
+    )
+    assert moved == ([] if stands else ["JUDGE_BRIEF", "JUDGE_QUESTION"])
+    if stands:
+        assert K.prepare(root, calibration_id="c1", run=run)["questions"] > 0
+    else:
+        with pytest.raises(K.WcCalibrationError, match="JUDGE_BRIEF, JUDGE_QUESTION changed"):
+            K.prepare(root, calibration_id="c1", run=run)
+
+
+def test_the_bound_texts_of_each_kind_are_its_question_its_brief_and_the_cache_note() -> None:
+    assert set(K.KIND_TEMPLATES) == set(K.KIND_ROLE) == set(K.TEMPLATES_BEFORE_X15)
+    for kind, names in K.KIND_TEMPLATES.items():
+        assert set(K.TEMPLATES_BEFORE_X15[kind]) == set(names)
+        assert "WIKI_CACHE_NOTE" in names and any(n.endswith("_BRIEF") for n in names)

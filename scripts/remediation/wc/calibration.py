@@ -21,6 +21,10 @@ a comparison that did not come from here (`verdict`).
   calibration whatever the agreement is (`lane_failures`);
 * **extra WRONG verdicts** (judge pool): a fresh judge that calls WRONG what the recorded one did not
   is allowed one (`MAX_EXTRA_WRONG`);
+* **the texts** (`templates`, X15 of 2026-10-25): the seal binds the sha256 of the kind's question,
+  brief and cache note, and `prepare` and `compare` refuse a calibration whose texts changed since (a
+  seal made before carries none and binds `TEMPLATES_BEFORE_X15`). A judge pool's copy is asked the
+  question the code builds now, and `compare` refuses a copy or a fresh answer to another one;
 * **the judge pool is registrable** (`register_judge_pool`): `mcode_driver.register_calibration_run`
   knows the check and the verification rounds, not the judge's, so the calibration run of a judge pool
   is written here (`judge/ROUND.json` marked `calibration`, tied to no plan, the `FINAL.jsonl` lines of its sites).
@@ -59,6 +63,7 @@ from phase3.ledger import utc_now  # noqa: E402
 from phase3.run import read_jsonl  # noqa: E402
 
 from wc import cli as WC  # noqa: E402 - the verification rounds' records
+from wc import prompts as P  # noqa: E402 - the frozen texts a seal binds
 
 #: The verdicts of a check answer that count as one (a sentence kept whole or with a piece cut off).
 MERGED = frozenset({"KEEP", "KEEP_TRIMMED"})
@@ -73,6 +78,38 @@ KIND_ROLE = {"check": WC.ROLE_CHECK, "verify": WC.ROLE_VERIFY, "judge": WC.ROLE_
 #: The verdicts a fresh verification may give a sentence the judge found WRONG (it may not support it).
 NOT_SUPPORTED = ["UNSUPPORTED", "WRONG"]
 JUDGE_ROUND = Path("judge") / "ROUND.json"
+#: The frozen texts (`wc/prompts.py`) a kind of pool is asked and briefed with: its question, its
+#: brief and the cache note every brief carries. A seal binds their bytes (`templates`), as a teaser
+#: seal binds its prompt modules, so a question or brief changed after the seal refuses the
+#: calibration's prepare and compare: its agents would answer another prompt than the one sealed
+#: (orchestrator decision X15, 2026-10-25).
+KIND_TEMPLATES = {
+    "check": ("CHECK_QUESTION", "REASK_BLOCK", "CHECK_BRIEF", "WIKI_CACHE_NOTE"),
+    "verify": ("VERIFY_QUESTION", "VERIFY_BRIEF", "WIKI_CACHE_NOTE"),
+    "judge": ("JUDGE_QUESTION", "JUDGE_BRIEF", "WIKI_CACHE_NOTE"),
+}
+#: What a seal made before the templates were bound carries none of: the texts in force when every
+#: such seal was made (2026-10-24, the pins of `tests/remediation/test_wc.py` since 2026-10-09). Such
+#: a seal binds these, so the judge question sharpened by X15 refuses wc-pj-1/2's agents while the
+#: check and verify seals of 2026-10-24 (wc-fc-*o, wc-wv-*o) stand on unchanged texts.
+TEMPLATES_BEFORE_X15 = {
+    "check": {
+        "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
+        "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
+        "CHECK_BRIEF": "df2eaa3e04a08c70a223f04e54eb8b5164e895c86c134e1badb12b54d69e7b55",
+        "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
+    },
+    "verify": {
+        "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
+        "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
+        "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
+    },
+    "judge": {
+        "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
+        "JUDGE_BRIEF": "84e03f52b104ee213367dd18958fca4cf6d49927a6b26573cc446b89d504a95d",
+        "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
+    },
+}
 
 
 class WcCalibrationError(ValueError):
@@ -255,6 +292,55 @@ def _sha256(payload: Any) -> str:
     ).hexdigest()
 
 
+def templates(kind: str) -> dict[str, str]:
+    """The sha256 of each frozen text a pool of this kind is asked and briefed with, as they are now."""
+    if kind not in KIND_TEMPLATES:
+        raise WcCalibrationError(f"kind {kind!r} is none of {', '.join(KIND_ROLE)}")
+    return {
+        name: hashlib.sha256(getattr(P, name).encode("utf-8")).hexdigest()
+        for name in KIND_TEMPLATES[kind]
+    }
+
+
+def _need_unchanged_templates(calibration_id: str, lane: dict[str, Any]) -> None:
+    """Refuse a calibration whose question or brief changed after its seal: its agents answer, or
+    answered, another prompt than the one the seal binds. A seal made before the templates were bound
+    binds `TEMPLATES_BEFORE_X15`."""
+    sealed = lane.get("templates", TEMPLATES_BEFORE_X15[lane["kind"]])
+    now = templates(lane["kind"])
+    moved = sorted(name for name in set(sealed) | set(now) if sealed.get(name) != now.get(name))
+    if moved:
+        raise WcCalibrationError(
+            f"{', '.join(moved)} changed after {calibration_id} was sealed: its agents answer "
+            "another prompt than the sealed one - seal a new calibration"
+        )
+
+
+def _need_current_judge_prompts(out: Path, batches: Sequence[str]) -> None:
+    """Refuse a judge pool whose copy does not ask the question the code builds now, and a fresh
+    answer to another prompt (`opus_handoff.read_answer` names it stale). A missing answer is left to
+    the comparison, which counts it unanswered."""
+    run_dir = D.calibration_run(out)
+    finals, sites, kind = WC._finals(run_dir), WC.read_sites(run_dir), WC.run_kind(run_dir)
+    for batch in batches:
+        for (stage, label), line in OH.read_manifest(out, batch).items():
+            prompt = _judge_prompt(finals, sites, kind, label)
+            if (out / line["prompt_path"]).read_text(encoding="utf-8") != prompt:
+                raise WcCalibrationError(
+                    f"{out.name}: the question {batch}/{label} is not the one the code builds now: "
+                    "the copy was prepared under another judge question - seal a new calibration"
+                )
+            if (out / line["answer_path"]).exists():
+                OH.read_answer(out, batch_id=batch, stage=stage, label=label, prompt=prompt)
+
+
+def _judge_prompt(
+    finals: dict[str, dict[str, Any]], sites: dict[str, dict[str, Any]], kind: str, label: str
+) -> str:
+    site = WC.M.PlanSite.from_dict(sites[label]["plan_site"])
+    return WC.judge_prompt(finals[label], site, kind)
+
+
 def seal(
     root: Path,
     *,
@@ -283,6 +369,7 @@ def seal(
         "expectations": inside,
         "expectations_sha256": _sha256(inside),
         "outside_pool": sorted({e["label"] for e in found if e["label"] not in pool}),
+        "templates": templates(kind),
     }
     return CC.seal(
         root,
@@ -314,6 +401,7 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
     """`calibrate_claude.prepare` of a sealed lane WC pool, the judge pool registered. Refused when
     `run` answers the pool's kind of round in another role than the sealed one (`round_role`)."""
     sealed, lane = _lane(root, calibration_id)
+    _need_unchanged_templates(calibration_id, lane)
     _need_round_role(lane["kind"], run, sealed["role"])
     return CC.prepare(root, calibration_id=calibration_id, run=run, register=register_judge_pool)
 
@@ -325,10 +413,13 @@ def compare(root: Path, *, calibration_id: str) -> dict[str, Any]:
     that `calibrate_claude.py verdict` requires and counts. The merge and the known errors are the
     seal's: there is no setting to pass."""
     sealed, lane = _lane(root, calibration_id)
+    _need_unchanged_templates(calibration_id, lane)
     out = root / calibration_id
     recorded_path = out / CC.RECORDED_FILE
     if not recorded_path.exists():
         raise WcCalibrationError(f"{calibration_id} is not prepared: {recorded_path} is missing")
+    if lane["kind"] == "judge":
+        _need_current_judge_prompts(out, sealed["batches"])
     recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
     fresh = CC._fresh_answers(out, sealed)
     read = merge if lane["merge"] else (lambda text: text)
@@ -380,7 +471,8 @@ def register_judge_pool(
     labels = [label for batch in batches for label in record["batches"][batch]]
     (run_dir / "judge").mkdir(parents=True)
     (run_dir / "POPULATION.json").write_text(
-        json.dumps({"kind": "wc", "pilot": None}, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps({"kind": WC.run_kind(source_run), "pilot": None}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     calibration_round = {
         "handoff": D._shown(out),
@@ -399,7 +491,38 @@ def register_judge_pool(
     (run_dir / "FINAL.jsonl").write_text(
         D._labels_of(source_run / "FINAL.jsonl", labels), encoding="utf-8"
     )
+    (run_dir / WC.SITES_FILE).write_text(
+        D._labels_of(source_run / WC.SITES_FILE, labels), encoding="utf-8"
+    )
+    _ask_with_current_question(run_dir, out, calibration_round["batches"])
     return run_dir
+
+
+def _ask_with_current_question(run_dir: Path, out: Path, batches: dict[str, list[str]]) -> None:
+    """Export the calibrated judge questions of the copy again, built by the code as it stands (the
+    site's final text with the question the seal binds): the copy holds them as the pilot's round
+    asked them, and a calibration measures the judge on the question it will be asked. The recorded
+    answers stay the gold. Their answers are not in the copy (`copy_for_calibration`), so no answer
+    is left to a question that changed."""
+    finals, sites, kind = WC._finals(run_dir), WC.read_sites(run_dir), WC.run_kind(run_dir)
+    for batch, labels in batches.items():
+        lines = OH.read_manifest(out, batch)
+        if set(lines) != {(WC.JUDGE_STAGE, label) for label in labels}:
+            raise WcCalibrationError(
+                f"{out / batch}: the manifest is not the judge round's questions of the batch"
+            )
+        for line in lines.values():
+            (out / line["prompt_path"]).unlink()
+        (out / batch / OH.MANIFEST_FILE).unlink()
+        for label in labels:
+            OH.export(
+                out,
+                batch_id=batch,
+                stage=WC.JUDGE_STAGE,
+                label=label,
+                field=lines[(WC.JUDGE_STAGE, label)]["field"],
+                prompt=_judge_prompt(finals, sites, kind, label),
+            )
 
 
 # ------------------------------------------------------------------------------------------ CLI

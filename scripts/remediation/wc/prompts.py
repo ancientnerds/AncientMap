@@ -271,7 +271,23 @@ sentences you found SUPPORTED, UNSUPPORTED and WRONG, and how many texts incoher
 """
 
 #: The independent judge's question about one checked site (the pilot's measurement).
-JUDGE_QUESTION = """\
+#:
+#: Sharpened 2026-10-25 (orchestrator decision X15, precedent D52: the checker is sharpened and
+#: recalibrated, never the gate lowered). The pilot judge failed its calibrations wc-pj-1/2 in the
+#: direction the gate cannot see: it called a kept sentence UNSUPPORTED that a scholarly source
+#: contradicts as worded, and a kept text coherent whose definite phrase had lost its referent with a
+#: trimmed piece. `cli.judge_result` counts a WRONG with a found quote and an incoherent text as hard
+#: failures (`J_THRESHOLDS`) but an UNSUPPORTED only toward a 5 % share, so a WRONG called UNSUPPORTED
+#: turns a failure into an allowance. The question therefore decides in three steps: each kept
+#: sentence under the lanes' contradiction rule (`web_rules.CONTRADICTION_RULE`, verbatim) with
+#: WRONG, UNSUPPORTED and SUPPORTED told apart - a contradiction as worded is WRONG, UNSUPPORTED only
+#: when no reputable source states the claim either way, a rounding, a compatible estimate or a
+#: variance the claim's own hedge covers is SUPPORTED, and a claim's tense and present state are part
+#: of it (D52); each dropped sentence; then coherence as a step of its own, with what makes a text
+#: incoherent named. `prompts_sonnet.JUDGE_QUESTION_WN` is derived from this text, so lane WN's judge
+#: decides the same way. A calibration seal binds these bytes (`wc/calibration.py`, `templates`).
+JUDGE_QUESTION = (
+    """\
 You judge, independently, the result of a sentence check of one site description of the Ancient \
 Nerds archaeology database. Another agent checked the old description sentence by sentence \
 against sources; the sentences below marked KEPT are what the site page will show, each with the \
@@ -289,15 +305,58 @@ and the checker's quotes)
 DROPPED SENTENCES (removed from the old description)
 {dropped}
 
-DECIDE
-- For each kept sentence K<k>: SUPPORTED (a reputable, independent source supports every claim in \
-it - the checker's quotes or your own), UNSUPPORTED (some claim is supported by no such source you \
-found) or WRONG (a source contradicts a claim; give that quote).
-- For each dropped sentence D<d>: DROP_OK (it is contradicted or unsupported) or DROP_WRONG (a \
+DECIDE in three steps, in this order.
+
+STEP 1 - each kept sentence K<k>. A claim is every name, number, date, measurement, attribution, \
+relation and stated fact - also a single word that says how, by whom or from what something was \
+made ("carved" where the sources say "built"). Take each claim as the sentence words it: its \
+tense, its "still", "today" or "now", and every qualifier and hedge are part of the claim. Never \
+restate a claim in the present as one in the past, nor the reverse: a state the sentence gives in \
+the present that held only in the past - a casing since robbed, a building since collapsed - is \
+contradicted, even where a page uses the same present tense. For every claim search for what \
+supports it AND for what contradicts it; a superlative or uniqueness claim ("the only", "the \
+first", "the largest", "unique") and a style or cultural attribution ("passage tomb-style", \
+"Roman-style") needs a source that states exactly that and a search for a source that disputes or \
+qualifies it. Read what the checker's pages say around its quotes: a quote torn from its context \
+supports nothing. Then give exactly one verdict:
+- WRONG: a reputable source contradicts a claim as the sentence words it; give that quote. This \
+answer has no DISPUTED verdict: a sentence that states as settled fact a claim that reputable \
+sources dispute, qualify or call uncertain is WRONG - quote the source that disputes it - unless \
+the sentence carries the hedge the sources share ("probably", "is thought to"). A claim that only \
+pages which are no reputable source state (a blog, a self-published or tourism page) and that a \
+reputable source contradicts is WRONG, not UNSUPPORTED.
+- UNSUPPORTED: no reputable, independent source you found states the claim either way - none \
+supports it and none contradicts it. It is the verdict of a search for both that found neither: \
+when you find no support, keep searching for a contradiction before you decide.
+- SUPPORTED: reputable, independent sources support every claim in it - the checker's quotes or \
+your own - and none contradicts it as worded.
+"""
+    + WR.CONTRADICTION_RULE
+    + """ So a rounding, a range that overlaps the claim's, an estimate or variance that the claim's \
+own hedge covers, another spelling and the same fact in other words leave a claim SUPPORTED. \
+Before you count two sources as disagreeing, make sure they state the same thing: a route's \
+length and a straight-line distance, an arch's span and a bridge's length, a founding and a first \
+mention are different facts.
+
+STEP 2 - each dropped sentence D<d>: DROP_OK (it is contradicted or unsupported) or DROP_WRONG (a \
 reputable, independent source supports every claim in it; give the quote).
-- coherent: false when the kept text does not read as a description of this site - a pronoun \
-whose referent was dropped, a trimmed sentence that is no longer grammatical, a sentence that now \
-says something else than it did; else true.
+
+STEP 3 - coherence, a step of its own, after the sentences. Read the kept sentences alone, in \
+order, as the site page will show them, and compare each with the old sentence it was cut from \
+(where one is shown) and with the dropped sentences. "coherent" is false when any of these holds:
+(a) a pronoun or a definite phrase ("it", "this", "the complex", "the later phase") whose \
+referent stood in a dropped sentence or in a piece cut from a sentence - also when a reader could \
+now take it to mean something that is still in the text: it was written about what was removed;
+(b) a sentence that now says something else than it said in the old text;
+(c) a sentence that is no longer grammatical, or that ends mid-sentence;
+(d) the text contradicts itself: a kept sentence states something that another kept sentence \
+denies (two dates, two places, two functions of one thing);
+(e) the kept sentences describe two different sites - this site and a namesake, the region, or a \
+later building on the spot.
+Otherwise "coherent" is true. Coherence is decided apart from the verdicts of step 1: a text of \
+SUPPORTED sentences can be incoherent, and a WRONG sentence does not by itself make a text \
+incoherent. The closing "note" names which of (a) to (e) fails, or says that none does.
+
 Sources follow the same rules as the check: Wikipedia, UNESCO, registers, museums, universities, \
 scholarly publications; never ancientnerds.com, AI aggregators, Wikipedia mirrors or a copy of this \
 description. A quote is verbatim from the page at its URL (code fetches it and searches for it) and \
@@ -311,6 +370,7 @@ One object per kept sentence and per dropped sentence, in order ({kept_count} ke
 {dropped_count} dropped); each quote is {{"url": "...", "quote": "..."}}; WRONG and DROP_WRONG \
 need at least one quote; every "note" is a short plain sentence, at most 600 characters.
 """
+)
 
 #: The instruction of the agent that judges one batch of the pilot.
 JUDGE_BRIEF = """You are {family} judge {batch} of the pilot of the Ancient Nerds sentence check (lane \
@@ -327,7 +387,9 @@ no git history. Run every command below from the repository root, {repo}.
 
 For each question:
 1. Read {handoff}/<prompt_path>.
-2. Research on the web and decide, exactly as the prompt asks.
+2. Research on the web and decide, exactly as the prompt asks, every point in the order the \
+prompt gives, the coherence of the text included: for each kept sentence search for what \
+contradicts it as well as for what supports it.
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is fetched and your verdict is not judged):

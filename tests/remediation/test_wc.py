@@ -819,14 +819,21 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: `WIKI_CACHE_NOTE` re-pinned 2026-10-09 (calibration teaser-2026-10-09b/c): it carries
 #: `web_rules.CONTRADICTION_RULE` (what a contradiction is, what is none, and that a claim reputable
 #: sources dispute is disputed, never contradicted). A brief is no part of an exported prompt.
+#: JUDGE_QUESTION and JUDGE_BRIEF re-pinned 2026-10-25 (orchestrator decision X15, precedent D52):
+#: the pilot judge failed wc-pj-1/2 by calling a kept sentence a scholarly source contradicts
+#: UNSUPPORTED and a text whose definite phrase lost its referent coherent. The question decides in
+#: three steps - each kept sentence under `web_rules.CONTRADICTION_RULE` with WRONG, UNSUPPORTED and
+#: SUPPORTED told apart and the claim's tense part of it, each dropped sentence, then coherence with
+#: what makes a text incoherent named. No judge round was open (every pilot's is imported), so no
+#: exported answer went stale; a calibration seal binds the new bytes (`wc/calibration.py`).
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
     "CHECK_BRIEF": "df2eaa3e04a08c70a223f04e54eb8b5164e895c86c134e1badb12b54d69e7b55",
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
     "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
-    "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
-    "JUDGE_BRIEF": "84e03f52b104ee213367dd18958fca4cf6d49927a6b26573cc446b89d504a95d",
+    "JUDGE_QUESTION": "e6dd6284e9770a5cc0a0212e14641b36e8229d7184c9e9873bf6d5efba835574",
+    "JUDGE_BRIEF": "22fa321b6141187955c07d0beb2b650e940a2e3e9d4be2a3a25ae06abe6b4296",
     "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
     "WIKI_CACHE_NOTE_WRITER": "746aa07c4f69f99ee1f7c19c91ccfffb7ea5ad427bc282479f9be71bb05fec1d",
 }
@@ -1285,6 +1292,47 @@ def test_the_pilot_judge_sees_the_kept_text_with_its_quotes_and_the_drops(tmp_pa
         "--answered-by opus-wc-judge-judge-0001" in judge
         and "--model claude-opus-5-5 --role pilot_judge" in judge
     )
+
+
+def test_the_judge_question_tells_wrong_from_unsupported_and_makes_coherence_a_step(
+    tmp_path: Path,
+) -> None:
+    """X15 (2026-10-25): every exported judge question carries the lanes' contradiction rule
+    verbatim, says that a contradiction as worded is WRONG and UNSUPPORTED only the absence of any
+    reputable statement either way, keeps a claim's tense part of it (D52), and decides coherence in
+    a step of its own that names what makes a text incoherent - after the kept text with each
+    trimmed sentence's old wording and the dropped sentences, so that a reference to what a cut took
+    away can be seen. The gate it feeds is not lowered."""
+    import web_rules as WR
+
+    run, handoff = _judge_run(tmp_path)
+    lines = {line["label"]: line for line in OH.manifest(handoff)}
+    prompt = (handoff / lines[FX.SITE_A]["prompt_path"]).read_text(encoding="utf-8")
+    assert WR.CONTRADICTION_RULE in prompt
+    for rule in (
+        "WRONG: a reputable source contradicts a claim as the sentence words it; give that quote.",
+        "This answer has no DISPUTED verdict",
+        "UNSUPPORTED: no reputable, independent source you found states the claim either way",
+        "when you find no support, keep searching for a contradiction before you decide",
+        "is WRONG, not UNSUPPORTED",
+        "leave a claim SUPPORTED",
+        'its "still", "today" or "now", and every qualifier and hedge are part of the claim',
+        "STEP 3 - coherence, a step of its own",
+        "also when a reader could now take it to mean something that is still in the text",
+        "(b) a sentence that now says something else than it said in the old text;",
+        "or that ends mid-sentence",
+        "(d) the text contradicts itself: a kept sentence states something that another kept "
+        "sentence denies",
+        "(e) the kept sentences describe two different sites",
+        "a text of SUPPORTED sentences can be incoherent",
+    ):
+        assert rule in prompt, rule
+    order = [prompt.index(mark) for mark in ("    trimmed from:", "DROPPED SENTENCES", "STEP 1")]
+    assert order == sorted(order)
+    assert prompt.index("STEP 1") < prompt.index("STEP 2") < prompt.index("STEP 3")
+    brief = C.judge_brief(run, handoff, "judge-0001")
+    assert "for each kept sentence search for what contradicts it as well as" in brief
+    assert C.J_THRESHOLDS == {"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}
 
 
 def test_the_pilot_passes_only_below_every_threshold(tmp_path: Path) -> None:

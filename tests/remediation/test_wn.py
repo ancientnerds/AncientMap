@@ -45,11 +45,14 @@ def _sha(text: str) -> str:
 #: Pinned 2026-10-01 (CHECK_QUESTION_LISTED re-pinned the same day, before any list run was exported:
 #: it gained the `{defects}` slot, and the three DEFECT texts are new). A changed text makes every answer exported under it stale: a change is a new
 #: pin and a new export, never an edit under a running round.
+#: JUDGE_QUESTION_WN re-pinned 2026-10-25 (X15): it is derived from the sharpened `JUDGE_QUESTION`
+#: (three steps, the contradiction rule, the coherence step), with the coherence step's comparison
+#: with an old sentence left out - a written text has none. No WN judge round was open.
 PINS = {
     "WRITE_QUESTION": "69c6d6a71dbe5c414b64a2421b2d4bb3eac499c5a050e16266409df7ffc88a44",
     "WRITE_BRIEF": "d4759eeca19bf0c9e722c751d268784090f403c0091be1f3c73a6d890e3ea3b9",
     "VERIFY_QUESTION_WN": "6a1e020d54c09377dcfba34a70b5c317bb9b7ebe2839e09ed716e227e06b5537",
-    "JUDGE_QUESTION_WN": "75c58553ed4a650834f9052672b3a93225c2dda73f1d5914870aefb64b4df2e4",
+    "JUDGE_QUESTION_WN": "7673ba1a572e4bcb2f670b4fb0bcf7df4ef151a1cb290a0ce8910ee47368e30e",
     "CHECK_QUESTION_LISTED": "2bcf9adf92932f5538e8a02ebe85403efb56670d8f852b7f5fef97706cb16fdf",
     "DEFECTS_HEAD": "b77770cfe817644be5fd3461a2e95a9a4d490662fd6daf2b9dc60453fe7e3ae1",
     "DEFECTS_TAIL": "abeb2651235a2fc721231a033ca0f180aefb83b0ce52077129be72460614e3a3",
@@ -68,6 +71,22 @@ def _measured() -> dict[str, str]:
 
 def test_the_new_templates_are_pinned() -> None:
     assert _measured() == PINS
+
+
+def test_lane_wns_judge_decides_by_the_sharpened_rules_without_an_old_sentence() -> None:
+    """X15: the WN judge question is derived from the sharpened WC one - the contradiction rule, the
+    three verdicts told apart, the coherence step - and speaks of the writer, never of a checker or
+    of an old sentence a piece was cut from."""
+    import web_rules as WR
+
+    text = P2.JUDGE_QUESTION_WN
+    assert WR.CONTRADICTION_RULE in text and "STEP 3 - coherence, a step of its own" in text
+    assert (
+        "UNSUPPORTED: no reputable, independent source you found states the claim either way"
+        in text
+    )
+    assert "and compare them with the dropped sentences." in text
+    assert "checker" not in text and "the old sentence it was cut from" not in text
 
 
 def test_the_old_templates_are_the_ones_the_runs_in_flight_were_exported_under() -> None:
