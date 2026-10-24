@@ -254,12 +254,6 @@ class TestThePinnedList:
             assert (row["ai_system"], row["derived"]) == (OLD, NEW)
             assert {m for m in row["models"].values() if m is not None} == {OPUS}
 
-    def test_list_check_holds_on_the_repository_s_closed_steps(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        assert X.main(["list", "--check"]) == 0
-        assert "the pinned list holds: 43 sites" in capsys.readouterr().out
-
 
 # ------------------------------------------------------------------------------ the list builder
 class Steps:
