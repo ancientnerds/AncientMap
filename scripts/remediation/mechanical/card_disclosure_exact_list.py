@@ -1,0 +1,52 @@
+"""The sites whose card disclosure `card-exact-sNNN` corrects (generated, never hand-edited).
+
+`mechanical/card_disclosure_exact.py list --write` derives them from the closed lane-WB steps'
+provenance plans and rewrites this file; `list --check` re-derives them and refuses when they differ.
+"""
+
+LIST_SHA256 = "b87daa31d60a33edb86c8c2a11acdecb104266d6244dac75e46b4c8aa03fd1bb"
+SITE_IDS: tuple[str, ...] = (
+    "00daa905-2060-4b9c-8369-eb5e6878f6a6",
+    "03ae634b-9c91-450a-89eb-9e9f79bdb726",
+    "05133e1e-6d12-461c-a682-d8ac77d2550f",
+    "0689fd2e-b56c-4c35-adb5-e4ef34083174",
+    "08122cd2-522f-4ebc-b363-aabc7bd60de3",
+    "0dd83b62-fce8-4143-9d25-ed7de89933d8",
+    "0e7825f5-26f0-483e-8cd0-687a9228a894",
+    "109fcdea-c114-4143-87ac-77c4c9c20f16",
+    "1196cd92-ce30-4a47-97f4-51f7a3694ebc",
+    "12851166-9039-4782-b5e3-98bce8e3ccc7",
+    "19dcdb91-8d2c-43a7-acae-e7d709c576fe",
+    "1a9242d4-250f-4ffb-8dad-dae849c10798",
+    "1da76491-5256-486f-b67e-ff6f762c46b5",
+    "2051a8ae-6ce5-4a33-bfa6-997ed2479750",
+    "21c25d59-fe0a-4320-8e9d-96e9eea5ed67",
+    "28b7b9c1-3901-4762-a71f-353d6ba8b513",
+    "31c676cd-4f5c-4e40-9bed-9c998f69eb81",
+    "3b04e370-3686-477d-a5c1-f1a6f7123c5f",
+    "3c1e886f-d77b-4d46-899b-2aaf26861a4d",
+    "4599daa4-93cc-4c55-872c-41e9c7875a59",
+    "45fcb351-64fb-488a-ab19-35741221bf81",
+    "48767303-6f43-4ddb-88e5-fb43ea3dfd89",
+    "4bf50d9c-aa7f-4283-83d6-5519e1793a03",
+    "4df3dcbd-62d3-4e37-92fe-e79989233f1f",
+    "5bb2f3b5-7bc6-4cf8-a3b4-cbb4b6e35595",
+    "679e85b1-245b-40bc-b815-8cd1ae71ee12",
+    "6cc9e902-c82f-4b21-9f36-41c2b783cebc",
+    "728762be-061a-4f8a-b03f-980153495b02",
+    "76cd8b60-c373-4f26-85ac-2827b0797b15",
+    "77a54c05-fd61-4fd7-ae4b-4a0fc89fec53",
+    "7a1fc276-f5b2-42d1-b57f-95f2dc6eb115",
+    "7d8df981-b89f-4d88-809d-205d2d11c160",
+    "7e97d2a5-3f87-44fc-9ad0-f0d5a2d84cab",
+    "817ff7b7-a814-405a-a5af-0ef173f07045",
+    "9cf1ec14-dd93-4270-897f-158203e91758",
+    "a3a38d98-16fc-464f-bbeb-c027813ef202",
+    "a4057ca6-8123-45d9-b213-91e18a1b9193",
+    "ac3877a0-04fc-4049-b918-ebf41b0a1501",
+    "bbde3c09-ac95-4fe7-b9d9-1be1fd6452fb",
+    "bcc037db-7637-44c9-8204-3ce6d4370653",
+    "e9a3f325-9632-4f10-a0a4-b04048f0b117",
+    "f0b786ae-17e0-4ce1-bfdc-c9184e5473a3",
+    "f29afd0d-6fb8-4405-bee8-c1b17a6989e3",
+)

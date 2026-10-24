@@ -461,7 +461,8 @@ class TestTheFirstRound:
             "check": OPUS,
             "verify": OPUS,
         }
-        assert prov["ai_system"] == M.AI_SYSTEM_CLAUDE
+        # owner decision D56: an all-Opus chain discloses Opus alone
+        assert prov["ai_system"] == M.AI_SYSTEM_CLAUDE_OPUS
         assert prov["hook"] == {"type": "object", "rating": 4, "variant": 1}
         assert prov["anchors"] == S.BY_NAME[MP]["anchors"] and prov["reserve"] == ["S3"]
         assert prov["shorts_ready"] is True and CP.describes(prov, mp["card"])

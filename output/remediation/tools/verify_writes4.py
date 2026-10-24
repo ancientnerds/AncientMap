@@ -28,7 +28,9 @@ production directly, read-only, after every step of 100 sites and once more at t
    with `revert4 --site`, held, then marked by lane L, whose raw_data is now L's. One lane is read by
    key, not only by stamp: a link of lane WB's disclosure correction (`wb-card-disclosure-sNNN`)
    supersedes only as the one-key transition `_card_provenance.ai_system` `AI_SYSTEM_OPUS` ->
-   `AI_SYSTEM`, whichever pattern allows it.
+   `AI_SYSTEM_CLAUDE`, and one of its exact-disclosure correction (`wb-card-exact-sNNN`, D56) only
+   as `AI_SYSTEM_CLAUDE` -> `AI_SYSTEM_CLAUDE_OPUS` (`teaser.CORRECTIONS`), whichever pattern
+   allows it.
 2. **V1-V15 again** (`--run`, lanes `p4` and `p5`): every written site's description and
    `raw_data` read back from production, its card from production (`p5`) or from the run's
    `assembly.jsonl` (`p4`, before the cards are written; only where production's
@@ -85,7 +87,7 @@ import verify_writes as VW  # noqa: E402 - the Phase-3 journal-chain reader (Lin
 import write_gate4  # noqa: E402 - like_matches: SQL LIKE over one stamp, as the gate reads stamps
 from census.tests import t08_citation_markers as T08  # noqa: E402 - on sys.path via lanes
 from journal_chain import ROLLBACK_SUFFIX  # noqa: E402
-from mechanical import teaser as WB  # noqa: E402 - lane WB's disclosure correction, by stamp
+from mechanical import teaser as WB  # noqa: E402 - lane WB's disclosure corrections, by stamp
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - utf8_streams, the writers' stream rule
 from phase4 import batch4 as B  # noqa: E402 - the stages' own holds reader
@@ -214,10 +216,12 @@ def superseding(
     problems, _ = VW.check_chain(key, list(run), live, missing=False)
     if problems:
         return None
-    # Lane WB's disclosure correction (2026-10-01) is allowed by its own stamp for its one key only:
-    # whatever pattern names it, a link of that lane that moved anything else is not superseding.
+    # Lane WB's disclosure corrections (2026-10-01; D56, 2026-10-24) are allowed by their own stamps
+    # for their one key only: whatever pattern names one, a link of it that moved anything else, or
+    # from another value than its old one, is not superseding.
     if any(
-        WB.CORRECTION_STAMP.match(link.stamp) and not WB.moves_one_key(link.old, link.new)
+        (correction := WB.correction_of(link.stamp)) is not None
+        and not WB.moves_disclosure_key(link.old, link.new, correction)
         for link in run
     ):
         return None

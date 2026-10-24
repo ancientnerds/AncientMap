@@ -300,8 +300,9 @@ def read_census(path: Path) -> dict[tuple[str, str], list[Mapping[str, Any]]]:
     return census
 
 
-def provenances_written(root: Path) -> dict[str, tuple[int, str, Mapping[str, Any]]]:
-    """Per site, the teaser provenance a closed lane-WB step left on it: `(step, run, provenance)`.
+def written_rows(root: Path) -> dict[str, tuple[int, str, Mapping[str, Any]]]:
+    """Per site, the provenance-lane plan row of the closed lane-WB step whose teaser provenance
+    stands on it: `(step, run, row)` (the exact-disclosure lane reads its `site_name` too).
 
     Only a step that was accepted and not undone wrote anything that stands; a later step that
     planned the site again wins, and a step that cleared the card leaves no provenance."""
@@ -313,10 +314,19 @@ def provenances_written(root: Path) -> dict[str, tuple[int, str, Mapping[str, An
         for row in read_jsonl(root / W.step_name(step) / W.PROV / "PLAN.jsonl"):
             raw = None if row["new_value"] is None else json.loads(row["new_value"])
             if isinstance(raw, dict) and PROV in raw:
-                held[row["site_id"]] = (step, record["run"], raw[PROV])
+                held[row["site_id"]] = (step, record["run"], row)
             else:
                 held.pop(row["site_id"], None)
     return held
+
+
+def provenances_written(root: Path) -> dict[str, tuple[int, str, Mapping[str, Any]]]:
+    """Per site, the teaser provenance a closed lane-WB step left on it: `(step, run, provenance)`
+    (`written_rows`)."""
+    return {
+        site_id: (step, run, json.loads(row["new_value"])[PROV])
+        for site_id, (step, run, row) in written_rows(root).items()
+    }
 
 
 def build_list(*, root: Path = W.ROOT, runs: Path = W.RUNS, census: Path = CENSUS) -> list[Listed]:

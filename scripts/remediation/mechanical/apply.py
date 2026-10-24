@@ -65,6 +65,7 @@ from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
+    CARD_EXACT_LANE,
     DUP_RETIRE_METRES,
     DUPLICATE_PREFIX,
     FIELD_PROV_LANE,
@@ -1943,6 +1944,10 @@ def readback_for(lane: Lane) -> str:
         from mechanical.card_disclosure import disclosure_readback
 
         return disclosure_readback(lane)
+    if CARD_EXACT_LANE.match(lane.name):
+        from mechanical.card_disclosure_exact import exact_readback
+
+        return exact_readback(lane)
     if IDENTITY_LANE.match(lane.name):
         return identity_readback(lane)
     if IDENTITY_WAVE_LANE.match(lane.name):
@@ -1964,7 +1969,7 @@ def _lane_argument(name: str) -> str:
         raise argparse.ArgumentTypeError(
             f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
             "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
-            "teaser-card-sNNN, card-disclosure-sNNN, dup-merge-move-<wave>, "
+            "teaser-card-sNNN, card-disclosure-sNNN, card-exact-sNNN, dup-merge-move-<wave>, "
             "dup-merge-retire-<wave>, parent-<wave>, scope-window-<wave>, name-clean-<wave>, "
             "retarget-name-<wave>, spoken-<wave>)"
             + (f": {exc.args[0]}" if exc.args and exc.args[0] != name else "")

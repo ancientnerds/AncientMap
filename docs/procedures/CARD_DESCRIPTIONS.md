@@ -881,6 +881,89 @@ Record the sitting (counts, `StartedAt` not needed: no API restart) in AUDIT_LOG
 output/remediation/mechanical_card_disclosure/s001 output/remediation/mechanical_card_disclosure/s002` (the
 whole trail, never reverted).
 
+### 5.10 The exact disclosure (`card-exact-sNNN`, owner decision D56, 2026-10-24)
+
+**The rule.** A disclosure names exactly the models whose answers a write rests on (D56).
+`model4.ai_system_for` maps every set of Claude stamps to the one string that names exactly its models
+(`model4.CLAUDE_DISCLOSURES`, seven sets): Opus only `AI_SYSTEM_CLAUDE_OPUS`, Sonnet only
+`AI_SYSTEM_CLAUDE_SONNET`, Opus and Sonnet `AI_SYSTEM_CLAUDE` (unchanged), all three
+`AI_SYSTEM_CLAUDE_HAIKU` (unchanged), and the three Haiku pairs/singles; a MiniMax stamp keeps the
+combined `AI_SYSTEM`. The new strings carry the run tag `an-sites-remediation-2026-10`; the Opus-only
+string of 2026-09 (`AI_SYSTEM_OPUS`) is **not** reused - it is the value 5.9 replaced on 185 cards, and
+`teaser.classify` refuses an outcome naming it for those sites. Every lane that derives its disclosure
+from stamps gets the exact string: lane WB's v3 provenance (`teaser/run.py`), WC/WN/E
+(`wc/cli.disclosure_of`), and the union of two writes (`wc4.union_ai_system`, over
+`model4.DISCLOSED_STAMPS`). `AI_SYSTEMS` (nine strings) is what every validator accepts; the API and the
+frontend pass the string through unchecked, and the Shorts note (`shorts_render.teaser_note`) names the
+models the string names.
+
+**What it fixes.** The 43 live version-3 cards of `wb-shorts-pilot2-2026-10-19` (23) and
+`wb-shorts-pilot3-2026-10-20` (20) carry `models` write/rate/check/verify = Opus only, but
+`ai_system` = `AI_SYSTEM_CLAUDE` ("Claude Opus and Claude Sonnet ..."): the pre-D56 rule. Pilot 1's 16
+cards (Sonnet writer; Opus rater, checker and verifier) are right as they are. One step corrects the 43 before
+wave A writes.
+
+**The list** (`card_disclosure_exact.py list`, offline). Each site a closed lane-WB step left a
+version-3 provenance on (the step's `prov/PLAN.jsonl`, `card_disclosure.written_rows`) is listed when the
+string `ai_system_for` derives from its own `models` is not the one it holds. The provenance is its own
+proof - no census, no run outcome. Any other pair than `AI_SYSTEM_CLAUDE` held / `AI_SYSTEM_CLAUDE_OPUS`
+derived is a refusal, never a guess; version 2 names no models and is not this lane's. Pinned in
+`card_disclosure_exact_list.py`: **43 sites, sha256 `b87daa31...fd1bb`**, one step (s001 = 43);
+`output/remediation/mechanical_card_exact/LIST.jsonl` names each site's run, step, models, held and
+derived string.
+
+**What a step writes.** One cell lane, `unified_sites.raw_data` (stamp `wb-card-exact-sNNN`, test id
+`WB/card-disclosure-exact`): `_card_provenance.ai_system`, from `AI_SYSTEM_CLAUDE` to
+`AI_SYSTEM_CLAUDE_OPUS`, every other key as it was (`teaser.EXACT_CORRECTION`). The plan lists, and does
+not write, a site whose live provenance is not the step's (`teaser-provenance-moved`), that already names
+the Opus-only string (`already-corrected`), whose live models no longer derive it (`models-moved`), that
+has none, or whose raw_data is not printed the way the planner prints JSON. Guards as in 5.9: guard 3
+holds the whole old `raw_data` (the old-value guard), guard 5 the provenance's identity
+(`run|text_sha256|desc_sha256`), the lane invariant refuses a provenance naming neither string. The
+read-back counts the journal rows that changed anything but the key (**0**), those whose old value was
+not `AI_SYSTEM_CLAUDE` (**0**), the listed sites still naming it, and the curated v3 provenances that
+name Sonnet while no stage of theirs does (**0 after the write**). Planned read-only on production on
+2026-10-24: **43 cells, 0 skipped** (`output/remediation/mechanical_card_exact/s001/`).
+
+**Preconditions.** As 5.9: backup and drill once per sitting, no lane writing `raw_data` of these sites
+between `plan` and `apply` (a later plan of the same sites is refused by guard 3 - re-plan it after).
+The write moves the page columns of 43 sites (sitemap `lastmod`, hourly IndexNow); no page byte changes
+(D11: the site page shows no AI system string).
+
+```bash
+PY=./.venv/Scripts/python.exe; CX=scripts/remediation/mechanical/card_disclosure_exact.py
+AP=scripts/remediation/mechanical/apply.py; MW=scripts/remediation/mechanical/teaser.py
+$PY $CX list --check                       # offline; "the pinned list holds: 43 sites, sha256 b87daa31..."
+# s001 is planned (2026-10-24, 43 cells); a fresh plan only after removing the never-applied s001/
+$PY $AP --lane card-exact-s001 --check-primitive
+$PY $AP --lane card-exact-s001 --verify    # before: "listed sites of this step still naming ..." = 43
+$PY $AP --lane card-exact-s001 --emit      # APPLY.sql, pinned to the plan
+$PY $AP --lane card-exact-s001 --rehearse  # COMMIT -> ROLLBACK
+$PY $AP --lane card-exact-s001 --probe-guards   # 6 probes, each refused by its own guard (exit 0)
+$PY $AP --lane card-exact-s001 --apply     # exit 0 = committed and read back
+$PY $AP --lane card-exact-s001 --verify    # after: 0 still naming; 0 rows changed anything but the key
+$PY $AP --lane card-exact-s001 --rehearse-rollback
+$PY $CX accept --step 1                    # read-only; ACCEPT_EXIT=0 and "RESULT: 0 deviation(s)" only
+$PY $MW accept --step 36; $PY $MW accept --step 37   # lane WB's steps still 0 deviations (re-read only)
+```
+
+**Gate: 0 deviations.** `teaser.py accept` (steps 36 and 37) reads this lane like 5.9's
+(`teaser.corrected_cell` over `teaser.CORRECTIONS`): of the correction rows on that site's `raw_data`
+only those that start from exactly the `raw_data` the step planned count, and of them exactly one must
+stand - here one row of `wb-card-exact-sNNN` (regex `^wb-card-exact-s\d{3}$`) to exactly that value with
+the one key set to `AI_SYSTEM_CLAUDE_OPUS`; two standing corrections from the step's cell, another stamp,
+or a second key leave the cell a deviation. A correction of an earlier step's cell does not count: High
+Peak, Devon and Huerfano Butte (Arizona) also carry 5.9's applied `wb-card-disclosure-s001` row of the
+version-2 card of teaser step 17 and 14, which starts from that step's cell, not step 37's (pinned
+against the committed plans by `test_the_committed_plans_accept_all_43_after_both_lanes_wrote`).
+`verify_writes4 --allow-stamp 'wb-card-exact-s%'` supersedes such a link only as that one-key
+transition, whichever pattern allows it.
+
+**Undo** (only as a decision; the stamp is single-use): this lane's `ROLLBACK.sql` first, before any undo
+of steps 36/37, then `teaser.py accept --step 36|37` is 0 deviations again. Record the sitting in
+AUDIT_LOG, then `git add -f output/remediation/mechanical_card_exact/LIST.jsonl
+output/remediation/mechanical_card_exact/ACCEPTED output/remediation/mechanical_card_exact/s001`.
+
 ## 6. Why a mechanical lane and not `write_gate4.py --group P5`
 
 The P5 writer is built around the Phase-4 plan: it writes the card of a site whose `PLAN4.jsonl`
@@ -1045,6 +1128,12 @@ them after a card was written): a card that gives its site away is listed `name-
 verification), `hook` (`type`, `rating` 1-5, `variant` 1-3; `null`/`null` for that rewrite), `anchors`,
 `reserve` and `shorts_ready` (an eligible site with a reserve and an anchor). `ai_system` is the string
 `model4.ai_system_for` derives from `models`; `mechanical/teaser.new_raw_data` refuses any other.
+Since owner decision D56 (2026-10-24) that string names exactly the models of `models`
+(`model4.CLAUDE_DISCLOSURES`): an all-Opus chain - every wave card (D46 writer, D45 checkers) - is
+`AI_SYSTEM_CLAUDE_OPUS`, an Opus-and-Sonnet one stays `AI_SYSTEM_CLAUDE`; the 43 all-Opus cards of
+pilots 2 and 3 written before D56 are corrected by the lane of 5.10. An outcome built before D56 that
+names `AI_SYSTEM_CLAUDE` for an all-Opus chain is refused by `new_raw_data` (rebuild it with `run.py
+outcomes`).
 Version 2 stays valid (the 2,830 live cards, still "generated" on the site page). `shorts_pin`, and so
 the Shorts gate S13, pins a **version-3 `shorts_ready` card with a fresh description only**; a
 version-2 card names its site and is never narrated. The next run of the new contract treats a

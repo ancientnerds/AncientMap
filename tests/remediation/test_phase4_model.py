@@ -467,8 +467,9 @@ def test_the_disclosed_ai_systems_are_the_claude_ones_and_the_combined_one() -> 
         "an-sites-remediation-2026-10"
     )
     assert M.AI_SYSTEMS == frozenset(
-        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM, M.AI_SYSTEM_CLAUDE_HAIKU}
+        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM, *M.CLAUDE_DISCLOSURES.values()}
     )
+    assert len(M.AI_SYSTEMS) == 9
     assert M.AI_SYSTEM_OPUS == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
     assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
     assert OH.SONNET_MODEL.split(" (")[0] in M.AI_SYSTEM and "claude-opus-5-5" in M.AI_SYSTEM
@@ -499,14 +500,18 @@ def test_the_haiku_disclosure_names_its_models_their_maker_and_no_minimax() -> N
 
 
 def test_ai_system_for_derives_the_disclosure_from_the_models_that_answered() -> None:
-    """Opus and/or Sonnet disclose `AI_SYSTEM_CLAUDE`; Haiku is named only when a Haiku answer is
-    stored in the write (it runs the image prefilter and the operators, no text); one MiniMax stamp
-    among them keeps the combined string, because the text then rests on a MiniMax judgement."""
-    assert M.ai_system_for([OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE
-    assert M.ai_system_for([OH.SONNET_MODEL]) == M.AI_SYSTEM_CLAUDE
+    """Owner decision D56 (2026-10-24): the disclosure names exactly the Claude models that
+    answered - an all-Opus chain is Opus only, a Sonnet-only one Sonnet only, Opus and Sonnet keep
+    `AI_SYSTEM_CLAUDE`, all three `AI_SYSTEM_CLAUDE_HAIKU`; one MiniMax stamp among them keeps the
+    combined string, because the text then rests on a MiniMax judgement."""
+    assert M.ai_system_for([OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE_OPUS
+    assert M.ai_system_for(iter([OH.OPUS_MODEL, OH.OPUS_MODEL])) == M.AI_SYSTEM_CLAUDE_OPUS
+    assert M.ai_system_for([OH.SONNET_MODEL]) == M.AI_SYSTEM_CLAUDE_SONNET
+    assert M.ai_system_for(iter([OH.SONNET_MODEL, OH.SONNET_MODEL])) == M.AI_SYSTEM_CLAUDE_SONNET
     assert M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL}) == M.AI_SYSTEM_CLAUDE
-    assert M.ai_system_for(iter([OH.SONNET_MODEL, OH.SONNET_MODEL])) == M.AI_SYSTEM_CLAUDE
-    assert M.ai_system_for([OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_HAIKU
+    assert M.ai_system_for([OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_HAIKU_ONLY
+    assert M.ai_system_for([OH.OPUS_MODEL, OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_OPUS_HAIKU
+    assert M.ai_system_for([OH.SONNET_MODEL, OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_SONNET_HAIKU
     assert (
         M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL})
         == M.AI_SYSTEM_CLAUDE_HAIKU
@@ -514,6 +519,74 @@ def test_ai_system_for_derives_the_disclosure_from_the_models_that_answered() ->
     assert M.ai_system_for([OH.OPUS_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM
     assert M.ai_system_for([OH.HAIKU_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM
     assert M.ai_system_for([OH.MINIMAX_MODEL]) == M.AI_SYSTEM
+
+
+def test_the_all_opus_disclosure_is_not_the_corrected_2026_09_string() -> None:
+    """D56's Opus-only string is a new one: `AI_SYSTEM_OPUS` is what lane WB's disclosure
+    correction replaced on 185 cards a Sonnet agent wrote (the planner refuses an outcome naming it
+    for those sites), and it carries the 2026-09 run tag. Both stay accepted."""
+    assert M.AI_SYSTEM_CLAUDE_OPUS == (
+        "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-10"
+    )
+    assert M.AI_SYSTEM_CLAUDE_OPUS != M.AI_SYSTEM_OPUS
+    assert M.AI_SYSTEM_CLAUDE_SONNET == (
+        "Claude Sonnet (Anthropic): anthropic/claude-sonnet-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-10"
+    )
+    assert {M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE_OPUS} <= M.AI_SYSTEMS
+
+
+@pytest.mark.parametrize(
+    "stamps",
+    [
+        {OH.OPUS_MODEL},
+        {OH.SONNET_MODEL},
+        {OH.HAIKU_MODEL},
+        {OH.OPUS_MODEL, OH.SONNET_MODEL},
+        {OH.OPUS_MODEL, OH.HAIKU_MODEL},
+        {OH.SONNET_MODEL, OH.HAIKU_MODEL},
+        {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL},
+    ],
+    ids=["opus", "sonnet", "haiku", "opus+sonnet", "opus+haiku", "sonnet+haiku", "all-three"],
+)
+def test_each_claude_disclosure_names_exactly_the_models_that_answered(stamps: set[str]) -> None:
+    """D56 for every Claude set: the derived string names each answering model and no other, and
+    `DISCLOSED_STAMPS` reads the same set back out of it (what a union of two writes is built
+    from)."""
+    system = M.ai_system_for(stamps)
+    named = {stamp.split(" (")[0] for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL)}
+    for model in named:
+        assert (model in system) == any(s.startswith(model) for s in stamps), (model, system)
+    assert "minimax" not in system.lower()
+    assert M.DISCLOSED_STAMPS[system] == frozenset(stamps)
+    assert system in M.AI_SYSTEMS
+
+
+def test_every_accepted_disclosure_names_its_stamps() -> None:
+    assert set(M.DISCLOSED_STAMPS) == set(M.AI_SYSTEMS)
+    assert M.DISCLOSED_STAMPS[M.AI_SYSTEM_OPUS] == frozenset({OH.OPUS_MODEL})
+    assert M.DISCLOSED_STAMPS[M.AI_SYSTEM] == frozenset(
+        {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL}
+    )
+    for system, stamps in M.DISCLOSED_STAMPS.items():
+        for stamp in stamps:
+            assert stamp.split(" (")[0] in system, (stamp, system)
+
+
+def test_the_shorts_note_names_exactly_the_models_of_each_new_disclosure() -> None:
+    """The one card consumer of `ai_system` (`shorts_render.teaser_note`) reads the new strings:
+    the all-Opus card's note names Opus alone."""
+    from pipeline.video.shorts_render import teaser_note
+
+    assert "AI-generated by Claude Opus 5.5 (Anthropic) from" in teaser_note(
+        M.AI_SYSTEM_CLAUDE_OPUS
+    )
+    assert "AI-generated by Claude Sonnet 5.5 (Anthropic) from" in teaser_note(
+        M.AI_SYSTEM_CLAUDE_SONNET
+    )
+    for system in M.CLAUDE_DISCLOSURES.values():
+        teaser_note(system)
 
 
 @pytest.mark.parametrize(
@@ -545,6 +618,17 @@ def test_ai_system_for_refuses_no_stamp_and_a_stamp_no_handoff_records(stamps: l
         "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
         "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
         "an-sites-remediation-2026-10",
+        # owner decision D56 (2026-10-24): the exact strings of the other Claude sets
+        "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-10",
+        "Claude Sonnet (Anthropic): anthropic/claude-sonnet-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-10",
+        "Claude Haiku (Anthropic): anthropic/claude-haiku-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-10",
+        "Claude Opus and Claude Haiku (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-haiku-5-5 (Claude Code agents), an-sites-remediation-2026-10",
+        "Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-sonnet-5-5 and "
+        "anthropic/claude-haiku-5-5 (Claude Code agents), an-sites-remediation-2026-10",
     ],
 )
 def test_a_provenance_accepts_each_disclosed_ai_system(system: str) -> None:
