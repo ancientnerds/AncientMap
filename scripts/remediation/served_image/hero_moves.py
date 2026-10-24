@@ -18,33 +18,55 @@ What a site can be planned for (`problems_of`), each measured on the read:
 
 **The new hero is always a qualifying row** (`qualifies`), whatever the problem: live, judged
 `depicts` by a Claude check of that very file, at least 800x300, with every credit column its licence
-demands - and, for a strip, larger than the hero it replaces. A qualifying row is never chosen because
-it is the only one: a site without one is not planned and goes on the owner list with the measured
-reason. "Checked" has two sources, never a guess:
+demands; for a strip larger than the hero it replaces, and for any other move not below 1600x900 where
+the hero it replaces is not (the move would otherwise make one of D48's small heroes). A qualifying row
+is never chosen because it is the only one: a site without one is not planned and goes on the owner
+list with the measured reason. "Checked" has two sources, never a guess:
 
 1. the served-image runs (`--verdicts-run`, `CHECK.jsonl` and `REPLACE.jsonl`, in the order given;
    a later run's verdict on an image replaces an earlier one): Claude stamps only (D6/D10);
 2. candidate check runs of the image roles (`--check-run`): the `TARGETS.jsonl` pick of a site, which
-   the depicts role chose and the adversarial re-check confirmed - the larger rows nobody judged yet
-   (`check-pictures` builds that run's population and pictures from this read).
+   the depicts role chose and the adversarial re-check confirmed (`check-pictures` builds that run's
+   population and pictures from this read).
+
+**And it is a chosen row** (`chosen_by`): a `depicts` says the picture is of the site, and the served
+check's `depicts` includes a find from the site, a drawing and a reconstruction (`served_image/
+vision.py`), so it does not say the picture is the site's main picture. A row becomes the hero only
+when a judgement chose it as that: the confirmed pick of a check run (the depicts role's quality, "suits
+the main picture of the site's page", then the adversarial re-check), the served-image replacement
+stage's own `pick` ("the best main image of the site - a clear photograph of its remains before a
+drawing, a plan or an object"), or - for an unflagged site only - the row the page already shows, which
+the served check judged as the page's main image and which the flag leaves in place. A `depicts` row
+nobody chose is not ranked by its pixels; `check-pictures` hands it to the image roles with the rows
+nobody judged, and their confirmed pick comes back through `--check-run`.
 
 A site whose hero the latest Claude check called `other_site` is not planned here: it is the D15
 re-check's subject (`served_image/recheck.py`), and a hero move here would pre-empt that judgement.
 Planning after the D15 chunk was accepted, from a fresh read with the D15 run among the verdict runs,
 is the order the runbook gives.
 
-The ranking among qualifying rows: a confirmed check-run pick first, then the row the served-image
-replacement stage picked as the best picture of the site, then the depicts role's quality, then the
-pixels, then the page's own order (`sort_order`, the id). A served-check `depicts` includes an object
-found at the site (`served_image/vision.py`), so the pixels alone would put a find before a view.
+The ranking among chosen rows: a confirmed check-run pick, then the replacement stage's pick, then the
+row the page shows, then the depicts role's quality, then the pixels, then `sort_order` and the id.
+
+**Nothing is written before a review** (`emit`). `plan` writes the review page `PLANNED.jsonl` (per site
+the old hero, the new one and what its check said) and the site plans, no chunk. A reviewer - the
+owner, or a Claude agent (D6) - answers every planned site in a review file, `accept` or `veto`, and
+only `emit --review` turns the accepted sites into chunks of the shared writer; every journal row
+carries the review line that accepted it. A vetoed row goes to `VETOED.jsonl`, in the shape `--veto`
+reads, for the next plan in a new run directory.
 
     hero_moves.py read           --run-dir R
     hero_moves.py check-pictures --run-dir R --verdicts-run S [S ...] --check-run C
     hero_moves.py plan           --run-dir R --verdicts-run S [S ...] [--check-run C ...] [--veto V]
+    hero_moves.py emit           --run-dir R --review REVIEW.jsonl
     chunk_writer.py R/chunks/chunk-NNN --check | --rehearse | --apply | --readback | --rehearse-rollback
     hero_moves.py accept         --run-dir R --chunk R/chunks/chunk-NNN
 
-`plan` also writes `OWNER_LIST.jsonl` (every site with a problem and no qualifying row, with the
+A review line: `{"site_id", "new_image_id", "decision": "accept" | "veto", "by", "reason"}` - one per
+line of `PLANNED.jsonl`, `new_image_id` the planned new hero, `by` `owner` or a Claude answer stamp,
+`reason` required for a veto.
+
+`plan` also writes `OWNER_LIST.jsonl` (every site with a problem and no qualifying chosen row, with the
 reason) and `SMALL_HEROES.jsonl` (D48's 433: a live hero below 1600x900 at a site that holds another
 live row of at least 1600x900 - the census definition, reproduced on 2026-10-24 at 433).
 """
@@ -103,19 +125,40 @@ READ_FILE = "READ.json"
 CHUNKS = "chunks"
 EXPECTED = "EXPECTED.jsonl"
 SUMMARY = "PLAN_SUMMARY.json"
+EMIT_SUMMARY = "EMIT_SUMMARY.json"
 OWNER_LIST = "OWNER_LIST.jsonl"
 PLANNED = "PLANNED.jsonl"
+PLAN_SITES = "PLAN_SITES.jsonl"
+VETOED = "VETOED.jsonl"
 SMALL_HEROES = "SMALL_HEROES.jsonl"
 DEFERRED = "DEFERRED_D15.jsonl"
 CHECK_SOURCE = "HERO_MOVES_SOURCE.json"
 CHECK_REFUSALS = "PICTURE_REFUSALS.jsonl"
+#: The files `plan` writes into the run directory, each once; the summary last.
+PLAN_FILES = (PLANNED, PLAN_SITES, OWNER_LIST, DEFERRED, SMALL_HEROES, SUMMARY)
 
 #: The reasons a row is not a qualifying hero, as `qualifies` names them.
 UNCHECKED = "no Claude check of this row"
 OTHER_FILE = "the row holds another file than the one the check judged"
 BELOW_FLOOR = f"below the floor of {FLOOR[0]}x{FLOOR[1]}"
 NOT_LARGER = "not larger than the hero it would replace"
+SMALLER = (
+    f"below {LARGE[0]}x{LARGE[1]} while the hero it would replace is not: the move would make "
+    "a D48 small hero"
+)
 CREDIT = "its licence demands a credit the row does not carry"
+NOT_CHOSEN = (
+    "judged depicts, but no judgement chose it as the site's main picture - the image roles "
+    "choose among such rows (check-pictures)"
+)
+
+#: How a qualifying row was chosen as the site's main picture (`chosen_by`), best first.
+CONFIRMED_PICK, REPLACEMENT_PICK, SHOWN = "check-run pick", "replacement pick", "shown already"
+CHOICES = (CONFIRMED_PICK, REPLACEMENT_PICK, SHOWN)
+
+#: A review line's decision, and who may make it: the owner or a Claude answer stamp (D6).
+ACCEPT, VETO = "accept", "veto"
+OWNER = "owner"
 
 
 class HeroMovesError(ST.StateError):
@@ -208,8 +251,15 @@ class Check:
     #: The served-image replacement stage's own `pick`: the agent saw the whole gallery and named
     #: this row the best picture of the site (`REPLACE.jsonl`, a `G` label).
     picked: bool = False
-    #: What the checker said the picture shows (`shows`, else its `basis` or note).
+    #: What the checker said this very picture shows: the served check's `shows`, a check run's
+    #: per-candidate `note`. A replacement answer has no per-candidate text, so it stays None there.
     shows: str | None = None
+    #: The served check's `basis` - about this picture, since that stage judges one picture.
+    basis: str | None = None
+    #: A replacement answer judges a whole gallery: the row's label in it, and the answer's `basis`,
+    #: which speaks of the answer's pick (often another candidate), not of this row.
+    label: str | None = None
+    answer_basis: str | None = None
 
     def evidence(self, image_id: int) -> dict[str, Any]:
         out = {k: v for k, v in asdict(self).items() if v is not None}
@@ -240,21 +290,36 @@ def served_checks(runs: Sequence[Path]) -> dict[int, Check]:
             else []
         )
         picked = replacement_picks(replaces)
+        labels = replacement_labels(replaces)
         for image_id, judged in RC.judged_gallery_rows(checks, replaces).items():
-            stage_file = "CHECK.jsonl" if judged["stage"] == "served-check" else "REPLACE.jsonl"
+            replace = judged["stage"] == "served-replace"
             if not judged.get("file"):
                 raise HeroMovesError(f"{run.name}: the verdict on image {image_id} names no file")
             out[image_id] = Check(
                 site_id=str(judged["site_id"]),
                 file=ST.canonical_file(str(judged["file"])),
                 verdict=str(judged["verdict"]),
-                source=f"served_image/{run.name}/{stage_file}",
+                source=f"served_image/{run.name}/{'REPLACE' if replace else 'CHECK'}.jsonl",
                 stage=str(judged["stage"]),
                 answered_by=str(judged.get("answered_by") or ""),
                 model=str(judged["model"]),
-                picked=image_id in picked and judged["stage"] == "served-replace",
-                shows=judged.get("shows") or judged.get("basis"),
+                picked=image_id in picked and replace,
+                shows=None if replace else judged.get("shows"),
+                basis=None if replace else judged.get("basis"),
+                label=labels[image_id] if replace else None,
+                answer_basis=judged.get("basis") if replace else None,
             )
+    return out
+
+
+def replacement_labels(replaces: Iterable[Mapping[str, Any]]) -> dict[int, str]:
+    """`image id -> its label` in the latest replacement answer that showed it (the order
+    `judged_gallery_rows` keeps the verdict of)."""
+    out: dict[int, str] = {}
+    for row in replaces:
+        for shown in row["candidates_shown"]:
+            if shown.get("kind") == "gallery" and shown.get("image_id"):
+                out[int(shown["image_id"])] = str(shown["label"])
     return out
 
 
@@ -368,8 +433,35 @@ def problems_of(
     return found
 
 
+def size_and_credit(
+    row: Mapping[str, Any],
+    *,
+    larger_than: Mapping[str, Any] | None = None,
+    keeps_large: Mapping[str, Any] | None = None,
+) -> str | None:
+    """What the row itself lacks as a hero, or None: the floor, larger than a strip it replaces
+    (`larger_than`), not small beside a large hero it replaces (`keeps_large`), its credit."""
+    if below(row, FLOOR):
+        return BELOW_FLOOR
+    if larger_than is not None:
+        width, height = _size(row)
+        hero_w, hero_h = _size(larger_than)
+        if width * height <= hero_w * hero_h:
+            return NOT_LARGER
+    if keeps_large is not None and not below(keeps_large, LARGE) and below(row, LARGE):
+        return SMALLER
+    missing = missing_credit(row)
+    if missing:
+        return f"{CREDIT}: {', '.join(missing)}"
+    return None
+
+
 def qualifies(
-    row: Mapping[str, Any], check: Check | None, *, larger_than: Mapping[str, Any] | None = None
+    row: Mapping[str, Any],
+    check: Check | None,
+    *,
+    larger_than: Mapping[str, Any] | None = None,
+    keeps_large: Mapping[str, Any] | None = None,
 ) -> str | None:
     """Why `row` cannot be the site's hero, or None when it can (see the module docstring)."""
     if check is None:
@@ -378,25 +470,34 @@ def qualifies(
         return f"judged {check.verdict} ({check.source})"
     if ST.file_of_row(row) != check.file:
         return OTHER_FILE
-    if below(row, FLOOR):
-        return BELOW_FLOOR
-    if larger_than is not None:
-        width, height = _size(row)
-        hero_w, hero_h = _size(larger_than)
-        if width * height <= hero_w * hero_h:
-            return NOT_LARGER
-    missing = missing_credit(row)
-    if missing:
-        return f"{CREDIT}: {', '.join(missing)}"
+    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large)
+
+
+def chosen_by(
+    row: Mapping[str, Any],
+    check: Check,
+    *,
+    hero: Mapping[str, Any] | None,
+    shown: Mapping[str, Any] | None,
+) -> str | None:
+    """How a judgement chose `row` as the site's main picture (`CHOICES`), or None: a `depicts`
+    alone is no such choice (see the module docstring). `shown` is the row the page shows now
+    (`gallery_audit.worklist.served_row`); it counts only for a site without a hero flag, where
+    flagging it changes nothing a visitor sees."""
+    if check.confirmed:
+        return CONFIRMED_PICK
+    if check.picked:
+        return REPLACEMENT_PICK
+    if hero is None and shown is not None and int(shown["id"]) == int(row["id"]):
+        return SHOWN
     return None
 
 
-def _rank(row: Mapping[str, Any], check: Check) -> tuple[int, int, int, int, int, int]:
+def _rank(row: Mapping[str, Any], check: Check, choice: str) -> tuple[int, int, int, int, int]:
     width, height = _size(row)
     order = row.get("sort_order")
     return (
-        1 if check.confirmed else 0,
-        1 if check.picked else 0,
+        -CHOICES.index(choice),
         int(check.quality or 0),
         width * height,
         -(order if order is not None else 1 << 30),
@@ -415,6 +516,7 @@ class Decision:
     hero: Mapping[str, Any] | None = None
     new: Mapping[str, Any] | None = None
     check: Check | None = None
+    choice: str | None = None
 
 
 def _reason_text(problems: Sequence[str], hero: Mapping[str, Any] | None) -> str:
@@ -431,6 +533,18 @@ def _reason_text(problems: Sequence[str], hero: Mapping[str, Any] | None) -> str
         elif problem == NO_AUTHOR and hero is not None:
             parts.append(f"the hero {hero['id']}'s licence asks for an author and it has none")
     return "; ".join(parts)
+
+
+def bounds_of(
+    hero: Mapping[str, Any] | None, problems: Sequence[str]
+) -> dict[str, Mapping[str, Any] | None]:
+    """The size bounds a new hero of this site must keep (`size_and_credit`'s keywords): larger
+    than a strip, not small beside any other hero it replaces."""
+    if hero is None:
+        return {"larger_than": None, "keeps_large": None}
+    if STRIP in problems:
+        return {"larger_than": hero, "keeps_large": None}
+    return {"larger_than": None, "keeps_large": hero}
 
 
 def decide(
@@ -477,28 +591,38 @@ def decide(
         changes = _thumb(site, target, rule_align, f"{why}; it becomes the hero's file", evidence)
         decision.plan = SP.SitePlan(sid, ALIGNED, int(hero["id"]), target, changes)
         return decision
-    larger = hero if STRIP in problems else None
+    bounds = bounds_of(hero, problems)
+    shown = served_row(live)
     rejected: dict[int, str] = {}
-    candidates: list[tuple[Mapping[str, Any], Check]] = []
+    candidates: list[tuple[Mapping[str, Any], Check, str]] = []
     for row in live:
         if hero is not None and int(row["id"]) == int(hero["id"]):
             continue
         check = row_check(row, served, picks)
-        reason = qualifies(row, check, larger_than=larger)
+        reason = qualifies(row, check, **bounds)
+        choice = None
+        if reason is None:
+            assert check is not None
+            choice = chosen_by(row, check, hero=hero, shown=shown)
+            if choice is None:
+                reason = NOT_CHOSEN
         if reason is None and int(row["id"]) in vetoes:
             reason = f"vetoed: {vetoes[int(row['id'])]}"
         if reason is None:
-            assert check is not None
-            candidates.append((row, check))
+            assert check is not None and choice is not None
+            candidates.append((row, check, choice))
         else:
             rejected[int(row["id"])] = reason
     if not candidates:
         decision.owner_reason = _owner_reason(rejected)
         decision.rejected = rejected
         return decision
-    new, check = max(candidates, key=lambda pair: _rank(*pair))
-    decision.new, decision.check = new, check
-    evidence = [check.evidence(int(new["id"])), _read_evidence(site, hero, problems)]
+    new, check, choice = max(candidates, key=lambda c: _rank(*c))
+    decision.new, decision.check, decision.choice = new, check, choice
+    evidence = [
+        check.evidence(int(new["id"])) | {"chosen_by": choice},
+        _read_evidence(site, hero, problems),
+    ]
     changes: list[CW.Change] = []
     if hero is not None:
         changes.append(
@@ -524,7 +648,7 @@ def decide(
             "true",
             rule_hero,
             f"{why}; {new['id']} is a checked picture of the site of "
-            f"{_size(new)[0]}x{_size(new)[1]} with its full credit",
+            f"{_size(new)[0]}x{_size(new)[1]} with its full credit ({choice})",
             evidence,
         )
     )
@@ -657,32 +781,55 @@ def _row_summary(row: Mapping[str, Any] | None) -> dict[str, Any] | None:
 
 
 def review_lines(read: Read, decisions: Sequence[Decision]) -> list[dict[str, Any]]:
-    """`PLANNED.jsonl`: per planned site the old hero, the new one and what its check said - the
-    page a reviewer reads before the write (a vetoed row goes into `--veto` and the plan is made
-    again in a new run directory)."""
+    """`PLANNED.jsonl`: per planned site the old hero, the new one, how it was chosen and what its
+    check said - the page a reviewer reads before `emit` (see the module docstring)."""
     out = []
     for d in decisions:
         if d.plan is None or not d.plan.changes:
             continue
-        assert d.check is not None
+        assert d.check is not None and d.new is not None
+        check = {
+            k: v
+            for k, v in {
+                "source": d.check.source,
+                "stage": d.check.stage,
+                "verdict": d.check.verdict,
+                "quality": d.check.quality,
+                "shows": d.check.shows,
+                "basis": d.check.basis,
+                "label": d.check.label,
+                "answer_basis": d.check.answer_basis,
+                "answered_by": d.check.answered_by,
+                "model": d.check.model,
+            }.items()
+            if v is not None
+        }
         out.append(
             {
                 "site_id": d.site_id,
                 "name": read.sites[d.site_id]["name"],
                 "outcome": d.plan.outcome,
                 "problems": d.problems,
+                "new_image_id": int(d.new["id"]),
+                "chosen_by": d.choice,
                 "old_hero": _row_summary(d.hero),
                 "new_hero": _row_summary(d.new),
-                "check": {
-                    "source": d.check.source,
-                    "verdict": d.check.verdict,
-                    "shows": d.check.shows,
-                    "answered_by": d.check.answered_by,
-                    "model": d.check.model,
-                },
+                "check": check,
             }
         )
     return out
+
+
+def _site_plan_line(plan: SP.SitePlan) -> dict[str, Any]:
+    return plan.expected() | {"changes": [asdict(c) for c in plan.changes]}
+
+
+def _refuse_existing(paths: Iterable[Path], what: str) -> None:
+    """Every write-once target is checked before the first write, so a refused step leaves no
+    half of its files behind."""
+    found = [p for p in paths if p.exists()]
+    if found:
+        raise HeroMovesError(f"{found[0]} exists - {what} is written once and never replaced")
 
 
 def write_plan(
@@ -691,24 +838,19 @@ def write_plan(
     check_runs: Sequence[Path],
     veto: Path | None = None,
 ) -> dict[str, Any]:
+    """The review page, the site plans, the owner lists and the summary - no chunk (`emit` writes
+    the chunks once a review accepted the sites)."""
     if not verdict_runs:
         raise HeroMovesError("name at least one served-image run with --verdicts-run")
-    out = run / CHUNKS
-    if (out / EXPECTED).exists():
-        raise HeroMovesError(f"{out} holds a plan already - a delivered plan is never replaced")
+    if (run / CHUNKS).exists() or any((run / name).exists() for name in PLAN_FILES):
+        raise HeroMovesError(f"{run} holds a plan already - a delivered plan is never replaced")
     read = load_read(run)
     vetoes = load_vetoes(veto, read)
     decisions = build(read, served_checks(verdict_runs), check_picks(check_runs), vetoes)
     plans = [d.plan for d in decisions if d.plan is not None and d.plan.changes]
     changes = [c for p in plans for c in p.changes]
-    chunks = CW.chunk_changes(lane_for(run), changes) if changes else []
-    CW.emit_chunks(out, chunks)
-    chunk_of = {sid: chunk.number for chunk in chunks for sid in chunk.sites}
-    out.mkdir(parents=True, exist_ok=True)
-    ST.write_text_once(
-        out / EXPECTED,
-        ST.jsonl_text(p.expected() | {"chunk": chunk_of[p.site_id]} for p in plans),
-    )
+    if changes:
+        CW.chunk_changes(lane_for(run), changes)  # the writer's own row checks, before any file
     owner = [
         {
             "site_id": d.site_id,
@@ -721,15 +863,11 @@ def write_plan(
         if d.owner_reason is not None
     ]
     deferred = [
-        {"site_id": d.site_id, "problems": d.problems, **asdict(d.deferred)}
-        for d in decisions
-        if d.deferred is not None
+        {"problems": d.problems, **asdict(d.deferred)} for d in decisions if d.deferred is not None
     ]
     small = small_heroes(read)
-    ST.write_text_once(run / PLANNED, ST.jsonl_text(review_lines(read, decisions)))
-    ST.write_text_once(run / OWNER_LIST, ST.jsonl_text(owner))
-    ST.write_text_once(run / DEFERRED, ST.jsonl_text(deferred))
-    ST.write_text_once(run / SMALL_HEROES, ST.jsonl_text(small))
+    planned_text = ST.jsonl_text(review_lines(read, decisions))
+    sites_text = ST.jsonl_text(_site_plan_line(p) for p in plans)
     by_problem: dict[str, dict[str, int]] = {}
     for d in decisions:
         status = (
@@ -744,6 +882,10 @@ def write_plan(
         for problem in d.problems:
             by_problem.setdefault(problem, {})
             by_problem[problem][status] = by_problem[problem].get(status, 0) + 1
+    chosen: dict[str, int] = {}
+    for d in decisions:
+        if d.plan is not None and d.plan.changes and d.choice is not None:
+            chosen[d.choice] = chosen.get(d.choice, 0) + 1
     summary = {
         "read_sha256": read.sha256,
         "read_at": read.read_at,
@@ -754,54 +896,208 @@ def write_plan(
         else {"file": str(veto.resolve()), "sha256": ST.file_sha256(veto)},
         "sites_with_a_problem": len(decisions),
         "by_problem": by_problem,
+        "chosen_by": chosen,
         "planned_sites": len(plans),
         "rows": len(changes),
-        "chunks": len(chunks),
+        "planned_sha256": ST.sha256_text(planned_text),
+        "plan_sites_sha256": ST.sha256_text(sites_text),
         "owner_list": len(owner),
         "deferred_d15": len(deferred),
         "small_heroes": len(small),
         "lane": asdict(lane_for(run)),
     }
-    ST.write_text_once(out / SUMMARY, ST.json_text(summary))
+    ST.write_text_once(run / PLANNED, planned_text)
+    ST.write_text_once(run / PLAN_SITES, sites_text)
+    ST.write_text_once(run / OWNER_LIST, ST.jsonl_text(owner))
+    ST.write_text_once(run / DEFERRED, ST.jsonl_text(deferred))
+    ST.write_text_once(run / SMALL_HEROES, ST.jsonl_text(small))
+    ST.write_text_once(run / SUMMARY, ST.json_text(summary))
     return summary
 
 
+def reviewers() -> frozenset[str]:
+    """Who may accept or veto a planned move: the owner, or a Claude answer stamp (D6)."""
+    return CJ.claude_stamps() | {OWNER}
+
+
+def load_review(path: Path, planned: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """`site id -> its review line`, refused unless the file answers exactly every planned site,
+    each for the planned new hero, with `accept` or `veto` by a reviewer (`reviewers`), a veto with
+    its reason. A review is a judgement of the pictures, so a missing or a foreign line is never
+    read as an accept."""
+    wanted = {str(p["site_id"]): int(p["new_image_id"]) for p in planned}
+    allowed = reviewers()
+    out: dict[str, dict[str, Any]] = {}
+    for line in _jsonl(path):
+        sid = str(line.get("site_id") or "")
+        if sid in out:
+            raise HeroMovesError(f"the review answers {sid} twice")
+        if sid not in wanted:
+            raise HeroMovesError(f"the review answers {sid!r}, which the plan does not move")
+        if int(line.get("new_image_id") or 0) != wanted[sid]:
+            raise HeroMovesError(
+                f"the review of {sid} names image {line.get('new_image_id')}, the plan makes "
+                f"{wanted[sid]} the hero - a review speaks of the plan it was made for"
+            )
+        decision = line.get("decision")
+        if decision not in (ACCEPT, VETO):
+            raise HeroMovesError(f"the review of {sid} decides {decision!r}, not accept or veto")
+        by = str(line.get("by") or "").strip()
+        if by not in allowed:
+            raise HeroMovesError(
+                f"the review of {sid} is by {by!r}: a review is the owner's or a Claude answer "
+                f"stamp's ({', '.join(sorted(allowed))})"
+            )
+        reason = str(line.get("reason") or "").strip()
+        if decision == VETO and not reason:
+            raise HeroMovesError(f"the veto of {sid} names no reason")
+        out[sid] = {"decision": decision, "by": by, "reason": reason}
+    missing = sorted(set(wanted) - set(out))
+    if missing:
+        raise HeroMovesError(
+            f"the review leaves {len(missing)} planned site(s) unanswered (first {missing[0]})"
+        )
+    return out
+
+
+def emit(run: Path, review: Path) -> dict[str, Any]:
+    """The chunks of the sites a review accepted, `EXPECTED.jsonl`, and `VETOED.jsonl` (the
+    vetoed new heroes, in the shape `--veto` reads, for the next plan in a new run directory).
+    Refused when the plan changed after it was made or a review line is missing or wrong."""
+    out = run / CHUNKS
+    if out.exists() or (run / VETOED).exists():
+        raise HeroMovesError(f"{run} holds emitted chunks already - they are never replaced")
+    path = run / SUMMARY
+    if not path.is_file():
+        raise HeroMovesError(f"{path} does not exist - run `hero_moves.py plan` first")
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    for name, key in ((PLANNED, "planned_sha256"), (PLAN_SITES, "plan_sites_sha256")):
+        if ST.file_sha256(run / name) != summary[key]:
+            raise HeroMovesError(f"{run / name} changed after the plan was made")
+    planned = _jsonl(run / PLANNED)
+    reviewed = load_review(review, planned)
+    review_sha = ST.file_sha256(review)
+    lane = lane_for(run)
+    accepted, vetoed, changes = [], [], []
+    by_site = {str(p["site_id"]): p for p in planned}
+    for line in _jsonl(run / PLAN_SITES):
+        sid = str(line["site_id"])
+        verdict = reviewed[sid]
+        if verdict["decision"] == VETO:
+            vetoed.append(
+                {
+                    "site_id": sid,
+                    "image_id": int(by_site[sid]["new_image_id"]),
+                    "reason": verdict["reason"],
+                    "by": verdict["by"],
+                }
+            )
+            continue
+        note = {
+            "source": "hero-moves review",
+            "review_sha256": review_sha,
+            "decision": ACCEPT,
+            "by": verdict["by"],
+        } | ({"reason": verdict["reason"]} if verdict["reason"] else {})
+        accepted.append(line)
+        changes += [
+            CW.Change(**(c | {"evidence": [*c["evidence"], note]})) for c in line["changes"]
+        ]
+    chunks = CW.chunk_changes(lane, changes) if changes else []
+    chunk_of = {sid: chunk.number for chunk in chunks for sid in chunk.sites}
+    expected = [
+        {k: v for k, v in line.items() if k != "changes"} | {"chunk": chunk_of[line["site_id"]]}
+        for line in accepted
+    ]
+    record = {
+        "review": {"file": str(review.resolve()), "sha256": review_sha},
+        "planned_sha256": summary["planned_sha256"],
+        "accepted_sites": len(accepted),
+        "vetoed_sites": len(vetoed),
+        "rows": len(changes),
+        "chunks": len(chunks),
+        "lane": asdict(lane),
+    }
+    # the review's record first, the chunks last: a chunk on disk always has its review beside it
+    ST.write_text_once(run / VETOED, ST.jsonl_text(vetoed))
+    ST.write_text_once(out / EMIT_SUMMARY, ST.json_text(record))
+    ST.write_text_once(out / EXPECTED, ST.jsonl_text(expected))
+    CW.emit_chunks(out, chunks)
+    return record
+
+
 # --------------------------------------------------------------------- the check population
+#: Why `check-pictures` offers a row to the image roles.
+OFFER_UNJUDGED = "a live gallery row of the site no Claude check judged (D48/D49)"
+OFFER_UNCHOSEN = (
+    "a live gallery row a Claude check judged depicts and no judgement chose as the site's main "
+    "picture (D48/D49)"
+)
+
+
+def offer_reason(
+    row: Mapping[str, Any],
+    check: Check | None,
+    *,
+    hero: Mapping[str, Any] | None,
+    shown: Mapping[str, Any] | None,
+) -> str | None:
+    """Why the image roles should judge `row` for its site's hero, or None: a row nobody judged
+    (or whose check judged another file than it holds now), or a `depicts` nobody chose. A row
+    judged anything but `depicts` keeps that verdict and is not asked again; a chosen row needs no
+    second choice."""
+    if check is None or ST.file_of_row(row) != check.file:
+        return OFFER_UNJUDGED
+    if check.verdict != CJ.DEPICTS:
+        return None
+    if chosen_by(row, check, hero=hero, shown=shown) is not None:
+        return None
+    return OFFER_UNCHOSEN
+
+
 def check_pictures(
     run: Path,
     check_run: Path,
     verdict_runs: Sequence[Path],
     path_of: Any,
 ) -> dict[str, Any]:
-    """The image roles' population and pictures for the rows nobody judged yet at the sites the plan
-    cannot settle: `C/POPULATION.jsonl` and `C/PICTURES.jsonl` (the shape `image_roles/flow.py`
-    reads after its `pictures` step), so `prefilter-export`, `depicts-export`, `recheck-export` and
-    `write-targets` run on them unchanged. Offered is a live row other than the hero that no Claude
-    check judged, that reaches the floor, carries its full credit and - for a strip - is larger
-    than the hero: exactly the rows a confirmed pick could make qualify. `path_of(site_id,
+    """The image roles' population and pictures for the sites the plan cannot settle:
+    `C/POPULATION.jsonl` and `C/PICTURES.jsonl` (the shape `image_roles/flow.py` reads after its
+    `pictures` step), so `prefilter-export`, `depicts-export`, `recheck-export` and `write-targets`
+    run on them unchanged and their confirmed pick - the depicts role's best quality, confirmed by
+    the adversarial re-check - comes back through `plan --check-run`. Offered is a live row other
+    than the hero that `offer_reason` names and that keeps the site's bounds (`size_and_credit`:
+    the floor, the credit, larger than a strip, not small beside a large hero). `path_of(site_id,
     filename)` is the offsite copy of a row; a row without one is refused by name in
     `C/PICTURE_REFUSALS.jsonl`, never skipped."""
+    from candidate_search import population as PP
+    from image_roles import flow as FL
+
+    targets = [
+        check_run / name for name in (PP.POPULATION_FILE, FL.PICTURES, CHECK_REFUSALS, CHECK_SOURCE)
+    ]
+    _refuse_existing(targets, "a check run's population")
     read = load_read(run)
     served = served_checks(verdict_runs)
     population: list[dict[str, Any]] = []
     pictures: list[dict[str, Any]] = []
     refusals: list[dict[str, str]] = []
+    offered: dict[str, int] = {}
     for sid in sorted(read.sites):
         decision = decide(read.sites[sid], read.rows.get(sid, ()), served, {})
         if decision is None or decision.owner_reason is None:
             continue
         site = read.sites[sid]
         live = ST.live_rows(read.rows.get(sid, ()))
-        hero = next((r for r in live if r.get("is_hero")), None)
-        larger = hero if STRIP in decision.problems else None
+        hero = decision.hero
+        shown = served_row(live)
+        bounds = bounds_of(hero, decision.problems)
         candidates = []
         for row in live:
             if hero is not None and int(row["id"]) == int(hero["id"]):
                 continue
-            if row_check(row, served, {}) is not None:
-                continue  # judged already: its verdict stands, it is not asked again
-            fake = Check(sid, ST.file_of_row(row) or "", CJ.DEPICTS, "", "", "", "")
-            if qualifies(row, fake, larger_than=larger) is not None:
+            why = offer_reason(row, row_check(row, served, {}), hero=hero, shown=shown)
+            if why is None or size_and_credit(row, **bounds) is not None:
                 continue
             file = ST.file_of_row(row)
             if file is None:
@@ -814,6 +1110,7 @@ def check_pictures(
             except ST.StateError as exc:
                 refusals.append({"site_id": sid, "file": file, "reason": str(exc)})
                 continue
+            offered[why] = offered.get(why, 0) + 1
             candidates.append(
                 {
                     "file": file,
@@ -821,7 +1118,7 @@ def check_pictures(
                     "path": path,
                     "width": _size(row)[0],
                     "height": _size(row)[1],
-                    "why": "a live gallery row of the site no Claude check judged (D48/D49)",
+                    "why": why,
                 }
             )
         if not candidates:
@@ -848,12 +1145,7 @@ def check_pictures(
             }
         )
     if not population:
-        raise HeroMovesError(
-            "no unsettled site has a row nobody judged - there is nothing to check"
-        )
-    from candidate_search import population as PP
-    from image_roles import flow as FL
-
+        raise HeroMovesError("no unsettled site has a row to offer - there is nothing to check")
     ST.write_text_once(check_run / PP.POPULATION_FILE, ST.jsonl_text(population))
     ST.write_text_once(check_run / FL.PICTURES, ST.jsonl_text(pictures))
     ST.write_text_once(check_run / CHECK_REFUSALS, ST.jsonl_text(refusals))
@@ -870,6 +1162,10 @@ def check_pictures(
     return {
         "sites": len(population),
         "pictures": sum(len(p["candidates"]) for p in pictures),
+        "offered": {
+            "unjudged": offered.get(OFFER_UNJUDGED, 0),
+            "depicts_unchosen": offered.get(OFFER_UNCHOSEN, 0),
+        },
         "refused": len(refusals),
     }
 
@@ -902,7 +1198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("read", "check-pictures", "plan", "accept"):
+    for name in ("read", "check-pictures", "plan", "emit", "accept"):
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True, type=Path)
     for name in ("check-pictures", "plan"):
@@ -910,6 +1206,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.choices["check-pictures"].add_argument("--check-run", required=True, type=Path)
     sub.choices["plan"].add_argument("--check-run", type=Path, nargs="*", default=[])
     sub.choices["plan"].add_argument("--veto", type=Path, default=None)
+    sub.choices["emit"].add_argument("--review", required=True, type=Path)
     sub.choices["accept"].add_argument("--chunk", required=True, type=Path)
     args = parser.parse_args(list(argv) if argv is not None else None)
     run = args.run_dir
@@ -930,6 +1227,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = check_pictures(run, args.check_run, args.verdicts_run, images.path_for)
         elif args.command == "plan":
             payload = write_plan(run, args.verdicts_run, args.check_run, args.veto)
+        elif args.command == "emit":
+            payload = emit(run, args.review)
         else:
             payload = accept(run, args.chunk)
             print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))

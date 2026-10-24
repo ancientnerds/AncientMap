@@ -1,10 +1,12 @@
 """D48/D49 (owner decisions of 2026-10-19): the hero moves the D15 pass carries.
 
 DB-less and offline: the problems of a site (unflagged, strip, hotlink, no author), what makes a row
-a qualifying hero (a Claude `depicts` of that very file, the floor, the credit, larger than a strip),
-the ranking (a confirmed check-run pick, then the replacement stage's pick), the D15 deferral of an
-`other_site` hero, vetoes, the check population of the rows nobody judged, the chunks the shared
-writer takes, the small-hero owner list, and the read-only acceptance.
+a qualifying hero (a Claude `depicts` of that very file, the floor, the credit, larger than a strip,
+never a new small hero), that a hero is a chosen row (a confirmed check-run pick, the replacement
+stage's pick, or the row an unflagged page shows - never a `depicts` ranked by its pixels), the
+ranking, the D15 deferral of an `other_site` hero, vetoes, the check population, the review that
+must accept a move before `emit` writes a chunk, the write order, the small-hero owner list, and the
+read-only acceptance.
 """
 
 from __future__ import annotations
@@ -175,7 +177,7 @@ def test_an_unflagged_site_gets_its_checked_row_as_hero() -> None:
 def test_a_strip_hero_moves_to_the_checked_larger_row_and_the_globe_follows() -> None:
     site = _site(thumb="/data/images/wiki/11111111/A.webp")
     rows = [_row(1, "A.jpg", hero=True, size=(800, 128)), _row(2, "B.jpg")]
-    decision = HM.decide(site, rows, {2: _check(SITE, "B.jpg")}, {})
+    decision = HM.decide(site, rows, {2: _check(SITE, "B.jpg", picked=True)}, {})
     assert decision is not None and decision.plan is not None
     got = {(c.column, c.row_key): (c.old_value, c.new_value, c.rule) for c in decision.plan.changes}
     assert got == {
@@ -192,7 +194,7 @@ def test_a_strip_hero_moves_to_the_checked_larger_row_and_the_globe_follows() ->
 
 def test_a_hero_without_its_author_moves_under_the_d49_rule() -> None:
     rows = [_row(1, "A.jpg", hero=True, author=None), _row(2, "B.jpg")]
-    decision = HM.decide(_site(thumb="/data/x"), rows, {2: _check(SITE, "B.jpg")}, {})
+    decision = HM.decide(_site(thumb="/data/x"), rows, {2: _check(SITE, "B.jpg", picked=True)}, {})
     assert decision is not None and decision.plan is not None
     assert {c.rule for c in decision.plan.changes} == {HM.RULE_D49_HERO, HM.RULE_D49_ALIGN}
 
@@ -237,16 +239,56 @@ def test_a_hero_judged_other_site_is_deferred_to_the_d15_recheck() -> None:
     assert decision is not None and decision.plan is None and decision.deferred is not None
 
 
-def test_the_replacement_stages_pick_beats_a_larger_row() -> None:
+def test_a_depicts_nobody_chose_is_never_ranked_by_its_pixels() -> None:
     rows = [
         _row(1, "A.jpg", hero=True, author=None),
-        _row(2, "Big.jpg", size=(6000, 4000)),
+        _row(2, "Big.jpg", size=(1600, 2844)),  # a portrait of a find, judged depicts
         _row(3, "Best.jpg", size=(2000, 1200)),
     ]
     served = {2: _check(SITE, "Big.jpg"), 3: _check(SITE, "Best.jpg", picked=True)}
     decision = HM.decide(_site(), rows, served, {})
     assert decision is not None and decision.plan is not None
+    assert decision.plan.served_image_id == 3 and decision.choice == HM.REPLACEMENT_PICK
+    decision = HM.decide(_site(), rows, {2: _check(SITE, "Big.jpg")}, {})
+    assert decision is not None and decision.plan is None
+    assert decision.rejected == {2: HM.NOT_CHOSEN, 3: HM.UNCHECKED}
+
+
+def test_the_replacement_pick_beats_the_larger_row_the_page_shows() -> None:
+    rows = [_row(2, "Shown.jpg", size=(6000, 4000), order=0), _row(3, "Pick.jpg", order=1)]
+    served = {2: _check(SITE, "Shown.jpg"), 3: _check(SITE, "Pick.jpg", picked=True)}
+    decision = HM.decide(_site(thumb="/data/x"), rows, served, {})
+    assert decision is not None and decision.plan is not None
     assert decision.plan.served_image_id == 3
+    decision = HM.decide(_site(thumb="/data/x"), rows, {2: served[2]}, {})
+    assert decision is not None and decision.plan is not None
+    assert decision.plan.served_image_id == 2 and decision.choice == HM.SHOWN
+
+
+def test_the_row_the_page_shows_is_chosen_only_where_no_hero_flag_is() -> None:
+    row = _row(2, "B.jpg")
+    check = _check(SITE, "B.jpg")
+    assert HM.chosen_by(row, check, hero=None, shown=row) == HM.SHOWN
+    assert HM.chosen_by(row, check, hero=_row(1, "A.jpg", hero=True), shown=row) is None
+    assert HM.chosen_by(row, check, hero=None, shown=_row(3, "C.jpg")) is None
+    assert HM.chosen_by(row, _check(SITE, "B.jpg", confirmed=True), hero=None, shown=None) == (
+        HM.CONFIRMED_PICK
+    )
+
+
+def test_a_move_never_makes_a_small_hero() -> None:
+    hero = _row(1, "A.jpg", hero=True, size=(1600, 929), author=None)
+    small = _row(2, "Engraving.jpg", size=(800, 500))
+    check = _check(SITE, "Engraving.jpg", picked=True)
+    assert HM.qualifies(small, check, **HM.bounds_of(hero, [HM.NO_AUTHOR])) == HM.SMALLER
+    decision = HM.decide(_site(thumb="/data/x"), [hero, small], {2: check}, {})
+    assert decision is not None and decision.plan is None
+    assert decision.rejected == {2: HM.SMALLER}
+    small_hero = _row(1, "A.jpg", hero=True, size=(1200, 800), author=None)
+    assert HM.qualifies(small, check, **HM.bounds_of(small_hero, [HM.NO_AUTHOR])) is None
+    # a strip keeps its own bound (larger than the strip), not this one
+    strip = _row(1, "A.jpg", hero=True, size=(800, 200))
+    assert HM.qualifies(small, check, **HM.bounds_of(strip, [HM.STRIP])) is None
 
 
 def test_a_confirmed_check_run_pick_beats_every_served_verdict() -> None:
@@ -264,7 +306,7 @@ def test_a_confirmed_check_run_pick_beats_every_served_verdict() -> None:
 
 def test_a_vetoed_row_is_never_chosen() -> None:
     rows = [_row(1, "A.jpg", hero=True, author=None), _row(2, "B.jpg"), _row(3, "C.jpg")]
-    served = {2: _check(SITE, "B.jpg", picked=True), 3: _check(SITE, "C.jpg")}
+    served = {2: _check(SITE, "B.jpg", picked=True), 3: _check(SITE, "C.jpg", picked=True)}
     decision = HM.decide(_site(), rows, served, {}, {2: "a find, not the site (pilot_judge)"})
     assert decision is not None and decision.plan is not None
     assert decision.plan.served_image_id == 3
@@ -329,8 +371,14 @@ def _served_run(tmp_path: Path, *, model: str = OH.SONNET_MODEL) -> Path:
 def test_served_checks_keep_claude_stamps_and_mark_the_replacement_pick(tmp_path: Path) -> None:
     checks = HM.served_checks([_served_run(tmp_path)])
     assert checks[2].verdict == "depicts" and checks[2].shows == "the walls"
+    assert checks[2].basis == "b" and checks[2].label is None
     assert checks[3].picked and not checks[2].picked
     assert checks[3].source.endswith("REPLACE.jsonl")
+
+
+def test_a_replacement_answers_basis_is_never_shown_as_what_the_row_shows(tmp_path: Path) -> None:
+    check = HM.served_checks([_served_run(tmp_path)])[3]
+    assert (check.shows, check.basis, check.label, check.answer_basis) == (None, None, "G1", "rb")
 
 
 def test_a_minimax_stamp_is_no_check(tmp_path: Path) -> None:
@@ -357,15 +405,21 @@ def test_a_later_run_replaces_an_earlier_verdict(tmp_path: Path) -> None:
     assert HM.served_checks([later, first])[2].verdict == "depicts"
 
 
-def _check_run(tmp_path: Path, *, confirmed: bool = True, model: str = OH.SONNET_MODEL) -> Path:
+def _check_run(
+    tmp_path: Path,
+    *,
+    confirmed: bool = True,
+    model: str = OH.SONNET_MODEL,
+    target: str = "C.jpg",
+) -> Path:
     run = tmp_path / "candidates-2026-10-24-heromoves"
-    _write_jsonl(run / "TARGETS.jsonl", [{"site_id": SITE, "commons_file": "C.jpg"}])
+    _write_jsonl(run / "TARGETS.jsonl", [{"site_id": SITE, "commons_file": target}])
     _write_jsonl(
         run / "VERDICTS.jsonl",
         [
             {
                 "site_id": SITE,
-                "file": "C.jpg",
+                "file": target,
                 "verdict": "depicts",
                 "quality": 4,
                 "note": "the walls",
@@ -378,7 +432,7 @@ def _check_run(tmp_path: Path, *, confirmed: bool = True, model: str = OH.SONNET
         run / "RECHECK_01.jsonl",
         [
             {
-                "meta": {"site_id": SITE, "file": "C.jpg"},
+                "meta": {"site_id": SITE, "file": target},
                 "verdict": "depicts" if confirmed else "other_site",
                 "model": OH.SONNET_MODEL,
             }
@@ -426,15 +480,48 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     return _hero_moves_run(tmp_path, sites, rows), _served_run(tmp_path)
 
 
-def test_the_plan_emits_one_chunk_the_shared_writer_takes(tmp_path: Path) -> None:
+def _review(tmp_path: Path, lines: list[dict[str, Any]], name: str = "REVIEW.jsonl") -> Path:
+    path = tmp_path / name
+    _write_jsonl(path, lines)
+    return path
+
+
+def _accept_all(tmp_path: Path, run: Path, by: str = HM.OWNER) -> Path:
+    planned = [json.loads(line) for line in (run / HM.PLANNED).read_text().splitlines()]
+    return _review(
+        tmp_path,
+        [
+            {"site_id": p["site_id"], "new_image_id": p["new_image_id"], "decision": "accept",
+             "by": by, "reason": ""}
+            for p in planned
+        ],
+    )  # fmt: skip
+
+
+def test_the_plan_writes_the_review_page_and_no_chunk(tmp_path: Path) -> None:
     run, served = _fixture(tmp_path)
     summary = HM.write_plan(run, [served], [])
-    assert summary["planned_sites"] == 1 and summary["rows"] == 3 and summary["chunks"] == 1
+    assert summary["planned_sites"] == 1 and summary["rows"] == 3
+    assert summary["chosen_by"] == {HM.REPLACEMENT_PICK: 1}
+    assert not (run / "chunks").exists()
+    [planned] = [json.loads(line) for line in (run / HM.PLANNED).read_text().splitlines()]
+    assert planned["new_image_id"] == 3 and planned["chosen_by"] == HM.REPLACEMENT_PICK
+    assert planned["check"]["label"] == "G1" and "shows" not in planned["check"]
+
+
+def test_emit_writes_the_accepted_sites_as_one_chunk_the_shared_writer_takes(
+    tmp_path: Path,
+) -> None:
+    run, served = _fixture(tmp_path)
+    HM.write_plan(run, [served], [])
+    record = HM.emit(run, _accept_all(tmp_path, run, by=OH.SONNET_MODEL))
+    assert (record["accepted_sites"], record["vetoed_sites"], record["chunks"]) == (1, 0, 1)
     chunk = CW.check_delivered(run / "chunks" / "chunk-001")
     assert chunk.lane.name == HM.LANE_NAME and chunk.run_stamp == "hero-moves-2026-10-24-001"
     assert chunk.may_empty == frozenset()
-    [planned] = [json.loads(line) for line in (run / HM.PLANNED).read_text().splitlines()]
-    assert planned["new_hero"]["image_id"] == 3  # the replacement stage picked C
+    for change in chunk.changes:
+        assert change.evidence[-1]["source"] == "hero-moves review"
+        assert change.evidence[-1]["by"] == OH.SONNET_MODEL
     [expected] = [
         json.loads(line) for line in (run / "chunks" / HM.EXPECTED).read_text().splitlines()
     ]
@@ -445,6 +532,90 @@ def test_the_plan_emits_one_chunk_the_shared_writer_takes(tmp_path: Path) -> Non
         "thumbnail_url": "/data/images/wiki/11111111/C.webp",
         "chunk": 1,
     }
+    with pytest.raises(HM.HeroMovesError, match="emitted chunks already"):
+        HM.emit(run, _accept_all(tmp_path, run))
+
+
+def test_a_veto_writes_no_chunk_and_feeds_the_next_plan(tmp_path: Path) -> None:
+    run, served = _fixture(tmp_path)
+    HM.write_plan(run, [served], [])
+    review = _review(
+        tmp_path,
+        [{"site_id": SITE, "new_image_id": 3, "decision": "veto", "by": HM.OWNER,
+          "reason": "a museum shot of a find"}],
+    )  # fmt: skip
+    record = HM.emit(run, review)
+    assert (record["accepted_sites"], record["vetoed_sites"], record["chunks"]) == (0, 1, 0)
+    assert not (run / "chunks" / "chunk-001").exists()
+    assert (run / "chunks" / HM.EXPECTED).read_text() == ""
+    [vetoed] = [json.loads(line) for line in (run / HM.VETOED).read_text().splitlines()]
+    assert vetoed == {
+        "site_id": SITE,
+        "image_id": 3,
+        "reason": "a museum shot of a find",
+        "by": HM.OWNER,
+    }
+    # the veto file is what the next plan reads: B was never chosen, so the site goes to the owner
+    nxt = tmp_path / "next" / "hero-moves-2026-10-25"
+    nxt.mkdir(parents=True)
+    (nxt / "READ.json").write_text((run / "READ.json").read_text(), encoding="utf-8")
+    summary = HM.write_plan(nxt, [served], [], run / HM.VETOED)
+    assert summary["planned_sites"] == 0 and summary["owner_list"] == 1
+    [owner] = [json.loads(line) for line in (nxt / HM.OWNER_LIST).read_text().splitlines()]
+    assert owner["rows"]["3"].startswith("vetoed: a museum shot")
+    assert owner["rows"]["2"] == HM.NOT_CHOSEN
+
+
+@pytest.mark.parametrize(
+    ("lines", "match"),
+    [
+        ([], "unanswered"),
+        ([{"site_id": SITE, "new_image_id": 2, "decision": "accept", "by": "owner"}],
+         "the plan makes 3 the hero"),
+        ([{"site_id": SITE, "new_image_id": 3, "decision": "maybe", "by": "owner"}],
+         "not accept or veto"),
+        ([{"site_id": SITE, "new_image_id": 3, "decision": "accept", "by": "pilot_judge"}],
+         "Claude answer stamp"),
+        ([{"site_id": SITE, "new_image_id": 3, "decision": "veto", "by": "owner"}],
+         "names no reason"),
+        ([{"site_id": OTHER, "new_image_id": 3, "decision": "accept", "by": "owner"}],
+         "does not move"),
+        ([{"site_id": SITE, "new_image_id": 3, "decision": "accept", "by": "owner"}] * 2,
+         "twice"),
+    ],
+)  # fmt: skip
+def test_a_review_that_does_not_answer_the_plan_exactly_emits_nothing(
+    tmp_path: Path, lines: list[dict[str, Any]], match: str
+) -> None:
+    run, served = _fixture(tmp_path)
+    HM.write_plan(run, [served], [])
+    with pytest.raises(HM.HeroMovesError, match=match):
+        HM.emit(run, _review(tmp_path, lines))
+    assert not (run / "chunks").exists() and not (run / HM.VETOED).exists()
+
+
+def test_a_minimax_stamp_reviews_nothing(tmp_path: Path) -> None:
+    run, served = _fixture(tmp_path)
+    HM.write_plan(run, [served], [])
+    with pytest.raises(HM.HeroMovesError, match="Claude answer stamp"):
+        HM.emit(run, _accept_all(tmp_path, run, by=OH.MINIMAX_MODEL))
+
+
+def test_a_plan_changed_after_it_was_made_emits_nothing(tmp_path: Path) -> None:
+    run, served = _fixture(tmp_path)
+    HM.write_plan(run, [served], [])
+    review = _accept_all(tmp_path, run)
+    sites = run / HM.PLAN_SITES
+    sites.write_text(sites.read_text().replace('"true"', '"false"'), encoding="utf-8")
+    with pytest.raises(HM.HeroMovesError, match="changed after the plan"):
+        HM.emit(run, review)
+    assert not (run / "chunks").exists()
+
+
+def test_emit_needs_a_plan(tmp_path: Path) -> None:
+    run, _ = _fixture(tmp_path)
+    with pytest.raises(HM.HeroMovesError, match="run `hero_moves.py plan` first"):
+        HM.emit(run, _review(tmp_path, []))
 
 
 def test_a_delivered_plan_is_never_replaced(tmp_path: Path) -> None:
@@ -452,6 +623,14 @@ def test_a_delivered_plan_is_never_replaced(tmp_path: Path) -> None:
     HM.write_plan(run, [served], [])
     with pytest.raises(HM.HeroMovesError, match="holds a plan already"):
         HM.write_plan(run, [served], [])
+
+
+def test_a_refused_plan_writes_no_file(tmp_path: Path) -> None:
+    run, served = _fixture(tmp_path)
+    (run / HM.SMALL_HEROES).write_text("", encoding="utf-8")  # an aborted earlier attempt
+    with pytest.raises(HM.HeroMovesError, match="holds a plan already"):
+        HM.write_plan(run, [served], [])
+    assert sorted(p.name for p in run.iterdir()) == ["READ.json", HM.SMALL_HEROES]
 
 
 def test_the_plan_needs_a_verdict_run(tmp_path: Path) -> None:
@@ -471,14 +650,15 @@ def test_a_veto_without_a_reviewer_or_of_a_foreign_row_is_refused(tmp_path: Path
         HM.write_plan(run, [served], [], veto)
 
 
-def test_a_veto_moves_the_choice_to_the_next_row(tmp_path: Path) -> None:
+def test_a_veto_moves_the_choice_to_the_next_chosen_row(tmp_path: Path) -> None:
     run, served = _fixture(tmp_path)
+    picks = _check_run(tmp_path, target="B.jpg")
     veto = tmp_path / "veto.jsonl"
-    _write_jsonl(veto, [{"site_id": SITE, "image_id": 3, "reason": "a find", "by": "pilot_judge"}])
-    summary = HM.write_plan(run, [served], [], veto)
+    _write_jsonl(veto, [{"site_id": SITE, "image_id": 2, "reason": "a find", "by": "pilot_judge"}])
+    summary = HM.write_plan(run, [served], [picks], veto)
     assert summary["veto"]["sha256"]
     [planned] = [json.loads(line) for line in (run / HM.PLANNED).read_text().splitlines()]
-    assert planned["new_hero"]["image_id"] == 2
+    assert planned["new_hero"]["image_id"] == 3 and planned["chosen_by"] == HM.REPLACEMENT_PICK
 
 
 def test_the_run_directory_names_the_journal_stamp(tmp_path: Path) -> None:
@@ -500,7 +680,7 @@ def test_small_heroes_follow_the_census_definition() -> None:
 
 
 # ------------------------------------------------------------------------ the check population
-def test_check_pictures_offers_only_the_rows_nobody_judged(tmp_path: Path) -> None:
+def test_check_pictures_offers_the_rows_nobody_judged_or_chose(tmp_path: Path) -> None:
     sites = [_site()]
     rows = [
         _row(1, "A.jpg", hero=True, size=(800, 128)),
@@ -508,6 +688,7 @@ def test_check_pictures_offers_only_the_rows_nobody_judged(tmp_path: Path) -> No
         _row(3, "C.jpg"),  # judged other_site
         _row(4, "D.jpg"),  # nobody judged it
         _row(5, "E.jpg", author=None),  # no credit
+        _row(6, "F.jpg"),  # judged depicts, nobody chose it
     ]
     run = _hero_moves_run(tmp_path, sites, rows)
     served = tmp_path / "served-image-2026-09-30"
@@ -516,20 +697,44 @@ def test_check_pictures_offers_only_the_rows_nobody_judged(tmp_path: Path) -> No
         [
             {
                 "site_id": SITE,
-                "verdict": "other_site",
+                "verdict": verdict,
                 "answered_by": "check-001",
                 "model": OH.SONNET_MODEL,
-                "served": {"image_id": 3, "file": "C.jpg"},
+                "served": {"image_id": image_id, "file": file},
             }
+            for image_id, file, verdict in ((3, "C.jpg", "other_site"), (6, "F.jpg", "depicts"))
         ],
     )
     check_run = tmp_path / "candidates-check"
     out = HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
-    assert out == {"sites": 1, "pictures": 1, "refused": 0}
+    assert out == {
+        "sites": 1,
+        "pictures": 2,
+        "offered": {"unjudged": 1, "depicts_unchosen": 1},
+        "refused": 0,
+    }
     [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
-    assert [c["image_id"] for c in line["candidates"]] == [4]
+    assert [(c["image_id"], c["why"]) for c in line["candidates"]] == [
+        (4, HM.OFFER_UNJUDGED),
+        (6, HM.OFFER_UNCHOSEN),
+    ]
     [pop] = [json.loads(x) for x in (check_run / "POPULATION.jsonl").read_text().splitlines()]
     assert pop["lat"] == 40.7 and pop["site_id"] == SITE
+    with pytest.raises(HM.HeroMovesError, match="written once"):
+        HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
+
+
+def test_a_chosen_row_and_a_small_one_are_not_offered() -> None:
+    hero = _row(1, "A.jpg", hero=True, size=(1600, 929), author=None)
+    picked = _row(2, "B.jpg")
+    assert (
+        HM.offer_reason(picked, _check(SITE, "B.jpg", picked=True), hero=hero, shown=hero) is None
+    )
+    assert HM.offer_reason(picked, _check(SITE, "Z.jpg"), hero=hero, shown=hero) == (
+        HM.OFFER_UNJUDGED
+    )
+    small = _row(3, "C.jpg", size=(800, 500))
+    assert HM.size_and_credit(small, **HM.bounds_of(hero, [HM.NO_AUTHOR])) == HM.SMALLER
 
 
 def test_check_pictures_names_a_row_without_an_offsite_copy(tmp_path: Path) -> None:
@@ -546,7 +751,7 @@ def test_check_pictures_names_a_row_without_an_offsite_copy(tmp_path: Path) -> N
 
     check_run = tmp_path / "candidates-check"
     out = HM.check_pictures(run, check_run, [served], path_of)
-    assert out == {"sites": 1, "pictures": 1, "refused": 1}
+    assert (out["sites"], out["pictures"], out["refused"]) == (1, 1, 1)
     [refusal] = [json.loads(x) for x in (check_run / HM.CHECK_REFUSALS).read_text().splitlines()]
     assert refusal["file"] == "D.jpg"
 
@@ -557,6 +762,7 @@ def test_accept_reads_production_and_names_every_deviation(
 ) -> None:
     run, served = _fixture(tmp_path)
     HM.write_plan(run, [served], [])
+    HM.emit(run, _accept_all(tmp_path, run))
     good_sites = [
         {
             "id": SITE,
@@ -566,32 +772,15 @@ def test_accept_reads_production_and_names_every_deviation(
     ]
     good_images = [
         {
-            "id": 1,
+            "id": image_id,
             "site_id": SITE,
-            "is_hero": False,
+            "is_hero": image_id == 3,
             "is_lead": False,
             "is_excluded": False,
             "sort_order": 0,
-            "filename": "A.webp",
-        },
-        {
-            "id": 2,
-            "site_id": SITE,
-            "is_hero": False,
-            "is_lead": False,
-            "is_excluded": False,
-            "sort_order": 0,
-            "filename": "B.webp",
-        },
-        {
-            "id": 3,
-            "site_id": SITE,
-            "is_hero": True,
-            "is_lead": False,
-            "is_excluded": False,
-            "sort_order": 0,
-            "filename": "C.webp",
-        },
+            "filename": f"{name}.webp",
+        }
+        for image_id, name in ((1, "A"), (2, "B"), (3, "C"))
     ]
     answers = iter([good_sites, good_images])
     monkeypatch.setattr(CW.pv, "read_rows", lambda sql: next(answers))
