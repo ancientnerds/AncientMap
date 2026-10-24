@@ -10,7 +10,7 @@ All 3 sources are covered:
 | `lyra` | Radar | varies | Pipeline-discovered sites. Enrich + verify. Stay in their DB. |
 | `ancient_nerds_community` | Community | varies | User submissions. Enrich + verify. Stay in their DB. |
 
-**Critical rule**: Community and Radar sites are enriched but NEVER auto-promoted to Originals. Only the admin does that.
+**Critical rule**: Community and Radar sites are enriched but NEVER auto-promoted to Originals. Only the admin does that. The one owner-sanctioned exception is D57 (2026-10-24): the high-demand sites of the 2026-10-08 demand audit enter as Originals through the journalled insert lane, `docs/procedures/INSERT_SITES.md` (rehearsed, undone by retiring, never by DELETE).
 
 **Data flow**: Sync production → audit locally → package → upload via db.html (creates rollback snapshot).
 

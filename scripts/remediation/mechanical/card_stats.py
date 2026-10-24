@@ -684,9 +684,22 @@ def counterfactual_sites(
     how many journal rows were undone.
 
     Refused unless the curated sites are the basis's own: a site added or removed since changes
-    every `mystery` share it takes part in, and no basis says what it was.
+    every `mystery` share it takes part in, and no basis says what it was. The one addition a basis
+    does explain is a journalled insert after its horizon (the D57 insert lane, `insert_site/
+    writer.py`: its `unified_sites.id` row runs from NULL to the site's own id): such a site did not
+    exist at the basis, so it is not in the counterfactual - and it adds to every `mystery` share of
+    the recompute that plans the next write, as the generator would count it.
     """
-    by_id = {row["id"]: dict(row) for row in sites}
+    created = {
+        str(entry["row_pk"])
+        for entry in journal
+        if entry["table_name"] == "unified_sites"
+        and entry["column_name"] == "id"
+        and entry["old_value"] is None
+        and entry["new_value"] == entry["row_pk"]
+        and int(entry["id"]) > basis.since
+    }
+    by_id = {row["id"]: dict(row) for row in sites if row["id"] not in created}
     if set(by_id) != set(basis.unjournalled):
         added, gone = set(by_id) - set(basis.unjournalled), set(basis.unjournalled) - set(by_id)
         raise PlanError(
