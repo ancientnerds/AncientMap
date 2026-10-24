@@ -403,7 +403,12 @@ def test_a_card_correction_replaces_the_card_only(images, effects):
     ("card", "gate", "issue"),
     [
         (make_result()["card_description"], "card", "card_description equals the stored one"),
-        ("x" * 601, "shape", "card_description must be 1-600 characters"),
+        (
+            "x" * 601,
+            "card",
+            "card_description must be 1-600 characters (600, or the stored card's length when "
+            "that is longer: a correction never lengthens it past that)",
+        ),
         (
             "Two lines.\nOf card.",
             "shape",
@@ -433,6 +438,37 @@ def test_a_card_is_one_plain_line_that_changes_something(images, card, gate, iss
         PublishSession(_live_row()), images, _correction(card_description=card), dry_run=True
     )
     assert _failing(outcome) == {gate: [issue]}
+
+
+LEGACY_CARD = "A card published before the publish gate's limit. " * 18
+
+
+def test_a_legacy_card_longer_than_the_limit_is_corrected_in_place(images, effects):
+    stored = LEGACY_CARD.strip()
+    assert len(stored) > 600
+    fixed = stored.replace("before", "prior to", 1).replace("A card", "Card", 1)
+    assert len(fixed) <= len(stored)
+    session = PublishSession(_live_row(card_description=stored))
+    outcome = _correct(session, images, _correction(card_description=fixed))
+    assert outcome.ok is True, _failing(outcome)
+    assert json.loads(session.written)["card_description"] == fixed
+
+
+def test_a_correction_never_lengthens_a_legacy_card(images):
+    stored = LEGACY_CARD.strip()
+    longer = stored + " One more."
+    outcome = _correct(
+        PublishSession(_live_row(card_description=stored)),
+        images,
+        _correction(card_description=longer),
+        dry_run=True,
+    )
+    assert _failing(outcome) == {
+        "card": [
+            f"card_description must be 1-{len(stored)} characters (600, or the stored card's "
+            "length when that is longer: a correction never lengthens it past that)"
+        ]
+    }
 
 
 # --- evidence_changes -----------------------------------------------------------------

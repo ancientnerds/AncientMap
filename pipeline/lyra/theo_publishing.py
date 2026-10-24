@@ -1247,8 +1247,6 @@ def _card_shape(card: Any) -> list[str]:
     issues = []
     if card != card.strip() or "\n" in card:
         issues.append("card_description must be one line without leading or trailing whitespace")
-    if len(card) > MAX_CARD_CHARS:
-        issues.append(f"card_description must be 1-{MAX_CARD_CHARS} characters")
     if any(token in card for token in _CARD_MARKUP):
         issues.append("card_description must be plain text (no citations, no markdown)")
     return issues
@@ -1449,11 +1447,17 @@ def _apply_parts(
     if "card_description" in correction:
         card = correction["card_description"]
         parts["card_description"] = card
-        gates["card"] = _gate(
-            ["card_description equals the stored one"]
-            if card == current.get("card_description")
-            else []
-        )
+        stored_card = current.get("card_description") or ""
+        # A paper published before the publish gate's limit can carry a longer card: a correction
+        # fixes it in place and may keep its length, but never lengthens a card past the limit.
+        limit = max(MAX_CARD_CHARS, len(stored_card))
+        card_issues = ["card_description equals the stored one"] if card == stored_card else []
+        if len(card) > limit:
+            card_issues.append(
+                f"card_description must be 1-{limit} characters ({MAX_CARD_CHARS}, or the stored "
+                "card's length when that is longer: a correction never lengthens it past that)"
+            )
+        gates["card"] = _gate(card_issues)
     return parts, gates
 
 

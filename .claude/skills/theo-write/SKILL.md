@@ -137,7 +137,7 @@ the server gates.
 |---|---|---|
 | Stored picture records: `verified: false` to true, or drop a record | `--image-changes FILE`, `{"verify": [web_path], "drop": [web_path]}` | a path that is not exactly one stored record; `verify` on a record that is not `verified: false`; dropping a picture the text still shows (remove its block in the `--report-file` text first) or the hero's |
 | Hero | `--hero WEB_PATH` | a path that is not exactly one record of the paper's own pictures; `verified: false`; the current hero; a portrait or narrower than 600 px (measured on the served file) |
-| Card description (API `summary`) | `--card-file FILE` | more than 600 characters, a line break, markdown or citations, the stored card. The studio also holds it to the house rule first: at most 400 characters and three sentences |
+| Card description (API `summary`) | `--card-file FILE` | more than 600 characters (or, for a legacy card that is already longer, more than its stored length: a correction fixes such a card in place but never lengthens it), a line break, markdown or citations, the stored card. The studio also holds it to the house rule first: at most 400 characters and three sentences |
 | Evidence re-anchoring | `--evidence-changes FILE`, `{"retire": [ev-NN], "add": [entry]}` | a retired id no `--entries` entry names (`evidence_id`); an added entry with a current or earlier retired id, a verdict other than `supported`, an anchor that is not on exactly one paragraph |
 
 - Flip a picture to `verify` only after looking at it: the flag says someone opened the picture
