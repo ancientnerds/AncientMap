@@ -462,14 +462,15 @@ def _selected_batch(tmp_path: Path, site_id: str = "site-1", batch: str = "p4-00
         [X.w_site(site_id, raw_data={"description_citations": [], "k": 1})],
         batch=batch,
     )
+    ledger = batch_dir.parent / M.LEDGER_FILE  # the run's own: run4's review reads it
     SEL.select_batch(
         batch_dir,
-        ledger=tmp_path / "L.jsonl",
+        ledger=ledger,
         runner=X.ScriptedRunner({(site_id, "select"): SELECT}),
     )
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=ledger) == 0
     return batch_dir
 
 
@@ -975,7 +976,7 @@ def _reviewed(tmp_path: Path, site_id: str = "site-1", batch: str = "p4-0001") -
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: KEEP\nCARD: KEEP"
     RV.review_batch(
         batch_dir,
-        ledger=tmp_path / "L.jsonl",
+        ledger=batch_dir.parent / M.LEDGER_FILE,
         runner=X.ScriptedRunner({(site_id, "review"): answer}),
         reverify=lambda site, assembly: (),
     )
@@ -991,7 +992,7 @@ def test_done_is_a_finished_review_over_the_assembly_on_disk(tmp_path: Path) -> 
     assert M4.batch_done(run_dir, "p4-0001")[0]
     assembly = batch_dir / M.ASSEMBLY_FILE
     assembly.write_bytes(assembly.read_bytes() + b"")
-    A.assemble_batch(batch_dir)  # the same bytes: still done
+    A.assemble_batch(batch_dir, ledger=run_dir / M.LEDGER_FILE)  # the same bytes: still done
     assert M4.batch_done(run_dir, "p4-0001")[0]
     assembly.write_text("", encoding="utf-8")
     assert M4.batch_done(run_dir, "p4-0001") == (
@@ -1075,7 +1076,7 @@ def test_the_journal_evidence_of_a_site_answered_through_the_handoff_is_complete
     assert _run(capsys, ["select", *argv, "--handoff-import", str(select)])[0] == 0
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=ledger) == 0
     rows = X.ledger_lines(ledger)
     files = W4.model_files(batch_dir, "site-1")
     labels = W4.ledger_labels(rows, batch_id="p4-0001", site_id="site-1")
@@ -1213,7 +1214,7 @@ def test_the_sheet_shows_every_sentence_beside_its_passage_and_never_the_reviewe
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: DROP SECRET REVIEWER NOTE\nCARD: KEEP"
     RV.review_batch(
         batch_dir,
-        ledger=tmp_path / "L.jsonl",
+        ledger=batch_dir.parent / M.LEDGER_FILE,
         runner=X.ScriptedRunner({("site-1", "review"): answer}),
         reverify=lambda site, assembly: (),
     )

@@ -25657,6 +25657,62 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += ENRICH_MUTATIONS
 
 
+# ---- orchestrator item X10 (2026-10-24): the Phase-4 disclosure is derived from the answering stamps
+P4_DISCLOSURE_TEST = "tests/remediation/test_phase4_review.py"
+X10_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "p4 disclosure: S4 stamps a constant again",
+        "scripts/remediation/phase4/assemble.py",
+        "        ai=M.LANE_AI[lane],\n        ai_system=ai_system,\n",
+        "        ai=M.LANE_AI[lane],\n        ai_system=M.AI_SYSTEM,  # mutant\n",
+        P4_DISCLOSURE_TEST,
+        "test_the_disclosure_names_the_models_whose_answers_the_text_rests_on",
+    ),
+    (
+        "p4 disclosure: another batch's calls count",
+        "scripts/remediation/phase4/assemble.py",
+        '        and row.get("batch_id") == batch_id\n',
+        "        and True  # mutant\n",
+        P4_DISCLOSURE_TEST,
+        "test_the_stamps_are_the_sites_own_calls_in_its_own_batch",
+    ),
+    (
+        "p4 disclosure: another site's calls count",
+        "scripts/remediation/phase4/assemble.py",
+        '        and str(row.get("label", "")).startswith(f"{site_id}/")\n',
+        "        and True  # mutant\n",
+        P4_DISCLOSURE_TEST,
+        "test_the_stamps_are_the_sites_own_calls_in_its_own_batch",
+    ),
+    (
+        "p4 disclosure: a missing ledger is an empty one",
+        "scripts/remediation/phase4/assemble.py",
+        "    if not path.exists():\n        raise InputError(\n",
+        "    if False:\n        raise InputError(\n",
+        P4_DISCLOSURE_TEST,
+        "test_a_site_whose_calls_the_ledger_does_not_hold_has_no_disclosure",
+    ),
+    (
+        "p4 disclosure: the reviewer's stamp is left out",
+        "scripts/remediation/phase4/review4.py",
+        "    rebuilt = build(inputs, kept, run=run, ai_system=ai_system)\n    card = rebuilt",
+        "    rebuilt = build(inputs, kept, run=run, ai_system=built.assembly.provenance.ai_system)\n"
+        "    card = rebuilt",
+        P4_DISCLOSURE_TEST,
+        "test_the_disclosure_names_the_models_whose_answers_the_text_rests_on",
+    ),
+    (
+        "p4 disclosure: the export's scratch ledger starts empty",
+        "scripts/remediation/phase4/run4.py",
+        "            shutil.copyfile(recorded, ledger)\n",
+        "            pass  # mutant\n",
+        "tests/remediation/test_phase4_v3.py",
+        "test_check_answer_reads_the_review_whole",
+    ),
+]
+MUTATIONS += X10_MUTATIONS
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
