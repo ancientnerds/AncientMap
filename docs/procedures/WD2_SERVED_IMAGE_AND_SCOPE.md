@@ -1671,7 +1671,11 @@ $PY $CAL evaluate --dir $D --role adversarial                     # after image-
   `img d59 outcomes`, `img gap1`, `img gap3`, and `img d17` for the empty thumbnail the INSERT plan
   keeps as the empty string). Last full run 2026-10-24, after the review fixes:
   320 image cases, 320 fired; `mechanical/mutation_sweep.py wd2` (114 of 114 fired on the first
-  close-out build) was not re-run, because none of its targets changed.
+  close-out build) was not re-run, because none of its targets changed. The pilot judge's
+  adjudication (2026-10-25, section 3.8.4) added ten `img cal:` cases and re-anchored two (`the kind
+  gold has no error`, which had drifted since the C1-pass fix and counted 0, and `an answer before
+  the sample is refused`, which the adjudication's own `answered_at` guard doubled): `img cal:` 36 of
+  36 fired, and the 13 other cases on `calibrate.py` and `depicts.py` 13 of 13; 333 image cases in all.
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
