@@ -4,7 +4,10 @@ DB-less and offline: the two populations (third-party hotlinks join the D17 rese
 get a credited row of the same file), the one candidate per Commons site and every refusal by name,
 the D59 wording and marker of the INSERT claim, the INSERT plan's lift of the thumbnail-only rule
 (only for the claimed thumbnail and only for that very file), and the NULL plan of the third-party
-thumbnails no research found a picture for - which waits for a finished research.
+thumbnails - when no research found a picture (only once the research is finished) or the INSERT lane
+refused the confirmed one for good, and never for a site whose INSERT has not ended -, the D59 run's
+way past the prefilter to the depicts role, the per-site outcomes and owner list, and the write
+order (nothing is written before the Commons answers are in).
 """
 
 from __future__ import annotations
@@ -304,13 +307,17 @@ def test_d59_covers_no_local_thumbnail() -> None:
 
 # --------------------------------------------------------------------------- the NULL plan
 def _write(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
 
 def _research(tmp_path: Path, *, targets: list[dict[str, Any]], refused: bool = False) -> Path:
     run = tmp_path / "candidates-2026-10-25"
     run.mkdir()
-    _write(run / PP.POPULATION_FILE, [{"site_id": SITE}, {"site_id": SITE_B}])
+    _write(
+        run / PP.POPULATION_FILE,
+        [{"site_id": SITE, "thumbnail_url": BLOG}, {"site_id": SITE_B, "thumbnail_url": BLOG}],
+    )
     _write(run / CJ.TARGETS, targets)
     _write(
         run / "CANDIDATE_REFUSALS.jsonl",
@@ -335,6 +342,35 @@ def _prefilter(monkeypatch: pytest.MonkeyPatch, survives: bool | None) -> None:
     monkeypatch.setattr(PF, "judged", lambda results: rows)
 
 
+def _insert_run(
+    tmp_path: Path,
+    *,
+    refusal: str | None = None,
+    planned: bool = False,
+    fetch_failure: str | None = None,
+    claimed: str = UPLOAD,
+    name: str = "insert-2026-10-25-d17",
+) -> Path:
+    """An INSERT run of the INSERT lane that claims `claimed` for SITE and planned or refused it."""
+    run = tmp_path / name
+    _write(
+        run / D59.INSERT_SEEDS,
+        [{"site_id": SITE, "reason": "no_target_row", "decision": IN.D59, "thumbnail_url": BLOG}],
+    )
+    (run / D59.INSERT_CLAIMS).write_text(json.dumps({SITE: {"image": claimed}}), encoding="utf-8")
+    if planned:
+        _write(run / "chunk-001" / "INSERT.jsonl", [{"site_id": SITE}])
+    if refusal is not None or planned:
+        refusals = [] if refusal is None else [{"site_id": SITE, "reason": refusal, "detail": "d"}]
+        _write(run / D59.INSERT_REFUSALS, refusals)
+    if fetch_failure is not None:
+        _write(
+            run / D59.FETCH_FAILURES,
+            [{"site_id": SITE, "commons_file": FILE, "why": fetch_failure}],
+        )
+    return run
+
+
 def test_a_site_whose_research_found_nothing_is_emptied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -343,7 +379,8 @@ def test_a_site_whose_research_found_nothing_is_emptied(
     run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG},
                                {"id": SITE_B, "name": "B", "thumbnail_url": BLOG}])  # fmt: skip
     summary = D59.null_plan(run, [research])
-    assert summary["cleared"] == 2 and summary["pending_insert"] == 0
+    assert summary["cleared"] == 2
+    assert summary["cleared_by"] == {D59.NONE_CONFIRMED: 1, D59.NO_CANDIDATE: 1}
     chunk = CW.check_delivered(run / "chunks" / "chunk-001")
     assert {(c.old_value, c.new_value, c.rule) for c in chunk.changes} == {
         (BLOG, None, D59.RULE_NULL)
@@ -352,14 +389,77 @@ def test_a_site_whose_research_found_nothing_is_emptied(
     assert reasons == {SITE: D59.NONE_CONFIRMED, SITE_B: D59.NO_CANDIDATE}
 
 
-def test_a_site_with_a_target_waits_for_the_insert_wave(
+@pytest.mark.parametrize(
+    ("insert", "match"),
+    [
+        ({}, "not_claimed"),
+        ({"planned": True}, "planned"),
+        ({"refusal": None}, "not_planned"),
+        ({"refusal": "not_fetched"}, "never fetched"),
+    ],
+)
+def test_a_confirmed_site_the_insert_lane_has_not_ended_is_refused_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, insert: dict[str, Any], match: str
+) -> None:
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _prefilter(monkeypatch, survives=True)
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    runs = [] if not insert else [_insert_run(tmp_path, **insert)]
+    with pytest.raises(D59.D59Error, match=match):
+        D59.null_plan(run, [research], runs)
+    assert not (run / "chunks").exists()
+
+
+def test_a_confirmed_site_whose_insert_was_refused_for_good_is_emptied_with_the_refusal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
     _prefilter(monkeypatch, survives=True)
     run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
-    summary = D59.null_plan(run, [research])
-    assert summary["cleared"] == 0 and summary["pending_insert"] == 1
+    insert = _insert_run(
+        tmp_path, refusal="not_fetched", fetch_failure="the fetch failed: no author"
+    )
+    summary = D59.null_plan(run, [research], [insert])
+    assert summary["cleared_by"] == {"insert_refused:not_fetched": 1}
+    [change] = CW.check_delivered(run / "chunks" / "chunk-001").changes
+    assert change.new_value is None and "INSERT lane refused it" in change.reason
+    [proof] = [e for e in change.evidence if e["source"].startswith("import_hero/")]
+    assert proof["insert_refusal"] == "not_fetched"
+    assert proof["fetch_failure"] == "the fetch failed: no author"
+
+
+def test_an_insert_refusal_about_another_state_of_the_site_empties_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _prefilter(monkeypatch, survives=True)
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    insert = _insert_run(tmp_path, refusal="d59_thumbnail_moved")
+    with pytest.raises(D59.D59Error, match="another state of the site"):
+        D59.null_plan(run, [research], [insert])
+
+
+def test_an_insert_claim_of_another_file_or_by_two_runs_is_refused(
+    tmp_path: Path,
+) -> None:
+    other = _insert_run(tmp_path, refusal="not_fetched", claimed=UPLOAD.replace("Monte", "Other"))
+    with pytest.raises(D59.D59Error, match="not the research's"):
+        D59.insert_state([other], SITE, FILE)
+    one = _insert_run(tmp_path, refusal="not_fetched", name="insert-a")
+    two = _insert_run(tmp_path, refusal="not_fetched", name="insert-b")
+    with pytest.raises(D59.D59Error, match="two INSERT runs"):
+        D59.insert_state([one, two], SITE, FILE)
+
+
+def test_the_null_plan_refuses_a_thumbnail_the_research_did_not_see(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    research = _research(tmp_path, targets=[])
+    _prefilter(monkeypatch, survives=False)
+    other = "https://www.megalithic.co.uk/a312/x.jpg"
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": other}])
+    with pytest.raises(D59.D59Error, match="researched the site while it showed"):
+        D59.null_plan(run, [research])
 
 
 def test_an_unfinished_research_empties_nothing(
@@ -370,6 +470,7 @@ def test_an_unfinished_research_empties_nothing(
     run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
     with pytest.raises(D59.D59Error, match="no prefilter answer"):
         D59.null_plan(run, [research])
+    assert not (run / "chunks").exists()
     (research / CJ.TARGETS).unlink()
     with pytest.raises(D59.D59Error, match="not finished"):
         D59.research_outcome(research, SITE)
@@ -405,6 +506,17 @@ def test_the_null_plan_refuses_a_thumbnail_that_is_no_third_party_hotlink(
         D59.null_plan(run, [research])
 
 
+def test_a_delivered_null_plan_is_never_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    research = _research(tmp_path, targets=[])
+    _prefilter(monkeypatch, survives=False)
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    D59.null_plan(run, [research])
+    with pytest.raises(D59.D59Error, match="holds a plan already"):
+        D59.null_plan(run, [research])
+
+
 def test_the_null_lane_is_named_by_its_run_directory(tmp_path: Path) -> None:
     assert D59.lane_for(tmp_path / "d59-thumb-2026-10-26").stamp == "d59-thumb-2026-10-26"
     with pytest.raises(D59.D59Error):
@@ -422,3 +534,121 @@ def test_the_null_accept_names_a_thumbnail_that_is_still_there(
     monkeypatch.setattr(CW.pv, "read_rows", lambda sql: next(answers))
     found = D59.null_accept(run, run / "chunks" / "chunk-001")["deviations"]
     assert found and "thumbnail_url" in found[0]
+
+
+# ------------------------------------------------------------- the D59 run: no prefilter, outcomes
+SITE_C = "33333333-3333-4333-8333-333333333333"
+
+
+def _d59_run(tmp_path: Path) -> Path:
+    """A D59 candidate run: SITE confirmed, SITE_B below the floor, SITE_C judged not depicts."""
+    run = tmp_path / "candidates-2026-10-25-d59"
+    _write(
+        run / PP.POPULATION_FILE,
+        [
+            {"site_id": s, "name": s[:4], "thumbnail_url": THUMB, "lat": 42.0, "lon": 8.7}
+            for s in (SITE, SITE_B, SITE_C)
+        ],
+    )
+    (run / D59.MARKER).write_text("{}", encoding="utf-8")
+    _write(run / CJ.TARGETS, [{"site_id": SITE, "commons_file": FILE}])
+    _write(
+        run / "CANDIDATE_REFUSALS.jsonl",
+        [{"site_id": SITE_B, "reason": "all_too_small", "detail": "640x480, below 800x300"}],
+    )
+    _write(
+        run / CJ.CANDIDATES,
+        [{"site_id": s, "candidates": [{"file": FILE}]} for s in (SITE, SITE_C)],
+    )
+    _write(
+        run / CJ.VERDICTS,
+        [
+            {"site_id": SITE, "file": FILE, "verdict": "depicts"},
+            {"site_id": SITE_C, "file": FILE, "verdict": "region_or_type"},
+        ],
+    )
+    return run
+
+
+def test_a_d59_run_needs_no_prefilter_answer(tmp_path: Path) -> None:
+    run = _d59_run(tmp_path)
+    assert D59.research_outcome(run, SITE_C) == (
+        D59.NONE_CONFIRMED,
+        "1 candidate(s): 1 not depicts",
+    )
+
+
+def test_a_d59_run_goes_straight_to_the_depicts_role(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from image_roles import flow as FL
+
+    run = _d59_run(tmp_path)
+    _write(
+        run / FL.PICTURES,
+        [{"site_id": SITE, "name": "A", "candidates": [{"file": FILE, "path": "x.jpg"}]}],
+    )
+    with pytest.raises(FL.FlowError, match="straight to depicts-export"):
+        FL.prefilter_export(run, tmp_path / "handoff")
+    asked: list[Any] = []
+
+    def build(sites: Any, read: Any) -> tuple[list[Any], dict[str, Any], list[Any]]:
+        asked.extend(sites)
+        return [], {}, []
+
+    monkeypatch.setattr(FL.DP, "build_questions", build)
+    monkeypatch.setattr(FL.SG, "export", lambda *a: {})
+    monkeypatch.setattr(FL.PF, "judged", lambda results: pytest.fail("the prefilter was read"))
+    FL.depicts_export(run, tmp_path / "handoff", cache=None)
+    assert [(s["site_id"], [c["file"] for c in s["candidates"]]) for s in asked] == [(SITE, [FILE])]
+
+
+def test_the_outcomes_name_every_site_that_keeps_its_uncredited_hotlink(tmp_path: Path) -> None:
+    run = _d59_run(tmp_path)
+    summary = D59.outcomes(run)
+    assert summary["sites"] == 3 and summary["owner_list"] == 2
+    owner = {
+        line["site_id"]: line["reason"]
+        for line in map(json.loads, (run / D59.OWNER_LIST).read_text().splitlines())
+    }
+    assert owner[SITE_B] == D59.FLOOR_QUESTION
+    assert owner[SITE_C].startswith(D59.NONE_CONFIRMED)
+    lines = [json.loads(x) for x in (run / D59.OUTCOMES).read_text().splitlines()]
+    assert {x["site_id"]: x["research"] for x in lines} == {
+        SITE: D59.TARGET,
+        SITE_B: D59.NO_CANDIDATE,
+        SITE_C: D59.NONE_CONFIRMED,
+    }
+
+
+def test_an_insert_refusal_puts_a_confirmed_d59_site_on_the_owner_list(tmp_path: Path) -> None:
+    run = _d59_run(tmp_path)
+    insert = _insert_run(tmp_path, refusal="already_holds_the_file")
+    summary = D59.outcomes(run, [insert])
+    assert summary["outcomes"]["target:refused"] == 1 and summary["owner_list"] == 3
+    planned = _insert_run(tmp_path, planned=True, name="insert-planned")
+    assert D59.outcomes(run, [planned])["owner_list"] == 2
+
+
+def test_outcomes_need_a_d59_run(tmp_path: Path) -> None:
+    research = _research(tmp_path, targets=[])
+    with pytest.raises(D59.D59Error, match="no D59 candidate run"):
+        D59.outcomes(research)
+
+
+def test_a_commons_failure_leaves_no_candidate_run_behind(tmp_path: Path) -> None:
+    class Down:
+        def imageinfo(self, files: Any) -> dict[str, Any]:
+            raise CM.CommonsError("HTTP 503")
+
+        def sizes(self, files: Any) -> dict[str, Any]:
+            raise AssertionError("not reached")
+
+    rows = [
+        {"site_id": SITE, "name": "Monte Lazzu", "country": "France", "site_type": "Dolmen",
+         "lat": 42.0, "lon": 8.7, "description": "", "qids": [], "enwiki_titles": [],
+         "coord_kind": None, "coord_marker_current": False, "rows": [], "thumbnail_url": THUMB},
+    ]  # fmt: skip
+    with pytest.raises(CM.CommonsError):
+        D59.write_candidates(tmp_path, rows, Down(), floor=(800, 300))
+    assert list(tmp_path.iterdir()) == []

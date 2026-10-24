@@ -12,25 +12,38 @@ Two populations, two paths, no new writer:
   (`candidate_search.population.population_sql(kind=COMMONS_THUMBNAIL)`), and whose only candidate
   per site is **that file** - asked of Commons for its rendering, its MIME type and its size, exactly
   as the search asks (`served_image.commons`). From there the image roles' chain runs unchanged
-  (`pictures`, `prefilter-export`, `depicts-export` - the Sonnet depicts check -, `recheck-export`,
-  `write-targets`), then `judge_run.py insert-claims`, which words the claim as a D59 first row and
-  marks it (`candidate_search.judge.d59_wording`), and the INSERT lane, whose plan lifts the
-  thumbnail-only rule only for such a claim and only while the read still shows that very
-  thumbnail and the fetched file is that very file (`import_hero.insert.d59_refusal`).
+  except for the prefilter: `pictures`, then `depicts-export` - the Sonnet depicts check D59 names,
+  over every fetched candidate, because the run carries the `D59.json` marker
+  (`image_roles.flow.skips_prefilter`: a Haiku cut must not decide a picture the owner sent to the
+  depicts role) -, `recheck-export` and `write-targets`. The adversarial re-check stays: the INSERT
+  lane takes only a confirmed target, the second look every picture of the lanes gets before it
+  goes on a page (D17), so D59 does not lower that bar. Then `judge_run.py insert-claims`, which
+  words the claim as a D59 first row and marks it (`candidate_search.judge.d59_wording`), and the
+  INSERT lane, whose plan lifts the thumbnail-only rule only for such a claim and only while the read
+  still shows that very thumbnail and the fetched file is that very file
+  (`import_hero.insert.d59_refusal`).
 * **The 9 third-party thumbnails** are in the D17 population itself (`population_sql` of kind
   `research`). Where the research confirms a Commons picture, the INSERT wave replaces the
-  thumbnail; where it finds none, `null-plan` sets the `thumbnail_url` to NULL through the shared
-  image writer (lane `d59-thumb`), each site with the research's measured reason - and only once
-  every candidate of the site was judged, so a site still waiting for a round is never emptied.
+  thumbnail. `null-plan` sets the `thumbnail_url` to NULL through the shared image writer (lane
+  `d59-thumb`) for every site the research found nothing for - only once every candidate of the site
+  was judged, so a site still waiting for a round is never emptied - and for every site whose
+  confirmed picture the INSERT lane refused for good (`--insert-run`: a credit the file lacks, a
+  failed fetch, a file an excluded row already holds), each with the measured reason as evidence.
+  A confirmed site no INSERT run covers, one whose INSERT is planned but not in production, and one
+  whose INSERT run was planned from another state of the site are refused by name: D59 knows two
+  ends, a credited Commons picture or NULL, and no third that waits.
 
 A candidate the Commons answer refuses - a file Commons no longer holds, one that is no still picture,
 one renamed since (a redirect: "the same file" would no longer hold), one below the floor, one an
 excluded row of the site already holds (unhiding it needs a judgement of its own) - is named in
-`CANDIDATE_REFUSALS.jsonl`, never skipped.
+`CANDIDATE_REFUSALS.jsonl`, never skipped. `outcomes` states per site of a D59 run where it stands
+(`D59_OUTCOMES.jsonl`) and lists every site that keeps its uncredited hotlink with the reason
+(`D59_OWNER_LIST.jsonl`; the floor refusals are the owner question of the runbook).
 
     d59.py candidates     --run-dir C [--min-width 800 --min-height 300]
+    d59.py outcomes       --run-dir C [--insert-run I ...]
     d59.py null-read      --run-dir N          (N = output/remediation/d59/d59-thumb-<date>)
-    d59.py null-plan      --run-dir N --research-run C [C ...]
+    d59.py null-plan      --run-dir N --research-run C [C ...] [--insert-run I ...]
     chunk_writer.py N/chunks/chunk-NNN --check | --rehearse | --apply | --readback | --rehearse-rollback
     d59.py null-accept    --run-dir N --chunk N/chunks/chunk-NNN
 """
@@ -41,7 +54,7 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -68,7 +81,7 @@ from image_roles import stage as SG  # noqa: E402
 
 #: The route a D59 candidate carries: the site's own thumbnail, not a search hit.
 ROUTE = "d59_thumbnail"
-MARKER = "D59.json"
+MARKER = FL.D59_MARKER
 
 LANE_NAME = "d59-thumb"
 TEST_ID = "D59/thumbnail-null"
@@ -80,14 +93,33 @@ READ_FILE = "READ.json"
 CHUNKS = "chunks"
 EXPECTED = "EXPECTED.jsonl"
 SUMMARY = "PLAN_SUMMARY.json"
-PENDING = "PENDING_INSERT.jsonl"
+OUTCOMES = "D59_OUTCOMES.jsonl"
+OWNER_LIST = "D59_OWNER_LIST.jsonl"
 
 #: The research outcomes `research_outcome` names.
 TARGET, NO_CANDIDATE, NONE_CONFIRMED = "target", "no_candidate", "none_confirmed"
+#: What an INSERT run did with a confirmed target (`insert_state`).
+NOT_CLAIMED, NOT_PLANNED, PLANNED, REFUSED = "not_claimed", "not_planned", "planned", "refused"
+#: INSERT refusals that speak of another state of the site than the one read now: the INSERT is
+#: planned again from a fresh read, the thumbnail is not emptied on them.
+STALE_INSERT_REASONS = frozenset({"retired", "d59_thumbnail_moved"})
+#: The INSERT lane's record files (`import_hero/run.py`).
+INSERT_CLAIMS = "IMPORT_CLAIMS.json"
+INSERT_SEEDS = "IMPORT_HERO_REFUSALS.jsonl"
+INSERT_REFUSALS = "INSERT_REFUSALS.jsonl"
+FETCH_FAILURES = "FETCH_FAILURES.jsonl"
 
 
 class D59Error(ST.StateError):
     """D59's inputs do not allow the step. Nothing was written."""
+
+
+def _refuse_existing(paths: Iterable[Path], what: str) -> None:
+    """Every write-once target is checked before the first write (and before any network call),
+    so a refused step leaves no half of its files behind."""
+    found = [p for p in paths if p.exists()]
+    if found:
+        raise D59Error(f"{found[0]} exists - {what} is written once and never replaced")
 
 
 # ----------------------------------------------------------------------- the 131 Commons files
@@ -175,12 +207,13 @@ def write_candidates(
     run: Path, rows: Sequence[Mapping[str, Any]], commons: Any, *, floor: tuple[int, int]
 ) -> dict[str, Any]:
     """The D59 candidate run directory: `POPULATION.jsonl`, `CANDIDATES.jsonl`, the refusals and
-    the `D59.json` marker - each written once."""
-    if (run / MARKER).exists() or (run / CS.CANDIDATES).exists():
-        raise D59Error(f"{run} holds a candidate run already - a recorded run is never replaced")
+    the `D59.json` marker - each written once, all after the Commons answers are in, the marker
+    last."""
+    names = (PP.POPULATION_FILE, CS.CANDIDATES, CS.REFUSALS, MARKER)
+    _refuse_existing((run / name for name in names), "a candidate run's record")
     sites = PP.build(rows)
-    population_sha = PP.write_population(run / PP.POPULATION_FILE, sites)
     lines, refusals = commons_candidates(sites, commons, floor=floor)
+    population_sha = PP.write_population(run / PP.POPULATION_FILE, sites)
     ST.write_text_once(run / CS.CANDIDATES, ST.jsonl_text(lines))
     ST.write_text_once(run / CS.REFUSALS, ST.jsonl_text(refusals))
     counts: dict[str, int] = {}
@@ -223,7 +256,8 @@ def _jsonl_or_empty(path: Path) -> list[dict[str, Any]]:
 def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
     """What the research run `run` found for one site: `(TARGET, file)`, `(NO_CANDIDATE, why)` or
     `(NONE_CONFIRMED, counts)`. Refused while the run has not written its targets, does not hold the
-    site, or left a candidate of it unjudged - an empty thumbnail must rest on a finished search."""
+    site, or left a candidate of it unjudged - an empty thumbnail must rest on a finished search. A
+    D59 run has no prefilter (`flow.skips_prefilter`): every fetched candidate needs its verdict."""
     if site_id not in {str(s["site_id"]) for s in FL._population(run)}:
         raise D59Error(f"{site_id} is not in the population of {run.name}")
     if not (run / CJ.TARGETS).is_file():
@@ -245,11 +279,16 @@ def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
         for r in _jsonl_or_empty(run / FL.PICTURE_REFUSALS)
         if str(r["site_id"]) == site_id
     }
-    prefiltered = {
-        str(r["file"]): r
-        for r in PF.judged(SG.read_results(run, PF.SPEC))
-        if str(r["site_id"]) == site_id
-    }
+    skip_prefilter = FL.skips_prefilter(run)
+    prefiltered = (
+        {}
+        if skip_prefilter
+        else {
+            str(r["file"]): r
+            for r in PF.judged(SG.read_results(run, PF.SPEC))
+            if str(r["site_id"]) == site_id
+        }
+    )
     verdicts = {
         str(r["file"]): str(r["verdict"])
         for r in _jsonl_or_empty(run / FL.VERDICTS)
@@ -270,11 +309,11 @@ def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
         file = str(candidate["file"])
         if file in gone:
             counts["not fetched"] += 1
-        elif file not in prefiltered:
+        elif not skip_prefilter and file not in prefiltered:
             raise D59Error(
                 f"{site_id}: {file!r} has no prefilter answer - the research is not done"
             )
-        elif not prefiltered[file]["survives"]:
+        elif not skip_prefilter and not prefiltered[file]["survives"]:
             counts["prefilter dropped"] += 1
         elif file in left_out:
             raise D59Error(f"{site_id}: {file!r} was left out of the depicts stage - ask it first")
@@ -288,11 +327,76 @@ def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
     return NONE_CONFIRMED, f"{len(candidates)} candidate(s): {detail}"
 
 
-def null_plan(run: Path, research_runs: Sequence[Path]) -> dict[str, Any]:
-    """The NULL writes of the third-party thumbnails no research run found a picture for, and the
-    sites whose target the INSERT lane still has to write (`PENDING_INSERT.jsonl`, never emptied)."""
+# ------------------------------------------------------------------------- the INSERT outcome
+def insert_state(
+    insert_runs: Sequence[Path], site_id: str, file: str
+) -> tuple[str, str, dict[str, Any]]:
+    """What the INSERT runs did with the confirmed `file` of one site: `(state, detail, evidence)`.
+
+    `NOT_CLAIMED` - no run claims the site (`insert-claims` never ran for it); `NOT_PLANNED` - a run
+    claims it and its `insert-plan` has not decided it; `PLANNED` - a chunk of the run plans the row;
+    `REFUSED` - the run's plan refused it, with the lane's reason (and, for `not_fetched`, the
+    fetch's own failure line). Refused outright: two runs claiming one site, or a claim of another
+    file than the research confirmed."""
+    claimed: list[Path] = []
+    for run in insert_runs:
+        seeds = _jsonl_or_empty(run / INSERT_SEEDS)
+        if any(
+            str(s.get("site_id")) == site_id and s.get("reason") == "no_target_row" for s in seeds
+        ):
+            claimed.append(run)
+    if not claimed:
+        return NOT_CLAIMED, "no INSERT run given claims the site", {}
+    if len(claimed) > 1:
+        raise D59Error(f"{site_id} is claimed by two INSERT runs ({claimed[0].name}, ...)")
+    run = claimed[0]
+    claims = json.loads((run / INSERT_CLAIMS).read_text(encoding="utf-8"))
+    url = str((claims.get(site_id) or {}).get("image") or "")
+    if ST.file_of_url(url) != ST.canonical_file(file):
+        raise D59Error(
+            f"{site_id}: {run.name} claims {url!r}, the research confirmed {file!r} - the claim is "
+            "not the research's"
+        )
+    evidence: dict[str, Any] = {"source": f"import_hero/{run.name}", "claimed": url}
+    for chunk in sorted(run.glob("chunk-0*")):
+        for row in _jsonl_or_empty(chunk / "INSERT.jsonl"):
+            if str(row.get("site_id")) == site_id:
+                return PLANNED, f"{run.name}/{chunk.name} plans the row", evidence
+    if not (run / INSERT_REFUSALS).is_file():
+        return NOT_PLANNED, f"{run.name} has not run insert-plan", evidence
+    for refusal in FL._jsonl(run / INSERT_REFUSALS):
+        if str(refusal.get("site_id")) == site_id:
+            reason = str(refusal["reason"])
+            evidence |= {"insert_refusal": reason, "detail": str(refusal.get("detail") or "")}
+            if reason == "not_fetched":
+                failed = [
+                    f["why"]
+                    for f in _jsonl_or_empty(run / FETCH_FAILURES)
+                    if str(f.get("site_id")) == site_id
+                ]
+                if not failed:
+                    return NOT_PLANNED, f"{run.name} never fetched the file", evidence
+                evidence["fetch_failure"] = failed[-1]
+            return REFUSED, reason, evidence
+    return NOT_PLANNED, f"{run.name}'s insert-plan neither planned nor refused it", evidence
+
+
+def _population_thumbnail(research: Path, site_id: str) -> str | None:
+    for site in FL._population(research):
+        if str(site["site_id"]) == site_id:
+            value = site.get("thumbnail_url")
+            return None if value is None else str(value)
+    raise D59Error(f"{site_id} is not in the population of {research.name}")
+
+
+def null_plan(
+    run: Path, research_runs: Sequence[Path], insert_runs: Sequence[Path] = ()
+) -> dict[str, Any]:
+    """The NULL writes of the third-party thumbnails D59 empties: no research run found a picture,
+    or the INSERT lane refused the confirmed one for good. Every other state of a read site is
+    refused by name (see the module docstring); the summary is written first, the chunks last."""
     out = run / CHUNKS
-    if (out / EXPECTED).exists():
+    if out.exists():
         raise D59Error(f"{out} holds a plan already - a delivered plan is never replaced")
     if not research_runs:
         raise D59Error("name the D17 research run(s) with --research-run")
@@ -306,7 +410,7 @@ def null_plan(run: Path, research_runs: Sequence[Path]) -> dict[str, Any]:
             by_run[sid] = research
     changes: list[CW.Change] = []
     expected: list[dict[str, Any]] = []
-    pending: list[dict[str, Any]] = []
+    basis: dict[str, int] = {}
     for site in read["sites"]:
         sid, thumb = str(site["id"]), site["thumbnail_url"]
         if not PP.is_third_party_thumbnail(thumb):
@@ -314,54 +418,70 @@ def null_plan(run: Path, research_runs: Sequence[Path]) -> dict[str, Any]:
         research = by_run.get(sid)
         if research is None:
             raise D59Error(f"{sid}: no research run holds this site - D59 sends it to D17 first")
+        researched = _population_thumbnail(research, sid)
+        if researched != thumb:
+            raise D59Error(
+                f"{sid}: {research.name} researched the site while it showed {researched!r}, the "
+                f"read shows {thumb!r} - an empty thumbnail must rest on research about this one"
+            )
         outcome, detail = research_outcome(research, sid)
-        if outcome == TARGET:
-            pending.append({"site_id": sid, "name": site["name"], "file": detail})
-            continue
-        evidence = [
-            {
-                "source": f"image_roles/{research.name}",
-                "outcome": outcome,
-                "detail": detail,
-            },
+        evidence: list[dict[str, Any]] = [
+            {"source": f"image_roles/{research.name}", "outcome": outcome, "detail": detail},
             {"source": "d59 READ.json", "thumbnail_url": thumb},
         ]
-        changes.append(
-            CW.Change(
-                "unified_sites",
-                "thumbnail_url",
-                sid,
-                sid,
-                thumb,
-                None,
-                RULE_NULL,
+        if outcome == TARGET:
+            state, why, insert = insert_state(insert_runs, sid, detail)
+            if state != REFUSED:
+                raise D59Error(
+                    f"{sid}: the research confirmed {detail!r} and the INSERT lane has not ended "
+                    f"it ({state}: {why}) - run insert-claims and the INSERT wave to its "
+                    "acceptance, then plan again with --insert-run"
+                )
+            if why in STALE_INSERT_REASONS:
+                raise D59Error(
+                    f"{sid}: {insert['source']} refused the row as {why!r}, which speaks of another "
+                    "state of the site - plan the INSERT again from a fresh read"
+                )
+            evidence.append(insert)
+            reason = (
+                f"the site's only picture was a third-party hotlink without a credit; the D17 "
+                f"research confirmed {detail!r}, and the INSERT lane refused it ({why}); D59: the "
+                "thumbnail goes NULL"
+            )
+            key = f"insert_refused:{why}"
+        else:
+            reason = (
                 "the site's only picture was a third-party hotlink without a credit, and the D17 "
                 f"research found no checked Commons picture of it ({outcome}); D59: the thumbnail "
-                "goes NULL",
-                evidence,
+                "goes NULL"
+            )
+            key = outcome
+        basis[key] = basis.get(key, 0) + 1
+        changes.append(
+            CW.Change(
+                "unified_sites", "thumbnail_url", sid, sid, thumb, None, RULE_NULL, reason, evidence
             )
         )
         expected.append(
             {"site_id": sid, "outcome": CLEARED, "served_image_id": None, "thumbnail_url": None}
         )
     chunks = CW.chunk_changes(lane_for(run), changes) if changes else []
-    CW.emit_chunks(out, chunks)
     chunk_of = {sid: chunk.number for chunk in chunks for sid in chunk.sites}
-    out.mkdir(parents=True, exist_ok=True)
-    ST.write_text_once(
-        out / EXPECTED, ST.jsonl_text(e | {"chunk": chunk_of[e["site_id"]]} for e in expected)
-    )
-    ST.write_text_once(run / PENDING, ST.jsonl_text(pending))
     summary = {
         "read_sha256": ST.file_sha256(run / READ_FILE),
         "research_runs": [str(r.resolve()) for r in research_runs],
+        "insert_runs": [str(r.resolve()) for r in insert_runs],
         "sites": len(read["sites"]),
         "cleared": len(changes),
-        "pending_insert": len(pending),
+        "cleared_by": basis,
         "chunks": len(chunks),
         "lane": asdict(lane_for(run)),
     }
     ST.write_text_once(out / SUMMARY, ST.json_text(summary))
+    ST.write_text_once(
+        out / EXPECTED, ST.jsonl_text(e | {"chunk": chunk_of[e["site_id"]]} for e in expected)
+    )
+    CW.emit_chunks(out, chunks)
     return summary
 
 
@@ -381,6 +501,57 @@ def null_accept(run: Path, chunk: Path) -> dict[str, Any]:
     return {"chunk": delivered.number, "sites": len(mine), "deviations": found}
 
 
+# ------------------------------------------------------------------------- the per-site outcome
+#: The owner's question for a Commons thumbnail below the floor: the page shows it already.
+FLOOR_QUESTION = (
+    "below the owner's floor: lower the floor for this D59 run (the page already shows this "
+    "picture, without its credit), or leave the uncredited hotlink"
+)
+
+
+def outcomes(run: Path, insert_runs: Sequence[Path] = ()) -> dict[str, Any]:
+    """Where every site of a D59 candidate run stands: `D59_OUTCOMES.jsonl` (one line per site) and
+    `D59_OWNER_LIST.jsonl` (every site that keeps its uncredited hotlink, with the reason; a floor
+    refusal carries the owner question). A statement about the run as it stands - rewritten by every
+    call, never an answer record - and refused while the research is not finished."""
+    if not FL.skips_prefilter(run):
+        raise D59Error(f"{run.name} is no D59 candidate run (no {MARKER})")
+    lines: list[dict[str, Any]] = []
+    owner: list[dict[str, Any]] = []
+    for site in FL._population(run):
+        sid = str(site["site_id"])
+        line: dict[str, Any] = {
+            "site_id": sid,
+            "name": site.get("name"),
+            "thumbnail_url": site.get("thumbnail_url"),
+        }
+        outcome, detail = research_outcome(run, sid)
+        line |= {"research": outcome, "detail": detail}
+        if outcome == TARGET and insert_runs:
+            state, why, _ = insert_state(insert_runs, sid, detail)
+            line |= {"insert": state, "insert_detail": why}
+        lines.append(line)
+        if outcome == TARGET and line.get("insert") != REFUSED:
+            continue
+        reason = (
+            FLOOR_QUESTION
+            if outcome == NO_CANDIDATE and detail.startswith(CS.ALL_TOO_SMALL)
+            else f"the INSERT lane refused the confirmed file: {line['insert_detail']}"
+            if outcome == TARGET
+            else f"{outcome}: {detail}"
+        )
+        owner.append(line | {"reason": reason})
+    for name, rows in ((OUTCOMES, lines), (OWNER_LIST, owner)):
+        (run / name).write_text(ST.jsonl_text(rows), encoding="utf-8", newline="\n")
+    counts: dict[str, int] = {}
+    for line in lines:
+        key = line["research"] if "insert" not in line else f"target:{line['insert']}"
+        if line["research"] == NO_CANDIDATE:
+            key = f"{NO_CANDIDATE}:{line['detail'].split(':')[0]}"
+        counts[key] = counts.get(key, 0) + 1
+    return {"sites": len(lines), "outcomes": counts, "owner_list": len(owner)}
+
+
 # ----------------------------------------------------------------------------------- the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
@@ -391,11 +562,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("candidates", "null-read", "null-plan", "null-accept"):
+    for name in ("candidates", "outcomes", "null-read", "null-plan", "null-accept"):
         sub.add_parser(name).add_argument("--run-dir", required=True, type=Path)
     sub.choices["candidates"].add_argument("--min-width", type=int, default=IH.OWNER_FLOOR_WIDTH)
     sub.choices["candidates"].add_argument("--min-height", type=int, default=IH.OWNER_FLOOR_HEIGHT)
     sub.choices["null-plan"].add_argument("--research-run", required=True, type=Path, nargs="+")
+    for name in ("null-plan", "outcomes"):
+        sub.choices[name].add_argument("--insert-run", type=Path, nargs="*", default=[])
     sub.choices["null-accept"].add_argument("--chunk", required=True, type=Path)
     args = parser.parse_args(list(argv) if argv is not None else None)
     run = args.run_dir
@@ -406,6 +579,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload: Any = write_candidates(
                 run, rows, commons, floor=(args.min_width, args.min_height)
             )
+        elif args.command == "outcomes":
+            payload = outcomes(run, args.insert_run)
         elif args.command == "null-read":
             lane_for(run)
             data = {
@@ -415,7 +590,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             digest = ST.write_text_once(run / READ_FILE, ST.json_text(data))
             payload = {"sha256": digest, "sites": len(data["sites"])}
         elif args.command == "null-plan":
-            payload = null_plan(run, args.research_run)
+            payload = null_plan(run, args.research_run, args.insert_run)
         else:
             payload = null_accept(run, args.chunk)
             print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))

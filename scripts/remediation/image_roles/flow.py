@@ -56,6 +56,10 @@ PICTURES_SHA = "PICTURES_SHA256.jsonl"
 JUDGED_FILE = "JUDGED_NOT_DEPICTS.jsonl"
 #: Verdicts of models that were never ground truth (D10, X6): their rows do not exclude a file.
 MINIMAX_WORD = "minimax"
+#: The marker of a D59 candidate run (`image_roles/d59.py candidates`): one candidate per site, the
+#: site's own hotlinked Commons thumbnail, which the owner sends to "a Sonnet depicts check" - so it
+#: is never cut by the prefilter first (`skips_prefilter`).
+D59_MARKER = "D59.json"
 
 
 class FlowError(ST.StateError):
@@ -74,6 +78,13 @@ def _population(run: Path) -> list[dict[str, Any]]:
     """The merged population when the identity stage ran, else the first one."""
     merged = run / POPULATION_2
     return _jsonl(merged if merged.is_file() else run / PP.POPULATION_FILE)
+
+
+def skips_prefilter(run: Path) -> bool:
+    """A D59 run goes straight to the depicts role. The prefilter is the cheap cut of a search's
+    eleven thousand candidates; a D59 site has one candidate, the picture its page already shows, and
+    D59 names the check it gets - the Sonnet depicts role - so a Haiku drop must not decide it."""
+    return (run / D59_MARKER).is_file()
 
 
 # ---------------------------------------------------------------------------------- population
@@ -203,6 +214,10 @@ def prefilter_export(
     limit: int | None = None,
 ) -> dict[str, Any]:
     """The prefilter's questions over every fetched candidate (sixty to a question)."""
+    if skips_prefilter(run):
+        raise FlowError(
+            f"{run.name} is a D59 run: its one candidate per site goes straight to depicts-export"
+        )
     flat = [
         {"site_id": s["site_id"], "file": c["file"], "path": c["path"]}
         for s in _jsonl(run / PICTURES)
@@ -221,10 +236,18 @@ def depicts_export(
     cache: WikiCache | None,
     read: Callable[[Mapping[str, Any]], bytes] = _read_picture,
 ) -> dict[str, Any]:
-    """The depicts role's questions over the prefilter's survivors, packed by site."""
-    surviving = {
-        (r["site_id"], r["file"]) for r in PF.judged(SG.read_results(run, PF.SPEC)) if r["survives"]
-    }
+    """The depicts role's questions over the prefilter's survivors, packed by site - over every
+    fetched candidate of a D59 run (`skips_prefilter`)."""
+    if skips_prefilter(run):
+        surviving = {
+            (s["site_id"], c["file"]) for s in _jsonl(run / PICTURES) for c in s["candidates"]
+        }
+    else:
+        surviving = {
+            (r["site_id"], r["file"])
+            for r in PF.judged(SG.read_results(run, PF.SPEC))
+            if r["survives"]
+        }
     population = {s["site_id"]: s for s in _population(run)}
     sites = []
     for fetched in _jsonl(run / PICTURES):
