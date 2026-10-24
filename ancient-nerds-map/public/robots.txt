@@ -2,6 +2,10 @@
 # https://ancientnerds.com/robots.txt
 
 User-agent: *
+# Honeypot (pipeline/visitor_class.py HONEYPOT_PATH): a client that fetches it
+# ignores robots.txt. Above "Allow: /" so a first-match parser (the 1994 rules,
+# Python's urllib.robotparser) blocks it too, not only a longest-match one.
+Disallow: /index-all/
 Allow: /
 
 # Sitemap location: the index, and its content parts by name. Bing reads all
@@ -86,4 +90,5 @@ Disallow: /api/
 Disallow: /data/basemaps/
 Disallow: /data/historical/
 Disallow: /goto/
+Disallow: /index-all/
 Disallow: /globe.html?
