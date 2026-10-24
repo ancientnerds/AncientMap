@@ -1,0 +1,5 @@
+$ apply.py --lane card-stats-2026-09-30 --emit   (2026-10-03T23:55:50+02:00)
+[32m2026-10-03 23:55:50[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO | api.routes.public_v1 | Public API: loaded 46 Seshat polities from ancient-nerds-map\src\data\seshat\polities.json
+INFO | mechanical.apply | wrote C:\PythonProjects\AncientMap\output\remediation\mechanical_card_stats\2026-09-30\APPLY.sql (21041 rows); ROLLBACK.sql is older than APPLY.sql: 1791064223.7138686 vs 1791064563.1992643
+EXIT=0

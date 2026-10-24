@@ -1,0 +1,500 @@
+$ apply.py --lane card-stats-2026-09-30 --apply   (2026-10-04T01:24:23+02:00)
+[32m2026-10-04 01:24:24[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO | api.routes.public_v1 | Public API: loaded 46 Seshat polities from ancient-nerds-map\src\data\seshat\polities.json
+=== before ===
+                                                                                                  metric                                                                                                   | value 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------
+ card_stats rows of tier 1                                                                                                                                                                                 | 504
+ card_stats rows of tier 2                                                                                                                                                                                 | 1739
+ card_stats rows of tier 3                                                                                                                                                                                 | 2383
+ card_stats rows of tier 4                                                                                                                                                                                 | 357
+ card_stats rows of tier 5                                                                                                                                                                                 | 21
+ card_stats rows whose total_power is not the sum of the five stats                                                                                                                                        | 0
+ curated rows whose card_stats civilization differs from the site country                                                                                                                                  | 2
+ curated sites                                                                                                                                                                                             | 5004
+ curated sites without a card_stats row                                                                                                                                                                    | 0
+ journal rows for the rollback stamp                                                                                                                                                                       | 0
+ journal rows for this run on non-curated rows                                                                                                                                                             | 0
+ journal rows for this run outside card_stats.(antiquity, fortification, cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group, civilization, empires, empire_count) | 0
+ journal rows for this run stamp                                                                                                                                                                           | 0
+ journal rows for this run whose row is not a card_stats row                                                                                                                                               | 0
+ journal rows for this run with a site_id_ref of another site                                                                                                                                              | 0
+ journal rows for this test id                                                                                                                                                                             | 4106
+
+
+column          rows  value
+antiquity        273  1
+antiquity        129  10
+antiquity        128  2
+antiquity       1151  3
+antiquity        910  4
+antiquity        351  5
+antiquity        759  6
+antiquity        460  7
+antiquity        652  8
+antiquity        191  9
+category_group   517  Burial & Death
+category_group   799  Fortifications
+category_group   224  Infrastructure
+category_group   526  Megalithic
+category_group   351  Monuments
+category_group    57  Other
+category_group   474  Religious
+category_group   414  Rock & Cave
+category_group  1605  Settlements
+category_group    37  Water & Ports
+civilization     107  Germany
+civilization     402  Greece
+civilization     218  Türkiye
+cultural_influence 1929  10
+cultural_influence   15  2
+cultural_influence  225  3
+cultural_influence   45  4
+cultural_influence  347  5
+cultural_influence  535  6
+cultural_influence  944  7
+cultural_influence  558  8
+cultural_influence  406  9
+empire_count    4196  0
+empire_count     783  1
+empire_count      24  2
+empire_count       1  9
+empires         4196  []
+empires           89  ["achaemenid"]
+empires           19  ["achaemenid", "egyptian"]
+empires            3  ["assyrian"]
+empires            1  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "macedonian", "egyptian"]
+empires            2  ["assyrian", "egyptian"]
+empires            2  ["babylonian"]
+empires            3  ["byzantine"]
+empires            1  ["byzantine", "roman"]
+empires           17  ["carthaginian"]
+empires           34  ["egyptian"]
+empires            2  ["elam"]
+empires            1  ["etruscan"]
+empires          127  ["greek"]
+empires            1  ["hittite"]
+empires            1  ["inca"]
+empires           13  ["macedonian"]
+empires            1  ["macedonian", "egyptian"]
+empires            1  ["maurya"]
+empires           50  ["maya"]
+empires            5  ["minoan"]
+empires            3  ["mycenaean"]
+empires           12  ["parthian"]
+empires          410  ["roman"]
+empires            1  ["sassanid"]
+empires            5  ["seleucid"]
+empires            1  ["teotihuacan"]
+empires            1  ["zapotec"]
+fortification    799  10
+fortification    931  2
+fortification    531  3
+fortification     37  4
+fortification   1605  5
+fortification    224  6
+fortification    351  7
+fortification    526  8
+legacy          4660  1
+legacy           344  4
+mystery         1211  1
+mystery           90  10
+mystery          167  2
+mystery          453  3
+mystery         1011  4
+mystery          476  5
+mystery          852  6
+mystery          365  7
+mystery          279  8
+mystery          100  9
+rarity_score       9  11
+rarity_score       9  12
+rarity_score      53  13
+rarity_score      91  15
+rarity_score      11  16
+rarity_score     279  17
+rarity_score      41  18
+rarity_score      38  19
+rarity_score      48  20
+rarity_score     194  21
+rarity_score      43  22
+rarity_score     229  23
+rarity_score      78  24
+rarity_score     461  25
+rarity_score     253  26
+rarity_score      74  27
+rarity_score     125  28
+rarity_score     155  29
+rarity_score     163  30
+rarity_score     160  31
+rarity_score     322  32
+rarity_score      82  33
+rarity_score     383  34
+rarity_score     132  35
+rarity_score     109  36
+rarity_score     161  37
+rarity_score     154  38
+rarity_score      44  39
+rarity_score     354  40
+rarity_score      60  41
+rarity_score      33  42
+rarity_score     165  43
+rarity_score      61  44
+rarity_score       8  45
+rarity_score      99  46
+rarity_score      35  47
+rarity_score      12  48
+rarity_score      68  49
+rarity_score      15  50
+rarity_score       6  51
+rarity_score      42  52
+rarity_score      11  53
+rarity_score      31  55
+rarity_score       7  56
+rarity_score       1  57
+rarity_score      20  58
+rarity_score       2  59
+rarity_score       1  60
+rarity_score      13  61
+rarity_score       1  63
+rarity_score       4  64
+rarity_score       2  67
+rarity_score       2  7
+rarity_score      50  9
+rarity_tier      504  1
+rarity_tier     1739  2
+rarity_tier     2383  3
+rarity_tier      357  4
+rarity_tier       21  5
+total_power        2  12
+total_power       34  13
+total_power       31  14
+total_power       69  15
+total_power      127  16
+total_power      149  17
+total_power      214  18
+total_power      176  19
+total_power      400  20
+total_power      388  21
+total_power      327  22
+total_power      405  23
+total_power      410  24
+total_power      394  25
+total_power      359  26
+total_power      409  27
+total_power      316  28
+total_power      206  29
+total_power      156  30
+total_power      181  31
+total_power       87  32
+total_power       73  33
+total_power       39  34
+total_power       32  35
+total_power       11  36
+total_power        2  37
+total_power        3  38
+NOTICE:  card_stats recompute: 21041 of 21041 planned cell(s) changed and journalled over 4468 curated site(s)
+System.Management.Automation.RemoteException
+total_power        4  39
+=== the write ===
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 21041
+DO
+COMMIT
+                                  metric                                  | value 
+--------------------------------------------------------------------------+-------
+ journal rows for this run stamp                                          | 21041
+ curated sites                                                            | 5004
+ curated rows whose card_stats civilization differs from the site country | 0
+ journal rows for this test id                                            | 25147
+ planned rows now holding the new value                                   | 21041
+(5 rows)
+
+
+=== after ===
+                                                                                                  metric                                                                                                   | value 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------
+ card_stats rows of tier 1                                                                                                                                                                                 | 590
+ card_stats rows of tier 2                                                                                                                                                                                 | 1560
+ card_stats rows of tier 3                                                                                                                                                                                 | 2437
+ card_stats rows of tier 4                                                                                                                                                                                 | 394
+ card_stats rows of tier 5                                                                                                                                                                                 | 23
+ card_stats rows whose total_power is not the sum of the five stats                                                                                                                                        | 0
+ curated rows whose card_stats civilization differs from the site country                                                                                                                                  | 0
+ curated sites                                                                                                                                                                                             | 5004
+ curated sites without a card_stats row                                                                                                                                                                    | 0
+ journal rows for the rollback stamp                                                                                                                                                                       | 0
+ journal rows for this run on non-curated rows                                                                                                                                                             | 0
+ journal rows for this run outside card_stats.(antiquity, fortification, cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group, civilization, empires, empire_count) | 0
+ journal rows for this run stamp                                                                                                                                                                           | 21041
+ journal rows for this run whose row is not a card_stats row                                                                                                                                               | 0
+ journal rows for this run with a site_id_ref of another site                                                                                                                                              | 0
+ journal rows for this test id                                                                                                                                                                             | 25147
+
+
+column          rows  value
+antiquity        152  1
+antiquity         55  10
+antiquity         76  2
+antiquity        659  3
+antiquity        643  4
+antiquity       2349  5
+antiquity        441  6
+antiquity        282  7
+antiquity        240  8
+antiquity        107  9
+category_group   477  Burial & Death
+category_group   808  Fortifications
+category_group   204  Infrastructure
+category_group   373  Megalithic
+category_group   384  Monuments
+category_group   445  Other
+category_group   441  Religious
+category_group   378  Rock & Cave
+category_group  1452  Settlements
+category_group    42  Water & Ports
+civilization     106  Germany
+civilization     402  Greece
+civilization     219  Türkiye
+cultural_influence 1879  10
+cultural_influence   11  2
+cultural_influence  240  3
+cultural_influence   80  4
+cultural_influence  364  5
+cultural_influence  548  6
+cultural_influence  981  7
+cultural_influence  516  8
+cultural_influence  385  9
+empire_count    2589  0
+empire_count    1779  1
+empire_count       9  10
+empire_count       5  11
+empire_count       4  12
+empire_count       6  13
+empire_count     255  2
+empire_count     101  3
+empire_count      98  4
+empire_count      45  5
+empire_count      25  6
+empire_count      30  7
+empire_count      37  8
+empire_count      21  9
+empires         2589  []
+empires           58  ["achaemenid"]
+empires            7  ["achaemenid", "byzantine", "roman"]
+empires            4  ["achaemenid", "byzantine", "roman", "egyptian"]
+empires           12  ["achaemenid", "egyptian"]
+empires            1  ["achaemenid", "greek", "byzantine"]
+empires           10  ["achaemenid", "greek", "byzantine", "roman"]
+empires            9  ["achaemenid", "greek", "byzantine", "roman", "babylonian", "hittite", "akkadian", "macedonian", "egyptian"]
+empires            9  ["achaemenid", "greek", "byzantine", "roman", "hittite", "macedonian", "egyptian"]
+empires           20  ["achaemenid", "greek", "byzantine", "roman", "macedonian", "egyptian"]
+empires            3  ["achaemenid", "greek", "byzantine", "roman", "phoenician"]
+empires            1  ["achaemenid", "greek", "byzantine", "sassanid", "roman", "hittite", "macedonian", "egyptian"]
+empires            1  ["achaemenid", "greek", "roman", "macedonian"]
+empires            1  ["achaemenid", "parthian", "greek", "sassanid", "indus_valley", "maurya", "macedonian", "egyptian"]
+empires            1  ["achaemenid", "parthian", "greek", "sassanid", "macedonian", "egyptian"]
+empires            1  ["achaemenid", "parthian", "greek", "sassanid", "maurya", "macedonian", "egyptian"]
+empires            4  ["achaemenid", "parthian", "sassanid", "roman"]
+empires            1  ["achaemenid", "seleucid", "greek", "sassanid", "macedonian", "egyptian"]
+empires            1  ["achaemenid", "seleucid", "parthian", "greek", "byzantine", "sassanid", "roman", "babylonian", "macedonian", "egyptian"]
+empires            5  ["achaemenid", "seleucid", "parthian", "greek", "sassanid", "macedonian", "egyptian"]
+empires            6  ["assyrian"]
+empires            1  ["assyrian", "achaemenid", "byzantine", "sassanid", "roman", "babylonian"]
+empires            1  ["assyrian", "achaemenid", "greek", "byzantine", "roman", "babylonian", "hittite", "akkadian", "macedonian", "egyptian"]
+empires            1  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "akkadian", "phoenician", "macedonian", "egyptian"]
+empires            3  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "hittite", "akkadian", "macedonian", "egyptian"]
+empires            1  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "hittite", "macedonian", "egyptian"]
+empires            9  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "macedonian", "egyptian"]
+empires            3  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "phoenician", "macedonian", "egyptian"]
+empires           21  ["assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "macedonian", "egyptian"]
+empires           17  ["assyrian", "achaemenid", "parthian", "sassanid", "roman"]
+empires            1  ["assyrian", "achaemenid", "seleucid", "byzantine", "sassanid", "roman", "babylonian", "hittite", "egyptian"]
+empires            2  ["assyrian", "achaemenid", "seleucid", "greek", "byzantine", "roman", "hittite", "macedonian", "egyptian"]
+empires            1  ["assyrian", "achaemenid", "seleucid", "greek", "byzantine", "sassanid", "roman", "hittite", "macedonian", "egyptian"]
+empires            1  ["assyrian", "achaemenid", "seleucid", "parthian", "greek", "sassanid", "elam", "akkadian", "macedonian", "egyptian"]
+empires            3  ["assyrian", "achaemenid", "seleucid", "parthian", "greek", "sassanid", "elam", "roman", "babylonian", "akkadian", "macedonian", "egyptian"]
+empires            1  ["assyrian", "achaemenid", "seleucid", "parthian", "greek", "sassanid", "roman", "babylonian", "macedonian", "egyptian"]
+empires            1  ["assyrian", "egyptian"]
+empires            2  ["axum"]
+empires           13  ["aztec"]
+empires            3  ["babylonian"]
+empires            4  ["byzantine"]
+empires           27  ["byzantine", "carthaginian", "roman"]
+empires           18  ["byzantine", "carthaginian", "roman", "phoenician"]
+empires           91  ["byzantine", "roman"]
+empires            2  ["byzantine", "roman", "etruscan"]
+empires            2  ["byzantine", "sassanid"]
+empires            1  ["byzantine", "sassanid", "roman"]
+empires           22  ["carolingian"]
+empires           13  ["carolingian", "byzantine", "roman"]
+empires           18  ["carolingian", "byzantine", "roman", "etruscan"]
+empires            5  ["carolingian", "greek", "roman"]
+empires          114  ["carolingian", "roman"]
+empires            9  ["carthaginian"]
+empires           20  ["carthaginian", "roman"]
+empires           39  ["egyptian"]
+empires            2  ["elam"]
+empires            1  ["etruscan"]
+empires          103  ["greek"]
+empires            3  ["greek", "byzantine", "carthaginian", "roman"]
+empires            3  ["greek", "byzantine", "roman"]
+empires           15  ["greek", "byzantine", "roman", "macedonian"]
+empires            1  ["greek", "macedonian"]
+empires            3  ["greek", "maurya", "macedonian", "egyptian"]
+empires            4  ["gupta", "indus_valley", "maurya"]
+empires            7  ["gupta", "kush", "achaemenid", "greek", "kushan", "indus_valley", "maurya", "macedonian"]
+empires            2  ["gupta", "kush", "greek", "kushan", "indus_valley", "maurya", "macedonian"]
+empires            7  ["gupta", "kush", "greek", "kushan", "indus_valley", "maurya", "macedonian", "egyptian"]
+empires            2  ["gupta", "maurya"]
+empires            7  ["han"]
+empires            1  ["han", "qin"]
+empires            1  ["han", "qin", "zhou"]
+empires            2  ["hittite"]
+empires          250  ["inca"]
+empires            8  ["kush", "achaemenid", "greek", "kushan", "maurya", "macedonian", "egyptian"]
+empires            5  ["kush", "achaemenid", "seleucid", "greek", "kushan", "macedonian", "egyptian"]
+empires           10  ["macedonian"]
+empires            1  ["macedonian", "egyptian"]
+empires            7  ["maurya"]
+empires           98  ["maya"]
+empires            5  ["minoan"]
+empires            1  ["mitanni", "assyrian", "achaemenid", "greek", "byzantine", "sassanid", "roman", "babylonian", "hittite", "macedonian", "egyptian"]
+empires            2  ["mitanni", "assyrian", "achaemenid", "seleucid", "greek", "byzantine", "sassanid", "roman", "babylonian", "hittite", "akkadian", "macedonian", "egyptian"]
+empires            4  ["mitanni", "assyrian", "achaemenid", "seleucid", "parthian", "greek", "byzantine", "sassanid", "roman", "babylonian", "akkadian", "macedonian", "egyptian"]
+empires            1  ["mitanni", "assyrian", "achaemenid", "seleucid", "parthian", "greek", "sassanid", "roman", "babylonian", "akkadian", "macedonian", "egyptian"]
+empires            9  ["mycenaean"]
+empires            2  ["mycenaean", "achaemenid"]
+empires            4  ["mycenaean", "achaemenid", "greek", "byzantine", "roman"]
+empires            2  ["mycenaean", "achaemenid", "greek", "byzantine", "roman", "macedonian"]
+empires           33  ["mycenaean", "byzantine", "roman"]
+empires           22  ["mycenaean", "greek", "byzantine", "roman"]
+empires           21  ["mycenaean", "greek", "byzantine", "roman", "minoan"]
+empires            1  ["olmec", "maya"]
+empires            7  ["parthian"]
+empires            3  ["parthian", "sassanid"]
+empires            4  ["parthian", "sassanid", "roman"]
+empires            1  ["phoenician"]
+empires         1099  ["roman"]
+empires           14  ["sassanid"]
+empires            5  ["seleucid"]
+empires            2  ["teotihuacan"]
+empires            3  ["zapotec", "aztec"]
+fortification    808  10
+fortification    855  2
+fortification    886  3
+fortification     42  4
+fortification   1452  5
+fortification    204  6
+fortification    384  7
+fortification    373  8
+legacy          4744  1
+legacy           260  4
+mystery         1066  1
+mystery          155  10
+mystery          358  2
+mystery          244  3
+mystery          585  4
+mystery          798  5
+mystery          957  6
+mystery          429  7
+mystery          323  8
+mystery           89  9
+rarity_score      28  11
+rarity_score      10  12
+rarity_score      59  13
+rarity_score       3  14
+rarity_score     106  15
+rarity_score       5  16
+rarity_score     283  17
+rarity_score      34  18
+rarity_score      51  19
+rarity_score      84  20
+rarity_score     183  21
+rarity_score      28  22
+rarity_score     138  23
+rarity_score      76  24
+rarity_score     281  25
+rarity_score     178  26
+rarity_score      66  27
+rarity_score     229  28
+rarity_score     212  29
+rarity_score     109  30
+rarity_score     136  31
+rarity_score     284  32
+rarity_score     110  33
+rarity_score     217  34
+rarity_score     181  35
+rarity_score     102  36
+rarity_score     296  37
+rarity_score     166  38
+rarity_score      46  39
+rarity_score     426  40
+rarity_score      61  41
+rarity_score      29  42
+rarity_score     184  43
+rarity_score      90  44
+rarity_score       7  45
+rarity_score     140  46
+rarity_score      24  47
+rarity_score      10  48
+rarity_score      45  49
+rarity_score      29  50
+rarity_score       6  51
+rarity_score      77  52
+rarity_score       9  53
+rarity_score       1  54
+rarity_score      23  55
+rarity_score       2  56
+rarity_score       3  57
+rarity_score      13  58
+rarity_score       5  59
+rarity_score      12  61
+rarity_score       2  62
+rarity_score       4  64
+rarity_score       5  67
+rarity_score       5  7
+rarity_score      91  9
+rarity_tier      590  1
+rarity_tier     1560  2
+rarity_tier     2437  3
+rarity_tier      394  4
+rarity_tier       23  5
+total_power        5  12
+total_power       57  13
+total_power       27  14
+total_power      100  15
+total_power      140  16
+total_power      114  17
+total_power      176  18
+total_power      286  19
+total_power      267  20
+total_power      287  21
+total_power      582  22
+total_power      408  23
+total_power      424  24
+total_power      367  25
+total_power      337  26
+total_power      364  27
+total_power      237  28
+total_power      222  29
+total_power      222  30
+total_power      104  31
+total_power      128  32
+total_power       62  33
+total_power       31  34
+total_power       32  35
+total_power       14  36
+total_power        4  37
+total_power        4  38
+total_power        2  39
+total_power        1  40
+  journal rows for this run stamp: 21041
+  planned rows now holding the planned new value: 21041
+  planned rows with no journal row for this run stamp: 0
+  journal rows for this run outside card_stats.(antiquity, fortification, cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group, civilization, empires, empire_count): 0
+APPLY OK: the read-back matches the plan, row for row
+EXIT=0

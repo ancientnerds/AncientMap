@@ -1,0 +1,15 @@
+$ apply.py --lane card-stats-2026-09-30 --check-primitive   (2026-10-03T23:55:40+02:00)
+[32m2026-10-03 23:55:41[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO | api.routes.public_v1 | Public API: loaded 46 Seshat polities from ancient-nerds-map\src\data\seshat\polities.json
+                                             signature                                             
+---------------------------------------------------------------------------------------------------
+ apply_remediation_change(text, text, text, text, text, text, text, text, text, text, jsonb, uuid)
+(1 row)
+
+ casts_value_to_column_type | casts_old_value | rereads_stored_value 
+----------------------------+-----------------+----------------------
+ t                          | t               | t
+(1 row)
+
+
+EXIT=0
