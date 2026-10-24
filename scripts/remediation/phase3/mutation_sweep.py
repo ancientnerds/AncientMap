@@ -25712,6 +25712,61 @@ X10_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 ]
 MUTATIONS += X10_MUTATIONS
 
+# ---- lane E's writer calibration (`wc/enrich_calibration.py`, the leave-one-out pool `enrich-writer`)
+ENRICH_CAL = "scripts/remediation/wc/enrich_calibration.py"
+ENRICH_CAL_TEST = "tests/remediation/test_enrich_calibration.py"
+ENRICH_CAL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "enrich calibration: the removed sentence stays in the question",
+        ENRICH_CAL,
+        "        if n == number:\n            continue\n",
+        "        if False:\n            continue\n",
+        ENRICH_CAL_TEST,
+        "test_the_pool_asks_the_text_without_its_open_question_and_seals_the_hosts",
+    ),
+    (
+        "enrich calibration: a sentence that frames nothing as open is a case",
+        ENRICH_CAL,
+        "        if not OPEN_WORDS.search(removed) or not urls:\n",
+        "        if False:  # mutant\n",
+        ENRICH_CAL_TEST,
+        "test_the_pool_asks_the_text_without_its_open_question_and_seals_the_hosts",
+    ),
+    (
+        "enrich calibration: a case nobody confirmed is a case",
+        ENRICH_CAL,
+        '        if not str(case["confirmed_by"]).strip():\n',
+        "        if False:  # mutant\n",
+        ENRICH_CAL_TEST,
+        "test_an_unanswered_case_is_never_agreement_and_a_case_needs_its_confirmation",
+    ),
+    (
+        "enrich calibration: any host counts as the source",
+        ENRICH_CAL,
+        '        same = found == PRESENT and bool(set(hosts.split(",")) & set(wanted["hosts"]))\n',
+        "        same = True  # mutant\n",
+        ENRICH_CAL_TEST,
+        "test_a_writer_that_finds_no_open_question_fails_and_lane_e_stays_closed",
+    ),
+    (
+        "enrich calibration: an unanswered case is measured",
+        ENRICH_CAL,
+        "        if read is None:\n",
+        "        if False:  # mutant\n",
+        ENRICH_CAL_TEST,
+        "test_an_unanswered_case_is_never_agreement_and_a_case_needs_its_confirmation",
+    ),
+    (
+        "enrich calibration: an answer without an open question has one",
+        ENRICH_CAL,
+        "    if not hooks:\n        return ABSENT, NO_SENTENCE, urls\n",
+        "    if False:\n        return ABSENT, NO_SENTENCE, urls\n",
+        ENRICH_CAL_TEST,
+        "test_a_writer_that_finds_no_open_question_fails_and_lane_e_stays_closed",
+    ),
+]
+MUTATIONS += ENRICH_CAL_MUTATIONS
+
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
