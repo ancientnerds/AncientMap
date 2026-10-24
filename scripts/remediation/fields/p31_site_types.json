@@ -1,5 +1,5 @@
 {
- "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron; 773 since lane WD3's refreshed harvest of 2026-10-01 added Luoyang, Ingapirca and Aramu Muru: former capital, tourist attraction, prefecture-level city of China, portal); pinned by fields/classify.py TABLE_SHA256.",
+ "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron; 773 since lane WD3's refreshed harvest of 2026-10-01 added Luoyang, Ingapirca and Aramu Muru: former capital, tourist attraction, prefecture-level city of China, portal); without the site_type aliases the merge map (mechanical/site_type_merge.json, sha256 56418e49a550e57e) moved into their targets; pinned by fields/classify.py TABLE_SHA256.",
  "classes": {
   "Q5": {
    "label": "human",
@@ -30,31 +30,22 @@
    "label": "city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q532": {
    "label": "village",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2977": {
    "label": "cathedral",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -70,20 +61,15 @@
    "kind": "site",
    "types": [
     "Residence/villa/farmhouse",
-    "Villa",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q3957": {
    "label": "town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q4022": {
@@ -118,12 +104,8 @@
    "label": "hamlet",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q5737": {
@@ -183,7 +165,6 @@
    "kind": "site",
    "types": [
     "Gate/archway/bridge",
-    "Gate",
     "Monument",
     "Memorial"
    ]
@@ -254,7 +235,6 @@
    "label": "church building",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -269,7 +249,6 @@
    "label": "Roman theatre",
    "kind": "site",
    "types": [
-    "Theater",
     "Theatre",
     "Amphitheatre"
    ]
@@ -319,12 +298,9 @@
    "label": "castle",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort"
    ]
   },
@@ -350,7 +326,6 @@
    "label": "theatre building",
    "kind": "site",
    "types": [
-    "Theater",
     "Theatre",
     "Amphitheatre"
    ]
@@ -359,7 +334,6 @@
    "label": "lava tube",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -426,7 +400,6 @@
    "label": "road",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -452,7 +425,6 @@
    "label": "cave",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -474,7 +446,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -543,12 +514,8 @@
    "label": "oasis",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
+    "Village",
     "Natural feature"
    ]
   },
@@ -559,7 +526,6 @@
     "Infrastructure",
     "Reservoir/aqueduct/canal",
     "Aqueduct",
-    "Road",
     "Road/avenue/trackway",
     "Cave Structures"
    ]
@@ -586,7 +552,6 @@
    "types": [
     "Monastery",
     "Religious",
-    "Church",
     "Church/cathedral",
     "Temple complex"
    ]
@@ -646,7 +611,6 @@
    "label": "gate",
    "kind": "site",
    "types": [
-    "Gate",
     "Gate/archway/bridge",
     "Fortification",
     "Monument"
@@ -667,7 +631,6 @@
    "types": [
     "Amphitheatre",
     "Theatre",
-    "Theater",
     "Stadium"
    ]
   },
@@ -675,24 +638,16 @@
    "label": "administrative territorial entity",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q57058": {
    "label": "municipality of Croatia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q57346": {
@@ -711,15 +666,13 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle",
+    "Castle/palace",
     "Wall",
     "Earthwork",
-    "Gate"
+    "Gate/archway/bridge"
    ]
   },
   "Q57831": {
@@ -727,12 +680,10 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q60129": {
@@ -751,24 +702,16 @@
    "label": "municipality of Switzerland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q74047": {
    "label": "ghost town",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q75520": {
@@ -798,7 +741,7 @@
     "Fortification",
     "Fort",
     "Military",
-    "Fortress"
+    "Fortress/citadel"
    ]
   },
   "Q82101": {
@@ -806,19 +749,16 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q82117": {
    "label": "city gate",
    "kind": "site",
    "types": [
-    "Gate",
     "Gate/archway/bridge",
     "Fortification",
     "Monument"
@@ -831,7 +771,7 @@
     "Minaret/tower",
     "Fortification",
     "Fort",
-    "Settlement",
+    "City/town/settlement",
     "Megalithic structures"
    ]
   },
@@ -844,7 +784,6 @@
    "label": "thoroughfare",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -854,23 +793,19 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q88291": {
    "label": "citadel",
    "kind": "site",
    "types": [
-    "Citadel",
     "Fortress/citadel",
-    "Fortress",
     "Fortification",
-    "Castle",
+    "Castle/palace",
     "Fort"
    ]
   },
@@ -878,14 +813,10 @@
    "label": "gord",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Fort",
     "Fortification",
-    "Fortress",
+    "Fortress/citadel",
     "Earthwork"
    ]
   },
@@ -894,19 +825,17 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q91759": {
    "label": "crannog",
    "kind": "site",
    "types": [
-    "Settlement",
+    "City/town/settlement",
     "Residence/villa/farmhouse",
     "Fortification",
     "Underwater structures",
@@ -918,24 +847,20 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q92026": {
    "label": "Japanese castle",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort"
    ]
   },
@@ -943,12 +868,9 @@
    "label": "motte-and-bailey castle",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort",
     "Earthwork",
     "Mound/tumulus"
@@ -959,12 +881,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q92383": {
@@ -972,12 +893,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q101659": {
@@ -1009,12 +929,8 @@
    "label": "parish",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q105190": {
@@ -1034,7 +950,6 @@
    "label": "chapel",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -1073,7 +988,6 @@
    "label": "minor basilica",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -1083,12 +997,8 @@
    "label": "neighborhood",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q124714": {
@@ -1122,8 +1032,7 @@
    "kind": "container",
    "types": [
     "Residence/villa/farmhouse",
-    "Villa",
-    "Settlement",
+    "City/town/settlement",
     "Village"
    ]
   },
@@ -1131,16 +1040,12 @@
    "label": "acropolis",
    "kind": "site",
    "types": [
-    "Citadel",
     "Fortress/citadel",
-    "Fortress",
     "Fortification",
     "Temple complex",
     "Temple",
     "Sanctuary",
-    "City",
-    "City/town/settlement",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q131681": {
@@ -1171,10 +1076,6 @@
    "label": "colony",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -1182,10 +1083,6 @@
    "label": "city-state",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -1193,12 +1090,8 @@
    "label": "district capital",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q143912": {
@@ -1206,7 +1099,6 @@
    "kind": "site",
    "types": [
     "Gate/archway/bridge",
-    "Gate",
     "Monument",
     "Memorial"
    ]
@@ -1232,10 +1124,6 @@
    "label": "polis",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -1312,7 +1200,6 @@
    "label": "basilica",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery",
@@ -1388,7 +1275,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -1415,7 +1301,7 @@
    "kind": "site",
    "types": [
     "Forum",
-    "Urban",
+    "City/town/settlement",
     "Monument"
    ]
   },
@@ -1568,7 +1454,7 @@
    "kind": "site",
    "types": [
     "Forum",
-    "Urban",
+    "City/town/settlement",
     "Monument"
    ]
   },
@@ -1585,8 +1471,6 @@
    "label": "quarry",
    "kind": "site",
    "types": [
-    "Mine",
-    "Quarry",
     "Mine/quarry",
     "Infrastructure"
    ]
@@ -1595,12 +1479,8 @@
    "label": "suburb",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q189771": {
@@ -1621,14 +1501,10 @@
    "label": "oppidum",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Fort",
     "Fortification",
-    "Fortress",
+    "Fortress/citadel",
     "Earthwork"
    ]
   },
@@ -1644,7 +1520,7 @@
     "Barrow",
     "Monument",
     "Memorial",
-    "Church",
+    "Church/cathedral",
     "Religious",
     "Cave Structures"
    ]
@@ -1664,7 +1540,6 @@
    "label": "Roman road",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -1674,7 +1549,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -1685,12 +1559,8 @@
    "label": "metropolis",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q207326": {
@@ -1738,10 +1608,6 @@
    "label": "municipium",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -1749,11 +1615,10 @@
    "label": "cave painting",
    "kind": "site",
    "types": [
-    "Cave",
+    "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
-    "Petroglyphs",
-    "Cave Structures"
+    "Petroglyphs"
    ]
   },
   "Q217123": {
@@ -1787,10 +1652,6 @@
    "label": "compact city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -1804,41 +1665,32 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q252021": {
    "label": "villa rustica",
    "kind": "site",
    "types": [
-    "Villa",
     "Residence/villa/farmhouse",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q253019": {
    "label": "Ortsteil",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q253030": {
    "label": "major regional center",
    "kind": "site",
    "types": [
-    "City",
-    "Settlement",
     "City/town/settlement",
     "Mound/tumulus",
     "Earthwork",
@@ -1958,7 +1810,7 @@
    "kind": "site",
    "types": [
     "Forum",
-    "Urban",
+    "City/town/settlement",
     "Monument"
    ]
   },
@@ -1966,7 +1818,6 @@
    "label": "pylon",
    "kind": "site",
    "types": [
-    "Gate",
     "Gate/archway/bridge",
     "Fortification",
     "Monument",
@@ -1997,12 +1848,8 @@
    "label": "abandoned village",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q355304": {
@@ -2035,12 +1882,8 @@
    "label": "village with a church",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q381885": {
@@ -2196,36 +2039,24 @@
    "label": "commune of France",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q486972": {
    "label": "human settlement",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q490329": {
    "label": "dong of South Korea",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q492255": {
@@ -2233,7 +2064,6 @@
    "kind": "site",
    "types": [
     "Gate/archway/bridge",
-    "Gate",
     "Monument",
     "Memorial"
    ]
@@ -2289,12 +2119,8 @@
    "label": "market municipality",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q567555": {
@@ -2389,7 +2215,7 @@
     "Temple",
     "Religious",
     "Monument",
-    "Church",
+    "Church/cathedral",
     "Tomb"
    ]
   },
@@ -2439,10 +2265,6 @@
    "label": "emporium",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Harbor",
     "Port",
@@ -2472,7 +2294,7 @@
    "kind": "site",
    "types": [
     "Forum",
-    "Urban",
+    "City/town/settlement",
     "Monument"
    ]
   },
@@ -2480,54 +2302,36 @@
    "label": "municipality of Austria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q672490": {
    "label": "deme",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q676050": {
    "label": "old town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q677678": {
    "label": "fortified town",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q684740": {
@@ -2539,12 +2343,8 @@
    "label": "district of Ethiopia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q697295": {
@@ -2563,8 +2363,7 @@
    "kind": "site",
    "types": [
     "Residence/villa/farmhouse",
-    "Villa",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q731841": {
@@ -2604,8 +2403,7 @@
     "Barrow",
     "Monument",
     "Memorial",
-    "Cemetery",
-    "Necropolis"
+    "Cemetery"
    ]
   },
   "Q740445": {
@@ -2622,51 +2420,38 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q747074": {
    "label": "comune of Italy",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q748149": {
    "label": "prefecture-level city of China",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q751876": {
    "label": "château",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort",
     "Residence/villa/farmhouse",
-    "Villa",
     "Palace"
    ]
   },
@@ -2674,12 +2459,8 @@
    "label": "tell",
    "kind": "site",
    "types": [
-    "Settlement",
-    "City",
-    "Town",
-    "Village",
     "City/town/settlement",
-    "Urban",
+    "Village",
     "Mound/tumulus"
    ]
   },
@@ -2696,10 +2477,6 @@
    "label": "Roman colony",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -2707,12 +2484,8 @@
    "label": "vicus",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q765822": {
@@ -2725,20 +2498,15 @@
    "kind": "site",
    "types": [
     "Residence/villa/farmhouse",
-    "Villa",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q783930": {
    "label": "municipalities and cities of Serbia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q785952": {
@@ -2798,7 +2566,6 @@
    "kind": "container",
    "types": [
     "Museum",
-    "Mine",
     "Mine/quarry"
    ]
   },
@@ -2806,7 +2573,6 @@
    "label": "mining region",
    "kind": "container",
    "types": [
-    "Mine",
     "Mine/quarry"
    ]
   },
@@ -2814,8 +2580,6 @@
    "label": "mine",
    "kind": "site",
    "types": [
-    "Mine",
-    "Quarry",
     "Mine/quarry",
     "Infrastructure"
    ]
@@ -2857,7 +2621,6 @@
    "label": "portal",
    "kind": "site",
    "types": [
-    "Gate",
     "Gate/archway/bridge",
     "Fortification",
     "Monument"
@@ -2900,7 +2663,6 @@
    "label": "subterranea",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -2942,10 +2704,8 @@
    "kind": "site",
    "types": [
     "Residence/villa/farmhouse",
-    "Villa",
     "Castle/palace",
-    "Palace",
-    "Castle"
+    "Palace"
    ]
   },
   "Q893775": {
@@ -2963,22 +2723,17 @@
    "kind": "site",
    "types": [
     "Cave Structures",
-    "Settlement",
+    "City/town/settlement",
     "Residence/villa/farmhouse",
-    "Village",
-    "Cave"
+    "Village"
    ]
   },
   "Q902814": {
    "label": "border city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q907116": {
@@ -2996,21 +2751,16 @@
    "label": "Roman villa",
    "kind": "site",
    "types": [
-    "Villa",
     "Residence/villa/farmhouse",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q925381": {
    "label": "city with powiat rights in Poland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q935773": {
@@ -3051,7 +2801,6 @@
    "label": "shelter",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -3063,12 +2812,9 @@
    "label": "deserted castle site",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort"
    ]
   },
@@ -3084,12 +2830,8 @@
    "label": "seaside resort",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1035294": {
@@ -3134,7 +2876,7 @@
    "kind": "site",
    "types": [
     "Forum",
-    "Urban",
+    "City/town/settlement",
     "Monument"
    ]
   },
@@ -3151,12 +2893,8 @@
    "label": "planned community",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1076486": {
@@ -3191,12 +2929,8 @@
    "label": "civil parish",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1129474": {
@@ -3215,7 +2949,6 @@
    "label": "grotto",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -3227,19 +2960,14 @@
    "label": "frazione",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1137365": {
    "label": "entrance",
    "kind": "site",
    "types": [
-    "Gate",
     "Gate/archway/bridge",
     "Fortification",
     "Monument"
@@ -3249,7 +2977,6 @@
    "label": "odeon",
    "kind": "site",
    "types": [
-    "Theater",
     "Theatre",
     "Amphitheatre"
    ]
@@ -3270,7 +2997,6 @@
    "label": "rock shelter",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -3294,7 +3020,7 @@
    "label": "Dartmoor Pound",
    "kind": "site",
    "types": [
-    "Settlement",
+    "City/town/settlement",
     "Wall",
     "Earthwork",
     "Megalithic walls"
@@ -3318,12 +3044,8 @@
    "label": "college town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1193438": {
@@ -3332,7 +3054,6 @@
    "types": [
     "Amphitheatre",
     "Theatre",
-    "Theater",
     "Stadium"
    ]
   },
@@ -3354,8 +3075,8 @@
    "label": "rocca",
    "kind": "container",
    "types": [
-    "Castle",
-    "Fortress",
+    "Castle/palace",
+    "Fortress/citadel",
     "Natural feature"
    ]
   },
@@ -3415,7 +3136,7 @@
     "Minaret/tower",
     "Megalithic structures",
     "Megalithic",
-    "Settlement",
+    "City/town/settlement",
     "Fortification"
    ]
   },
@@ -3443,12 +3164,8 @@
    "label": "Settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1253315": {
@@ -3500,8 +3217,7 @@
     "Palace",
     "Military",
     "Fort",
-    "Residence/villa/farmhouse",
-    "Villa"
+    "Residence/villa/farmhouse"
    ]
   },
   "Q1324228": {
@@ -3564,10 +3280,8 @@
    "kind": "site",
    "types": [
     "Residence/villa/farmhouse",
-    "Villa",
     "Castle/palace",
-    "Palace",
-    "Castle"
+    "Palace"
    ]
   },
   "Q1345069": {
@@ -3592,10 +3306,7 @@
    "kind": "site",
    "types": [
     "Cave Structures",
-    "City",
-    "Settlement",
-    "City/town/settlement",
-    "Cave"
+    "City/town/settlement"
    ]
   },
   "Q1349587": {
@@ -3614,12 +3325,8 @@
    "label": "municipality of Greece",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1351659": {
@@ -3673,12 +3380,8 @@
    "label": "county town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1368970": {
@@ -3697,7 +3400,6 @@
     "Religious",
     "Temple",
     "Temple complex",
-    "Church",
     "Church/cathedral",
     "Monastery",
     "Mosque",
@@ -3746,8 +3448,7 @@
     "Monument",
     "Memorial",
     "Cave Structures",
-    "Rock relief/carving",
-    "Necropolis"
+    "Rock relief/carving"
    ]
   },
   "Q1406331": {
@@ -3836,7 +3537,7 @@
    "types": [
     "Monastery",
     "Religious",
-    "Church",
+    "Church/cathedral",
     "Earthwork"
    ]
   },
@@ -3865,7 +3566,7 @@
    "label": "tambo",
    "kind": "site",
    "types": [
-    "Settlement",
+    "City/town/settlement",
     "Infrastructure",
     "Road/avenue/trackway",
     "Residence/villa/farmhouse"
@@ -3892,36 +3593,24 @@
    "label": "socken",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1529096": {
    "label": "village of Turkey",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1549591": {
    "label": "big city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1570262": {
@@ -3982,7 +3671,6 @@
    "label": "bridle path",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -4034,12 +3722,8 @@
    "label": "settlement site",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1709247": {
@@ -4094,12 +3778,10 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q1787688": {
@@ -4129,36 +3811,24 @@
    "label": "municipal formation in Russia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1852859": {
    "label": "cadastral populated place in the Netherlands",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1901835": {
    "label": "seat of government",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1916821": {
@@ -4208,12 +3878,8 @@
    "label": "municipality of Mexico",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q1959314": {
@@ -4303,7 +3969,6 @@
    "label": "Eastern Orthodox church building",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -4313,12 +3978,8 @@
    "label": "municipality of the Netherlands",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2046310": {
@@ -4389,12 +4050,8 @@
    "label": "municipality of Spain",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2087181": {
@@ -4404,8 +4061,7 @@
     "Museum",
     "Archaeological site",
     "Heritage site",
-    "Residence/villa/farmhouse",
-    "Villa"
+    "Residence/villa/farmhouse"
    ]
   },
   "Q2094954": {
@@ -4421,19 +4077,14 @@
    "label": "townland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2179671": {
    "label": "Roman roads in Britain",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -4442,10 +4093,6 @@
    "label": "Roman city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -4464,7 +4111,6 @@
    "label": "show cave",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -4476,12 +4122,8 @@
    "label": "port city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
+    "Village",
     "Harbor",
     "Port"
    ]
@@ -4490,24 +4132,16 @@
    "label": "municipality of Galicia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2292572": {
    "label": "district of Costa Rica",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2293362": {
@@ -4558,7 +4192,6 @@
    "label": "dripstone cave",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -4590,10 +4223,6 @@
    "label": "altepetl",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -4601,10 +4230,6 @@
    "label": "City-kingdom of Cyprus",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -4613,7 +4238,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -4636,12 +4260,8 @@
    "label": "urban municipality of Poland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2624046": {
@@ -4668,12 +4288,8 @@
    "label": "territorial demarcation of Mexico City",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2736554": {
@@ -4716,7 +4332,6 @@
    "label": "Greek theatre",
    "kind": "site",
    "types": [
-    "Theater",
     "Theatre",
     "Amphitheatre"
    ]
@@ -4794,10 +4409,6 @@
    "label": "lost city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -4805,12 +4416,8 @@
    "label": "quarter",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2985026": {
@@ -4837,24 +4444,16 @@
    "label": "commune of Algeria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q2989470": {
    "label": "commune of Mauritania",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q3024240": {
@@ -4866,12 +4465,8 @@
    "label": "single entity of population",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q3078732": {
@@ -4897,12 +4492,8 @@
    "label": "city of Indonesia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q3240227": {
@@ -4943,12 +4534,8 @@
    "label": "locality",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q3294251": {
@@ -4971,7 +4558,6 @@
    "label": "footpath",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -5041,7 +4627,6 @@
    "label": "ancient trackway",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -5089,7 +4674,6 @@
     "Infrastructure",
     "Reservoir/aqueduct/canal",
     "Aqueduct",
-    "Road",
     "Road/avenue/trackway",
     "Cave Structures"
    ]
@@ -5098,22 +4682,14 @@
    "label": "village of Poland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q3559137": {
    "label": "Gallo-Roman city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -5142,7 +4718,7 @@
     "Megalithic structures",
     "Megalithic walls",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q3822604": {
@@ -5170,24 +4746,16 @@
    "label": "quarter of Naples",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q3976659": {
    "label": "subdivisions of Belgrade",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q4167410": {
@@ -5199,36 +4767,24 @@
    "label": "village of Japan",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q4224624": {
    "label": "kmetstvo of Bulgaria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q4313794": {
    "label": "populated place in Georgia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q4362293": {
@@ -5236,10 +4792,9 @@
    "kind": "site",
    "types": [
     "Cave Structures",
-    "Settlement",
+    "City/town/settlement",
     "Residence/villa/farmhouse",
-    "Village",
-    "Cave"
+    "Village"
    ]
   },
   "Q4363262": {
@@ -5265,9 +4820,8 @@
     "Ruin",
     "Heritage site",
     "Scheduled monument",
-    "Cave",
     "Cave Structures",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q4502142": {
@@ -5321,12 +4875,8 @@
    "label": "settlement in Croatia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q4895508": {
@@ -5343,12 +4893,8 @@
    "label": "spa town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
+    "Village",
     "Bath"
    ]
   },
@@ -5376,12 +4922,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q5069563": {
@@ -5405,14 +4950,10 @@
    "label": "dava",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Fort",
     "Fortification",
-    "Fortress",
+    "Fortress/citadel",
     "Earthwork"
    ]
   },
@@ -5426,7 +4967,7 @@
     "Mound/tumulus",
     "Geoglyphs",
     "Wall",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q5393308": {
@@ -5456,21 +4997,16 @@
    "types": [
     "Cave Structures",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q5670577": {
    "label": "alqueria",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
-    "Residence/villa/farmhouse",
-    "Villa"
+    "Village",
+    "Residence/villa/farmhouse"
    ]
   },
   "Q5999924": {
@@ -5542,7 +5078,6 @@
    "kind": "site",
    "types": [
     "Gate/archway/bridge",
-    "Gate",
     "Monument",
     "Memorial"
    ]
@@ -5562,7 +5097,6 @@
    "label": "military road",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure",
     "Military"
@@ -5572,12 +5106,8 @@
    "label": "municipality of Lebanon",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q6974552": {
@@ -5594,12 +5124,9 @@
    "label": "qal'a",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort"
    ]
   },
@@ -5623,7 +5150,6 @@
    "types": [
     "Amphitheatre",
     "Theatre",
-    "Theater",
     "Stadium"
    ]
   },
@@ -5631,19 +5157,14 @@
    "label": "small burgh",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q7558985": {
    "label": "solutional cave",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -5686,36 +5207,24 @@
    "label": "unparished area",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q7930989": {
    "label": "city or town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q7969215": {
    "label": "ward of the City of London",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q9096832": {
@@ -5764,17 +5273,12 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
     "Tomb",
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q10521078": {
@@ -5803,23 +5307,18 @@
    "label": "Ortschaft",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q11269813": {
    "label": "cave with prehistoric art",
    "kind": "site",
    "types": [
-    "Cave",
+    "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
-    "Petroglyphs",
-    "Cave Structures"
+    "Petroglyphs"
    ]
   },
   "Q11486300": {
@@ -5874,27 +5373,21 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle",
+    "Castle/palace",
     "Wall",
     "Earthwork",
-    "Gate"
+    "Gate/archway/bridge"
    ]
   },
   "Q12131624": {
    "label": "city in Ukraine",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q12137573": {
@@ -5906,9 +5399,8 @@
     "Ruin",
     "Heritage site",
     "Scheduled monument",
-    "Cave",
     "Cave Structures",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q12223988": {
@@ -5926,12 +5418,8 @@
    "label": "civil parish of Galicia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q12413618": {
@@ -5955,12 +5443,9 @@
    "label": "earthen castle",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort",
     "Earthwork",
     "Mound/tumulus"
@@ -5970,12 +5455,8 @@
    "label": "urban area in Sweden",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q13033698": {
@@ -5983,7 +5464,7 @@
    "kind": "site",
    "types": [
     "Forum",
-    "Urban",
+    "City/town/settlement",
     "Monument"
    ]
   },
@@ -6001,12 +5482,9 @@
    "label": "Welsh princes' castles",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort"
    ]
   },
@@ -6023,7 +5501,6 @@
    "label": "long-distance trail",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -6062,12 +5539,8 @@
    "label": "place with town rights and privileges",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q14276458": {
@@ -6094,10 +5567,6 @@
    "label": "destroyed city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -6106,10 +5575,7 @@
    "kind": "site",
    "types": [
     "Cave Structures",
-    "City",
-    "Settlement",
     "City/town/settlement",
-    "Cave",
     "Monastery"
    ]
   },
@@ -6128,24 +5594,16 @@
    "label": "cantonal capital of Switzerland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q14839548": {
    "label": "minor locality in Sweden",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q15069452": {
@@ -6162,12 +5620,8 @@
    "label": "town in Croatia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q15120977": {
@@ -6198,58 +5652,38 @@
    "label": "municipality seat",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q15344922": {
    "label": "oblast seat",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q15630849": {
    "label": "village of Bulgaria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q15642541": {
    "label": "human-geographic territorial entity",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q15661340": {
    "label": "ancient city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -6262,7 +5696,6 @@
    "label": "National Trail",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -6271,12 +5704,8 @@
    "label": "municipality of Libya",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q16685255": {
@@ -6316,7 +5745,7 @@
    "label": "hut circle",
    "kind": "site",
    "types": [
-    "Settlement",
+    "City/town/settlement",
     "Village",
     "Residence/villa/farmhouse"
    ]
@@ -6351,12 +5780,8 @@
    "label": "mahalle",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q17156398": {
@@ -6378,7 +5803,6 @@
     "Natural feature",
     "Archaeological site",
     "Site",
-    "City",
     "City/town/settlement",
     "Temple complex",
     "Temple"
@@ -6408,24 +5832,17 @@
    "label": "Iron Age settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q17715832": {
    "label": "castle ruin",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort"
    ]
   },
@@ -6466,24 +5883,16 @@
    "label": "small city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q18511725": {
    "label": "market town",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q18870689": {
@@ -6499,12 +5908,8 @@
    "label": "former municipality",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q19860854": {
@@ -6520,7 +5925,7 @@
    "label": "talaiotic village",
    "kind": "site",
    "types": [
-    "Settlement",
+    "City/town/settlement",
     "Village",
     "Megalithic structures",
     "Megalithic"
@@ -6530,12 +5935,8 @@
    "label": "locality of Mexico",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q20588290": {
@@ -6556,12 +5957,8 @@
    "label": "submerged settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
+    "Village",
     "Underwater structures"
    ]
   },
@@ -6593,24 +5990,16 @@
    "label": "village of Ukraine",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q21751582": {
    "label": "deserted medieval village",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q21752084": {
@@ -6644,24 +6033,16 @@
    "label": "former settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q22674930": {
    "label": "destroyed settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q22989102": {
@@ -6673,7 +6054,6 @@
    "label": "paved road outside of settlements",
    "kind": "site",
    "types": [
-    "Road",
     "Road/avenue/trackway",
     "Infrastructure"
    ]
@@ -6682,36 +6062,24 @@
    "label": "centre of Saudi Arabia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q23828031": {
    "label": "village in Jordan",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q23828039": {
    "label": "village/town/city in Lebanon",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q23929671": {
@@ -6749,7 +6117,6 @@
    "types": [
     "Amphitheatre",
     "Theatre",
-    "Theater",
     "Stadium"
    ]
   },
@@ -6757,10 +6124,6 @@
    "label": "Civitas foederata",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -6768,12 +6131,8 @@
    "label": "desa",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q27506396": {
@@ -6785,12 +6144,8 @@
    "label": "former capital",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q27608973": {
@@ -6806,24 +6161,16 @@
    "label": "abandoned hamlet",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q27916659": {
    "label": "former place",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q28045079": {
@@ -6831,24 +6178,19 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q28328984": {
    "label": "village in Armenia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q28415786": {
@@ -6870,19 +6212,14 @@
    "label": "cadastral municipality of Serbia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q28846085": {
    "label": "city gate of London",
    "kind": "site",
    "types": [
-    "Gate",
     "Gate/archway/bridge",
     "Fortification",
     "Monument"
@@ -6913,24 +6250,16 @@
    "label": "community of Cyprus Republic",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q29556224": {
    "label": "city in Cyprus",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q29702995": {
@@ -6973,8 +6302,6 @@
     "Site",
     "Ruin",
     "Heritage site",
-    "City",
-    "Settlement",
     "City/town/settlement",
     "City/town/settlement, Pyramid complex",
     "Pyramid complex",
@@ -6989,8 +6316,6 @@
     "Site",
     "Ruin",
     "Heritage site",
-    "City",
-    "Settlement",
     "City/town/settlement",
     "City/town/settlement, Pyramid complex",
     "Pyramid complex",
@@ -7005,8 +6330,6 @@
     "Site",
     "Ruin",
     "Heritage site",
-    "City",
-    "Settlement",
     "City/town/settlement",
     "City/town/settlement, Pyramid complex",
     "Pyramid complex",
@@ -7021,8 +6344,6 @@
     "Site",
     "Ruin",
     "Heritage site",
-    "City",
-    "Settlement",
     "City/town/settlement",
     "City/town/settlement, Pyramid complex",
     "Pyramid complex",
@@ -7043,12 +6364,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q31028695": {
@@ -7056,12 +6376,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q31028835": {
@@ -7069,12 +6388,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q31028965": {
@@ -7082,12 +6400,11 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q31029044": {
@@ -7095,27 +6412,22 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
     "Earthwork",
-    "Settlement"
+    "City/town/settlement"
    ]
   },
   "Q32164125": {
    "label": "fortified manor house",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort",
     "Residence/villa/farmhouse",
-    "Villa",
     "Palace"
    ]
   },
@@ -7123,12 +6435,8 @@
    "label": "municipality of Catalonia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q34918903": {
@@ -7163,7 +6471,7 @@
     "Tomb",
     "Burial",
     "Funerary",
-    "Church",
+    "Church/cathedral",
     "Religious"
    ]
   },
@@ -7171,12 +6479,8 @@
    "label": "Serbian city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q37947353": {
@@ -7217,12 +6521,10 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q40006041": {
@@ -7243,10 +6545,6 @@
    "label": "historic city",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -7263,12 +6561,8 @@
    "label": "urban municipality in Germany",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q44097629": {
@@ -7301,12 +6595,8 @@
    "label": "largest city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q53336805": {
@@ -7340,12 +6630,8 @@
    "label": "city of Switzerland",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q55075651": {
@@ -7390,7 +6676,6 @@
    "label": "Catholic cathedral",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -7401,7 +6686,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -7423,12 +6707,8 @@
    "label": "village in India",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q58621988": {
@@ -7466,7 +6746,6 @@
    "label": "cave church",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery",
@@ -7489,12 +6768,8 @@
    "label": "Bronze Age settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q66108498": {
@@ -7506,7 +6781,6 @@
    "label": "cave system",
    "kind": "site",
    "types": [
-    "Cave",
     "Cave Structures",
     "Cave Structures, Rock art",
     "Rock art",
@@ -7518,22 +6792,14 @@
    "label": "urban ensemble",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q69391739": {
    "label": "Greek colony",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -7570,12 +6836,9 @@
    "label": "motte",
    "kind": "site",
    "types": [
-    "Castle",
     "Castle/palace",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
-    "Citadel",
     "Fort",
     "Earthwork",
     "Mound/tumulus"
@@ -7586,24 +6849,18 @@
    "kind": "site",
    "types": [
     "Fort",
-    "Fortress",
     "Fortress/citadel",
     "Fortification",
     "Military",
-    "Citadel",
-    "Castle"
+    "Castle/palace"
    ]
   },
   "Q85631896": {
    "label": "urban district of Bavaria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q88778578": {
@@ -7611,9 +6868,8 @@
    "kind": "site",
    "types": [
     "Cave Structures",
-    "Cave",
     "Tomb",
-    "Mine",
+    "Mine/quarry",
     "Temple",
     "Religious"
    ]
@@ -7622,12 +6878,8 @@
    "label": "city in Bulgaria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q92755865": {
@@ -7685,7 +6937,6 @@
    "types": [
     "Religious",
     "Temple",
-    "Church",
     "Church/cathedral",
     "Monastery",
     "Mosque",
@@ -7751,14 +7002,10 @@
    "label": "iberian settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Fort",
     "Fortification",
-    "Fortress",
+    "Fortress/citadel",
     "Earthwork"
    ]
   },
@@ -7777,7 +7024,6 @@
    "label": "Romanian Orthodox church building",
    "kind": "site",
    "types": [
-    "Church",
     "Church/cathedral",
     "Religious",
     "Monastery"
@@ -7789,7 +7035,7 @@
    "types": [
     "Monastery",
     "Religious",
-    "Church",
+    "Church/cathedral",
     "Temple complex",
     "Cave Structures"
    ]
@@ -7798,24 +7044,16 @@
    "label": "Jewish settlement in the land of Israel",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q106491339": {
    "label": "Neolithic settlement",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q107990777": {
@@ -7842,12 +7080,8 @@
    "label": "city of United Kingdom",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q110951231": {
@@ -7920,26 +7154,18 @@
    "label": "municipality without town privileges in Germany",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q116798230": {
    "label": "celtiberian town",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement",
     "Fort",
     "Fortification",
-    "Fortress",
+    "Fortress/citadel",
     "Earthwork"
    ]
   },
@@ -7947,10 +7173,6 @@
    "label": "colonia augusta",
    "kind": "site",
    "types": [
-    "City",
-    "Town",
-    "Settlement",
-    "Urban",
     "City/town/settlement"
    ]
   },
@@ -7981,7 +7203,6 @@
     "Cairn",
     "Earthwork",
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex"
    ]
   },
@@ -8000,12 +7221,8 @@
    "label": "municipality of the Valencian Community",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q124750618": {
@@ -8035,12 +7252,8 @@
    "label": "village in Egypt",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q125855764": {
@@ -8048,7 +7261,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -8082,7 +7294,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -8094,7 +7305,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -8106,7 +7316,6 @@
    "kind": "site",
    "types": [
     "Cemetery",
-    "Necropolis",
     "Necropolis/tombs complex",
     "Burial",
     "Funerary",
@@ -8122,60 +7331,40 @@
    "label": "nucleus of singular population entity",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q127388602": {
    "label": "settlement formation in Bulgaria",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q129676344": {
    "label": "large city",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q129725870": {
    "label": "city of regional significance",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q130212458": {
    "label": "village of Kazakhstan",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q130313562": {
@@ -8184,7 +7373,6 @@
    "types": [
     "Amphitheatre",
     "Theatre",
-    "Theater",
     "Stadium"
    ]
   },
@@ -8206,7 +7394,6 @@
     "Cave Structures",
     "Rock relief/carving",
     "Rock art",
-    "Cave",
     "Monastery",
     "Temple complex"
    ]
@@ -8244,24 +7431,16 @@
    "label": "local board in Osijek",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q134587884": {
    "label": "town in Myanmar",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q136351774": {
@@ -8282,20 +7461,15 @@
     "Funerary",
     "Burial",
     "Temple complex",
-    "Pyramid complex",
-    "Necropolis"
+    "Pyramid complex"
    ]
   },
   "Q141223668": {
    "label": "self-governing city of Georgia",
    "kind": "container",
    "types": [
-    "City",
-    "Town",
-    "Village",
-    "Settlement",
-    "Urban",
-    "City/town/settlement"
+    "City/town/settlement",
+    "Village"
    ]
   },
   "Q141267696": {

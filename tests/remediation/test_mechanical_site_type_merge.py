@@ -137,18 +137,22 @@ class TestTheMap:
         with pytest.raises(PlanError, match="names no `by`, `at` and `check`"):
             M.parse_map(map_text(decision={"by": "x", "at": "", "check": "c"}), "x")
 
-    def test_the_p31_table_keeps_every_alias_until_the_merge_is_in_production(self) -> None:
-        """Until the decided merge is applied and `table --write` moves the table with its pin,
-        the pinned table still lists every alias, so a classify run reads the unmerged rows as
-        before (the merge map is undecided today)."""
+    def test_the_pinned_p31_table_is_the_merged_one(self) -> None:
+        """The merge wave of 2026-10-24 is in production and `table --write` moved the table with
+        its pin: the pinned table is the pre-merge table merged with the decided map, byte for
+        byte, and offers none of its aliases, so a later field wave never proposes them again."""
         merge_map = M.load_map()
+        before = {t for entry in FC.parse_table(_table_text()).values() for t in entry.types}
+        assert set(merge_map.merges) <= before
+        merged_text, _ = M.merged_table(_table_text(), merge_map)
+        assert FC.TABLE.read_bytes().replace(b"\r\n", b"\n").decode("utf-8") == merged_text
         offered = {t for entry in FC.load_table().values() for t in entry.types}
-        assert set(merge_map.merges) <= offered
+        assert not set(merge_map.merges) & offered
 
     def test_an_unmerged_alias_row_classifies_as_before(self) -> None:
         """A `Settlement` site whose item is a 'human settlement' (a container class) holds its
-        type: no identity doubt, the type confirmed - with the pinned table, not a merged one."""
-        table = FC.load_table()
+        type: no identity doubt, the type confirmed - with the pre-merge table, not a merged one."""
+        table = FC.parse_table(_table_text())
         who = FC.identity("Settlement", [table["Q486972"]])
         assert not who.doubt
         merged = FC.parse_table(M.merged_table(_table_text(), decided())[0])
@@ -160,8 +164,13 @@ class TestTheMap:
         assert dict(M.category_group()) == dict(CATEGORY_GROUP)
 
 
+#: The P31 table as it stood before the merge wave of 2026-10-24 (the pinned table at 9a1c5a5): the
+#: table the merge starts from. The pinned table is its merged form since `table --write`.
+PREMERGE_TABLE = Path(__file__).parent / "fixtures" / "p31_site_types.premerge.json"
+
+
 def _table_text() -> str:
-    return FC.TABLE.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
+    return PREMERGE_TABLE.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
 
 
 class TestTheTable:

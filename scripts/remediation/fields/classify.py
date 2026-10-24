@@ -121,7 +121,7 @@ FIELDS = ("coordinates", "period_start", "site_type", "source_url")
 TABLE = _HERE.parent / "p31_site_types.json"
 #: sha256 of the table's LF text. The table is reviewed data: a changed table is refused until this
 #: pin is moved with it, in one reviewed commit.
-TABLE_SHA256 = "38140ab2415ce6d8352f96237d839ddab93131e0df3a9ac78e952d793bcba768"
+TABLE_SHA256 = "fe54e1661707f894cf60f03b2d218de60adc193ce57a7ae860d7c0bfcde45414"
 #: `other`: the item is no place at all - an object, a person, a deity, a concept, a Wikimedia page.
 KINDS = frozenset({"site", "generic", "container", "other"})
 #: The kinds that put the item's identity in doubt unless the stored type is one they list.

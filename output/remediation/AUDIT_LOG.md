@@ -14339,3 +14339,11 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   out. Then `rebuild_static` (268 s), freshness 0 differing sites, IndexNow `--lastmod-since 2026-10-24` 162 URLs
   accepted, Qdrant `sites` 9/9 indexed. Not done (owner): rejecting the founder-review proposal of L'Anse aux Meadows
   (01e29c6e-...) needs a founder token - in the owner list.
+- **Phase 8 site_type merge (D25, X14) - done 2026-10-24.** Opus decided the alias map under X14; an independent Opus
+  check held 16 merges and refuted Megalithic (the group's generic word, kept). Map committed and pinned (`9a1c5a5`,
+  MAP_SHA256 56418e49...). Wave 2026-10-24: 308 curated rows in 4 steps (100/100/100/8), each emit/rehearse/probe-guards
+  (5 guards refused)/apply (APPLY OK)/verify/rehearse-rollback/accept 0 deviations; journal recount 308 rows at 308 sites
+  (run stamps `2026-10-24_mechanical-site-type-merge-s001..s004`); 0 curated rows hold an alias. Then `rebuild_static`
+  (262 s), freshness 0 differing sites, IndexNow 502 URLs accepted (every page changed on 2026-10-24). The P31 table moved
+  with its pin in one commit (`table --write`, 314 classes changed, TABLE_SHA256 fe54e166...); the pre-merge table is
+  now a test fixture and a test pins the pinned table as its exact merged form.

@@ -1,0 +1,19 @@
+{"kind" : "site", "row" : {"site_id":"f70384d7-00ec-45ba-b086-bf1aba816f84","name":"Dreros","source_id":"ancient_nerds","scope_status":null,"site_type":"City"}}
+{"kind" : "site", "row" : {"site_id":"f82d4a70-4581-4e06-858a-d52019ecbd0f","name":"Zacpeten","source_id":"ancient_nerds","scope_status":null,"site_type":"Settlement"}}
+{"kind" : "site", "row" : {"site_id":"f921cb05-ab49-4bc9-b9a0-3dae48ee3e5a","name":"Pucará, Puno","source_id":"ancient_nerds","scope_status":null,"site_type":"Settlement"}}
+{"kind" : "site", "row" : {"site_id":"f967e3c4-fc5b-4cd0-91d1-06030d51e31c","name":"Shaduppum","source_id":"ancient_nerds","scope_status":"retired","site_type":"Settlement"}}
+{"kind" : "site", "row" : {"site_id":"f993864c-339b-4a13-b85c-59a59737df2c","name":"Dara Fortress","source_id":"ancient_nerds","scope_status":"retired","site_type":"Fortress"}}
+{"kind" : "site", "row" : {"site_id":"fac04898-9342-436f-8a58-df8061d72fcc","name":"Río Azul","source_id":"ancient_nerds","scope_status":null,"site_type":"City"}}
+{"kind" : "site", "row" : {"site_id":"fc973357-2176-4ed3-ab9d-fdb783edb192","name":"Castro de Borneiro","source_id":"ancient_nerds","scope_status":null,"site_type":"Settlement"}}
+{"kind" : "site", "row" : {"site_id":"ffb9aa8c-0ecc-4510-b18d-8555e319c427","name":"Leskernick Hill","source_id":"ancient_nerds","scope_status":null,"site_type":"Settlement"}}
+{"kind" : "journal", "row" : {"id":27776,"row_pk":"f70384d7-00ec-45ba-b086-bf1aba816f84","run_stamp":"phase3:batch-0007:chunk-0001","test_id":"P3/site_type","old_value":"Fortress/citadel","new_value":"Archaeological site"}}
+{"kind" : "journal", "row" : {"id":29390,"row_pk":"f921cb05-ab49-4bc9-b9a0-3dae48ee3e5a","run_stamp":"phase3:batch-0281:chunk-0001","test_id":"P3/site_type","old_value":"Settlement","new_value":"City/town/settlement"}}
+{"kind" : "journal", "row" : {"id":36097,"row_pk":"f921cb05-ab49-4bc9-b9a0-3dae48ee3e5a","run_stamp":"2026-09-25_mechanical-journal-reversal-3","test_id":"P6/journal-reversal-3","old_value":"City/town/settlement","new_value":"Settlement"}}
+{"kind" : "journal", "row" : {"id":112251,"row_pk":"f82d4a70-4581-4e06-858a-d52019ecbd0f","run_stamp":"2026-09-26d_fields-wd1-s023","test_id":"WD1/structured-fields","old_value":"City/town/settlement","new_value":null}}
+{"kind" : "journal", "row" : {"id":112297,"row_pk":"fac04898-9342-436f-8a58-df8061d72fcc","run_stamp":"2026-09-26d_fields-wd1-s023","test_id":"WD1/structured-fields","old_value":"City/town/settlement","new_value":null}}
+{"kind" : "journal", "row" : {"id":126647,"row_pk":"f70384d7-00ec-45ba-b086-bf1aba816f84","run_stamp":"2026-09-26b_fields-wd1-s011","test_id":"WD1/structured-fields","old_value":"Archaeological site","new_value":"City"}}
+{"kind" : "journal", "row" : {"id":126697,"row_pk":"fc973357-2176-4ed3-ab9d-fdb783edb192","run_stamp":"2026-09-26b_fields-wd1-s011","test_id":"WD1/structured-fields","old_value":"City/town/settlement","new_value":"Settlement"}}
+{"kind" : "journal", "row" : {"id":126743,"row_pk":"ffb9aa8c-0ecc-4510-b18d-8555e319c427","run_stamp":"2026-09-26b_fields-wd1-s011","test_id":"WD1/structured-fields","old_value":"Stone circle","new_value":"Settlement"}}
+{"kind" : "journal", "row" : {"id":244836,"row_pk":"f82d4a70-4581-4e06-858a-d52019ecbd0f","run_stamp":"2026-10-02b_fields-wd3-s011","test_id":"WD3/structured-fields","old_value":null,"new_value":"Settlement"}}
+{"kind" : "journal", "row" : {"id":245166,"row_pk":"fac04898-9342-436f-8a58-df8061d72fcc","run_stamp":"2026-10-02b_fields-wd3-s012","test_id":"WD3/structured-fields","old_value":null,"new_value":"City"}}
+{"kind" : "snapshot", "row" : {"exported_at" : "2026-10-24 17:30:55.132954+00"}}
