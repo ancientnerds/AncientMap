@@ -8605,7 +8605,10 @@ body.hud-hidden .empire-borders-window {
   min-width: 0;
 }
 
-/* Development Warning Badge */
+/* Development Warning Badge
+   One line beside the connector status while it fits in 60 % of the footer (every desktop
+   popup width); on a phone or a popup resized towards its 400px minimum it wraps there,
+   so the status keeps the rest of the row (tests/frontend/test_gallery_footer_layout.py). */
 .gallery-dev-warning {
   display: flex;
   align-items: center;
@@ -8615,8 +8618,8 @@ body.hud-hidden .empire-borders-window {
   border: none;
   font-size: 10px;
   color: rgba(255, 180, 50, 0.7);
-  white-space: nowrap;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  max-width: 60%;
 }
 
 .gallery-dev-warning svg {

@@ -121,10 +121,32 @@ describe('beta exit (D62)', () => {
     expect(html).not.toMatch(/\bbeta\b/i)
   })
 
+  it('no page entry shows a beta label', () => {
+    // every MPA entry, inline <style> blocks included (`beta-badge` matches the word too)
+    const pages = readdirSync(APP_DIR).filter(name => name.endsWith('.html'))
+    expect(pages).toEqual(expect.arrayContaining(['index.html', 'globe.html', 'site.html']))
+    for (const page of pages) expect(read(page), page).not.toMatch(/\bbeta\b/i)
+  })
+
   it('no stylesheet keeps the dead .beta-badge rule', () => {
     const sheets = (readdirSync(join(APP_DIR, 'src'), { recursive: true }) as string[])
       .filter(name => name.endsWith('.css'))
     expect(sheets).toContain(join('styles', 'landing.css'))
     for (const sheet of sheets) expect(read(join('src', sheet))).not.toContain('beta-badge')
+  })
+
+  it('the longer gallery warning may wrap beside the connector status', () => {
+    // A nowrap, non-shrinking warning of 58 characters pushed the connector status out of a
+    // phone-wide footer. The layout itself is measured in a real Chrome by
+    // tests/frontend/test_gallery_footer_layout.py (local only, it needs Playwright); this
+    // pins the rule it measures for CI.
+    const css = read(join('src', 'styles', 'index.css'))
+    const rules = [...css.matchAll(/(?:^|\n)\.gallery-dev-warning\s*\{([^}]*)\}/g)].map(m => m[1])
+    expect(rules.length).toBeGreaterThanOrEqual(1)
+    for (const rule of rules) {
+      expect(rule).not.toMatch(/white-space:\s*nowrap/)
+      expect(rule).not.toMatch(/flex-shrink:\s*0/)
+    }
+    expect(rules.some(rule => /flex:\s*0 1 auto;/.test(rule) && /max-width:\s*60%;/.test(rule))).toBe(true)
   })
 })
