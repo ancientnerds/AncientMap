@@ -165,6 +165,29 @@ class TestTheValues:
         unknown = entity(P1435=[statement({"id": "Q1"})])
         assert X.heritage_designation(unknown, LABELS).reason == "designation-without-label"
 
+    def test_an_ended_designation_is_not_in_force(self) -> None:
+        """A tentative-list entry the inscription superseded carries an end time (P582): the card
+        names only the designation in force, and the note names the ended one."""
+        tentative = {**statement({"id": "Q9259"}), "qualifiers": {"P582": [
+            {"snaktype": "value", "property": "P582", "datavalue": {"value": time_value(1987)}}]}}  # fmt: skip
+        e = entity(P1435=[tentative, statement({"id": "Q219538"})])
+        found = X.heritage_designation(e, LABELS)
+        assert found.value == "scheduled monument"
+        assert "ended (P582), not read: ['Q9259']" in found.note
+        assert X.designation_ids([e]) == ["Q219538"]
+        gone = X.heritage_designation(entity(P1435=[tentative]), LABELS)
+        assert (gone.value, gone.reason) == (None, "designation-ended")
+        unknown_end = {**statement({"id": "Q9259"}),
+                       "qualifiers": {"P582": [{"snaktype": "somevalue", "property": "P582"}]}}  # fmt: skip
+        assert X.heritage_designation(entity(P1435=[unknown_end]), LABELS).reason == (
+            "designation-ended"
+        )
+
+    def test_a_designation_whose_end_is_novalue_is_in_force(self) -> None:
+        never = {**statement({"id": "Q9259"}),
+                 "qualifiers": {"P582": [{"snaktype": "novalue", "property": "P582"}]}}  # fmt: skip
+        assert X.heritage_designation(entity(P1435=[never]), LABELS).value == "World Heritage Site"
+
     def test_an_inception_is_a_year_within_the_site_s_dating(self) -> None:
         assert inception(p571(-1500)).value == "-1500"
         assert inception(p571(120, 11), period_start=-50, period_end=300).value == "120"
@@ -445,6 +468,18 @@ class TestTheFetchTheWaveAndTheSteps:
         assert H.entity_path(harvest, QID).exists()
         assert X.read_labels(WAVE, tmp_path) == {"Q219538": "scheduled monument"}
         assert net.asked[-1] == ("labels", ["Q219538"])
+
+    def test_a_fetch_for_a_planned_wave_is_refused(self, tmp_path: Path, harvest: Path) -> None:
+        """WAVE.json pins LABELS.json: a second fetch would rewrite it and void the wave's steps."""
+        (tmp_path / WAVE).mkdir(parents=True)
+        (tmp_path / WAVE / X.WAVE_FILE).write_text("{}", encoding="utf-8")
+        (tmp_path / WAVE / X.LABELS_FILE).write_text('{"labels": {}}', encoding="utf-8")
+        net = FakeNet({QID: full_entity()})
+        with pytest.raises(PlanError, match="the wave pinned its labels and items"):
+            X.fetch(WAVE, harvest, read=reader([{"site_id": SITE, "qid": QID}]),
+                    net=net, root=tmp_path)  # type: ignore[arg-type]  # fmt: skip
+        assert (tmp_path / WAVE / X.LABELS_FILE).read_text(encoding="utf-8") == '{"labels": {}}'
+        assert net.asked == []
 
     def test_the_fetch_needs_a_harvest(self, tmp_path: Path) -> None:
         with pytest.raises(PlanError, match="no harvest's entity directory"):

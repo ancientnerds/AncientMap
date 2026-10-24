@@ -23,19 +23,22 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
 * **The identity lanes' lists** (`LANE_LISTS`): the retarget and scope-window results
   (`identity/run.py ... result`), whose rows carry a state and a reason.
 * **Production** (`TOPICS`): what stays empty on a shown curated site - no description, no card,
-  an old card the shorts-v1 lane kept (D5), no picture, a thumbnail without a credited row, a small
-  hero or one without the credit its licence asks for, no type, no period, a rule-made period, an
+  an old card the shorts-v1 lane kept (D5), no picture, a thumbnail without any gallery row, a small
+  hero a larger live row could replace (D48) or one without the credit its licence asks for, no type, no period, a rule-made period, an
   unsourced or unmarked point, no source URL, no Wikidata item, a pending scope, and a card whose
   Wikidata id or article link is no longer its site's (the fill-only `card_stats_ext` lane never
   corrects one an identity lane moved afterwards).
 
 ## The small heroes (D48)
 
-D48 puts "the 433 small heroes" on the owner list. The census of 2026-10-08 that counted them did
-not keep its SQL (`C:/tmp/wf_images` is gone; the images scout of 2026-10-24 could not reproduce the
-number), so the list uses the size the census reported heroes against, 1600x900 (809 below it on
-2026-10-24), and the report states that count beside the census figure and the count at most 800 px
-wide (643), so the owner sees how the topic relates to D48 instead of a silently different number.
+D48 puts "the 433 small heroes" on the owner list. The census of 2026-10-08 defined them
+(`state-2026-10-08/workflow_result.json`, "Served hero size buckets"; `census_digest.md`: "give the
+owner the 433 as a list ... swapping to a larger row is his call"): a shown site's hero - its first
+`is_hero`, non-excluded `wiki_images` row - below 1600x900 whose site holds **another** non-excluded
+row of at least 1600x900. That is the swap the owner decides, so `hero-small` lists exactly those and
+names the largest such row (and how many there are). A small hero without a larger row offers
+nothing to decide: the report counts it, the list does not carry it. Measured read-only on
+2026-10-24: 809 heroes below 1600x900, 433 of them with a larger live row - the census's figure.
 
 ## What is read, and what is named
 
@@ -78,6 +81,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 from fields import owner_list as OL  # noqa: E402
 from fields import rule as R  # noqa: E402
 from licenses import credit_columns  # noqa: E402
+from mechanical import site_type_merge as STM  # noqa: E402
 from mechanical.field_prov import read_production  # noqa: E402
 from mechanical.lane import FIELDS_ROOTS  # noqa: E402
 from mechanical.plan import parse_tagged_export, tagged_export_script  # noqa: E402
@@ -88,13 +92,10 @@ OUT_JSONL, OUT_MD = "OWNER_LIST_FINAL.jsonl", "OWNER_LIST_FINAL.md"
 #: The field runs, in the order they ran: a later run's answer closes an earlier run's question.
 FIELD_RUNS = ("wd3-pilot", "wd3", "wd4", "wd5-pilot", "wd5", "wd5-reask")
 CURATED, RETIRED, SHOWN_CONTRACT = "ancient_nerds", "retired", "shorts-v1"
-#: A hero below this is "small" (owner decision D48: the small heroes go on the owner list). The
-#: census of 2026-10-08 counted 433 without keeping its SQL; 1600x900 is the size the census
-#: reported heroes against ("2,999 heroes reach 1600x900, 809 fall below it").
+#: A hero below this is "small", and a row of at least this size can replace it (owner decision
+#: D48 over the census of 2026-10-08: "809 heroes under 1600x900; 433 of the 809 have another live
+#: row >=1600x900").
 HERO_WIDTH, HERO_HEIGHT = 1600, 900
-#: D48's own figure, and the narrower reading the images scout measured beside it (the report
-#: prints both counts, so the topic's relation to D48 is visible).
-D48_SMALL_HEROES, NARROW_WIDTH = 433, 800
 #: An owner-facing artefact: a file (`.jsonl`, `.json`, `.md`) or directory whose name holds this.
 OWNER_NAME = re.compile(r"owner|human_only", re.IGNORECASE)
 OWNER_SUFFIXES = frozenset({".jsonl", ".json", ".md"})
@@ -156,13 +157,27 @@ def _blank(value: Any) -> bool:
     return value is None or not str(value).strip()
 
 
-def _hero_small(row: Mapping[str, Any]) -> str | None:
-    hero = row["hero"]
+def _small(hero: Mapping[str, Any] | None) -> bool:
+    """A hero with a stored size below `HERO_WIDTH` x `HERO_HEIGHT`."""
     if not hero or hero["width"] is None or hero["height"] is None:
+        return False
+    return hero["width"] < HERO_WIDTH or hero["height"] < HERO_HEIGHT
+
+
+def _hero_small(row: Mapping[str, Any]) -> str | None:
+    """D48: a small hero whose site holds another live row of at least the size - the swap the
+    owner decides. A small hero without one is counted (`hero_sizes`), not listed."""
+    hero = row["hero"]
+    if not _small(hero):
         return None
-    if hero["width"] < HERO_WIDTH or hero["height"] < HERO_HEIGHT:
-        return f"hero {hero['filename']} is {hero['width']}x{hero['height']}"
-    return None
+    larger = row["hero_larger"]
+    if larger is None:
+        return None
+    return (
+        f"hero {hero['filename']} is {hero['width']}x{hero['height']}; the largest other live row "
+        f"is {larger['id']} {larger['filename']} ({larger['width']}x{larger['height']}), one of "
+        f"{row['hero_larger_rows']} at least {HERO_WIDTH}x{HERO_HEIGHT}"
+    )
 
 
 def _hero_size_unknown(row: Mapping[str, Any]) -> str | None:
@@ -235,7 +250,7 @@ TOPICS: tuple[Topic, ...] = (
     ),
     Topic(
         "image-thumbnail-only",
-        "a thumbnail without any credited gallery row",
+        "a thumbnail without any gallery row",
         "D59",
         lambda r: (
             f"thumbnail {r['thumbnail_url']} only"
@@ -243,7 +258,12 @@ TOPICS: tuple[Topic, ...] = (
             else None
         ),
     ),
-    Topic("hero-small", f"a hero below {HERO_WIDTH}x{HERO_HEIGHT}", "D48", _hero_small),
+    Topic(
+        "hero-small",
+        f"a hero below {HERO_WIDTH}x{HERO_HEIGHT} that a larger live row could replace",
+        "D48",
+        _hero_small,
+    ),
     Topic("hero-size-unknown", "a hero without a stored size", "D48", _hero_size_unknown),
     Topic(
         "hero-credit-missing", "a hero without the credit its licence asks", "D49/D28", _hero_credit
@@ -316,6 +336,11 @@ FIELD_TOPIC = {
     field: f"field-{field}" for field in ("coordinates", "period_start", "site_type", "source_url")
 }
 
+#: Another live row of the site (`h` is its hero) of at least the size: a row D48 could swap in.
+_LARGER = (
+    "x.site_id = u.id AND NOT x.is_excluded AND x.id <> h.id AND "
+    f"x.width >= {HERO_WIDTH} AND x.height >= {HERO_HEIGHT}"
+)
 SITES_SQL = (
     "SELECT u.id::text AS site_id, u.name, u.country, u.scope_status, u.site_type, "
     "u.period_start, u.period_name, u.lat::text AS lat, u.lon::text AS lon, u.source_url, "
@@ -324,15 +349,21 @@ SITES_SQL = (
     "card_contract, u.raw_data -> '_coord_provenance' ->> 'kind' AS coord_kind, "
     "u.raw_data -> '_period_provenance' ->> 'kind' AS period_kind, "
     "(SELECT count(*) FROM wiki_images w WHERE w.site_id = u.id AND NOT w.is_excluded) AS images, "
-    "(SELECT json_build_object('filename', w.filename, 'width', w.width, 'height', w.height, "
-    "'license', w.license, 'author', w.author, 'license_url', w.license_url) FROM wiki_images w "
-    "WHERE w.site_id = u.id AND w.is_hero AND NOT w.is_excluded ORDER BY w.id LIMIT 1) AS hero, "
+    "CASE WHEN h.id IS NULL THEN NULL ELSE json_build_object('id', h.id, 'filename', h.filename, "
+    "'width', h.width, 'height', h.height, 'license', h.license, 'author', h.author, "
+    "'license_url', h.license_url) END AS hero, "
+    "(SELECT json_build_object('id', x.id, 'filename', x.filename, 'width', x.width, 'height', "
+    f"x.height) FROM wiki_images x WHERE {_LARGER} ORDER BY x.width::bigint * x.height DESC, x.id "
+    "LIMIT 1) AS hero_larger, "
+    f"(SELECT count(*) FROM wiki_images x WHERE {_LARGER}) AS hero_larger_rows, "
     "EXISTS (SELECT 1 FROM site_external_ids e WHERE e.site_id = u.id AND "
     "e.kind = 'wikidata_qid') AS has_qid, c.wikidata_qid AS card_qid, c.best_wiki_url AS "
     "card_wiki_url, (SELECT e.value FROM site_external_ids e WHERE e.site_id = u.id AND "
     "e.kind = 'wikidata_qid') AS qid, (SELECT e.value FROM site_external_ids e WHERE "
     "e.site_id = u.id AND e.kind = 'enwiki_title') AS enwiki_title "
     "FROM unified_sites u LEFT JOIN card_stats c ON c.site_id = u.id "
+    "LEFT JOIN LATERAL (SELECT w.* FROM wiki_images w WHERE w.site_id = u.id AND w.is_hero AND "
+    "NOT w.is_excluded ORDER BY w.id LIMIT 1) h ON true "
     f"WHERE u.source_id = '{CURATED}' ORDER BY u.id"
 )
 
@@ -371,24 +402,31 @@ def _row(
 
 
 # ------------------------------------------------------------------------------ the field runs
-def _same(field: str, stored: Any, site: Mapping[str, Any]) -> bool:
+def _same(field: str, stored: Any, site: Mapping[str, Any], type_merges: Mapping[str, str]) -> bool:
     """Whether production still holds the value a field run classified (`stored` as the run's
-    CLASSIFIED.jsonl printed it: a point as `lat, lon`)."""
+    CLASSIFIED.jsonl printed it: a point as `lat, lon`). A site type also counts as held when
+    production holds the site_type merge's target of the stored alias (`type_merges`, alias ->
+    target): the merge renames the vocabulary and answers no question, so a row it moved from
+    `Settlement` to `City/town/settlement` stays open. Any other change of the type (`Settlement`
+    to `Urban` included, though both merge into one target) is a later write: superseded."""
     if field == "coordinates":
         if stored is None or site["lat"] is None:
             return stored is None and site["lat"] is None
         lat, lon = (float(part) for part in str(stored).split(","))
         return lat == float(site["lat"]) and lon == float(site["lon"])
+    if field == "site_type" and stored in type_merges:
+        return site[field] in (stored, type_merges[stored])
     return stored == site[field]
 
 
 def field_rows(
     runs: Sequence[tuple[str, Mapping[str, Any], set[tuple[str, str]]]],
     sites: Mapping[str, Mapping[str, Any]],
+    type_merges: Mapping[str, str],
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """The open field rows: per `(site, field)` the row of the **last** run that asked it, kept only
-    while the site is shown and holds the value the run classified. `runs` is `(name, build
-    result, asked cells)` in the order the runs ran. Pure."""
+    while the site is shown and holds the value the run classified (a site type up to the merge
+    map, `_same`). `runs` is `(name, build result, asked cells)` in the order the runs ran. Pure."""
     latest: dict[tuple[str, str], tuple[str, dict[str, Any] | None]] = {}
     for name, result, asked in runs:
         listed = {(r["site_id"], r["field"]): r for r in result["rows"]}
@@ -403,10 +441,12 @@ def field_rows(
         if site is None or site["scope_status"] == RETIRED:
             set_aside["retired-or-gone"] += 1
             continue
-        if not _same(field, row["stored"], site):
+        if not _same(field, row["stored"], site, type_merges):
             set_aside["superseded"] += 1
             continue
         reason = f"{row['open_because']}: {row['reason']}"
+        if field == "site_type" and row["stored"] != site[field]:
+            reason = f"(the site_type merge renamed {row['stored']!r} to {site[field]!r}) {reason}"
         out.append(
             _row(site, FIELD_TOPIC[field], f"fields-{name}", row["state"], reason, "D10/D12/D19")
         )
@@ -493,23 +533,11 @@ def unregistered_lists(root: Path, registered: Iterable[str]) -> list[str]:
 
 
 def hero_sizes(sites: Iterable[Mapping[str, Any]]) -> dict[str, int]:
-    """The shown curated heroes with a stored size, counted the topic's way and the narrower way,
-    beside D48's census figure. Pure."""
-    sized = [
-        s["hero"]
-        for s in sites
-        if s["scope_status"] != RETIRED
-        and s["hero"]
-        and s["hero"]["width"] is not None
-        and s["hero"]["height"] is not None
-    ]
-    return {
-        f"below_{HERO_WIDTH}x{HERO_HEIGHT}": sum(
-            1 for h in sized if h["width"] < HERO_WIDTH or h["height"] < HERO_HEIGHT
-        ),
-        f"at_most_{NARROW_WIDTH}_wide": sum(1 for h in sized if h["width"] <= NARROW_WIDTH),
-        "d48_census": D48_SMALL_HEROES,
-    }
+    """The shown curated sites with a small hero, and how many of them hold a larger live row (the
+    `hero-small` topic, D48) or none (nothing to swap: counted, not listed). Pure."""
+    small = [s for s in sites if s["scope_status"] != RETIRED and _small(s["hero"])]
+    larger = sum(1 for s in small if s["hero_larger"] is not None)
+    return {"small": len(small), "with_a_larger_row": larger, "without": len(small) - larger}
 
 
 # ------------------------------------------------------------------------------ the build
@@ -533,7 +561,8 @@ def build(
             continue
         result, asked = field_run(root, name)
         runs.append((name, result, asked))
-    rows, set_aside = field_rows(runs, sites)
+    type_merges = {alias: m.target for alias, m in STM.load_map().merges.items()}
+    rows, set_aside = field_rows(runs, sites, type_merges)
     for lane in LANE_LISTS:
         path = root / lane.path
         if not path.exists():
@@ -606,12 +635,11 @@ def render(result: Mapping[str, Any]) -> str:
     sizes = result["hero_sizes"]
     out += [
         "",
-        f"**Small heroes (D48).** The topic `hero-small` lists every hero below "
-        f"{HERO_WIDTH}x{HERO_HEIGHT}: {sizes[f'below_{HERO_WIDTH}x{HERO_HEIGHT}']} today. D48 names "
-        f"{sizes['d48_census']}, the census figure of 2026-10-08 whose SQL was not kept, so that "
-        f"number cannot be reproduced; {sizes[f'at_most_{NARROW_WIDTH}_wide']} heroes are at most "
-        f"{NARROW_WIDTH} px wide. Neither reading gives {sizes['d48_census']}: the list errs on "
-        "the side of showing more.",
+        f"**Small heroes (D48).** {sizes['small']} heroes are below {HERO_WIDTH}x{HERO_HEIGHT}. "
+        f"`hero-small` lists the {sizes['with_a_larger_row']} whose site holds another live row of "
+        "at least that size and names the largest: the swap is the owner's call (the census of "
+        f"2026-10-08 counted 433). The other {sizes['without']} have no larger live row, so there "
+        "is nothing to swap: they are counted here, not listed.",
     ]
     if result["out_of_scope"]:
         out += ["", "Owner-facing files this list does not read, and why:", ""]

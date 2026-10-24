@@ -18,8 +18,11 @@ site page shows it only beside a non-English `source_language`, which this lane 
   spaces as underscores (the form the remediation writes `source_url` in);
 * `commons_image` - P18 of that item, the first value of the best rank (preferred, else normal;
   deprecated is never read), as Wikidata serves the file name;
-* `heritage_designation` - the English labels of every best-rank P1435 value, `; `-joined in
-  Wikidata's order; a value without an English label refuses the cell (it is never guessed);
+* `heritage_designation` - the English labels of every best-rank P1435 value in force, `; `-joined
+  in Wikidata's order; a value without an English label refuses the cell (it is never guessed). A
+  statement with an end time (a P582 qualifier other than `novalue`: a delisting, a tentative-list
+  entry the inscription superseded) is no designation in force and is never read - the note names
+  it, and an item whose every best-rank designation ended refuses the cell (`designation-ended`);
 * `inception_year` - P571 at year precision or finer (9, 10, 11), when every such best-rank value
   names one year and that year passes every refusal of `plans/fields.md` trap 9 and the scope rule:
   - before 1500 (`fields/classify.MODERN`): a later inception is the item's park, museum or
@@ -141,6 +144,8 @@ REFUSED_PATH = Path("output") / "remediation" / "period_wave" / "structured_refu
 RETIRED = "retired"
 ENWIKI = "https://en.wikipedia.org/wiki/"
 P_IMAGE, P_HERITAGE, P_INCEPTION = "P18", "P1435", "P571"
+#: A designation's end time: a P1435 statement that carries one is no longer in force.
+P_END_TIME = "P582"
 #: Wikidata time precision 9 is a year, 10 a month, 11 a day; anything coarser states no year.
 YEAR_PRECISION = 9
 SEPARATOR = "; "
@@ -313,13 +318,36 @@ def commons_image(entity: Mapping[str, Any]) -> Derived:
     return Derived(files[0], "", note, P_IMAGE)
 
 
+def _ended(statement: Mapping[str, Any]) -> bool:
+    """The statement carries an end time: a P582 qualifier with a value or `somevalue` (ended at
+    an unknown time); an explicit `novalue` says it never ended."""
+    return any(
+        q.get("snaktype") != "novalue"
+        for q in (statement.get("qualifiers") or {}).get(P_END_TIME, [])
+    )
+
+
+def designations(entity: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    """The items of the best-rank P1435 statements in force, and of those Wikidata records as
+    ended (`_ended`), each in Wikidata's order."""
+    current: list[str] = []
+    ended: list[str] = []
+    for statement in best_rank(entity, P_HERITAGE):
+        value = _value(statement)
+        if isinstance(value, dict) and value.get("id"):
+            (ended if _ended(statement) else current).append(value["id"])
+    return current, ended
+
+
 def heritage_designation(entity: Mapping[str, Any], labels: Mapping[str, str | None]) -> Derived:
-    qids = [
-        v["id"]
-        for v in (_value(s) for s in best_rank(entity, P_HERITAGE))
-        if isinstance(v, dict) and v.get("id")
-    ]
+    qids, ended = designations(entity)
     if not qids:
+        if ended:
+            return Derived(
+                None,
+                "designation-ended",
+                f"every best-rank P1435 {ended} carries an end time ({P_END_TIME})",
+            )
         return Derived(None, "no-p1435", "the item has no P1435 of the best rank")
     unlabelled = [q for q in qids if not labels.get(q)]
     if unlabelled:
@@ -333,7 +361,10 @@ def heritage_designation(entity: Mapping[str, Any], labels: Mapping[str, str | N
         label = str(labels[qid])
         if label not in names:
             names.append(label)
-    return Derived(SEPARATOR.join(names), "", f"P1435 {qids} -> {names}", P_HERITAGE)
+    note = f"P1435 {qids} -> {names}" + (
+        f"; ended ({P_END_TIME}), not read: {ended}" if ended else ""
+    )
+    return Derived(SEPARATOR.join(names), "", note, P_HERITAGE)
 
 
 def inception_year(
@@ -682,15 +713,8 @@ def entity_of(harvest: Path, qid: str | None) -> tuple[dict[str, Any] | None, st
 
 # ------------------------------------------------------------------------------ the fetch
 def designation_ids(entities: Iterable[Mapping[str, Any]]) -> list[str]:
-    """Every item the entities name as a best-rank P1435 value."""
-    return sorted(
-        {
-            v["id"]
-            for e in entities
-            for v in (_value(s) for s in best_rank(e, P_HERITAGE))
-            if isinstance(v, dict) and v.get("id")
-        }
-    )
+    """Every item the entities name as a best-rank P1435 value in force (`designations`)."""
+    return sorted({qid for e in entities for qid in designations(e)[0]})
 
 
 def fetch_labels(net: Fetcher, qids: Sequence[str]) -> dict[str, str | None]:
@@ -729,8 +753,15 @@ def fetch(
 ) -> dict[str, Any]:
     """The items of the candidate sites the harvest lacks (into the harvest, `harvest.py`'s way),
     then the English labels of every P1435 value they name (`LABELS.json` in the wave's directory).
-    Production is read only; Wikidata is asked with GET only."""
+    Production is read only; Wikidata is asked with GET only. A wave already planned is refused:
+    its WAVE.json pins this LABELS.json and the item files, so a second fetch would void every
+    step it has left (`build_wave` refuses a second wave the same way)."""
     ext_lane(wave, 1)  # refuses a wave label no lane resolves
+    if (wave_dir(wave, root) / WAVE_FILE).exists():
+        raise PlanError(
+            f"{wave_dir(wave, root) / WAVE_FILE} exists: the wave pinned its labels and items, "
+            "a fetch for it is refused (fetch a new wave)"
+        )
     if not (harvest / H.ENTITIES).is_dir():
         raise PlanError(f"{harvest / H.ENTITIES} is no harvest's entity directory")
     rows, _at = parse_tagged_export(
