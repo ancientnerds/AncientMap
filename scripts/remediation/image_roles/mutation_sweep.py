@@ -1135,6 +1135,22 @@ D17_CASES: list[Case] = [
 ]
 
 CAL_CASES: list[Case] = [
+    c(
+        "cal: a picture of both C1 passes is one kind case",
+        CALIBRATE,
+        '        if job.get("pass", C1_GALLERY) == C1_GALLERY and int(job["image_id"]) in kinds',
+        '        if int(job["image_id"]) in kinds',
+        "test_a_picture_judged_in_both_c1_passes_is_one_case",
+        T_CAL,
+    ),
+    c(
+        "cal: only a gallery-pass verdict is kind gold",
+        CALIBRATE,
+        '        if v.get("pass", C1_GALLERY) == C1_GALLERY\n        and not v.get("error")',
+        '        if not v.get("error")',
+        "test_a_hero_pass_verdict_alone_is_no_gallery_gold",
+        T_CAL,
+    ),
     g(
         "cal: thresholds are sealed before the sample",
         CALIBRATE,

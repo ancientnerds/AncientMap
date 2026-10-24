@@ -75,6 +75,8 @@ SEAL_LOG = "SEAL.jsonl"
 GOLD_FILE = "GOLD.jsonl"
 JOBS_FILE = "JOBS.jsonl"
 VERDICTS_DIR = "verdicts"
+#: The C1 calibration's pass over gallery pictures (its `hero` pass judged 50 of them again).
+C1_GALLERY = "gallery"
 
 #: What the map proposes; sealed before the first case is chosen. A number moves only by a new seal.
 THRESHOLDS: dict[str, Any] = {
@@ -324,16 +326,20 @@ def kind_cases(
     seed: int,
 ) -> list[dict[str, Any]]:
     """The prefilter's gold: Opus's C1 kind of a gallery picture, stratified by kind. A verdict with
-    an error or without a kind is no gold."""
+    an error or without a kind is no gold. C1 judged 50 of its pictures a second time in its `hero`
+    pass (same image, same file): only the `gallery` pass counts, so a picture is one case - with
+    both passes in the pool the draw held a case id twice (2026-10-24: 12 of 300)."""
     kinds = {
         int(v["image_id"]): v["parsed"]["kind"]
         for v in verdicts
-        if not v.get("error") and (v.get("parsed") or {}).get("kind") in PF.KINDS
+        if v.get("pass", C1_GALLERY) == C1_GALLERY
+        and not v.get("error")
+        and (v.get("parsed") or {}).get("kind") in PF.KINDS
     }
     pool = [
         {**job, "kind": kinds[int(job["image_id"])]}
         for job in jobs
-        if int(job["image_id"]) in kinds
+        if job.get("pass", C1_GALLERY) == C1_GALLERY and int(job["image_id"]) in kinds
     ]
     return [
         {

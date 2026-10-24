@@ -213,6 +213,37 @@ class TestTheSample:
         ]
         assert got[0]["role"] == "image_prefilter" and got[0]["path"].startswith("/img/")
 
+    def test_a_picture_judged_in_both_c1_passes_is_one_case(self) -> None:
+        """C1 judged 50 gallery pictures again in its `hero` pass: only the gallery pass counts,
+        so a draw never holds one picture's case id twice."""
+        jobs = [
+            {"image_id": i, "site_id": "s", "site_name": "S", "filename": f"{i}.webp", "pass": p}
+            for i in (1, 2)
+            for p in ("gallery", "hero")
+        ]
+        verdicts = [
+            {"image_id": i, "pass": p, "parsed": {"kind": "site_photo"}, "error": None}
+            for i in (1, 2)
+            for p in ("gallery", "hero")
+        ]
+        got = CAL.kind_cases(jobs, verdicts, lambda j: f"/img/{j['filename']}", n=10, seed=1)
+        assert sorted(c["case_id"] for c in got) == ["kind-1", "kind-2"]
+
+    def test_a_hero_pass_verdict_alone_is_no_gallery_gold(self) -> None:
+        jobs = [
+            {
+                "image_id": 1,
+                "site_id": "s",
+                "site_name": "S",
+                "filename": "1.webp",
+                "pass": "gallery",
+            }
+        ]
+        verdicts = [
+            {"image_id": 1, "pass": "hero", "parsed": {"kind": "site_photo"}, "error": None}
+        ]
+        assert CAL.kind_cases(jobs, verdicts, lambda j: j["filename"], n=10, seed=1) == []
+
     def test_the_identity_cases_are_sites_with_a_known_label(self) -> None:
         population = {"s1": {**site("s1"), "qid": "Q1", "enwiki_title": "S"}}
         got = CAL.identity_cases([{"site_id": "s1", "label": "wrong"}], population)
