@@ -114,7 +114,10 @@ should two batches still both plan one site, nothing is rendered (`write4.wc_sit
 unless their rows chain (a clear, then a text for the same cell: lane WN's population). The apply
 root holds these plans' write batches or none (`wc_batches`) - or a batch whose plan is lost and
 that a versioned record closes (`closed_wc_batches.py`, `--closed-batches`: `p4wc-4325`, the WN
-pilot of 2026-10-06), which is never planned again and stays in the lane plan. A plan with a text of lane N (recorded marking `none` or
+pilot of 2026-10-06), which is never planned again and stays in the lane plan and, at the place it
+was written, in the chain check (`wc_chain`: the clear before it, its WN text, the D10 re-check
+after it chain). A raw_data link chains on the description's own state (`write4._links`), so a
+lane-WB key written between two WC writes is no second claim. A plan with a text of lane N (recorded marking `none` or
 `web`) is refused unless the live API's commit contains the change that lets its pages render
 (`require_lane_n_api`). The step's acceptance is `verify_writes4.py --lane
 p4wc --plan <apply root>/LANE_PLAN.jsonl --allow-stamp 'wb-teaser-prov-%'`, which reads no run.
@@ -401,9 +404,10 @@ def wc_batches(
     *,
     apply_root: pathlib.Path,
     closed_root: pathlib.Path = CLOSED.RECORDS,
-) -> tuple[list[W4.BatchInputs], dict[str, Any]]:
+) -> tuple[list[W4.BatchInputs], dict[str, Any], dict[str, dict[str, Any]]]:
     """Lane WC's plan batches (`write4.load_wc_plan`, every plan named, in order) and their
-    outcomes, or exactly the named batches. The apply root holds these plans' write batches or
+    outcomes, or exactly the named batches, and the closed batches the apply root holds (batch id
+    -> its record, each verified). The apply root holds these plans' write batches or
     none: a write batch of a WC plan not named here would enter the lane plan the acceptance reads
     and be judged as one of these - it is named and nothing is planned.
 
@@ -412,7 +416,8 @@ def wc_batches(
     `db-finish`) is **closed** when a versioned reconstruction under `closed_root` names it and still
     holds (`closed_wc_batches.verify`: the recorded batch files, the journal's rows, the recorded
     acceptance, nothing stopped). It is never planned or written again, and its `PLAN.jsonl` stays in
-    the lane plan the acceptance reads. A closed batch a named plan also plans is refused."""
+    the lane plan the acceptance reads and in the chain of the cells it wrote (`wc_chain`). A closed
+    batch a named plan also plans is refused."""
     for path in paths:
         if not path.is_file():
             raise SystemExit(f"{path}: no such WC plan (wc/cli.py build writes it)")
@@ -441,6 +446,7 @@ def wc_batches(
             f"{planned_closed}: closed by record ({closed_root}) and planned by a named WC plan: a "
             "closed batch is never planned again"
         )
+    present: dict[str, dict[str, Any]] = {}
     for batch_id, record in sorted(closed.items()):
         if not (apply_root / batch_id).is_dir():
             continue
@@ -455,6 +461,7 @@ def wc_batches(
             f"{record['reconstructed_by']} ({record['rows']} row(s), {record['sites']} site(s); "
             f"{CLOSED.record_path(closed_root, batch_id)}); never planned again"
         )
+        present[batch_id] = record
     foreign = sorted(
         found.name
         for found in apply_root.glob(f"{prefix}-*")
@@ -466,12 +473,56 @@ def wc_batches(
             f"({len(foreign)}): name every WC plan (--wc-plan, once each), or move them aside."
         )
     if not wanted:
-        return whole, outcomes
+        return whole, outcomes, present
     by_name = {batch.batch_id: batch for batch in whole}
     missing = [name for name in wanted if name not in by_name]
     if missing:
         raise SystemExit(f"no WC plan batch {missing}")
-    return [by_name[name] for name in wanted], outcomes
+    return [by_name[name] for name in wanted], outcomes, present
+
+
+def accepted_steps(apply_root: pathlib.Path) -> dict[str, int]:
+    """Write batch -> the number of the accepted step that wrote it (`ACCEPTED/step-NNNN.json`)."""
+    steps: dict[str, int] = {}
+    for path in sorted((apply_root / ACCEPTED_DIR).glob("step-*.json")):
+        number = int(path.stem.removeprefix("step-"))
+        for batch_id in _read(path)["batches"]:
+            steps[batch_id] = number
+    return steps
+
+
+def wc_chain(
+    plans: Sequence[W4.WritePlan4],
+    closed: Mapping[str, Mapping[str, Any]],
+    *,
+    apply_root: pathlib.Path,
+) -> list[W4.WritePlan4]:
+    """What `write4.wc_sites_planned_twice` checks: the named plans and, at the place each was
+    written, every closed batch's written rows (its `PLAN.jsonl`, the bytes its record holds -
+    `wc_batches` verified it), which are never rendered.
+
+    Without them a cell the closed batch wrote has a hole in its chain: `p4wc-4325` wrote the WN
+    text over the clears of the pilot and of mass-02 (NULL -> T), and the D10 re-check of that text
+    plans T -> T'; the clear's NULL and the re-check's T do not chain, and the gate would stop the
+    lane (the review of 2026-10-24). The place is the write order: a closed batch goes before the
+    first named plan whose write batch was not accepted on an earlier step than it (not written
+    yet, written in the step that awaits its acceptance, or accepted after it); the named plans keep
+    their plan order."""
+    steps = accepted_steps(apply_root)
+    chain = list(plans)
+    for batch_id in sorted(closed, key=steps.__getitem__):
+        written = W4.WritePlan4(group=W4.Group.WC, batch_id=batch_id)
+        written.rows.extend(W4.read_plan(apply_root / batch_id, group=W4.Group.WC))
+        at = next(
+            (
+                index
+                for index, plan in enumerate(chain)
+                if plan.batch_id not in steps or steps[plan.batch_id] > steps[batch_id]
+            ),
+            len(chain),
+        )
+        chain.insert(at, written)
+    return chain
 
 
 #: Lane N (a description written from web sources, `model4.WebProvenance`) has no licence key: the
@@ -1211,6 +1262,7 @@ def _run(
         return close_reverted_step(apply_root, runner=runner, host=args.host)
     run_dir: pathlib.Path | None
     wc_outcomes: dict[str, Any] = {}
+    closed: dict[str, dict[str, Any]] = {}
     if group is W4.Group.L:
         plan_path = pathlib.Path(args.legacy_plan)
         batches = legacy_batches(plan_path, args.batch, apply_root=apply_root)
@@ -1220,7 +1272,7 @@ def _run(
         )
     elif group is W4.Group.WC:
         paths = [pathlib.Path(path) for path in args.wc_plan]
-        batches, wc_outcomes = wc_batches(
+        batches, wc_outcomes, closed = wc_batches(
             paths, args.batch, apply_root=apply_root, closed_root=pathlib.Path(args.closed_batches)
         )
         run_dir = None
@@ -1303,7 +1355,7 @@ def _run(
     frozen = frozenset(waiting["batches"]) if waiting is not None else frozenset()
     plans = [W4.plan_writes(batch, group=group, **options) for batch in batches]
     if group is W4.Group.WC:
-        twice = W4.wc_sites_planned_twice(plans)
+        twice = W4.wc_sites_planned_twice(wc_chain(plans, closed, apply_root=apply_root))
         if twice:
             raise SystemExit(
                 "one WC site, one planning batch - nothing is rendered: "

@@ -1053,7 +1053,14 @@ def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
     Rows that chain are no claim twice: a site whose text an earlier plan wrote (a clear) and a later
     plan writes again (lane WN's text, a site-list run over a written text) has, per column, one row
     per plan, each one's old value the new value of the row before it, in plan order. The earlier
-    batch re-plans the rows it was written from, the later one plans its own."""
+    batch re-plans the rows it was written from, the later one plans its own.
+
+    `plans` are in write order and may hold written batches that are never rendered: a closed batch
+    whose plan is lost (`write_gate4.wc_chain`) is a link of the chain like any written batch. A
+    `raw_data` link chains on the description's own state (`_links`, `description_part` without the
+    card sub-key): a key another lane wrote between two WC writes (lane WB's `_card_provenance`)
+    moves the later row's old value - it is planned over the live raw_data - without making the
+    two rows two claims; the transaction still holds that old value whole (guard 4)."""
     by_site: dict[str, dict[str, list[tuple[str, Row4]]]] = {}
     for plan in plans:
         for row in plan.rows:
@@ -1065,12 +1072,25 @@ def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
         for rows in columns.values():
             ids = list(dict.fromkeys(batch_id for batch_id, _ in rows))
             chained = all(
-                before.new_value == after.old_value
+                _links(before, after)
                 for (_, before), (_, after) in zip(rows, rows[1:], strict=False)
             )
             if len(ids) > 1 and not (chained and len(ids) == len(rows)):
                 twice[site_id] = list(dict.fromkeys([*twice.get(site_id, []), *ids]))
     return twice
+
+
+def _links(before: Row4, after: Row4) -> bool:
+    """Does `after` (a later batch's row of the same cell) start where `before` ended? The
+    description chains byte for byte; raw_data on the description's own state (`description_part`
+    without the card sub-key, which lane WB nulls)."""
+    if before.column != "raw_data":
+        return before.new_value == after.old_value
+
+    def state(value: str | None) -> dict[str, Any]:
+        return description_part(None if value is None else M.parse_json(value), keep_card=False)
+
+    return state(before.new_value) == state(after.old_value)
 
 
 def source_files(

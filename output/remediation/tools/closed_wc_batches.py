@@ -281,27 +281,62 @@ def write_record(root: pathlib.Path, record: Mapping[str, Any]) -> pathlib.Path:
     return path
 
 
+def read_record(path: pathlib.Path) -> dict[str, Any]:
+    """One record, read strictly: its kind and version, `reconstructed: true`, and a file name that
+    is its batch's. What it says about the batch is `verify`'s question."""
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(record, dict)
+        or record.get("kind") != KIND
+        or record.get("v") != VERSION
+        or record.get("reconstructed") is not True
+    ):
+        raise ClosedBatchError(f"{path}: not a closed-batch record of version {VERSION}")
+    if path.name != f"{record['batch_id']}{RECORD_SUFFIX}":
+        raise ClosedBatchError(f"{path}: named for another batch than {record['batch_id']}")
+    return record
+
+
 def load(root: pathlib.Path) -> dict[str, dict[str, Any]]:
     """Batch id -> its record, for every record under `root` (none: an empty mapping)."""
     records: dict[str, dict[str, Any]] = {}
     for path in sorted(root.glob(f"*{RECORD_SUFFIX}")):
-        record = json.loads(path.read_text(encoding="utf-8"))
-        if record.get("kind") != KIND or record.get("v") != VERSION:
-            raise ClosedBatchError(f"{path}: not a closed-batch record of version {VERSION}")
-        if path.name != f"{record['batch_id']}{RECORD_SUFFIX}":
-            raise ClosedBatchError(f"{path}: named for another batch than {record['batch_id']}")
+        record = read_record(path)
         records[record["batch_id"]] = record
     return records
+
+
+def _site_list_problems(record: Mapping[str, Any]) -> list[str]:
+    """Where the record's `site_list` says of a site what its own journal rows do not: the sites
+    are the journal's, and each one's checker and `minimax` flag are its rows' evidence checker (a
+    text is MiniMax-shaped exactly when that checker is `model4.AI_SYSTEM`). The flag decides the
+    D10 list, so an edited flag is a record that does not hold."""
+    checkers: dict[str, set[str]] = {}
+    for row in record["journal"]["rows"]:
+        checkers.setdefault(row["row_pk"], set()).add(row["ev_checker"])
+    listed = {site["site_id"]: site for site in record["site_list"]}
+    if sorted(listed) != sorted(checkers) or len(listed) != len(record["site_list"]):
+        return ["the site list is not the sites of the recorded journal rows"]
+    problems = []
+    for site_id, site in sorted(listed.items()):
+        if checkers[site_id] != {site["checker"]} or site["minimax"] is not (
+            site["checker"] == M.AI_SYSTEM
+        ):
+            problems.append(
+                f"{site_id}: the site list's checker or minimax flag is not its journal's"
+            )
+    return problems
 
 
 def verify(record: Mapping[str, Any], apply_root: pathlib.Path) -> list[str]:
     """Why the closed batch of `record` is not what the record says in `apply_root`; empty = it
     is: its `PLAN.jsonl` and `APPLIED.json` are the recorded bytes, its plan's rows are the
-    recorded journal's, it was accepted on the recorded acceptance and nothing stopped."""
+    recorded journal's, its site list is that journal's (`_site_list_problems`), it was accepted
+    on the recorded acceptance and nothing stopped."""
     batch_dir = apply_root / record["batch_id"]
     if not batch_dir.is_dir():
         return [f"{batch_dir}: the closed batch is not in the apply root"]
-    problems: list[str] = []
+    problems: list[str] = _site_list_problems(record)
     for name, digest in record["batch_files"].items():
         path = batch_dir / name
         if not path.exists() or sha256_file(path) != digest:
@@ -325,7 +360,7 @@ def verify(record: Mapping[str, Any], apply_root: pathlib.Path) -> list[str]:
 
 def minimax_sites(record: Mapping[str, Any]) -> dict[str, str]:
     """Site id -> the lost run, for every site of the record whose text a MiniMax agent shaped:
-    what `wc/cli.py minimax-sites --closed` adds to the D10 list."""
+    what `wc/cli.py minimax-sites --closed` adds to the D10 list (after `verify`)."""
     return {site["site_id"]: site["run"] for site in record["site_list"] if site["minimax"]}
 
 

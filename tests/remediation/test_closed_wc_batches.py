@@ -11,8 +11,10 @@ computes. Also the real record of `p4wc-4325`, against the journal rows it pins.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,13 +31,20 @@ import lanes  # noqa: E402
 import write_gate4 as G  # noqa: E402
 
 from tests.remediation import phase4_write_fixtures as PFX  # noqa: E402
+from tests.remediation import test_wn_write as WNT  # noqa: E402 - the lane-N gate and history
 from tests.remediation import wc_fixtures as FX  # noqa: E402
+from tests.remediation import wn_fixtures as WX  # noqa: E402
 from tests.remediation.phase4_write_fixtures import W4, M  # noqa: E402
 from tests.remediation.test_phase4_wc_write import (  # noqa: E402
     _accept_step,
     _answers,
     _db,
     _rows,
+    _stamp_card_provenance,
+)
+from tests.remediation.test_wn_write import (  # noqa: E402,F401 - the lane-N history fixtures
+    _history_of_the_gate,
+    lane_n_history,
 )
 from tests.remediation.wc_fixtures import wiki_cache  # noqa: E402,F401 - the autouse fixture
 
@@ -306,3 +315,173 @@ def test_the_record_of_p4wc_4325_holds_against_the_apply_root_where_it_is_presen
     if not (root / "p4wc-4325").is_dir():
         pytest.skip(f"the gitignored WC apply root is not in this checkout ({root})")
     assert CB.verify(json.loads(REAL.read_text(encoding="utf-8")), root) == []
+
+
+# --------------------------------------------- the chain of a cell the closed batch wrote
+def _closed_wn_text(tmp_path, capsys, monkeypatch) -> tuple[PFX.FakeDb, Path, Path, list[str]]:
+    """`p4wc-4325`'s history in small: the WC pilot clears site C (p4wc-4001, accepted), the WN
+    pilot writes its text over the clear (p4wc-4002, accepted), and the WN run is lost and closed
+    by record. Returns the database, the apply root, the records and the gate's base arguments
+    (the WC pilot's plan, the closed records)."""
+    db, args = WNT._cleared_then_written(tmp_path, capsys, monkeypatch)
+    assert WNT._gate([*args, "--apply", "--step", "100"], runner=db) == 0
+    _accept_step(tmp_path, capsys, monkeypatch, db, "--complete")
+    plans = [Path(args[i + 1]) for i, arg in enumerate(args) if arg == "--wc-plan"]
+    wc_plan, wn_plan = plans
+    shutil.rmtree(wn_plan.parent)  # the run is lost: its plan cannot be named any more
+    apply_root, records = tmp_path / "apply", tmp_path / "records"
+    assert _reconstruct(db, apply_root, records, batch="p4wc-4002") == 0
+    base = ["--group", "WC", "--apply-root", str(apply_root), "--wc-plan", str(wc_plan),
+            "--closed-batches", str(records)]  # fmt: skip
+    return db, apply_root, records, base
+
+
+def _recheck(tmp_path: Path, db: PFX.FakeDb) -> Path:
+    """The D10 re-check of the WN text: a site-list run over production as it is now, which keeps
+    the first two sentences and drops the third (a trim)."""
+    rows = [
+        FX.row(sid, site.description, raw_data=site.raw_data, name=sid[:4])
+        for sid, site in db.sites.items()
+    ]
+    answer = FX.answer(FX.SITE_C, [FX.keep(1, FX.Q_COMPLEX), FX.keep(2, FX.Q_DATE), FX.drop(3)])
+    return WX.build_list_run(
+        tmp_path / "d10", rows, [FX.SITE_C], {FX.SITE_C: answer}, name="wcl-d10", first_batch=4003
+    )[1]
+
+
+@pytest.mark.parametrize("carded", [False, True], ids=["plain", "lane-wb-carded-it-since"])
+def test_a_later_plan_rechecks_a_text_the_closed_batch_wrote_over_an_earlier_clear(
+    tmp_path, capsys, monkeypatch, carded
+) -> None:
+    """The review of 2026-10-24: every one of the 17 sites of `p4wc-4325` was cleared earlier by a
+    named batch, and the D10 re-check plans their WN text again. The clear (re-planned from what it
+    wrote), the closed batch's text and the re-check chain only with the closed batch's rows in the
+    chain, at the place it was written (`write_gate4.wc_chain`). Two of the 17 carry lane WB's
+    `_card_provenance` since: the re-check is planned over that live raw_data, and the raw_data
+    link chains on the description's own state."""
+    db, apply_root, _, base = _closed_wn_text(tmp_path, capsys, monkeypatch)
+    wn_text = db.sites[FX.SITE_C].description
+    if carded:
+        _stamp_card_provenance(db, FX.SITE_C)
+    recheck = _recheck(tmp_path, db)
+    args = [*base, "--wc-plan", str(recheck)]
+    capsys.readouterr()
+    assert WNT._gate(args, runner=db) == 0, capsys.readouterr().err
+    out = capsys.readouterr().out
+    assert "closed batch p4wc-4002: written and accepted" in out
+    plans = [Path(args[i + 1]) for i, arg in enumerate(args) if arg == "--wc-plan"]
+    batches, outcomes = W4.load_wc_plan(plans)
+    live = {
+        sid: {"description": s.description, "raw_data": s.raw_data} for sid, s in db.sites.items()
+    }
+    bases = G.wc_bases(apply_root, ["p4wc-4001"], write_round=1)
+    named = [W4.plan_wc(b, outcomes=outcomes, live=live, bases=bases) for b in batches]
+    closed = CB.load(tmp_path / "records")
+    chain = G.wc_chain(named, closed, apply_root=apply_root)
+    assert [plan.batch_id for plan in chain] == ["p4wc-4001", "p4wc-4002", "p4wc-4003"]
+    assert W4.wc_sites_planned_twice(named) == {FX.SITE_C: ["p4wc-4001", "p4wc-4003"]}  # the hole
+    assert W4.wc_sites_planned_twice(chain) == {}
+    assert WNT._gate([*args, "--apply", "--step", "100"], runner=db) == 0
+    assert "STEP COMPLETE: 1 site(s) written in 1 batch(es)" in capsys.readouterr().out
+    site = db.sites[FX.SITE_C]
+    assert site.description != wn_text and WX.W3 not in site.description
+    assert ("_card_provenance" in site.raw_data) is carded  # the other lane's key is kept
+
+
+def test_a_later_plan_whose_old_value_is_not_the_closed_batchs_text_is_refused(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The chain is a chain: a re-check whose old description is not the text the closed batch
+    wrote claims the cell a second time, and nothing is rendered."""
+    db, apply_root, records, base = _closed_wn_text(tmp_path, capsys, monkeypatch)
+    recheck = _recheck(tmp_path, db)
+    batches, outcomes = W4.load_wc_plan([Path(base[base.index("--wc-plan") + 1]), recheck])
+    live = {
+        sid: {"description": s.description, "raw_data": s.raw_data} for sid, s in db.sites.items()
+    }
+    bases = G.wc_bases(apply_root, ["p4wc-4001"], write_round=1)
+    named = [W4.plan_wc(b, outcomes=outcomes, live=live, bases=bases) for b in batches]
+    later = named[-1]
+    later.rows[:] = [
+        dataclasses.replace(row, old_value="another text") if row.column == "description" else row
+        for row in later.rows
+    ]
+    chain = G.wc_chain(named, CB.load(records), apply_root=apply_root)
+    assert W4.wc_sites_planned_twice(chain) == {FX.SITE_C: ["p4wc-4001", "p4wc-4002", "p4wc-4003"]}
+    # and a raw_data link that moves the description's own state does not chain either
+    moved = W4.Row4.from_dict(
+        {**later.rows[-1].to_dict(), "old_value": json.dumps({M.CITATIONS_KEY: []})}
+    )
+    assert not W4._links(chain[1].rows[-1], moved)
+
+
+def test_a_closed_batch_goes_where_it_was_written_in_the_chain(tmp_path: Path) -> None:
+    """Before the first named plan not accepted on an earlier step: after the steps written before
+    it, before a later step's batch, a pending step's batch and a plan not written yet."""
+    accepted = tmp_path / G.ACCEPTED_DIR
+    accepted.mkdir()
+    for number, batches in ((1, ["p4wc-4001"]), (2, ["p4wc-4009"]), (3, ["p4wc-4002"])):
+        (accepted / f"step-{number:04d}.json").write_text(
+            json.dumps({"batches": batches}), encoding="utf-8"
+        )
+    (tmp_path / "p4wc-4009").mkdir()
+    (tmp_path / "p4wc-4009" / W4.PLAN_FILE).write_text("", encoding="utf-8")
+    named = [
+        W4.WritePlan4(group=W4.Group.WC, batch_id=b)
+        for b in ("p4wc-4001", "p4wc-4002", "p4wc-4003")
+    ]
+    chain = G.wc_chain(named, {"p4wc-4009": {}}, apply_root=tmp_path)
+    assert [plan.batch_id for plan in chain] == ["p4wc-4001", "p4wc-4009", "p4wc-4002", "p4wc-4003"]
+    assert G.accepted_steps(tmp_path) == {"p4wc-4001": 1, "p4wc-4009": 2, "p4wc-4002": 3}
+
+
+# ------------------------------------------------------- the D10 list from a record that holds
+def test_minimax_sites_names_a_closed_batchs_texts_only_from_a_record_that_holds(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """`wc/cli.py minimax-sites --closed` reads a record as the gate does: strictly, and only while
+    it holds against the apply root (the review of 2026-10-24). A copy whose `minimax` flag was
+    edited, or a record whose batch files moved, is refused instead of shortening the D10 list."""
+    from wc import cli as WCC
+
+    from tests.remediation.test_wc_repairs import _read
+
+    db, apply_root, _ = _written_and_lost(tmp_path, capsys, monkeypatch)
+    plan = apply_root / "p4wc-4001" / W4.PLAN_FILE
+    rows = lanes.read_jsonl(plan)
+    for row in rows:
+        if row["site_id"] == FX.SITE_A:
+            row["evidence"] = {**row["evidence"], "checker": M.AI_SYSTEM}
+    lanes.write_jsonl(plan, rows)
+    records = tmp_path / "records"
+    assert _reconstruct(db, apply_root, records) == 0
+    record = records / "p4wc-4001.closed.json"
+    run = _read(
+        tmp_path,
+        [
+            FX.row(sid, s.description, raw_data=s.raw_data, name=sid[:4])
+            for sid, s in db.sites.items()
+        ],
+    )
+    out = tmp_path / "minimax.txt"
+    argv = ["minimax-sites", "--run-dir", str(run), "--closed", str(record),
+            "--apply-root", str(apply_root), "--out", str(out)]  # fmt: skip
+    assert WCC.main(argv) == 0
+    assert out.read_text(encoding="utf-8").split() == [FX.SITE_A]
+    report = json.loads(out.with_name(out.name + ".report.json").read_text(encoding="utf-8"))
+    assert report["closed"][0]["holds_against"].endswith("apply")
+    edited = tmp_path / "edited" / "p4wc-4001.closed.json"
+    edited.parent.mkdir()
+    data = json.loads(record.read_text(encoding="utf-8"))
+    for site in data["site_list"]:
+        site["minimax"] = False
+    edited.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(WCC.WcRunError, match="checker or minimax flag is not its journal's"):
+        WCC.cmd_minimax_sites(run, [], tmp_path / "e.txt", closed=[edited], apply_root=apply_root)
+    renamed = tmp_path / "edited" / "p4wc-4002.closed.json"
+    renamed.write_text(record.read_text(encoding="utf-8"), encoding="utf-8")
+    with pytest.raises(WCC.WcRunError, match="named for another batch"):
+        WCC.cmd_minimax_sites(run, [], tmp_path / "r.txt", closed=[renamed], apply_root=apply_root)
+    plan.write_text("", encoding="utf-8")
+    with pytest.raises(WCC.WcRunError, match="does not hold against"):
+        WCC.cmd_minimax_sites(run, [], tmp_path / "s.txt", closed=[record], apply_root=apply_root)
