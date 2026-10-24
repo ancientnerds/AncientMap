@@ -22696,7 +22696,9 @@ WC_PLAN_RULES = "test_every_wc_plan_rule_refuses_a_broken_plan"
 WC_PLAN_REFUSALS = "test_a_site_phase4_wrote_or_that_moved_since_its_check_is_refused_not_written"
 #: The stale reads of 2026-10-24 (`write4.description_part`, `on_basis`, `write_gate4.wc_bases`) and
 #: the closed batch of a lost plan (`closed_wc_batches.py`, `p4wc-4325`).
-WC_REBASED = "test_a_site_not_written_yet_whose_other_raw_data_moved_is_planned_over_the_live_raw_data"
+WC_REBASED = (
+    "test_a_site_not_written_yet_whose_other_raw_data_moved_is_planned_over_the_live_raw_data"
+)
 WC_SUPERSEDED = (
     "test_a_written_site_a_later_write_superseded_re_plans_to_the_rows_it_was_written_from"
 )
@@ -23337,7 +23339,7 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc write4: the description state of an unwritten site may move",
         P4_WRITE,
-        "            and description_part(now[\"raw_data\"], keep_card=keep_card)\n"
+        '            and description_part(now["raw_data"], keep_card=keep_card)\n'
         "            == description_part(site.raw_data, keep_card=keep_card)\n",
         "            and True  # mutant\n",
         WC_WRITE_TEST,
