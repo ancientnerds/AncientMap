@@ -1048,9 +1048,8 @@ def _window_date_sql(prefix: str) -> str:
 
 def label_cutoff_sql(prefix: str = "") -> str:
     """SQL: the cutoff of the row's region under the label rule D58 (`dates.scope_region`,
-    `dates.LABEL_CUTOFFS`) - Oceania, the Americas' longitude window, the medieval Old World, then
-    any other row with a country - and NULL where the region cannot be told (no country outside the
-    Americas and Oceania)."""
+    `dates.LABEL_CUTOFFS`) - Oceania, the Americas' longitude window, a row without a country
+    (`UNPLACED_OLD_WORLD`), the medieval Old World, then the rest of the world."""
     from pipeline.normalizers.dates import (
         AMERICAS,
         AMERICAS_LON_MAX,
@@ -1059,6 +1058,7 @@ def label_cutoff_sql(prefix: str = "") -> str:
         MEDIEVAL_OLD_WORLD,
         OCEANIA,
         REST_OF_WORLD,
+        UNPLACED_OLD_WORLD,
     )
 
     p = prefix
@@ -1066,17 +1066,17 @@ def label_cutoff_sql(prefix: str = "") -> str:
         f"(CASE WHEN {in_oceania_sql(p)} THEN {LABEL_CUTOFFS[OCEANIA]} "
         f"WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {LABEL_CUTOFFS[AMERICAS]} "
+        f"WHEN {p}country IS NULL THEN {LABEL_CUTOFFS[UNPLACED_OLD_WORLD]} "
         f"WHEN {in_medieval_old_world_sql(p)} THEN {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} "
-        f"WHEN {p}country IS NOT NULL THEN {LABEL_CUTOFFS[REST_OF_WORLD]} END)"
+        f"ELSE {LABEL_CUTOFFS[REST_OF_WORLD]} END)"
     )
 
 
 def outside_label_window(prefix: str = "") -> str:
     """SQL: the row's date lies past the cutoff of its region under the owner's label rule (D58,
     2026-10-24) - `passes_date_cutoff()` negated, rendered from the same lists and constants
-    (`pipeline/normalizers/dates.py`), never re-typed. A row without a date, a longitude or a
-    region (`label_cutoff_sql` is NULL) is never outside: the function includes it. `prefix`
-    qualifies the columns (`u.`)."""
+    (`pipeline/normalizers/dates.py`), never re-typed. A row without a date or a longitude is
+    never outside: the function includes it. `prefix` qualifies the columns (`u.`)."""
     p = prefix
     return (
         f"({p}lon IS NOT NULL AND coalesce({_window_date_sql(p)} > {label_cutoff_sql(p)}, false))"

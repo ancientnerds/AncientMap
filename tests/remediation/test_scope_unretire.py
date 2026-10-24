@@ -44,8 +44,16 @@ NORSE = "c0000000-0000-4000-8000-00000000000c"
 DUPLICATE = "d0000000-0000-4000-8000-00000000000d"
 YONAGUNI = "01296632-a2a1-4610-a4a9-d0c3be77b788"
 RICHAT = "84b456ff-0b44-4d75-92a4-5cbe22026b95"
-SOURCE_A = {"url": "https://example.org/geology", "title": "Geology", "quote": "A natural formation."}
-SOURCE_B = {"url": "https://example.net/claim", "title": "Claim", "quote": "Kimura claims a monument."}
+SOURCE_A = {
+    "url": "https://example.org/geology",
+    "title": "Geology",
+    "quote": "A natural formation.",
+}
+SOURCE_B = {
+    "url": "https://example.net/claim",
+    "title": "Claim",
+    "quote": "Kimura claims a monument.",
+}
 
 
 # ------------------------------------------------------------------------------ the label SQL
@@ -153,7 +161,8 @@ class TestTheLabelWindowInSql:
         assert got[by[("Cambodia", 13.45, 103.86, 975)]] == 0
         assert got[by[("Türkiye", 37.18, 40.95, 975)]] == 1  # SQLite's lower agrees on this one
         assert got[by[("Russia", 43.07, 132.68, 975)]] == 0
-        assert got[by[(None, 51.0, 15.0, 1501)]] == 0  # a region that cannot be told is inside
+        assert got[by[(None, 51.0, 15.0, 975)]] == 1  # no country: the Old World's 500 AD
+        assert got[by[(None, 20.0, -100.0, 975)]] == 0  # the Americas need no country
 
     def test_label_borderline_sql_is_label_borderline(self) -> None:
         records = self.records()
@@ -166,14 +175,17 @@ class TestTheLabelWindowInSql:
     def test_in_medieval_old_world_sql_is_the_python_rule(self) -> None:
         records = self.records()
         db = _sites_db(records)
-        got = dict(db.execute(f"SELECT id, {L.in_medieval_old_world_sql('u.')} FROM unified_sites u"))
+        got = dict(
+            db.execute(f"SELECT id, {L.in_medieval_old_world_sql('u.')} FROM unified_sites u")
+        )
         want = {r["id"]: D.in_medieval_old_world(r["country"], r["lat"], r["lon"]) for r in records}
         assert {k: bool(v) for k, v in got.items()} == want
 
     def test_the_sql_is_rendered_from_the_lists(self) -> None:
         sql = L.outside_label_window()
         assert f"THEN {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} " in sql
-        assert f"THEN {D.LABEL_CUTOFF_REST_OF_WORLD} END" in sql
+        assert f"ELSE {D.LABEL_CUTOFF_REST_OF_WORLD} END" in sql
+        assert f"WHEN country IS NULL THEN {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} " in sql
         assert "'türkiye'" in sql and "'baltic sea'" in sql
         assert L.in_oceania_sql("u.") in L.outside_label_window("u.")
         assert L.outside_e3_window() != sql, "the delivered lanes keep the E3 text"
@@ -315,11 +327,19 @@ class TestTheInvariantInSql:
         museum = IL.D58_MUSEUM_REASON_PREFIX + "its exhibits ..."
         rows = [
             self.site(KHUSHUU, museum, site_type="Museum", country="Mongolia", period_start=2008),
-            self.site(GROSS_RADEN, museum, site_type="Museum", country="Germany", lat=53.7,
-                      lon=11.9, period_start=800),  # fmt: skip
+            self.site(
+                GROSS_RADEN,
+                museum,
+                site_type="Museum",
+                country="Germany",
+                lat=53.7,
+                lon=11.9,
+                period_start=800,
+            ),  # fmt: skip
             self.site(OTHER_MUSEUM, museum, site_type="Temple complex", country="Mongolia"),
+            self.site(NORSE, museum, site_type="Museum", country=None),
         ]
-        assert self.violators(rows, []) == {GROSS_RADEN, OTHER_MUSEUM}
+        assert self.violators(rows, []) == {GROSS_RADEN, OTHER_MUSEUM, NORSE}
 
     def test_a_d50_site_passes_only_with_its_dispute_text(self) -> None:
         d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
@@ -444,7 +464,8 @@ class TestThePlanner:
             ({"country": "Canada", "lat": 51.6, "lon": -55.53, "period_start": 1000,
               "qids": ["Q189113"]}, "viking-subject"),
             ({"lon": None}, "label-rule-cannot-tell"),
-            ({"country": None}, "label-rule-cannot-tell"),
+            ({"period_start": None}, "label-rule-cannot-tell"),
+            ({"country": None}, "outside-label-window"),  # an unplaced point keeps 500
         ],
     )  # fmt: skip
     def test_a_date_retirement_the_label_rule_does_not_keep_stays(
@@ -500,6 +521,10 @@ class TestThePlanner:
         assert skipped(build(export([moved], [journal(KHUSHUU, 1)]))) == {
             KHUSHUU: "museum-reason-moved"
         }
+        unplaced = {**museum, "country": None}
+        assert skipped(build(export([unplaced], [journal(KHUSHUU, 1)]))) == {
+            KHUSHUU: "museum-exhibits-out"
+        }
         retyped = {**museum, "site_type": "Temple complex"}
         assert skipped(build(export([retyped], [journal(KHUSHUU, 1)]))) == {
             KHUSHUU: "museum-type-moved"
@@ -526,7 +551,9 @@ class TestThePlanner:
     def test_a_d50_site_with_its_dispute_text_comes_back_disputed(self) -> None:
         yonaguni = site_row(YONAGUNI, name="Yonaguni Monument", country="Japan", lat=24.4,
                             lon=123.0, period_start=None, scope_reason=D50_REASON_NOW)  # fmt: skip
-        rows = [journal(YONAGUNI, 129629, old="pending", stamp="2026-09-30_mechanical-scope-review")]
+        rows = [
+            journal(YONAGUNI, 129629, old="pending", stamp="2026-09-30_mechanical-scope-review")
+        ]
         stale = dispute_row(n=400, decision=wc4.EVIDENCE_DECISION)
         plan = build(export([yonaguni], rows, [stale, dispute_row(n=500)]))
         got = {c.column: c for c in plan.changes}

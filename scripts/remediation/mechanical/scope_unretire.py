@@ -19,8 +19,8 @@ the scope lane, journalled." A site comes back when
   subject is Byzantine, Crusader or Norse is a scope verdict's question, not this lane's. A site
   whose Wikidata item is a Viking subject (`VIKING_SUBJECT_QIDS`, L'Anse aux Meadows) stays out;
 * or it is one of the museums scope-e4 retired by the museum rule for exhibits dated past 500 AD
-  (`MUSEUM_EXHIBITS`, pinned by id with the exhibits the reason names) that lies outside the
-  medieval Old World, so the label rule keeps its exhibits.
+  (`MUSEUM_EXHIBITS`, pinned by id with the exhibits the reason names) whose country is not of
+  the medieval Old World, so the label rule keeps its exhibits.
 
 **D50, the disputed sites.** "All return as disputed sites: un-retire them through the scope lane,
 journalled; each description states the scholarly position and the claim, both sourced; no card or
@@ -90,6 +90,7 @@ from mechanical.plan import (  # noqa: E402
 from pipeline.normalizers.dates import (  # noqa: E402
     LABEL_CUTOFFS,
     MEDIEVAL_OLD_WORLD,
+    UNPLACED_OLD_WORLD,
     VIKING_SUBJECT_QIDS,
     label_borderline,
     passes_date_cutoff,
@@ -282,7 +283,7 @@ def _date_decision(
         return _skip(
             site,
             "label-rule-cannot-tell",
-            "no longitude, country or date: the label rule cannot place it, the retirement stands",
+            "no longitude or no date: the label rule cannot place it, the retirement stands",
         )
     if not passes_date_cutoff(site):
         return _skip(
@@ -326,7 +327,7 @@ def _museum_decision(
     if site["site_type"] != "Museum":
         return _skip(site, "museum-type-moved", f"site_type is {site['site_type']!r} now")
     region = scope_region(site)
-    if region == MEDIEVAL_OLD_WORLD:
+    if region in (MEDIEVAL_OLD_WORLD, UNPLACED_OLD_WORLD):
         return _skip(
             site,
             "museum-exhibits-out",

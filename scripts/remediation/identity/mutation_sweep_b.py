@@ -1095,8 +1095,8 @@ CASES: list[Case] = [
     Case(
         "scope_judge: region is None",
         SCOPE_JUDGE,
-        "    if region is None:\n        raise common.IdentityError(\n",
-        "    if False:\n        raise common.IdentityError(\n",
+        "    if region is None:\n        raise common.IdentityError(f\"{record['id']} has no longitude: the window cannot be told\")",
+        "    if False:\n        raise common.IdentityError(f\"{record['id']} has no longitude: the window cannot be told\")",
         "test_a_record_without_a_longitude_has_no_window",
         T_SCOPE,
     ),

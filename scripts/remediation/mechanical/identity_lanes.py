@@ -308,7 +308,8 @@ def unretire_violation_sql() -> str:
     transaction -
 
     * `D58_REASON_PREFIX`: a site no D50 site, inside the label window and not label-borderline;
-    * `D58_MUSEUM_REASON_PREFIX`: a Museum outside the medieval Old World, no D50 site;
+    * `D58_MUSEUM_REASON_PREFIX`: a Museum whose country is not of the medieval Old World, no
+      D50 site;
     * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment."""
     d50 = f"CAST(u.id AS text) IN ({_d50_ids_sql()})"
     date_kept = (
@@ -317,7 +318,8 @@ def unretire_violation_sql() -> str:
     )
     museum_kept = (
         f"(u.scope_reason LIKE {sql_literal(D58_MUSEUM_REASON_PREFIX + '%')} AND NOT {d50} "
-        f"AND u.site_type = 'Museum' AND NOT {in_medieval_old_world_sql('u.')})"
+        f"AND u.site_type = 'Museum' AND u.country IS NOT NULL "
+        f"AND NOT {in_medieval_old_world_sql('u.')})"
     )
     disputed = (
         f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "

@@ -218,12 +218,19 @@ def e3_region(record: Mapping[str, Any]) -> str | None:
 #: In machine form it is a region test: a site of the medieval Old World keeps the 500 AD cutoff,
 #: every other site has 1500 AD.
 MEDIEVAL_OLD_WORLD = "medieval Old World"
+#: A point outside the Americas and Oceania whose row names no country: the rule cannot tell
+#: Lisbon from Lagos, so the row keeps the Old World's stricter cutoff - only a country that is
+#: not Europe's or Byzantium's earns a site the 1500 AD of the rest of the world. (The E3 rule
+#: placed such a row in its rest of the world, 500 AD, too: for a row without a country the
+#: label rule changes nothing. The loader looks the country up before it asks.)
+UNPLACED_OLD_WORLD = "Old World, country unknown"
 LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 500
 LABEL_CUTOFF_REST_OF_WORLD = 1500
-#: The four regions of the label rule, in the order `scope_region` tests them, and their cutoffs.
+#: The five regions of the label rule, in the order `scope_region` tests them, and their cutoffs.
 LABEL_CUTOFFS: Mapping[str, int] = {
     OCEANIA: DATE_CUTOFF_OCEANIA,
     AMERICAS: DATE_CUTOFF_AMERICAS,
+    UNPLACED_OLD_WORLD: LABEL_CUTOFF_MEDIEVAL_OLD_WORLD,
     MEDIEVAL_OLD_WORLD: LABEL_CUTOFF_MEDIEVAL_OLD_WORLD,
     REST_OF_WORLD: LABEL_CUTOFF_REST_OF_WORLD,
 }
@@ -355,8 +362,8 @@ def in_medieval_old_world(country: str | None, lat: float | None, lon: float | N
 
 def scope_region(record: Mapping[str, Any]) -> str | None:
     """The region of a record under the label rule (D58): `OCEANIA`, `AMERICAS`,
-    `MEDIEVAL_OLD_WORLD` or `REST_OF_WORLD`, or None when it cannot be told - no longitude, or a
-    point outside the Americas and Oceania without a country.
+    `UNPLACED_OLD_WORLD` (a point outside the Americas and Oceania without a country),
+    `MEDIEVAL_OLD_WORLD` or `REST_OF_WORLD`, or None without a longitude.
 
     Oceania first and the Americas by the longitude window second, as in `e3_region`; then the
     medieval Old World by the country; every other country is the rest of the world.
@@ -370,7 +377,7 @@ def scope_region(record: Mapping[str, Any]) -> str | None:
     if AMERICAS_LON_MIN <= lon <= AMERICAS_LON_MAX:
         return AMERICAS
     if country is None:
-        return None
+        return UNPLACED_OLD_WORLD
     if in_medieval_old_world(country, record.get("lat"), lon):
         return MEDIEVAL_OLD_WORLD
     return REST_OF_WORLD
@@ -446,9 +453,10 @@ def passes_date_cutoff(record: Mapping[str, Any]) -> bool:
     - Americas (lon -170 to -30): <= 1500 AD
     - The medieval Old World (Europe, Byzantium): <= 500 AD
     - Rest of World (Asia, Africa, the Near East outside Byzantium): <= 1500 AD
+    - A point outside the Americas and Oceania without a country: <= 500 AD (only a country
+      proves a site is not of the medieval Old World)
     - Records WITHOUT dates: INCLUDED (can't filter unknown)
-    - Records whose region cannot be told (no longitude; outside the Americas and Oceania
-      without a country): INCLUDED
+    - Records without a longitude: INCLUDED
 
     A record of a `LABEL_BORDERLINE_COUNTRIES` country passes; whether its subject is Byzantine,
     Crusader or Norse is a scope verdict's question (`label_borderline`), not this check's.

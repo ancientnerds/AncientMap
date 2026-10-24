@@ -148,8 +148,9 @@ class TestTheContext:
     def test_a_record_without_a_longitude_has_no_window(self) -> None:
         with pytest.raises(common.IdentityError, match="no longitude"):
             SJ.cutoff_of(record(lon=None))
-        with pytest.raises(common.IdentityError, match="no country outside the Americas"):
-            SJ.cutoff_of(record(country=None))
+        assert SJ.cutoff_of(record(country=None)) == ("Old World, country unknown", 500)
+        unplaced = SJ.render_web(context(country=None))
+        assert "an Old World entry whose country is not stored: 500 AD" in unplaced
 
     def test_the_context_says_whether_the_label_decides(self) -> None:
         assert context(groups=["label_borderline"])["label_borderline"] is True

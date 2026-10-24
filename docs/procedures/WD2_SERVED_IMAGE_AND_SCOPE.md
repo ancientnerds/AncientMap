@@ -94,9 +94,9 @@ E3/O7 above stays the documented history: the applied scope-e4 and scope-review 
 
 | function | what it answers |
 |---|---|
-| `scope_region(record)` | `Oceania` (as O7), then `Americas` (the longitude window), then `medieval Old World` (by country), else `rest of world`; `None` without a longitude, or outside the Americas and Oceania without a country |
-| `LABEL_CUTOFFS` | Oceania 1500, Americas 1500, **medieval Old World 500**, **rest of world 1500** |
-| `passes_date_cutoff(record)` | the label rule (the loader, Lyra's promotion gate, the prospector and Phase 4's `scope-pending` flag share it); no date or no region: included |
+| `scope_region(record)` | `Oceania` (as O7), then `Americas` (the longitude window), then `Old World, country unknown` (a point without a country: 500 AD, as E3 placed it - only a country proves a site is not of the medieval Old World), then `medieval Old World` (by country), else `rest of world`; `None` without a longitude |
+| `LABEL_CUTOFFS` | Oceania 1500, Americas 1500, Old World with no country 500, **medieval Old World 500**, **rest of world 1500** |
+| `passes_date_cutoff(record)` | the label rule (the loader, Lyra's promotion gate, the prospector and Phase 4's `scope-pending` flag share it); no date or no longitude: included |
 | `passes_e3_cutoff(record)` | the E3/O7 rule under its own name (T11's census, the scope review's O7 reinstatement) |
 | `label_borderline(record)` | dated after 500 and through 1500 in a `LABEL_BORDERLINE_COUNTRIES` country: the window keeps it, the label decides |
 | `VIKING_SUBJECT_QIDS` | `Q189113` L'Anse aux Meadows: out by its subject wherever it lies (an insert or scope lane asks it) |

@@ -90,6 +90,7 @@ from pipeline.normalizers.dates import (  # noqa: E402
     LABEL_CUTOFFS,
     MEDIEVAL_OLD_WORLD,
     OCEANIA,
+    UNPLACED_OLD_WORLD,
     scope_region,
 )
 from pipeline.utils.public_sites import RETIRED  # noqa: E402
@@ -126,10 +127,7 @@ def cutoff_of(record: Mapping[str, Any]) -> tuple[str, int]:
     `dates.LABEL_CUTOFFS`)."""
     region = scope_region(record)
     if region is None:
-        raise common.IdentityError(
-            f"{record['id']} has no longitude, or no country outside the Americas and Oceania: "
-            "the window cannot be told"
-        )
+        raise common.IdentityError(f"{record['id']} has no longitude: the window cannot be told")
     return region, LABEL_CUTOFFS[region]
 
 
@@ -325,6 +323,10 @@ CUTOFF_NOTES = {
     AMERICAS: "Americas and Oceania: 1500 AD",
     OCEANIA: "Americas and Oceania: 1500 AD",
     MEDIEVAL_OLD_WORLD: "the medieval Old World - Europe and Byzantium (Anatolia, Cyprus): 500 AD",
+    UNPLACED_OLD_WORLD: (
+        "an Old World entry whose country is not stored: 500 AD, as for Europe - only a stored "
+        "country outside Europe and Byzantium keeps an entry through 1500 AD"
+    ),
 }
 REST_NOTE = "the rest of the world - Asia, Africa and the Near East outside Byzantium: 1500 AD"
 

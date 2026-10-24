@@ -80,12 +80,16 @@ class TestTheRegion:
         assert D.scope_region({"country": country, "lat": lat, "lon": lon}) == region
 
     def test_a_region_that_cannot_be_told_is_none(self) -> None:
-        """Without a longitude nothing can be told; outside the Americas and Oceania a row needs
-        its country (a point east of -30 may be Lisbon or Lagos)."""
+        """Without a longitude nothing can be told; outside the Americas and Oceania a row without
+        a country is the unplaced Old World (a point east of -30 may be Lisbon or Lagos), which
+        keeps the stricter 500 AD."""
         assert D.scope_region({"country": "Poland", "lat": 51.0, "lon": None}) is None
-        assert D.scope_region({"country": None, "lat": 51.0, "lon": 15.0}) is None
+        assert D.scope_region({"country": None, "lat": 51.0, "lon": 15.0}) == (D.UNPLACED_OLD_WORLD)
         assert D.scope_region({"country": None, "lat": 20.0, "lon": -100.0}) == D.AMERICAS
-        assert D.scope_region({"country": None, "lat": -37.21, "lon": 144.81}) is None
+        assert D.scope_region({"country": None, "lat": -37.21, "lon": 144.81}) == (
+            D.UNPLACED_OLD_WORLD
+        )
+        assert D.LABEL_CUTOFFS[D.UNPLACED_OLD_WORLD] == 500
 
     def test_the_urals_edge_counts_as_asia(self) -> None:
         assert D.scope_region({"country": "Russia", "lat": 56.8, "lon": 60.0}) == D.REST_OF_WORLD
@@ -148,6 +152,7 @@ class TestTheCutoff:
         assert D.LABEL_CUTOFFS == {
             D.OCEANIA: 1500,
             D.AMERICAS: 1500,
+            D.UNPLACED_OLD_WORLD: 500,
             D.MEDIEVAL_OLD_WORLD: 500,
             D.REST_OF_WORLD: 1500,
         }
@@ -171,7 +176,9 @@ class TestTheCutoff:
             (row("Lebanon", 33.58, 35.61, 975), True),  # borderline: the window keeps it
             (row("Greenland", 61.16, -45.43, 1300), True),
             (row("Australia", -37.21, 144.81, 1501), False),
-            (row(None, 51.0, 15.0, 1200), True),  # no country outside the Americas: included
+            (row(None, 51.0, 15.0, 1200), False),  # no country: the Old World's 500 AD
+            (row(None, 51.0, 15.0, 500), True),
+            (row(None, 20.0, -100.0, 1200), True),  # the Americas need no country
             (row("Poland", 51.0, 15.0, None), True),  # no date: included
             (row("Poland", None, None, 3000), True),  # no longitude: included
         ],

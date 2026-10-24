@@ -12499,9 +12499,8 @@ UNRETIRE_WAVES = "test_a_wave_writes_its_files_and_is_never_replaced_or_planned_
 _DATE_KEPT = (
     "        f\"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')})\"\n"
 )
-_MUSEUM_KEPT = (
-    "        f\"AND u.site_type = 'Museum' AND NOT {in_medieval_old_world_sql('u.')})\"\n"
-)
+_MUSEUM_KEPT = "        f\"AND u.site_type = 'Museum' AND u.country IS NOT NULL \"\n"
+_MUSEUM_OUTSIDE = "        f\"AND NOT {in_medieval_old_world_sql('u.')})\"\n"
 
 D58_CASES: list[Case] = [
     # -- the rule
@@ -12553,10 +12552,10 @@ D58_CASES: list[Case] = [
         LABEL_TESTS,
     ),
     Case(
-        "d58 rule: the region needs a country outside the Americas",
+        "d58 rule: a row without a country is the unplaced Old World",
         LABEL_RULE,
-        "    if country is None:\n        return None\n    if in_medieval_old_world",
-        "    if False:\n        return None\n    if in_medieval_old_world",
+        "    if country is None:\n        return UNPLACED_OLD_WORLD\n",
+        "    if False:\n        return UNPLACED_OLD_WORLD\n",
         "test_a_region_that_cannot_be_told_is_none",
         LABEL_TESTS,
     ),
@@ -12608,10 +12607,10 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d58 sql: an unknown region is inside",
+        "d58 sql: a row without a country keeps 500",
         LANE,
-        '        f"WHEN {p}country IS NOT NULL THEN {LABEL_CUTOFFS[REST_OF_WORLD]} END)"',
-        '        f"ELSE {LABEL_CUTOFFS[REST_OF_WORLD]} END)"',
+        '        f"WHEN {p}country IS NULL THEN {LABEL_CUTOFFS[UNPLACED_OLD_WORLD]} "\n',
+        "",
         "test_outside_label_window_is_passes_date_cutoff_negated",
         UNRETIRE_TESTS,
     ),
@@ -12644,15 +12643,23 @@ D58_CASES: list[Case] = [
         "d58 lane: a museum un-retirement needs a museum",
         IDENTITY_LANES,
         _MUSEUM_KEPT,
-        "        f\"AND NOT {in_medieval_old_world_sql('u.')})\"\n",
+        '        "AND u.country IS NOT NULL "\n',
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
         "d58 lane: a museum un-retirement lies outside Europe",
         IDENTITY_LANES,
+        _MUSEUM_OUTSIDE,
+        '        ")"\n',
+        UNRETIRE_MUSEUM_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: a museum un-retirement needs its country",
+        IDENTITY_LANES,
         _MUSEUM_KEPT,
-        "        \"AND u.site_type = 'Museum')\"\n",
+        "        \"AND u.site_type = 'Museum' \"\n",
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
@@ -12815,7 +12822,7 @@ D58_CASES: list[Case] = [
     guard(
         "d58 plan: a European museum stays",
         UNRETIRE,
-        "    if region == MEDIEVAL_OLD_WORLD:",
+        "    if region in (MEDIEVAL_OLD_WORLD, UNPLACED_OLD_WORLD):",
         UNRETIRE_MUSEUM,
         UNRETIRE_TESTS,
     ),

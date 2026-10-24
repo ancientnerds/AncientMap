@@ -173,7 +173,7 @@ class TestTheSelection:
         fort, museum, baltic = (c.context for c in cases)
         assert (
             fort["groups"] == ["outside_window"]
-            and fort["cutoff"] == 500
+            and fort["cutoff"] == 1500  # D58: Pakistan keeps 1500 AD, 1837 is still past it
             and fort["origin"] == "import"
         )
         assert museum["museum_question"] is True and baltic["groups"] == ["calibration"]
