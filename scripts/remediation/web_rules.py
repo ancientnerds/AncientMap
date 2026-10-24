@@ -96,7 +96,7 @@ QUOTE_RULE = (
 
 
 #: Which rule a registered role (`roles.ROLES`) reads. A role is in exactly one set: a role that
-#: confirms or rejects (the fact checker, the web verifier, the adversarial reviewer, the pilot
+#: confirms or rejects (the fact checkers, the web verifiers, the adversarial reviewers, the pilot
 #: judge) or one that researches or writes. A role added to the registry is classified here before
 #: a brief for it can be built - there is no default.
 VERIFIER_ROLES = frozenset(
@@ -106,6 +106,7 @@ VERIFIER_ROLES = frozenset(
         "card_fact_checker",
         "card_web_verifier",
         "adversarial",
+        "card_adversarial",
         "pilot_judge",
     }
 )

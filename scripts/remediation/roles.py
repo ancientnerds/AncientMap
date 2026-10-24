@@ -23,6 +23,11 @@ moves and owner moves in order. A calibration verdict that failed with a tier mo
 under such a decision (`calibrate_claude.py release --owner-decision`) while the role is registered
 to the model that verdict was made on.
 
+A tier move that a failed verdict named but that was never applied to its role, because a lane got a
+role of its own on the higher tier instead (D45), is a **settled tier move** (`SETTLED_TIER_MOVES`):
+the move as the verdict named it, the role that took the context over and the decision. The role it
+names stays where it was.
+
 The two code roles have no pool of cases (`calibration_set` is `None`): the gates and the review
 judge them.
 
@@ -116,8 +121,17 @@ ROLES: Mapping[str, Role] = _registry(
     # that role moved to Opus: the lane's writing was never measured on Opus and stays on Sonnet,
     # under a calibration set of its own, sealed as `enrich-writer`.
     Role("enrich_writer", "claude-sonnet-5-5", "high", "enrich-writer"),
-    # D36: it re-checks every wd5 write and every card, so it is calibrated on Sonnet before use.
+    # D36: it re-checks every wd5 write, so it is calibrated on Sonnet before use. The shared role of
+    # the fields, identity and image lanes (D45, D51: it passed adv-truth-002 on Sonnet, 0.96); it no
+    # longer reviews cards - see `card_adversarial` and `SETTLED_TIER_MOVES`.
     Role("adversarial", "claude-sonnet-5-5", "high", "opus_audit_934"),
+    # The card lane's own adversarial reviewer: the last stage of the D10 re-check of the cards
+    # another model wrote (contract recheck-v1). As `adversarial` it failed the card calibration on
+    # Sonnet (teaser-2026-10-10, 0.7907 of 0.9, tier move to Opus) and on Opus before the contradiction
+    # rule and DISPUTED were tuned in (teaser-2026-10-09c, 0.72). Following D45 the card context gets
+    # a role of its own on Opus (D51/D6: a failing role moves up) instead of moving the shared one; a
+    # new role, not a move: it is calibrated on the 50 card cases before its first answer.
+    Role("card_adversarial", "claude-opus-5-5", "high", "wb_check_verify_opus"),
     Role("image_prefilter", "claude-haiku-5-5", "low", "image_kind_135"),
     Role("image_depicts", "claude-sonnet-5-5", "medium", "gallery_audit_calibration_opus"),
     Role("code_builder", "claude-sonnet-5-5", "high", None),
@@ -255,6 +269,81 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
 _ESCALATION_KEYS = frozenset({"role", "from", "to", "calibration_id", "reason"})
 _OWNER_KEYS = frozenset({"kind", "role", "from", "to", "effort", "decision", "reason", "evidence"})
 _DECISION = re.compile(r"D\d+[a-z]?")
+
+#: The tier moves a failed verdict named that were never applied to the role it named, each with how
+#: it was settled instead: the verdict's `tier_move` copied (as `APPLIED_ESCALATIONS` copies an
+#: applied one), the role that took the context over (`settled_by`, registered at the move's `to`),
+#: the decision it rests on and why. The named role stays where it was: such a move is never also an
+#: applied one, and `check_settled_tier_moves` holds the registry to both at import.
+SETTLED_TIER_MOVES: tuple[Mapping[str, Any], ...] = (
+    MappingProxyType(
+        {
+            # `VERDICT-adversarial.json` of teaser-2026-10-10 (Sonnet: clean 14/18, contradicted
+            # 20/25, agreement 0.7907 of 0.9).
+            "role": "adversarial",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "teaser-2026-10-10",
+            "reason": "failed: adversarial_agreement",
+            "settled_by": "card_adversarial",
+            "decision": "D45",
+            "how": "the failure is the card context's: the card lane's adversarial review moved to "
+            "the new role card_adversarial on Opus (D45: the card lane gets roles of its own; D51: a "
+            "failing role moves to Opus), calibrated on the same card cases; the shared adversarial "
+            "stays on Sonnet for the fields, identity and image lanes, where it passed adv-truth-002",
+        }
+    ),
+)
+_SETTLED_KEYS = frozenset({*_ESCALATION_KEYS, "settled_by", "decision", "how"})
+
+
+def check_settled_tier_moves(
+    settled: tuple[Mapping[str, Any], ...],
+    moves: tuple[Mapping[str, Any], ...],
+    roles: Mapping[str, Role],
+) -> None:
+    """Refuse a settled tier move that carries other keys or a blank one, that is not one tier up,
+    whose role is not registered where the move started (it moved after all: that is an applied
+    move), that `moves` applies too, or whose `settled_by` is not another registered role standing
+    at the model the move named."""
+    applied = {(m["role"], m.get("calibration_id")) for m in moves if m.get("kind") != OWNER_KIND}
+    for move in settled:
+        if set(move) != _SETTLED_KEYS or not all(
+            isinstance(v, str) and v.strip() for v in move.values()
+        ):
+            raise RoleError(
+                f"a settled tier move carries exactly {sorted(_SETTLED_KEYS)}: {dict(move)}"
+            )
+        name, taker = move["role"], move["settled_by"]
+        if _DECISION.fullmatch(move["decision"]) is None:
+            raise RoleError(f"{name}: {move['decision']!r} is not an owner decision id (D45)")
+        if name not in roles or taker not in roles:
+            raise RoleError(f"a settled tier move names an unregistered role: {name!r}, {taker!r}")
+        if move["to"] != next_tier(move["from"]):
+            raise RoleError(f"{name}: {move['from']} to {move['to']} is not one tier up")
+        if roles[name].model != move["from"]:
+            raise RoleError(
+                f"{name} is registered to {roles[name].model}, not {move['from']}: a role that "
+                "moved has an applied move, not a settled one"
+            )
+        if (name, move["calibration_id"]) in applied:
+            raise RoleError(
+                f"{name}: the tier move of {move['calibration_id']} is applied and settled at once"
+            )
+        if taker == name or roles[taker].model != move["to"]:
+            raise RoleError(
+                f"{name}: the tier move of {move['calibration_id']} is settled by {taker}, which is "
+                f"not another role registered to {move['to']}"
+            )
+
+
+def settled_tier_move(name: str, calibration_id: str) -> Mapping[str, Any] | None:
+    """The settlement of the tier move a failed verdict of role `name` in `calibration_id` named,
+    or `None` when it was not settled."""
+    found = [
+        m for m in SETTLED_TIER_MOVES if m["role"] == name and m["calibration_id"] == calibration_id
+    ]
+    return found[-1] if found else None
 
 
 def _check_owner_move(move: Mapping[str, Any]) -> None:
@@ -501,3 +590,4 @@ def registry_sha256() -> str:
 
 
 check_applied_escalations(APPLIED_ESCALATIONS, ROLES)
+check_settled_tier_moves(SETTLED_TIER_MOVES, APPLIED_ESCALATIONS, ROLES)

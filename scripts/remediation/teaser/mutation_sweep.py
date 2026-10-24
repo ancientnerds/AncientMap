@@ -4,7 +4,9 @@ The machinery is `mechanical/mutation_sweep.py`'s (a case counts as FIRED only w
 exactly once, the mutant compiles, the named test passed on the unmutated file and is reported
 FAILED against the mutant - anything else fails the sweep). The cases are the repair's: the claims
 floor, the coverage measure, the disputed gold, the told-apart quote standings, the opaque cache map,
-`check-answer`, the recorder's `--check` hook, `void`, and the seal over the code that judges.
+`check-answer`, the recorder's `--check` hook, `void`, and the seal over the code that judges; and
+(2026-10-24) the card lane's own adversarial reviewer `card_adversarial`: the re-check's binding, the
+calibration's cases, the verifier rule and the settled tier move of the shared `adversarial`.
 
 Run it from a parent process on a clean committed tree, never from inside a subagent lane (a lane
 killed between applying a mutation and restoring it leaves the mutant behind):
@@ -75,6 +77,19 @@ def gold(label: str, path: Path, old: str, new: str, test: str, testfile: str = 
 
 def rel(label: str, needle: str, test: str) -> Case:
     return guard(f"teaser release: {label}", CAL, needle, test, T_RELEASE)
+
+
+ROLES = REMEDIATION / "roles.py"
+T_ROLES = "tests/remediation/test_roles.py"
+
+
+def adv(label: str, path: Path, old: str, new: str, test: str, testfile: str) -> Case:
+    """A case of the card lane's own adversarial reviewer (`card_adversarial`, 2026-10-24)."""
+    return Case(f"teaser card-adversarial: {label}", path, old, new, test, testfile)
+
+
+def advg(label: str, path: Path, needle: str, test: str, testfile: str) -> Case:
+    return guard(f"teaser card-adversarial: {label}", path, needle, test, testfile)
 
 
 CASES: list[Case] = [
@@ -595,6 +610,81 @@ CASES: list[Case] = [
         " and card_labels[k] != CONTRADICTED_CARD\n",
         "\n",
         "test_a_contradiction_of_a_card_whose_gold_is_wrong_is_not_false",
+    ),
+    # ------------------------------------------------------------------ the card adversarial reviewer
+    adv(
+        "the re-check's adversarial stage is the card reviewer's",
+        RUN,
+        '            ADVERSARIAL: "card_adversarial",',
+        '            ADVERSARIAL: "adversarial",',
+        "test_the_adversarial_stage_is_the_card_reviewer_s_on_opus",
+        T_RUN,
+    ),
+    adv(
+        "the card cases are asked of the card reviewer",
+        CAL,
+        '    "adversarial_clean": "card_adversarial",',
+        '    "adversarial_clean": "adversarial",',
+        "test_the_card_cases_are_the_card_reviewer_s_not_the_shared_adversarial_s",
+        T_CAL,
+    ),
+    adv(
+        "the card reviewer reads the verifier rule",
+        WEB_RULES,
+        '        "card_adversarial",\n',
+        "",
+        "test_every_role_of_the_re_check_reads_the_verifier_rule",
+        T_DISPUTED,
+    ),
+    adv(
+        "the failed card calibration is settled by the card reviewer",
+        ROLES,
+        '            "settled_by": "card_adversarial",',
+        '            "settled_by": "pilot_judge",',
+        "test_the_failed_card_calibration_of_adversarial_is_settled_by_card_adversarial",
+        T_ROLES,
+    ),
+    advg(
+        "a settlement names an owner decision",
+        ROLES,
+        '        if _DECISION.fullmatch(move["decision"]) is None:',
+        "test_a_thin_or_unjoined_settlement_is_refused",
+        T_ROLES,
+    ),
+    advg(
+        "a settled move is one tier up",
+        ROLES,
+        '        if move["to"] != next_tier(move["from"]):',
+        "test_a_thin_or_unjoined_settlement_is_refused",
+        T_ROLES,
+    ),
+    advg(
+        "a settled role stays where the move started",
+        ROLES,
+        '        if roles[name].model != move["from"]:',
+        "test_a_role_that_moved_has_an_applied_move_not_a_settled_one",
+        T_ROLES,
+    ),
+    advg(
+        "a move is not applied and settled at once",
+        ROLES,
+        '        if (name, move["calibration_id"]) in applied:',
+        "test_a_role_that_moved_has_an_applied_move_not_a_settled_one",
+        T_ROLES,
+    ),
+    advg(
+        "the role that settles stands at the move's model",
+        ROLES,
+        '        if taker == name or roles[taker].model != move["to"]:',
+        "test_a_thin_or_unjoined_settlement_is_refused",
+        T_ROLES,
+    ),
+    advg(
+        "a settled tier move is not escalated",
+        RUN,
+        "    if settled is not None:",
+        "test_the_settled_tier_move_of_the_shared_adversarial_is_not_applied",
+        T_RUN,
     ),
 ]
 

@@ -85,7 +85,7 @@ TINY: dict[str, Any] = {
             }
         },
         "card_writer": {"sets": {"writer_pilot": {"sites": 2, "clean_first_min": 0.5}}},
-        "adversarial": {
+        "card_adversarial": {
             "sets": {
                 "adversarial_contradicted": {"cases": 2},
                 "adversarial_clean": {"cases": 2},
@@ -385,7 +385,7 @@ class TestTheSeal:
         assert (hooks["strong"], hooks["weak"], hooks["ordered_right_min"]) == (11, 13, 1.0)
         assert hooks["reference_within_one_min"] == 0.8
         assert roles["card_writer"]["sets"]["writer_pilot"] == {"sites": 40, "clean_first_min": 0.8}
-        adv = roles["adversarial"]["sets"]
+        adv = roles["card_adversarial"]["sets"]
         assert adv["adversarial_contradicted"]["cases"] == adv["adversarial_clean"]["cases"] == 25
         assert adv["adversarial_agreement"]["agreement_min"] == 0.9
         assert set(roles) == {
@@ -393,7 +393,7 @@ class TestTheSeal:
             "card_web_verifier",
             "hook_rater",
             "card_writer",
-            "adversarial",
+            "card_adversarial",
         }
 
     def test_a_seal_writes_the_thresholds_the_modules_and_the_registry(
@@ -484,7 +484,7 @@ class TestTheCases:
             "card_web_verifier",
             "hook_rater",
             "pilot_judge",
-            "adversarial",
+            "card_adversarial",
         }
 
     def test_a_key_says_nothing_of_its_case(self, tmp_path: Path) -> None:
@@ -1135,7 +1135,7 @@ class TestTheAdversary:
         run_dir = fixed_dir(tmp_path)
         answer_role(
             run_dir,
-            "adversarial",
+            "card_adversarial",
             {
                 "adversarial_contradicted": lambda job: T.checker_answer(
                     "FAIL", [("x", [])], ["The web says otherwise."]
@@ -1143,8 +1143,8 @@ class TestTheAdversary:
                 "adversarial_clean": lambda job: T.checker_answer(),
             },
         )
-        verdict = K.evaluate(run_dir, "adversarial")
-        assert verdict["passed"] is True and verdict["model"] == "claude-sonnet-5-5"
+        verdict = K.evaluate(run_dir, "card_adversarial")
+        assert verdict["passed"] is True and verdict["model"] == "claude-opus-5-5"
         assert verdict["sets"]["adversarial_agreement"]["agreement"] == 1.0
 
     def test_a_reviewer_that_passes_everything_fails_the_role(self, tmp_path: Path) -> None:
@@ -1153,10 +1153,42 @@ class TestTheAdversary:
             "adversarial_contradicted": lambda job: T.checker_answer(),
             "adversarial_clean": lambda job: T.checker_answer(),
         }
-        answer_role(run_dir, "adversarial", passes)
-        verdict = K.evaluate(run_dir, "adversarial")
+        answer_role(run_dir, "card_adversarial", passes)
+        verdict = K.evaluate(run_dir, "card_adversarial")
         assert verdict["sets"]["adversarial_agreement"]["agreement"] == 0.5
-        assert verdict["passed"] is False and verdict["tier_move"]["to"] == "claude-opus-5-5"
+        # Opus has no tier above: the failed card reviewer is held for the owner, not moved
+        assert verdict["passed"] is False and verdict["tier_move"] is None
+        assert verdict["held"] == "no higher tier than claude-opus-5-5: the owner decides"
+
+    def test_the_card_cases_are_the_card_reviewer_s_not_the_shared_adversarial_s(
+        self, tmp_path: Path
+    ) -> None:
+        """The 50 card cases are asked of `card_adversarial` (Opus) alone: the seal binds its entry,
+        the cases name it, and an answer of the shared `adversarial` (Sonnet; its failed card
+        calibration is settled by the new role) is refused."""
+        run_dir = fixed_dir(tmp_path)
+        sealed = K.sealed(run_dir)[0]["registry"]
+        assert sealed["card_adversarial"]["model"] == "claude-opus-5-5"
+        assert sealed["card_adversarial"]["sha256"] == RO.role_sha256("card_adversarial")
+        assert "adversarial" not in sealed and "adversarial" not in K.ROLE_SETS
+        adversary = {
+            j["role"] for j in K.sealed_jobs(run_dir) if j["set"].startswith("adversarial_")
+        }
+        assert adversary == {"card_adversarial"}
+        assert RO.settled_tier_move("adversarial", "teaser-2026-10-10")["settled_by"] == (
+            "card_adversarial"
+        )
+        answer_role(
+            run_dir,
+            "card_adversarial",
+            {
+                "adversarial_contradicted": lambda job: T.checker_answer(),
+                "adversarial_clean": lambda job: T.checker_answer(),
+            },
+            as_role="adversarial",
+        )
+        with pytest.raises(K.CalibrationError, match="did not answer as role card_adversarial"):
+            K.evaluate(run_dir, "card_adversarial")
 
 
 # ------------------------------------------------------------------------------ the writer

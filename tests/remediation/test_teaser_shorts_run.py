@@ -24,6 +24,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+import web_rules as WR  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from teaser import answers as A  # noqa: E402
 from teaser import answers_shorts as AS  # noqa: E402
@@ -912,6 +913,31 @@ class TestTheRoles:
         with pytest.raises(R.RunError, match="answers no stage of this run"):
             R.escalate_role(run, "adversarial", verdict)
 
+    def test_the_settled_tier_move_of_the_shared_adversarial_is_not_applied(
+        self, tmp_path: Path
+    ) -> None:
+        """teaser-2026-10-10's move of `adversarial` to Opus is settled by `card_adversarial`
+        (`roles.SETTLED_TIER_MOVES`): escalating it is refused with the role that took over."""
+        run = seed(tmp_path, [MP])
+        settled = RO.settled_tier_move("adversarial", "teaser-2026-10-10")
+        assert settled is not None
+        move = {k: settled[k] for k in ("role", "from", "to", "calibration_id", "reason")}
+        verdict = tmp_path / "VERDICT-adversarial.json"
+        verdict.write_text(
+            json.dumps({"role": "adversarial", "passed": False, "tier_move": move}),
+            encoding="utf-8",
+        )
+        with pytest.raises(R.RunError, match="settled under D45: role card_adversarial"):
+            R.escalate_role(run, "adversarial", verdict)
+        # a move the registry did not settle is refused for what it is
+        other = {**move, "calibration_id": "teaser-other"}
+        verdict.write_text(
+            json.dumps({"role": "adversarial", "passed": False, "tier_move": other}),
+            encoding="utf-8",
+        )
+        with pytest.raises(R.RunError, match="answers no stage of this run"):
+            R.escalate_role(run, "adversarial", verdict)
+
     def test_an_escalation_needs_a_failed_verdict_of_that_role_one_tier_up(
         self, tmp_path: Path
     ) -> None:
@@ -1365,9 +1391,10 @@ class TestTheRecheckRun:
         assert set(record["roles"]) == {
             "card_fact_checker",
             "card_web_verifier",
-            "adversarial",
+            "card_adversarial",
             "pilot_judge",
         }
+        assert record["roles"]["card_adversarial"] == {"model": "claude-opus-5-5", "effort": "high"}
         write = R.stage_records(run)["write"]
         assert set(write) == {sid(MP), sid(DENBURY)}
         row = write[sid(MP)]
@@ -1503,6 +1530,29 @@ class TestTheRecheckRun:
             GAP_RUN,
         )
         assert row["findings"] and "card-clear-" + reason == f"card-clear-{row['reason']}"
+
+    def test_the_adversarial_stage_is_the_card_reviewer_s_on_opus(self, tmp_path: Path) -> None:
+        """The re-check's last stage is answered by the card lane's own reviewer `card_adversarial`
+        (Opus), never by the shared `adversarial` (Sonnet), which failed the card calibration: the
+        brief names the role and its model, and an answer of the shared role is refused at import."""
+        assert R.RECHECK_SPEC.roles[R.ADVERSARIAL] == "card_adversarial"
+        assert "adversarial" not in R.RECHECK_SPEC.roles.values()
+        run = seed(tmp_path, [MP])
+        ok = {sid(MP): T.checker_answer()}
+        recheck_step(run, tmp_path, "check", ok)
+        recheck_step(run, tmp_path, "verify", verifies([MP]))
+        handoff = tmp_path / "handoff-adversarial"
+        R.export_stage(run, R.ADVERSARIAL, handoff)
+        record = R._round(run, R.ADVERSARIAL)
+        assert record is not None
+        (batch_id,) = record["batches"]
+        brief = R.role_brief(run, R.RECHECK_SPEC, record, batch_id)
+        assert "**card_adversarial**" in brief and "**claude-opus-5-5**" in brief
+        assert "--role card_adversarial --model claude-opus-5-5" in brief
+        assert WR.CONTRADICTION_RULE in brief
+        put(handoff, R.ADVERSARIAL, batch_id, sid(MP), ok[sid(MP)], "adversarial")
+        with pytest.raises(R.RunError, match="did not answer as role card_adversarial"):
+            R.import_stage(run, R.ADVERSARIAL, fit=T.fit)
 
     def test_a_card_without_a_description_is_cleared_pinned_to_its_text(
         self, tmp_path: Path

@@ -29,7 +29,8 @@ import roles as RO  # noqa: E402
 #: to Sonnet by owner move (the hook rater at medium); `pilot_judge` is the small spot check that
 #: stays on Opus; `enrich_writer` is the lane E writer that never left Sonnet. D40 as scoped by D45
 #: (2026-10-17) added the card lane's own checkers on Opus; D46 (2026-10-19) moved `card_writer` back
-#: to Opus after its Sonnet pilot.
+#: to Opus after its Sonnet pilot. The card lane's adversarial reviewer `card_adversarial` (Opus,
+#: 2026-10-24) settles the shared role's failed card calibration (`SETTLED_TIER_MOVES`).
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "medium"),
@@ -40,6 +41,7 @@ D6 = {
     "field_researcher": ("claude-sonnet-5-5", "high"),
     "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-sonnet-5-5", "high"),
+    "card_adversarial": ("claude-opus-5-5", "high"),
     "image_prefilter": ("claude-haiku-5-5", "low"),
     "image_depicts": ("claude-sonnet-5-5", "medium"),
     "code_builder": ("claude-sonnet-5-5", "high"),
@@ -663,3 +665,81 @@ def test_the_owner_move_of_d46_puts_the_card_writer_on_opus() -> None:
     )
     assert move["evidence"] == ("wb-shorts-pilot-2026-10-18",)
     assert RO.ROLES["card_writer"].model == "claude-opus-5-5"
+
+
+# ------------------------------------------------------------------------- the settled tier moves
+def test_the_failed_card_calibration_of_adversarial_is_settled_by_card_adversarial() -> None:
+    """teaser-2026-10-10 failed the shared `adversarial` on Sonnet with a tier move to Opus. It was
+    never applied: the card context moved to `card_adversarial` on Opus (D45), and the shared role
+    stays on Sonnet for the fields, identity and image lanes."""
+    settled = RO.settled_tier_move("adversarial", "teaser-2026-10-10")
+    assert settled is not None and dict(settled) == {
+        "role": "adversarial",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": "teaser-2026-10-10",
+        "reason": "failed: adversarial_agreement",
+        "settled_by": "card_adversarial",
+        "decision": "D45",
+        "how": settled["how"],
+    }
+    assert "card_adversarial" in settled["how"] and "Sonnet" in settled["how"]
+    assert RO.ROLES["adversarial"].model == "claude-sonnet-5-5"
+    card = RO.ROLES["card_adversarial"]
+    assert (card.model, card.effort) == ("claude-opus-5-5", "high")
+    assert RO.last_move("card_adversarial") is None  # a new role, not a move
+    assert not any(
+        m["role"] == "adversarial" and m.get("calibration_id") == "teaser-2026-10-10"
+        for m in RO.APPLIED_ESCALATIONS
+    )
+    assert RO.settled_tier_move("adversarial", "teaser-2026-10-09c") is None
+    assert RO.settled_tier_move("hook_rater", "teaser-2026-10-10") is None
+    RO.check_settled_tier_moves(RO.SETTLED_TIER_MOVES, RO.APPLIED_ESCALATIONS, RO.ROLES)
+
+
+def settled_move(**over: object) -> dict[str, object]:
+    move: dict[str, object] = {**RO.SETTLED_TIER_MOVES[0]}
+    move.update(over)
+    return move
+
+
+@pytest.mark.parametrize(
+    ("over", "message"),
+    [
+        ({"how": " "}, "carries exactly"),
+        ({"settled_by": None}, "carries exactly"),
+        ({"decision": "the owner"}, "is not an owner decision id"),
+        ({"settled_by": "writer"}, "unregistered role"),
+        ({"role": "writer"}, "unregistered role"),
+        ({"from": "claude-haiku-5-5"}, "not one tier up"),
+        ({"settled_by": "adversarial"}, "not another role registered to claude-opus-5-5"),
+        ({"settled_by": "image_depicts"}, "not another role registered to claude-opus-5-5"),
+    ],
+)
+def test_a_thin_or_unjoined_settlement_is_refused(over: dict[str, object], message: str) -> None:
+    with pytest.raises(RO.RoleError, match=message):
+        RO.check_settled_tier_moves((settled_move(**over),), RO.APPLIED_ESCALATIONS, RO.ROLES)
+
+
+def test_a_settlement_with_a_key_too_many_or_too_few_is_refused() -> None:
+    with pytest.raises(RO.RoleError, match="carries exactly"):
+        RO.check_settled_tier_moves(
+            ({**settled_move(), "extra": "x"},), RO.APPLIED_ESCALATIONS, RO.ROLES
+        )
+    short = {k: v for k, v in settled_move().items() if k != "how"}
+    with pytest.raises(RO.RoleError, match="carries exactly"):
+        RO.check_settled_tier_moves((short,), RO.APPLIED_ESCALATIONS, RO.ROLES)
+
+
+def test_a_role_that_moved_has_an_applied_move_not_a_settled_one() -> None:
+    """The settled role stays where the move started: a registry that moved it is refused, and so
+    is a move that is applied and settled at once."""
+    moved = dict(RO.ROLES)
+    moved["adversarial"] = RO.Role("adversarial", "claude-opus-5-5", "high", "opus_audit_934")
+    with pytest.raises(RO.RoleError, match="adversarial is registered to claude-opus-5-5"):
+        RO.check_settled_tier_moves(RO.SETTLED_TIER_MOVES, RO.APPLIED_ESCALATIONS, moved)
+    applied = {k: settled_move()[k] for k in ("role", "from", "to", "calibration_id", "reason")}
+    with pytest.raises(RO.RoleError, match="applied and settled at once"):
+        RO.check_settled_tier_moves(
+            RO.SETTLED_TIER_MOVES, (*RO.APPLIED_ESCALATIONS, applied), RO.ROLES
+        )
