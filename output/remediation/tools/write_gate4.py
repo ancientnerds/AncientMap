@@ -133,6 +133,7 @@ from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import closed_wc_batches as CLOSED  # noqa: E402 - WC batches whose plan is lost, closed by record
 import lanes  # noqa: E402 - the lane's paths, the JSON-lines reader and the database seam
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import snapshot_plan as SP  # noqa: E402 - the one reader of a site-id list
@@ -390,12 +391,23 @@ def legacy_batches(
 
 
 def wc_batches(
-    paths: Sequence[pathlib.Path], wanted: Sequence[str], *, apply_root: pathlib.Path
+    paths: Sequence[pathlib.Path],
+    wanted: Sequence[str],
+    *,
+    apply_root: pathlib.Path,
+    closed_root: pathlib.Path = CLOSED.RECORDS,
 ) -> tuple[list[W4.BatchInputs], dict[str, Any]]:
     """Lane WC's plan batches (`write4.load_wc_plan`, every plan named, in order) and their
     outcomes, or exactly the named batches. The apply root holds these plans' write batches or
     none: a write batch of a WC plan not named here would enter the lane plan the acceptance reads
-    and be judged as one of these - it is named and nothing is planned."""
+    and be judged as one of these - it is named and nothing is planned.
+
+    One exception, by record and never by default: a written and accepted batch whose WC plan is
+    lost (`closed_wc_batches`, 2026-10-24: `p4wc-4325`, the WN pilot of the removed worktree
+    `db-finish`) is **closed** when a versioned reconstruction under `closed_root` names it and still
+    holds (`closed_wc_batches.verify`: the recorded batch files, the journal's rows, the recorded
+    acceptance, nothing stopped). It is never planned or written again, and its `PLAN.jsonl` stays in
+    the lane plan the acceptance reads. A closed batch a named plan also plans is refused."""
     for path in paths:
         if not path.is_file():
             raise SystemExit(f"{path}: no such WC plan (wc/cli.py build writes it)")
@@ -414,10 +426,34 @@ def wc_batches(
     whole, outcomes = W4.load_wc_plan(paths)
     ours = {W4.group_batch_id(batch.batch_id, W4.Group.WC) for batch in whole}
     prefix = W4.GROUP_PREFIX[W4.Group.WC]
+    try:
+        closed = CLOSED.load(closed_root)
+    except CLOSED.ClosedBatchError as exc:
+        raise SystemExit(str(exc)) from None
+    planned_closed = sorted(ours & set(closed))
+    if planned_closed:
+        raise SystemExit(
+            f"{planned_closed}: closed by record ({closed_root}) and planned by a named WC plan: a "
+            "closed batch is never planned again"
+        )
+    for batch_id, record in sorted(closed.items()):
+        if not (apply_root / batch_id).is_dir():
+            continue
+        problems = CLOSED.verify(record, apply_root)
+        if problems:
+            raise SystemExit(
+                f"closed batch {batch_id}: the record does not hold - " + "; ".join(problems)
+            )
+        print(
+            f"closed batch {batch_id}: written and accepted, its WC plan lost - reconstructed "
+            f"{record['reconstructed_at']} from the production journal by "
+            f"{record['reconstructed_by']} ({record['rows']} row(s), {record['sites']} site(s); "
+            f"{CLOSED.record_path(closed_root, batch_id)}); never planned again"
+        )
     foreign = sorted(
         found.name
         for found in apply_root.glob(f"{prefix}-*")
-        if found.is_dir() and found.name not in ours
+        if found.is_dir() and found.name not in ours and found.name not in closed
     )
     if foreign:
         raise SystemExit(
@@ -525,6 +561,28 @@ def require_lane_n_api(host: str, *, api_commit: Any) -> str:
 def require_lane_e_api(host: str, *, api_commit: Any) -> str:
     """Refuse unless the live API's commit contains the lane-E change (`lane_e_commit`)."""
     return _require_lane_api("lane E", LANE_E_MARK, lane_e_commit(), host, api_commit=api_commit)
+
+
+def wc_bases(
+    apply_root: pathlib.Path, batches: Sequence[str], *, write_round: int
+) -> dict[str, dict[str, dict[str, str | None]]]:
+    """Write batch -> site -> column -> the old value of its row, for every one of `batches` (the
+    named plans' write batches) the apply root holds as applied in `write_round` (its
+    `PLAN.jsonl`): which sites each written batch wrote, and the raw_data each was planned over.
+    `write4.plan_wc` re-plans such a site from it - a site planned over a live raw_data another lane
+    had moved (`description_part`) and a site a later write superseded re-plan to the rows they were
+    written from, whatever production holds now. A batch written in another round is not read:
+    round N re-plans what round N-1's reversal left."""
+    bases: dict[str, dict[str, dict[str, str | None]]] = {}
+    for batch_id in batches:
+        applied = apply_root / batch_id / APPLIED_FILE
+        if not applied.exists() or _read(applied)["write_round"] != write_round:
+            continue
+        written: dict[str, dict[str, str | None]] = {}
+        for row in W4.read_plan(applied.parent, group=W4.Group.WC):
+            written.setdefault(row.site_id, {})[row.column] = row.old_value
+        bases[batch_id] = written
+    return bases
 
 
 #: The first line of `wc_live_sql`: how the tests' fake psql recognises the read.
@@ -1084,6 +1142,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="WC: a WC plan (wc/cli.py build), once per WC run, in run order",
     )
     parser.add_argument("--run-root", default=None, help="override phase4_runner/runs")
+    parser.add_argument(
+        "--closed-batches",
+        default=str(CLOSED.RECORDS),
+        help="WC: the records of closed batches whose plan is lost (closed_wc_batches.py)",
+    )
     parser.add_argument("--batch", action="append", default=[], help="only these plan batches")
     parser.add_argument(
         "--round",
@@ -1152,7 +1215,9 @@ def _run(
         )
     elif group is W4.Group.WC:
         paths = [pathlib.Path(path) for path in args.wc_plan]
-        batches, wc_outcomes = wc_batches(paths, args.batch, apply_root=apply_root)
+        batches, wc_outcomes = wc_batches(
+            paths, args.batch, apply_root=apply_root, closed_root=pathlib.Path(args.closed_batches)
+        )
         run_dir = None
         source = "WC plans " + ", ".join(
             f"{path} (sha256 {hashlib.sha256(path.read_bytes()).hexdigest()})" for path in paths
@@ -1186,7 +1251,15 @@ def _run(
         print(
             f"live description and raw_data: {len(live)} of {len(site_ids)} planned sites (read-only)"
         )
-        options = {"outcomes": wc_outcomes, "live": live}
+        options = {
+            "outcomes": wc_outcomes,
+            "live": live,
+            "bases": wc_bases(
+                apply_root,
+                [W4.group_batch_id(batch.batch_id, W4.Group.WC) for batch in batches],
+                write_round=args.round,
+            ),
+        }
     else:
         scope = _defect_scope()
         print(
@@ -1247,6 +1320,12 @@ def _run(
         for plan in plans
     ]
     rows = sum(len(item.plan.rows) for item in planned)
+    if group is W4.Group.WC:
+        rebased = sum(len(item.plan.rebased) for item in planned if not item.applied)
+        print(
+            f"planned over a live raw_data another lane moved since the check (a key that is not "
+            f"the description's, write4.description_part): {rebased} site(s)"
+        )
     refused: dict[str, int] = {}
     for item in planned:
         for rule, count in item.plan.refusals_by_rule().items():

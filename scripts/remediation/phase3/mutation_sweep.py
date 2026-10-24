@@ -22694,6 +22694,17 @@ WC_REASK = "test_a_sentence_whose_quote_fails_is_reasked_once_then_dropped"
 WC_POPULATION = "test_the_population_is_every_march_text_that_stays_and_lists_the_rest"
 WC_PLAN_RULES = "test_every_wc_plan_rule_refuses_a_broken_plan"
 WC_PLAN_REFUSALS = "test_a_site_phase4_wrote_or_that_moved_since_its_check_is_refused_not_written"
+#: The stale reads of 2026-10-24 (`write4.description_part`, `on_basis`, `write_gate4.wc_bases`) and
+#: the closed batch of a lost plan (`closed_wc_batches.py`, `p4wc-4325`).
+WC_REBASED = "test_a_site_not_written_yet_whose_other_raw_data_moved_is_planned_over_the_live_raw_data"
+WC_SUPERSEDED = (
+    "test_a_written_site_a_later_write_superseded_re_plans_to_the_rows_it_was_written_from"
+)
+WC_CONCURRENT = (
+    "test_concurrent_lanes_a_write_planned_over_one_lanes_key_survives_it_and_loses_no_later_one"
+)
+CLOSED_TOOL = "output/remediation/tools/closed_wc_batches.py"
+CLOSED_TEST = "tests/remediation/test_closed_wc_batches.py"
 WC_GATE = "test_wc_is_planned_written_in_a_step_and_accepted_on_its_own_lane"
 WC_SQL_PIN = "test_the_wc_statement_lets_only_its_clears_write_null_and_checks_its_own_invariants"
 WC_JUDGE_FAIL = "test_a_wrong_an_unsupported_share_or_an_incoherent_text_fails_the_pilot"
@@ -23092,8 +23103,8 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc write4: a site Phase 4 wrote is written",
         P4_WRITE,
-        '        if lane in full and outcome.evidence["marking"]["old"] != wc4.Marking.PHASE4.value:\n',
-        "        if False:  # mutant\n",
+        "            and lane in full\n",
+        "            and False  # mutant\n",
         WC_WRITE_TEST,
         WC_PLAN_REFUSALS,
     ),
@@ -23324,17 +23335,146 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_a_site_a_later_plan_asks_again_leaves_every_earlier_batch_that_did_not_write_it",
     ),
     (
-        "wc write4: an unwritten site's other raw_data may move",
+        "wc write4: the description state of an unwritten site may move",
         P4_WRITE,
-        '        checked = now is not None and (now["description"], now["raw_data"]) == (\n',
-        '        checked = now is not None and now["description"] == site.description and (  # mutant\n',
+        "            and description_part(now[\"raw_data\"], keep_card=keep_card)\n"
+        "            == description_part(site.raw_data, keep_card=keep_card)\n",
+        "            and True  # mutant\n",
         WC_WRITE_TEST,
-        "test_a_site_not_written_yet_whose_other_raw_data_moved_is_refused",
+        WC_REBASED,
+    ),
+    (
+        "wc write4: a rebased site is written over the checked raw_data",
+        P4_WRITE,
+        '            basis = now["raw_data"]\n',
+        "            pass  # mutant\n",
+        WC_WRITE_TEST,
+        WC_REBASED,
+    ),
+    (
+        "wc write4: the rebased row drops the other lane's key",
+        P4_WRITE,
+        "    new = {key: value for key, value in (basis or {}).items() if key not in wc4.WC_KEYS}\n",
+        "    new = {}  # mutant\n",
+        WC_WRITE_TEST,
+        WC_REBASED,
+    ),
+    (
+        "wc write4: the provenance's card sub-key counts as the text's",
+        P4_WRITE,
+        "    if not keep_card and isinstance(provenance, dict) and PROVENANCE_CARD_KEY in provenance:\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_wc_list.py",
+        "test_a_phase4_text_lane_wb_carded_since_its_check_is_planned_over_the_live_raw_data",
+    ),
+    (
+        "wc write4: a write that keeps a card is never seen",
+        P4_WRITE,
+        "    return isinstance(provenance, dict) and provenance.get(PROVENANCE_CARD_KEY) is not None\n",
+        "    return False  # mutant\n",
+        "tests/remediation/test_wc_list.py",
+        "test_the_description_state_leaves_out_the_card_only_when_the_write_leaves_none",
+    ),
+    (
+        "wc write4: a written site a later write superseded is refused",
+        P4_WRITE,
+        "        superseded = written_here is not None and not checked\n",
+        "        superseded = False  # mutant\n",
+        WC_WRITE_TEST,
+        WC_SUPERSEDED,
+    ),
+    (
+        "wc write4: a written site is re-planned over the live raw_data",
+        P4_WRITE,
+        '        if written_here is not None and "raw_data" in written_here:\n',
+        "        if False:  # mutant\n",
+        WC_WRITE_TEST,
+        WC_CONCURRENT,
+    ),
+    (
+        "wc gate: what a written batch wrote is not read",
+        P4_WRITE_GATE,
+        "        bases[batch_id] = written\n",
+        "        pass  # mutant\n",
+        WC_WRITE_TEST,
+        WC_SUPERSEDED,
+    ),
+    (
+        "wc gate: a written batch of another round gives its bases",
+        P4_WRITE_GATE,
+        '        if not applied.exists() or _read(applied)["write_round"] != write_round:\n',
+        "        if not applied.exists():  # mutant\n",
+        WC_WRITE_TEST,
+        WC_SUPERSEDED,
+    ),
+    (
+        "wc gate: a closed batch is not checked against its record",
+        P4_WRITE_GATE,
+        "        problems = CLOSED.verify(record, apply_root)\n",
+        "        problems = []  # mutant\n",
+        CLOSED_TEST,
+        "test_a_record_that_no_longer_holds_stops_the_gate",
+    ),
+    (
+        "wc gate: a batch of a lost plan is never closed",
+        P4_WRITE_GATE,
+        "        if found.is_dir() and found.name not in ours and found.name not in closed\n",
+        "        if found.is_dir() and found.name not in ours  # mutant\n",
+        CLOSED_TEST,
+        "test_a_lost_plans_batch_blocks_the_gate_until_a_record_closes_it",
+    ),
+    (
+        "wc gate: a closed batch may be planned again",
+        P4_WRITE_GATE,
+        "    planned_closed = sorted(ours & set(closed))\n",
+        "    planned_closed = []  # mutant\n",
+        CLOSED_TEST,
+        "test_a_closed_batch_a_named_plan_plans_again_is_refused",
+    ),
+    (
+        "closed batches: a journal row that is not the planned row holds",
+        CLOSED_TOOL,
+        "        if wanted != found:\n",
+        "        if False:  # mutant\n",
+        CLOSED_TEST,
+        "test_a_record_whose_journal_rows_are_not_the_plans_does_not_hold",
+    ),
+    (
+        "closed batches: another set of change keys holds",
+        CLOSED_TOOL,
+        '    if sorted(by_key) != sorted(row["change_key"] for row in plan):\n',
+        "    if False:  # mutant\n",
+        CLOSED_TEST,
+        "test_a_record_whose_journal_rows_are_not_the_plans_does_not_hold",
+    ),
+    (
+        "closed batches: a stopped batch is closed",
+        CLOSED_TOOL,
+        "    if (batch_dir / STOPPED_FILE).exists():\n        problems.append(",
+        "    if False:\n        problems.append(",
+        CLOSED_TEST,
+        "test_a_record_that_no_longer_holds_stops_the_gate",
+    ),
+    (
+        "closed batches: a batch accepted on no step is closed",
+        CLOSED_TOOL,
+        "    if len(found) != 1:\n",
+        "    if False:  # mutant\n",
+        CLOSED_TEST,
+        "test_a_record_that_no_longer_holds_stops_the_gate",
+    ),
+    (
+        "closed batches: a MiniMax-shaped text is not named for D10",
+        CLOSED_TOOL,
+        '        site["minimax"] = site["checker"] == M.AI_SYSTEM\n',
+        '        site["minimax"] = False  # mutant\n',
+        CLOSED_TEST,
+        "test_a_text_whose_checker_names_minimax_is_named_for_the_d10_recheck",
     ),
     (
         "wc write4: the clear of a NULL raw_data writes NULL over NULL",
         P4_WRITE,
-        "            continue  # NULL stays NULL: the clear is the description row alone (WC_PAIRS)\n",
+        "            continue  # nothing of raw_data moves: the clear is the description row alone (WC_PAIRS)\n",
         "            pass  # mutant\n",
         WC_WRITE_TEST,
         "test_the_clear_of_a_null_raw_data_is_its_description_row_alone",
@@ -24674,8 +24814,8 @@ WN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc wn write4: a Phase-4 text of a list run is refused as written by Phase 4",
         "scripts/remediation/phase4/write4.py",
-        '        if lane in full and outcome.evidence["marking"]["old"] != wc4.Marking.PHASE4.value:\n',
-        "        if lane in full:  # mutant\n",
+        '            and outcome.evidence["marking"]["old"] != wc4.Marking.PHASE4.value\n',
+        "            and True  # mutant\n",
         "tests/remediation/test_wc_list.py",
         "test_a_phase4_text_of_a_list_run_is_planned_not_refused_as_written_by_phase_4",
     ),

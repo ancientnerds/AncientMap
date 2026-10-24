@@ -97,14 +97,29 @@ def test_each_enriched_site_becomes_its_description_row_and_its_raw_data_row(
 
 
 def test_a_site_that_moved_since_its_enrichment_was_asked_is_refused(built: dict[str, Any]) -> None:
+    """A moved text, or a moved description state in raw_data (the check record the enrichment
+    builds on), is refused; another lane's key (2026-10-24, `write4.description_part`) is not the
+    text's and the site is planned over the live raw_data, the key kept."""
     db = _db(built)
     db.sites[EF.SITE_W].description = "Someone edited this text."
-    db.sites[EF.SITE_L].raw_data = {**db.sites[EF.SITE_L].raw_data, "title_es": "Templi"}
+    check = dict(db.sites[EF.SITE_L].raw_data[WC4.CHECK_KEY])
+    db.sites[EF.SITE_L].raw_data = {
+        **db.sites[EF.SITE_L].raw_data,
+        WC4.CHECK_KEY: {**check, "run": "another-run"},
+    }
     plan = _plan(built, db)
     assert sorted((r.site_id, r.rule) for r in plan.refusals) == sorted(
         [(EF.SITE_W, W4.RULE_MOVED), (EF.SITE_L, W4.RULE_MOVED)]
     )
     assert {row.site_id for row in plan.rows} == {EF.SITE_N}
+    db = _db(built)
+    db.sites[EF.SITE_L].raw_data = {**db.sites[EF.SITE_L].raw_data, "title_es": "Templi"}
+    rebased = _plan(built, db)
+    assert rebased.rebased == [EF.SITE_L] and not rebased.refusals
+    raw = next(r for r in rebased.rows if (r.site_id, r.column) == (EF.SITE_L, "raw_data"))
+    assert (
+        json.loads(raw.old_value)["title_es"] == json.loads(raw.new_value)["title_es"] == "Templi"
+    )
 
 
 def test_a_written_enrichment_re_plans_to_the_rows_it_was_written_from(

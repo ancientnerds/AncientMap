@@ -432,6 +432,62 @@ def test_a_list_run_site_that_moved_since_its_check_is_refused(built) -> None:
     assert not result.rows
 
 
+def test_a_phase4_text_lane_wb_carded_since_its_check_is_planned_over_the_live_raw_data(
+    tmp_path: Path,
+) -> None:
+    """2026-10-24 (the stale reads of defects-2026-10-02: 19 of 136 sites): lane WB wrote its
+    `_card_provenance` into a Phase-4 text checked before, and set the provenance's Phase-5 card to
+    null. Neither is the text's: the filtered provenance the check leaves carries no card, so the
+    site is planned over the live raw_data - WB's key kept, the transaction holding the live value -
+    instead of `moved-since-check`. A provenance key of the text's own that moved is refused."""
+    rows = [FX.row(SITE_P4, WX.P4_TEXT, raw_data=WX.p4_site_raw(card=True), name="Tarxien P4")]
+    _, plan = WX.build_list_run(
+        tmp_path, rows, [SITE_P4], {SITE_P4: _p4_answers()[SITE_P4]}, name="wcl-card"
+    )
+    (batch,), outcomes = W4.load_wc_plan([plan])
+    assert outcomes[batch.batch_id][SITE_P4].raw_data[M.PROVENANCE_KEY]["card"] is None
+    db = _db(rows)
+    raw = db.sites[SITE_P4].raw_data
+    carded = {
+        **raw,
+        M.PROVENANCE_KEY: {**raw[M.PROVENANCE_KEY], "card": None},
+        "_card_provenance": {"v": 3, "text_sha256": "c" * 64},
+    }
+    db.sites[SITE_P4].raw_data = carded
+    result = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert not result.refusals and result.rebased == [SITE_P4]
+    row = next(r for r in result.rows if r.column == "raw_data")
+    assert json.loads(row.old_value) == carded
+    new = json.loads(row.new_value)
+    assert new["_card_provenance"] == carded["_card_provenance"]
+    assert new[M.PROVENANCE_KEY] == outcomes[batch.batch_id][SITE_P4].raw_data[M.PROVENANCE_KEY]
+    moved = {
+        **carded,
+        M.PROVENANCE_KEY: {
+            **carded[M.PROVENANCE_KEY],
+            "sentences": carded[M.PROVENANCE_KEY]["sentences"][:2],
+        },
+    }
+    db.sites[SITE_P4].raw_data = moved
+    refused = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert [(r.site_id, r.rule) for r in refused.refusals] == [(SITE_P4, W4.RULE_MOVED)]
+    assert not refused.rows and not refused.rebased
+
+
+def test_the_description_state_leaves_out_the_card_only_when_the_write_leaves_none() -> None:
+    """`write4.description_part`: WC's keys and nothing else; the provenance's Phase-5 card is the
+    card lane's unless the write itself keeps a card there (`_keeps_card`)."""
+    raw = {**WX.p4_site_raw(card=True), "_card_provenance": {"v": 3}, "title_es": "Templos"}
+    part = W4.description_part(raw, keep_card=False)
+    assert set(part) == {M.CITATIONS_KEY, M.PROVENANCE_KEY}
+    assert "card" not in part[M.PROVENANCE_KEY]
+    assert W4.description_part(raw, keep_card=True)[M.PROVENANCE_KEY]["card"] is not None
+    assert W4._keeps_card(raw) and not W4._keeps_card(WX.p4_site_raw())
+    assert not W4._keeps_card(None) and W4.description_part(None, keep_card=False) == {}
+    assert W4.on_basis(None, {"title_es": "Templos"}) == {"title_es": "Templos"}
+    assert W4.on_basis(None, {M.CITATIONS_KEY: []}) is None
+
+
 def test_a_later_plan_takes_over_a_site_it_asks_again_and_after_leaves_the_earlier_ones(
     built, tmp_path: Path
 ) -> None:
