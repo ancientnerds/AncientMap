@@ -11,7 +11,7 @@ without a network and without a model:
     pictures        PICTURES.jsonl                    the renderings on disk, with their paths
     prefilter       PREFILTER.jsonl                   Haiku: kind and usable, at 640 px
     depicts         DEPICTS.jsonl, VERDICTS.jsonl     Sonnet: verdict and quality, at 1280 px
-    recheck         RECHECK_NN.jsonl                  Opus: the best pick of every site, round by round
+    recheck         RECHECK_NN.jsonl                  adversarial: the best pick of every site, by round
     targets         TARGETS.jsonl                     the confirmed picks the INSERT lane fetches
     prune           PICTURES_SHA256.jsonl             the pictures deleted, their hashes kept
 
@@ -56,6 +56,10 @@ PICTURES_SHA = "PICTURES_SHA256.jsonl"
 JUDGED_FILE = "JUDGED_NOT_DEPICTS.jsonl"
 #: Verdicts of models that were never ground truth (D10, X6): their rows do not exclude a file.
 MINIMAX_WORD = "minimax"
+#: The marker of a D59 candidate run (`image_roles/d59.py candidates`): one candidate per site, the
+#: site's own hotlinked Commons thumbnail, which the owner sends to "a Sonnet depicts check" - so it
+#: is never cut by the prefilter first (`skips_prefilter`).
+D59_MARKER = "D59.json"
 
 
 class FlowError(ST.StateError):
@@ -74,6 +78,13 @@ def _population(run: Path) -> list[dict[str, Any]]:
     """The merged population when the identity stage ran, else the first one."""
     merged = run / POPULATION_2
     return _jsonl(merged if merged.is_file() else run / PP.POPULATION_FILE)
+
+
+def skips_prefilter(run: Path) -> bool:
+    """A D59 run goes straight to the depicts role. The prefilter is the cheap cut of a search's
+    eleven thousand candidates; a D59 site has one candidate, the picture its page already shows, and
+    D59 names the check it gets - the Sonnet depicts role - so a Haiku drop must not decide it."""
+    return (run / D59_MARKER).is_file()
 
 
 # ---------------------------------------------------------------------------------- population
@@ -203,6 +214,10 @@ def prefilter_export(
     limit: int | None = None,
 ) -> dict[str, Any]:
     """The prefilter's questions over every fetched candidate (sixty to a question)."""
+    if skips_prefilter(run):
+        raise FlowError(
+            f"{run.name} is a D59 run: its one candidate per site goes straight to depicts-export"
+        )
     flat = [
         {"site_id": s["site_id"], "file": c["file"], "path": c["path"]}
         for s in _jsonl(run / PICTURES)
@@ -221,10 +236,18 @@ def depicts_export(
     cache: WikiCache | None,
     read: Callable[[Mapping[str, Any]], bytes] = _read_picture,
 ) -> dict[str, Any]:
-    """The depicts role's questions over the prefilter's survivors, packed by site."""
-    surviving = {
-        (r["site_id"], r["file"]) for r in PF.judged(SG.read_results(run, PF.SPEC)) if r["survives"]
-    }
+    """The depicts role's questions over the prefilter's survivors, packed by site - over every
+    fetched candidate of a D59 run (`skips_prefilter`)."""
+    if skips_prefilter(run):
+        surviving = {
+            (s["site_id"], c["file"]) for s in _jsonl(run / PICTURES) for c in s["candidates"]
+        }
+    else:
+        surviving = {
+            (r["site_id"], r["file"])
+            for r in PF.judged(SG.read_results(run, PF.SPEC))
+            if r["survives"]
+        }
     population = {s["site_id"]: s for s in _population(run)}
     sites = []
     for fetched in _jsonl(run / PICTURES):
@@ -388,11 +411,14 @@ def pool(run: Path, old_run: Path) -> dict[str, Any]:
     }
 
 
-def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
-    """The old run's targets that Claude has to re-check, as picks for `recheck_export`: those of
-    this run's population (sites that serve nothing), and those that are **live heroes** in the
-    fresh read `state` - the written ones (178 of the 192 first heroes), whose sites are no longer
-    in the population. A written hero's site record is the read's (`PL.state_record`)."""
+def pool_pick_sites(
+    run: Path, old_run: Path, state: ST.State
+) -> tuple[list[dict[str, Any]], set[str]]:
+    """`(site records, wanted site ids)` of the old targets Claude has to re-check: those of this
+    run's population (sites that serve nothing), and those that are **live heroes** in the fresh
+    read `state` - the written ones (178 of the 192 first heroes), whose sites are no longer in the
+    population. A written hero's site record is the read's (`PL.state_record`). `pool_picks` and
+    `candidate_search/repicture.py --need recheck` ask this one question."""
     population = _population(run)
     in_population = {s["site_id"] for s in population}
     heroes = PL.live_hero_files(state)
@@ -405,7 +431,14 @@ def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]
         elif ST.canonical_file(target["commons_file"]) in heroes.get(site_id, ()):
             wanted.add(site_id)
             records[site_id] = PL.state_record(state, site_id)
-    return PL.target_picks(old_run, list(records.values()), wanted)
+    return list(records.values()), wanted
+
+
+def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
+    """The old run's targets that Claude has to re-check (`pool_pick_sites`), as picks for
+    `recheck_export`."""
+    records, wanted = pool_pick_sites(run, old_run, state)
+    return PL.target_picks(old_run, records, wanted)
 
 
 def denied(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:

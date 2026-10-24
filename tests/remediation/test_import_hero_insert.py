@@ -153,6 +153,14 @@ class TestThePlanOfTheInsertWave:
         assert row.journal_rows == 16
         assert len(IN.JOURNAL_COLUMNS) == 14
 
+    def test_an_empty_thumbnail_is_planned_as_the_empty_string_it_is(self) -> None:
+        """Guard 5 compares the stored thumbnail with IS DISTINCT FROM: an empty string planned as
+        NULL would refuse the site's first row at rehearsal (Temple of Diana, 2026-10-24)."""
+        state = _state(rows={SITE_A: []}, thumbs={SITE_A: ""})
+        planned = IN.plan(state, [_refusal(SITE_A)], fetched=_fetched(SITE_A))
+        [row] = planned.inserts
+        assert row.old_thumbnail == "" and row.thumbnail_changes is True
+
     def test_a_site_with_no_row_at_all_stays_with_the_owners_decision(self) -> None:
         """2026-10-05 (18:32): a site with only a `thumbnail_url` gets no gallery image made up."""
         state = _state(rows={SITE_A: []}, thumbs={SITE_A: "/x/whatever.webp"})

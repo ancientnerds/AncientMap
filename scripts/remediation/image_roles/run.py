@@ -13,20 +13,23 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
     run.py brief | check-answer | import  ... --stage image-prefilter
     run.py depicts-export  --run-dir C --handoff H               Sonnet, 1280 px, by site
     run.py brief | check-answer | import  ... --stage image-depicts   (writes C/VERDICTS.jsonl)
-    run.py recheck-export  --run-dir C --handoff H               Opus, round N (the next one)
+    run.py recheck-export  --run-dir C --handoff H               adversarial, round N (the next)
     run.py brief | check-answer | import  ... --stage image-recheck [--round N]
     (a calibration directory uses the same three commands with --stage image-prefilter,
      image-depicts-calibration, image-adjudicate, image-recheck or identity-verify)
     run.py write-targets   --run-dir C                           -> C/TARGETS.jsonl (confirmed picks)
     run.py prune-pictures  --run-dir C                           delete the pictures, keep their hashes
 
-The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run:
+The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run.
+Its pictures are gone since 2026-10-24; `candidate_search/repicture.py --old-run OLD --need recheck
+--run-dir C --served-run S` (and `--need credit`, `--need calibration`, `--need pool`) fetches exactly
+the ones a step needs again, with a manifest, before the step runs:
 
     run.py pool            --run-dir C --old-run OLD             -> C/PICTURES.jsonl (pictures on disk)
     run.py pool-picks      --run-dir C --old-run OLD --served-run S --out FILE
                                        the old targets of the population's sites and the old targets
                                        that are live heroes in S/READ.json (the written ones) as picks
-    run.py recheck-export  --run-dir C --handoff H --picks FILE  Opus re-checks the old targets
+    run.py recheck-export  --run-dir C --handoff H --picks FILE  the old targets re-checked
     run.py denied          --run-dir C --old-run OLD --served-run S
                                        the heroes MiniMax put on a page and Claude does not confirm
                                        -> S/OTHER_SITE_HEROES.jsonl, S/SITES.txt (served_image recheck)

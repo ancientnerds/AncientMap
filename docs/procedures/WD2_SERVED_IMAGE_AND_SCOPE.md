@@ -1386,6 +1386,208 @@ $PY $IH/run.py insert-accept --run-dir $R
 (`pipeline/utils/public_sites.py`), so the globe shows the previous picture until the next export
 run; the page and the hub read the database at once and already show the new one.
 
+### 3.8 The close-out of 2026-10-24: D48, D49, D59, the lost pool pictures, the re-check's role
+
+Measured read-only on production on 2026-10-24 (scratch runs under `C:/tmp/closeout/images/`,
+nothing written to production).
+
+#### 3.8.1 D48/D49 - the hero moves (`served_image/hero_moves.py`, lane `hero-moves`)
+
+One planner for both decisions, because both are the same write: the hero flag moves from one live
+row of a site to another and the globe's `thumbnail_url` follows it (rules `d48-hero`/`d48-align`,
+`d49-hero`/`d49-align`). A site is planned for `unflagged` (live rows, no hero flag), `strip` (the
+hero is below 800x300), `hotlink` (live rows, but a remote or empty `thumbnail_url`) or `no_author`
+(the hero's licence asks for an author, `licenses.credit_columns`, and it has none).
+
+**The new hero is a qualifying row**: live, judged `depicts` by a Claude check of that very file (a
+served-image run's `CHECK.jsonl`/`REPLACE.jsonl`, or an image-roles check run's confirmed
+`TARGETS.jsonl` pick), at least 800x300, with every credit column its licence demands; for a strip
+larger than the hero, for any other move not below 1600x900 where the replaced hero is not (it would
+make a D48 small hero). **And a chosen row**: a served check's `depicts` includes a find from the site,
+a drawing and a reconstruction, so it does not say "main picture". A row becomes the hero only as a
+confirmed check-run pick (the depicts role's quality, then the adversarial re-check), as the served-
+image replacement stage's own `pick` ("a clear photograph of its remains before a drawing, a plan or an
+object"), or - unflagged sites only - as the row the page already shows. A `depicts` nobody chose is
+never ranked by its pixels: `check-pictures` hands it to the image roles with the rows nobody judged.
+Ranking among chosen rows: check-run pick, replacement pick, shown row, then quality, pixels,
+`sort_order`/id. A hero the latest Claude check called `other_site` is not planned
+(`DEFERRED_D15.jsonl`: the D15 re-check decides it first).
+
+**Nothing is written before a review.** `plan` writes `PLANNED.jsonl` (per site the old hero, the new
+one, `chosen_by`, and what the check said - a replacement answer's `basis` is recorded as
+`answer_basis` with the row's `label`, because it speaks of the answer's pick, not of this row),
+`PLAN_SITES.jsonl` and the owner lists, no chunk. A reviewer - the owner, or a Claude agent (D6; a
+MiniMax stamp is refused) - looks at both pictures of every planned site and writes one review line per
+site: `{"site_id", "new_image_id", "decision": "accept" | "veto", "by", "reason"}` (`by` is `owner` or a
+Claude answer stamp, a veto names its reason). `emit --review` refuses a review that misses a site,
+names another new hero or another site, and a plan changed since; it writes the chunks of the accepted
+sites only - every journal row carries its review line as evidence - and `VETOED.jsonl`, the vetoed
+rows in the shape `--veto` reads, for the next plan in a new run directory.
+
+Measured read-only 2026-10-24 (read `df451b59`, 4,900 shown sites, 48,846 rows; verdict run
+`served-image-2026-09-30`, no check run yet):
+
+| problem | sites | planned | owner list | deferred to D15 |
+|---|---:|---:|---:|---:|
+| unflagged | 20 | 20 flagged (the row the page shows) | 0 | 0 |
+| strip | 19 | 0 | 19 | 0 |
+| hotlink (sites with live rows) | 0 | - | - | - |
+| no_author | 50 | 4 moved (replacement picks) | 43 | 3 |
+
+24 sites, 32 journal rows. The 4 D49 moves include Wanakawri, whose replacement pick is a Guaman Poma
+drawing (`Idolos de los ingas.jpg`) - the review decides it. `check-pictures` offers 549 rows of the 51
+unsettled sites (510 nobody judged, 39 judged `depicts` and never chosen) to the image roles; their
+confirmed picks feed a second plan through `--check-run`. `SMALL_HEROES.jsonl` reproduces D48's 433: a
+hero below 1600x900 at a site that holds another live row of at least 1600x900 - owner list only.
+
+Order: after the D15 chunk was accepted and, for D49, after the D18 author backfill (A5 may give a
+hero its author); always from a fresh read, with every served-image run as a verdict run, oldest
+first (a later verdict on an image replaces an earlier one).
+
+```bash
+PY=./.venv/Scripts/python.exe
+HM=scripts/remediation/served_image/hero_moves.py
+CW=scripts/remediation/gallery_audit/chunk_writer.py
+R=output/remediation/served_image/hero-moves-<date>             # the date names the journal stamp
+S1=output/remediation/served_image/served-image-2026-09-30
+S2=output/remediation/served_image/served-image-<date>-os47       # the D15 run, once accepted
+C=output/remediation/candidate_search/candidates-<date>-heromoves
+$PY $HM read --run-dir $R                                         # production, read-only, once
+$PY $HM check-pictures --run-dir $R --verdicts-run $S1 $S2 --check-run $C
+#   then image_roles/run.py prefilter-export / depicts-export / recheck-export (+ brief,
+#   check-answer, import per stage) and write-targets on $C - section 3.7.3 and run.py's docstring
+$PY $HM plan --run-dir $R --verdicts-run $S1 $S2 --check-run $C [--veto V]
+#   review: one line per line of $R/PLANNED.jsonl into $R/REVIEW.jsonl (owner or a Claude agent)
+$PY $HM emit --run-dir $R --review $R/REVIEW.jsonl
+for step in --check --rehearse --apply --readback --rehearse-rollback; do
+    $PY $CW $R/chunks/chunk-001 $step                             # one at a time
+done
+$PY $HM accept --run-dir $R --chunk $R/chunks/chunk-001            # read-only, 0 deviations
+```
+
+#### 3.8.2 D59 - the shown sites whose only picture is a hotlinked thumbnail (`image_roles/d59.py`)
+
+140 sites on 2026-10-24: 131 hotlinked Commons files (119 originals on upload.wikimedia.org, 12
+thumb.wikimedia.org renderings) and 9 third-party hotlinks; none has a live row. D59 knows two ends
+for each: a credited Commons picture, or no hotlink.
+
+* **The 9 third-party hotlinks** are part of the D17 population now (`population_sql`, kind
+  `research`: 952 + 9 = 961 sites). A confirmed Commons picture goes in through the INSERT wave, which
+  replaces the thumbnail. `null-plan` sets `thumbnail_url` to NULL (lane `d59-thumb`, rule
+  `d59-thumb-null`) for a site the research found nothing for - only once the research is finished
+  (`TARGETS.jsonl` written, every candidate prefiltered, every survivor judged) - and, with
+  `--insert-run`, for a site whose confirmed picture the INSERT lane refused for good (the refusal of
+  `INSERT_REFUSALS.jsonl`, and for `not_fetched` the fetch's own failure line, are the evidence). It
+  refuses by name: a confirmed site no INSERT run claims, one whose INSERT is planned but not in
+  production, one never fetched, one refused as `retired` or `d59_thumbnail_moved` (another state of
+  the site: plan the INSERT again), a claim of another file than the research confirmed, and a read
+  thumbnail other than the one the research saw. Re-run a transient fetch failure (the fetch is
+  resumable) before `null-plan`: every recorded `not_fetched` counts as final there.
+* **The 131 Commons hotlinks** get a credited row of the same file: `d59.py candidates` writes a
+  candidate run whose one candidate per site is the thumbnail's own file (rendering, MIME and size from
+  Commons; nothing is written before every Commons answer is in). Measured: 88 candidates; **43
+  refused as below the owner floor 800x300** (Geograph uploads are 640 px wide) - they keep their
+  uncredited hotlink unless the floor is lowered for this run, the owner question `outcomes` writes
+  for each of them. Then the image roles' chain **without the prefilter**: the run carries `D59.json`,
+  so `prefilter-export` refuses it and `depicts-export` asks the Sonnet depicts role D59 names about
+  every fetched candidate (a Haiku cut must not decide a picture the page already shows); then the
+  adversarial re-check and `write-targets` (the INSERT lane takes only a confirmed target), and the
+  INSERT lane. `insert-claims` words a claim as a D59 first row and marks it (`decision: D59`, the
+  claimed `thumbnail_url`); `insert-plan` lifts the 2026-10-05 thumbnail-only rule only for such a
+  claim, only while the read still shows that thumbnail, and only for that very Commons file
+  (`d59_thumbnail_moved`, `d59_not_the_thumbnail_file`, `d59_not_a_hotlink` otherwise).
+  `outcomes` writes `D59_OUTCOMES.jsonl` (per site: the research's outcome and, with `--insert-run`,
+  the INSERT's state) and `D59_OWNER_LIST.jsonl` (every site that keeps its uncredited hotlink, with
+  the reason; rewritten by each call, a statement about the run as it stands).
+
+```bash
+PY=./.venv/Scripts/python.exe
+D59=scripts/remediation/image_roles/d59.py
+RUN=scripts/remediation/image_roles/run.py
+C=output/remediation/candidate_search/candidates-<date>-d59
+I=output/remediation/import_hero/insert-<date>-d59
+$PY $D59 candidates --run-dir $C                                  # production read-only + Commons
+$PY $RUN pictures --run-dir $C                                    # never `search` on this run
+#   depicts-export (no prefilter on a D59 run), recheck-export rounds and write-targets on $C (run.py)
+$PY scripts/remediation/candidate_search/judge_run.py insert-claims --run-dir $C --insert-run $I
+$PY scripts/remediation/import_hero/run.py read --run-dir $I
+$PY scripts/remediation/import_hero/run.py fetch --run-dir $I --root $OFFSITE --target insert --min-width 800 --min-height 300
+$PY scripts/remediation/import_hero/run.py insert-plan --run-dir $I
+#   insert_writer.py's five steps per chunk, then insert-accept (section 3.7, "The INSERT waves")
+$PY $D59 outcomes --run-dir $C --insert-run $I                    # the per-site outcome + owner list
+# the third-party ones, after the D17 research run(s) wrote their targets and their INSERT waves ran:
+N=output/remediation/d59/d59-thumb-<date>
+$PY $D59 null-read --run-dir $N
+$PY $D59 null-plan --run-dir $N --research-run <the D17 candidate run(s)> --insert-run <their INSERT run(s)>
+#   chunk_writer.py's five steps on $N/chunks/chunk-001, then:
+$PY $D59 null-accept --run-dir $N --chunk $N/chunks/chunk-001
+```
+
+#### 3.8.3 Gap 1 - the lost MiniMax-pool renderings (`candidate_search/repicture.py`)
+
+The 5,756 renderings of `candidates-2026-10-06/pictures` are gone (0 files on 2026-10-24; the worktree
+that held them was removed). `repicture.py` fetches exactly the pictures a step needs again, into the
+names `pool.picture_path` reads, through the lane's Commons transport (project User-Agent, one request
+a second per host; a 429 or 5xx stops the run, a gone address is recorded), and accepts only a Commons
+rendering of the lane's 1280 px width with a still-picture `Content-Type` that Pillow decodes. The
+manifest `REPICTURE_<need>.jsonl` in the old run names every needed picture (`fetched`, `present`,
+`gone`, `refused`); the command exits 1 while one is not on disk. A stopped run writes the lines it
+has and a last `stopped` line (the error, the picture it stopped on, `not_asked`), so the manifest
+always describes the disk; run the same command again to continue. Measured needs (dry runs):
+`recheck` 224, `credit` 33, `calibration` 150 (one live test fetched the 33 credit pictures into a
+scratch copy in 59 s, all accepted); `pool` 3,810 (optional: the D17 search re-finds those sites).
+The calibration's adjudication sample is drawn without looking at the disk
+(`calibrate.adjudication_sample`), and `gold` refuses while a drawn picture is missing.
+
+```bash
+OLD=output/remediation/candidate_search/candidates-2026-10-06
+RP=scripts/remediation/candidate_search/repicture.py
+$PY $RP --old-run $OLD --need recheck --run-dir <D17 run C> --served-run <served-image run with a fresh READ.json>
+$PY $RP --old-run $OLD --need credit --sites <credit_refusals out>/CREDIT_SITES_CLAUDE.txt
+$PY $RP --old-run $OLD --need calibration --calibration-dir <sealed D> --read <fresh READ.json>
+#   each takes --dry-run to count what is missing without fetching
+```
+
+#### 3.8.4 Gap 3 - the re-check's role and the image calibration
+
+Every image hero re-check (D15's `served_image/vision.RECHECK_ROLE`, D17 C3 `hero_recheck.SPEC`, the
+D10 re-check of the MiniMax picks) binds to the shared role `adversarial`, registered to Sonnet 5.5
+high since D36. Under D45/D51 it stays there for the image lane and is calibrated in `image-roles-v1`;
+only a failure moves it up one tier (a registry edit, which voids the seal: seal a new directory).
+The failed tier move of `teaser-2026-10-10` (agreement 0.7907) is the card lane's: that lane gets a
+role of its own (`card_adversarial`), and adding it leaves the image seal standing, because the seal
+binds each image role's own registry entry (`role_sha256`), not the registry file
+(`tests/remediation/test_image_recheck_binding.py`). A probe seal into a scratch directory on
+2026-10-24 succeeded (`adversarial` = Sonnet high, `role_sha256 b4d1c5aa...`). The lane exports do not
+check the calibration verdict themselves: the order seal, gold, answers, `evaluate` before the first
+lane answer is the runbook's.
+
+```bash
+CAL=scripts/remediation/image_roles/calibrate.py
+D=output/remediation/calibration/image-roles-v1
+$PY $CAL seal --dir $D                                            # before any case is chosen
+$PY $RP --old-run $OLD --need calibration --calibration-dir $D --read <fresh READ.json>
+$PY $CAL gold --dir $D --read <fresh READ.json> \
+    --c1-dir output/remediation/gallery_audit/calibration-2026-09-25-opus \
+    --labels tests/remediation/fixtures/gallery_labels_652.jsonl \
+    --import-geojson <the 2025 import geojson> \
+    --served-run output/remediation/served_image/served-image-2026-09-30 \
+    --pool-run $OLD --population <D17 run>/POPULATION.jsonl \
+    --identity-gold <5 known wrong + 20 known good links> \
+    --wiki-cache output/remediation/final-2026-10-08/wiki_cache \
+    --exclude-heroes <os47 run>/OTHER_SITE_HEROES.jsonl \
+    --insert-root output/remediation/import_hero
+for role in image_prefilter image_depicts pilot_judge adversarial web_verifier; do
+    $PY $CAL export --dir $D --role $role --handoff output/remediation/handoff/image-cal-$role
+done
+#   the agents answer (run.py brief / check-answer / import --run-dir $D with the role's stage:
+#   image-prefilter, image-depicts-calibration, image-adjudicate, image-recheck, identity-verify);
+#   the pilot judge's adjudication before the depicts and adversarial evaluation
+for role in image_prefilter image_depicts adversarial web_verifier; do
+    $PY $CAL evaluate --dir $D --role $role                       # exit 1 = failed, tier move named
+done
+```
+
 ---
 
 ## 4. Tests and the mutation sweep
@@ -1424,6 +1626,23 @@ run; the page and the hub read the database at once and already show the new one
   `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20
   window and question; `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
   `enrich disputes` - the D50 exemptions of lane WC/E.
+* `tests/remediation/test_hero_moves.py` - D48/D49: the four problems, what qualifies a hero (never
+  a new small hero), that a hero is a chosen row (never a `depicts` ranked by its pixels), the
+  ranking, the D15 deferral, vetoes, the check population (unjudged and unchosen rows), the review
+  `emit` requires, the write order, the small heroes, the acceptance.
+* `tests/remediation/test_d59_thumbnails.py` - D59: both populations, the one candidate and its
+  refusals, the claims' wording and marker, the INSERT plan's lift, the NULL plan (a finished research
+  or a final INSERT refusal, never a site whose INSERT has not ended), the D59 run's way past the
+  prefilter, the per-site outcomes and owner list, the write order.
+* `tests/remediation/test_repicture.py` - gap 1: the needs, the fetch's acceptance, the manifest (also
+  of a stopped run), the draw that does not look at the disk.
+* `tests/remediation/test_image_recheck_binding.py` - gap 3: the re-check's role and the seal.
+* `scripts/remediation/image_roles/mutation_sweep.py` - the image lanes' sweep; the close-out added
+  90 cases (`CLOSEOUT_CASES`, labels `img d48`, `img d48 review`, `img d49`, `img d59`,
+  `img d59 outcomes`, `img gap1`, `img gap3`, and `img d17` for the empty thumbnail the INSERT plan
+  keeps as the empty string). Last full run 2026-10-24, after the review fixes:
+  320 image cases, 320 fired; `mechanical/mutation_sweep.py wd2` (114 of 114 fired on the first
+  close-out build) was not re-run, because none of its targets changed.
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source

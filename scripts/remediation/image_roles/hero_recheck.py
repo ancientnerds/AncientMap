@@ -1,4 +1,8 @@
-"""C3, the adversarial re-check of a hero pick (D17, owner decision D6): Opus 5.5 at high effort.
+"""C3, the adversarial re-check of a hero pick (D17, owner decision D6): the role `adversarial`.
+
+D6 asked for Opus high; D36 (2026-10-09) moved the shared role to Sonnet 5.5 high, and under
+D45/D51 it stays there for the image lane unless its image calibration (`image-roles-v1`) fails -
+the registry (`roles.ROLES`) names the model, this module only names the role.
 
 The page's picture is the one candidate the depicts role called `depicts` with the best quality - and
 the one whose mistake the page shows to everybody. Before it is written, a second judge looks at it

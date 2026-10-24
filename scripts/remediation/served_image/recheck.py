@@ -3,7 +3,8 @@
 The served-image run of 2026-09-30 judged every served image and every gallery candidate. 47 of the
 live heroes carry an `other_site` verdict from it - 41 from Sonnet, 6 from Opus - and the owner's
 2025 hand-link made most of them heroes in the first place. Decision D15 is "re-check, then swap":
-a second Claude checker (the adversarial role, Opus high) looks at each of them with more context
+a second Claude checker (the role `adversarial`: Sonnet high since D36, calibrated for this lane)
+looks at each of them with more context
 than the first one had, and only a *confirmed* `other_site` moves the hero:
 
 * confirmed `other_site` with a gallery row that depicts the site: the row is excluded and the hero

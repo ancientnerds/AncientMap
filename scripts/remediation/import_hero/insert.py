@@ -57,6 +57,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation", _HERE.parent.parent):
     if str(_path) not in __import__("sys").path:
         __import__("sys").path.insert(0, str(_path))
 
+from candidate_search import population as PP  # noqa: E402
 from hero_repair.thumbnail import local_path  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
@@ -220,6 +221,46 @@ def _shows_a_picture_of_its_own(site: Mapping[str, Any]) -> bool:
     2026-10-06 after the candidate search confirmed a picture of 9 of them in one wave.
     """
     return bool(str(site.get("thumbnail_url") or "").strip())
+
+
+#: The owner decision that lifts the 2026-10-05 rule for a site that shows only a hotlinked thumbnail
+#: (D59, 2026-10-24), as `candidate_search.judge.insert_claims` writes it into the refusal.
+D59 = "D59"
+
+
+def d59_refusal(
+    site_id: str, site: Mapping[str, Any], refusal: Mapping[str, Any], original_url: str | None
+) -> Refusal | None:
+    """Why a D59 claim may not become a row, or None when it may.
+
+    D59 lifts the thumbnail-only rule only for the thumbnail the claim was made for: the read must
+    still show exactly that `thumbnail_url`, a hotlinked Commons file is credited with a row of
+    **that same file**, and a third-party thumbnail is replaced by the Commons file the research
+    confirmed. `original_url` is the fetched file's (None before the fetch is known)."""
+    thumb = site.get("thumbnail_url")
+    claimed = refusal.get("thumbnail_url")
+    if thumb != claimed:
+        return Refusal(
+            site_id,
+            "d59_thumbnail_moved",
+            f"the D59 claim was made for the thumbnail {claimed!r}, the read shows {thumb!r}",
+        )
+    if PP.is_commons_thumbnail(thumb):
+        if original_url is not None and ST.file_of_url(original_url) != ST.file_of_url(thumb):
+            return Refusal(
+                site_id,
+                "d59_not_the_thumbnail_file",
+                f"D59 credits the site's own Commons file {ST.file_of_url(thumb)!r}; the fetched "
+                f"file is {ST.file_of_url(original_url)!r}",
+            )
+        return None
+    if PP.is_third_party_thumbnail(thumb):
+        return None
+    return Refusal(
+        site_id,
+        "d59_not_a_hotlink",
+        f"the thumbnail {thumb!r} is no hotlinked picture D59 covers",
+    )
 
 
 def seed_from_import_run(
@@ -429,7 +470,13 @@ def plan(
             out.append(Refusal(site_id, "retired", "the site is not in the read"))
             continue
         rows = state.rows.get(site_id, ())
-        if not rows and _shows_a_picture_of_its_own(site):
+        d59 = refusal.get("decision") == D59
+        if d59:
+            refused = d59_refusal(site_id, site, refusal, None)
+            if refused is not None:
+                out.append(refused)
+                continue
+        elif not rows and _shows_a_picture_of_its_own(site):
             out.append(
                 Refusal(
                     site_id,
@@ -452,6 +499,11 @@ def plan(
             )
             continue
         values = {column: _stored(column, entry[column]) for column in INSERT_COLUMNS}
+        if d59:
+            refused = d59_refusal(site_id, site, refusal, values["original_url"])
+            if refused is not None:
+                out.append(refused)
+                continue
         # the read's own twin of guard 2: a site that already holds the file needs no row, and an
         # insert for it would be refused by the unique constraint (site_id, original_url). Measured
         # 2026-10-06: 3 of the 90 planned rows, whose import link carries a different Commons slug
@@ -486,7 +538,9 @@ def plan(
             Insert(
                 site_id=site_id,
                 demoted_id=str(hero["id"]) if hero else None,
-                old_thumbnail=str(thumb) if thumb else None,
+                # the read's value exactly: an empty string is not NULL, and guard 5 compares
+                # with IS DISTINCT FROM (Temple of Diana held '' on 2026-10-24)
+                old_thumbnail=None if thumb is None else str(thumb),
                 new_thumbnail=local_path(site_id, values["filename"]),
                 change_key=f"{LANE}:{site_id}",
                 reason=source

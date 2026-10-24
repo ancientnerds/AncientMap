@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -509,7 +510,7 @@ class TestTheRestrictedStages:
 
 class TestTheRole:
     def test_the_brief_names_the_role_and_the_recording_command_carries_it(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         run, _, handoff = _recheck_run(
             tmp_path, {THASOS: "other_site", HABU: "depicts", BARE: "region_or_type"}
@@ -518,6 +519,13 @@ class TestTheRole:
         assert "running as claude-sonnet-5-5 in the role adversarial at effort high" in text
         assert "--role adversarial" in text
         assert V.brief(run, handoff, "check-001") == text  # the recheck is bound to its role
+        # the brief follows the registry, not the lane's default model: a role moved up one tier
+        # after a failed image calibration (D51) is briefed as the model it is registered to
+        moved = dict(RO.ROLES)
+        moved["adversarial"] = RO.Role("adversarial", "claude-opus-5-5", "high", "opus_audit_934")
+        monkeypatch.setattr(RO, "ROLES", MappingProxyType(moved))
+        text = V.brief(run, handoff, "check-001", "adversarial")
+        assert "running as claude-opus-5-5 in the role adversarial at effort high" in text
 
     def test_the_other_populations_keep_the_lane_s_original_brief(self, tmp_path: Path) -> None:
         run, handoff, pictures = TS._setup(tmp_path)
