@@ -12653,6 +12653,77 @@ D25_CASES: list[Case] = [
     ),
 ]  # fmt: skip
 CASES += D25_CASES
+OWNER_FINAL = REPO / "scripts/remediation/owner_list_final.py"
+OWNER_FINAL_TESTS = "tests/remediation/test_owner_list_final.py"
+
+D25_OWNER_CASES: list[Case] = [
+    *(
+        guard(f"d25-owner: {label}", OWNER_FINAL, needle, test, OWNER_FINAL_TESTS)
+        for label, needle, test in (
+            ("a retired site is never listed", '        if site["scope_status"] == RETIRED:',
+             "test_a_retired_site_is_never_listed"),
+            ("a small hero is listed",
+             '    if hero["width"] < HERO_WIDTH or hero["height"] < HERO_HEIGHT:',
+             "test_each_gap_is_its_own_topic"),
+            ("a hero without a size is listed",
+             '    if hero and (hero["width"] is None or hero["height"] is None):',
+             "test_each_gap_is_its_own_topic"),
+            ("a missing credit is listed", "    if missing:", "test_each_gap_is_its_own_topic"),
+            ("a moved value is superseded", '        if not _same(field, row["stored"], site):',
+             "test_a_value_a_later_write_replaced_is_superseded"),
+            ("caches and registered lists are no lane list",
+             "            if SKIP_PARTS & set(parts[:-1]) or rel in known:",
+             "test_an_owner_list_no_source_covers_is_named"),
+            ("the field runs' own lists are rebuilt",
+             '            if parts[0] == "fields" and len(parts) in (3, 4) and parts[1] in FIELD_RUNS:',
+             "test_an_owner_list_no_source_covers_is_named"),
+            ("final refuses an unfinished list",
+             "    if final and (missing or unregistered or pending):",
+             "test_a_missing_source_is_named_and_refused_when_final"),
+        )
+    ),
+    Case(
+        "d25-owner: the last run that asked decides",
+        OWNER_FINAL,
+        "            latest[cell] = (name, listed.get(cell))",
+        "            latest.setdefault(cell, (name, listed.get(cell)))",
+        "test_the_last_run_that_asked_a_field_decides_it",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a point is compared as numbers",
+        OWNER_FINAL,
+        '        return lat == float(site["lat"]) and lon == float(site["lon"])',
+        "        return True",
+        "test_a_point_is_compared_as_numbers",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: an empty card is not an old one",
+        OWNER_FINAL,
+        '            if not _blank(r["card_description"]) and r["card_contract"] != SHOWN_CONTRACT',
+        '            if r["card_contract"] != SHOWN_CONTRACT',
+        "test_an_empty_card_is_not_also_an_old_one",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a field row of a retired site is set aside",
+        OWNER_FINAL,
+        '        if site is None or site["scope_status"] == RETIRED:\n            set_aside',
+        "        if False:\n            set_aside",
+        "test_a_retired_or_gone_site_is_set_aside",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a lane row of a retired site is set aside",
+        OWNER_FINAL,
+        '        if site is None or site["scope_status"] == RETIRED:\n            aside += 1',
+        "        if False:\n            aside += 1",
+        "test_a_lane_row_of_a_retired_site_is_set_aside",
+        OWNER_FINAL_TESTS,
+    ),
+]  # fmt: skip
+CASES += D25_OWNER_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation
