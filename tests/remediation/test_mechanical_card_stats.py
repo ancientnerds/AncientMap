@@ -821,3 +821,22 @@ def test_main_writes_the_wave_s_basis_next_to_its_plan(tmp_path: Path) -> None:
     assert (record["wave"], record["cells"], record["proof_basis"]) == ("2026-09-24", 0, None)
     assert set(record["unjournalled"]) == {SITE_A, SITE_B}
     assert not (tmp_path / "ROLLBACK.sql").exists()
+
+
+def test_the_proof_counts_the_sites_the_insert_lane_added(tmp_path: Path) -> None:
+    """Phase 8: the proof says how many curated sites it left out as inserted after its basis, so
+    a recompute after the D57 inserts reports them instead of hiding them."""
+    scenario = TestTheBasis().scenario
+    rows, entries, _ = scenario(tmp_path)
+    assert (
+        C.build_card_stats_plan(
+            export(rows, entries), NEXT, built_at="t", bases=bases_in(tmp_path)
+        ).proof.counters["counterfactual_sites_added_since_basis"]
+        == 0
+    )
+    added = {**row(SITE_B, site_type="Cairn", description=None), "has_card": False}
+    insert = {**jrow(len(entries) + 100, SITE_B, "id", None, SITE_B), "run_stamp": "d57_x-s001"}
+    result = C.build_card_stats_plan(
+        export([*rows, added], (*entries, insert)), NEXT, built_at="t", bases=bases_in(tmp_path)
+    )
+    assert result.proof.counters["counterfactual_sites_added_since_basis"] == 1

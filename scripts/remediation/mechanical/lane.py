@@ -986,6 +986,20 @@ def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     ROLLBACK.sql must stay what its plan renders (`tests/remediation/test_mechanical.py`,
     `TestTheDeliveredLanes`), so it keeps it.
     """
+    p = prefix
+    date = (
+        f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
+        f"ELSE {p}period_start END)"
+    )
+    cutoff = e3_cutoff_sql(p, before_o7=before_o7)
+    return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
+
+
+def e3_cutoff_sql(prefix: str = "", *, before_o7: bool = False) -> str:
+    """SQL: the E3 cutoff year of the row's region - `E3_CUTOFFS[e3_region(row)]`, Oceania first,
+    then the longitude window of the Americas, then the rest of the world. Only meaningful for a
+    row with a longitude (`e3_region` has no region without one); `before_o7` as in
+    `outside_e3_window`."""
     from pipeline.normalizers.dates import (
         AMERICAS_LON_MAX,
         AMERICAS_LON_MIN,
@@ -995,16 +1009,11 @@ def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     )
 
     p = prefix
-    date = (
-        f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
-        f"ELSE {p}period_start END)"
-    )
     oceania = "" if before_o7 else f"WHEN {in_oceania_sql(p)} THEN {DATE_CUTOFF_OCEANIA} "
-    cutoff = (
+    return (
         f"(CASE {oceania}WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {DATE_CUTOFF_AMERICAS} ELSE {DATE_CUTOFF_REST_OF_WORLD} END)"
     )
-    return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
 
 
 def _boxes_sql(
@@ -2023,6 +2032,12 @@ TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 #: D12 and D19 of 2026-10-08): `period-prov-<wave>-sNNN` writes `raw_data._period_provenance`,
 #: `coord-prov-<wave>-sNNN` writes `raw_data._coord_provenance`, a step of at most 100 sites each.
 FIELD_PROV_LANE = re.compile(r"^(period|coord)-prov-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+#: The site_type vocabulary merge (`mechanical/site_type_merge.py`, owner decision D25): one step of
+#: at most 100 sites per lane, `site-type-merge-<wave>-sNNN`, over the pinned map.
+SITE_TYPE_MERGE_LANE = re.compile(r"^site-type-merge-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+#: The five card_stats columns no generator fills (`mechanical/card_stats_ext.py`, D25 "fill the dead
+#: card_stats columns from the Wikidata ids"): `card-stats-ext-<wave>-sNNN`, at most 100 sites a step.
+CARD_STATS_EXT_LANE = re.compile(r"^card-stats-ext-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
 
 # ------------------------------------------------------------ the WD1/WD3 structured-field lanes
 #: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
@@ -3051,7 +3066,8 @@ def resolve_lane(name: str) -> Lane:
     correction), a period or
     point provenance-marker step, a duplicate merge (`dup-merge-move-<wave>`,
     `dup-merge-retire-<wave>`; both read the wave's `PAIRS.json`) or parent (`parent-<wave>`) wave,
-    or a card_stats wave. `KeyError` otherwise.
+    a site_type merge step (`site-type-merge-<wave>-sNNN`, over the pinned map), a card_stats
+    extension step (`card-stats-ext-<wave>-sNNN`) or a card_stats wave. `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
@@ -3094,6 +3110,14 @@ def resolve_lane(name: str) -> Lane:
         from mechanical.identity_lanes import lane_of as identity_wave_lane_of
 
         return identity_wave_lane_of(name)
+    if SITE_TYPE_MERGE_LANE.match(name):
+        from mechanical.site_type_merge import lane_of as merge_lane_of
+
+        return merge_lane_of(name)
+    if CARD_STATS_EXT_LANE.match(name):
+        from mechanical.card_stats_ext import lane_of as ext_lane_of
+
+        return ext_lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

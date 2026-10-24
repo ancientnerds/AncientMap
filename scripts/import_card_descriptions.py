@@ -8,16 +8,14 @@ exist yet (e.g. for sites without hero images that haven't had stats generated).
 Usage:
     python scripts/import_card_descriptions.py
 
-NOT A REMEDIATION PATH (2026-09-23): the UPDATE at :51 writes card_stats.card_description with no
-old-value condition and no journal row, and the copy at :66 overwrites the file every API boot
-imports (public/data/card_descriptions.json). The 2026-09 remediation writes cards through
-apply_remediation_change() (scripts/remediation/phase4/write4.py, group P5) and renders the file
-byte for byte from the same plan (scripts/remediation/phase4/card_json.py) - in the order
-docs/procedures/CARD_DESCRIPTIONS.md ("How a card reaches production") prescribes.
+NOT A REMEDIATION PATH (2026-09-23): the UPDATE at :50 writes card_stats.card_description with no
+old-value condition and no journal row. Since D25 (2026-10-08) the database is the one copy of a
+card text: the remediation writes cards through apply_remediation_change() (the mechanical lanes
+teaser-prov-sNNN / teaser-card-sNNN, docs/procedures/CARD_DESCRIPTIONS.md 5.5), and the dead copy
+public/data/card_descriptions.json this script used to refresh was deleted on 2026-10-24.
 """
 
 import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -60,11 +58,6 @@ def main() -> None:
     if skipped:
         print(f"Warning: {skipped} site_ids not found in card_stats (run generate_stats first).")
     print(f"Updated {updated} / {len(descriptions)} card descriptions.")
-
-    # Copy to public/data/ so the API startup import picks it up
-    public_path = Path(__file__).parent.parent / "public" / "data" / "card_descriptions.json"
-    shutil.copy2(desc_path, public_path)
-    print(f"Copied {len(descriptions)} descriptions to {public_path}")
 
     # Verify
     with engine.connect() as conn:

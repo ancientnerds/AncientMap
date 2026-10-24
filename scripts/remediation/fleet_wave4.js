@@ -44,8 +44,9 @@ WHAT IS ALREADY ESTABLISHED (do not redo it, build on it)
   A is a narrow reconstruction and B is UNAVAILABLE (the plan's 41-city list is not in this
   repository). Four of eight signals are rebuilt. Do not quote a tier as if all eight were
   measured.
-* api/main.py imports public/data/card_descriptions.json at startup unconditionally, so
-  card_stats.card_description is never the source of truth - the JSON is.
+* (2026-09, no longer true) api/main.py imported public/data/card_descriptions.json at startup,
+  so the JSON and not card_stats.card_description was the source of truth. The boot import is
+  gone since 2026-10-09 and the file since 2026-10-24 (D25): the database is the one copy.
 
 HOW EVIDENCE WORKS HERE (this is the culture of this repo, not decoration)
 * No claim without proof: a file:line, or the real output of a command you ran. If you did

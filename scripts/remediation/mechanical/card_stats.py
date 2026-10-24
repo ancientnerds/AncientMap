@@ -799,6 +799,7 @@ def prove_the_model(
             "counterfactual_journal_rows_undone": undone,
             "counterfactual_cells_compared": compared,
             "counterfactual_cells_differing": 0,
+            "counterfactual_sites_added_since_basis": len(export.sites) - len(rows),
         },
     )
 

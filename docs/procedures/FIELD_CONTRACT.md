@@ -136,9 +136,8 @@ needed: no file, no push, no push lock (`docs/procedures/CARD_DESCRIPTIONS.md` s
 
 - This holds from the deploy of the push that removed the import. Before it the old rule is in force:
   the file wins on every boot, so a card write needs the file rendered and pushed at once.
-- `public/data/card_descriptions.json` stays in the tree until that deploy is verified (the `commit`
-  field of `http://localhost:8000/` on the VPS equals the pushed HEAD), and is then deleted by a
-  later push. Never edit it; nobody reads it.
+- `public/data/card_descriptions.json` is deleted (2026-10-24): that deploy was verified on
+  2026-10-09 and nothing read the file any more. Never recreate it.
 - `scripts/import_card_descriptions.py`, `scripts/merge_rewrites.py` and the `audit_enrich.py` Wave-4
   merge write that file or the database without a journal. They are not remediation paths.
 - A new site needs a `card_stats` row to be drawable: a zeroed placeholder row

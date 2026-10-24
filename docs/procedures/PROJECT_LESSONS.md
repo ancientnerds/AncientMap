@@ -179,7 +179,7 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   nothing else follows - no file, no push, no push lock (`docs/procedures/CARD_DESCRIPTIONS.md` 5.5,
   `FIELD_CONTRACT.md` 2.3). This holds from the deploy of the push that removed the import (check
   the `commit` field of `http://localhost:8000/` on the VPS); until then the file still wins on every
-  boot. `public/data/card_descriptions.json` is a dead copy until a later push deletes it. *(owner
+  boot. `public/data/card_descriptions.json` was that dead copy; it is deleted (2026-10-24). *(owner
   decision D25, 2026-10-08)*
 - **A `db.html` batch upload from a stale export overwrites rewritten descriptions.**
   `POST /api/sites/batch-upload` sets `description = COALESCE(:description, description)`
