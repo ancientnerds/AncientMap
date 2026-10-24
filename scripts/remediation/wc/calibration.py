@@ -64,8 +64,12 @@ from wc import cli as WC  # noqa: E402 - the verification rounds' records
 MERGED = frozenset({"KEEP", "KEEP_TRIMMED"})
 #: A fresh judge may call WRONG at most this many kept sentences the recorded judge did not.
 MAX_EXTRA_WRONG = 1
-#: Which role a kind of pool calibrates.
-KIND_ROLE = {"check": "fact_checker", "verify": "web_verifier", "judge": "pilot_judge"}
+#: Which role a kind of pool calibrates: the role that answers that kind of round in lane WC
+#: (`wc/cli.py`), so a pool is sealed for, and its fresh answers judged against, the role the lane's
+#: briefs print and its imports require - the fact checker (Opus since the tier move of wc-fc-1),
+#: lane WC's own web verifier `wc_web_verifier` (D45; the shared `web_verifier` failed wc-wv-1/2,
+#: `roles.SETTLED_TIER_MOVES`) and the pilot judge.
+KIND_ROLE = {"check": WC.ROLE_CHECK, "verify": WC.ROLE_VERIFY, "judge": WC.ROLE_JUDGE}
 #: The verdicts a fresh verification may give a sentence the judge found WRONG (it may not support it).
 NOT_SUPPORTED = ["UNSUPPORTED", "WRONG"]
 JUDGE_ROUND = Path("judge") / "ROUND.json"
@@ -218,6 +222,32 @@ def _extra_wrong(recorded: dict[str, str], fresh: dict[str, str]) -> int:
     return count
 
 
+# ------------------------------------------------------------------------------ the pool's role
+def round_role(kind: str, run: Path) -> str:
+    """The role that answers `run`'s rounds of this kind of pool in lane WC: `cli.check_role` for a
+    check pool (the fact checker; an adversarial or enrichment run answers in another role),
+    `cli.verify_role` for a verify pool (`wc_web_verifier`; an enrichment run's verifier is lane E's
+    `web_verifier`), the pilot judge for a judge pool."""
+    if kind == "check":
+        return WC.check_role(run)
+    if kind == "verify":
+        return WC.verify_role(run)
+    if kind == "judge":
+        return WC.ROLE_JUDGE
+    raise WcCalibrationError(f"kind {kind!r} is none of {', '.join(KIND_ROLE)}")
+
+
+def _need_round_role(kind: str, run: Path, calibration_role: str) -> None:
+    """Refuse a pool whose source run answers this kind of round in another role than the one the
+    calibration measures: the measurement would stand for a role that never answers those rounds."""
+    answered_in = round_role(kind, run)
+    if answered_in != calibration_role:
+        raise WcCalibrationError(
+            f"{run}: its {kind} rounds are answered as {answered_in}, but a lane WC {kind} pool "
+            f"calibrates {calibration_role}"
+        )
+
+
 # ------------------------------------------------------------------------------------- the seal
 def _sha256(payload: Any) -> str:
     return hashlib.sha256(
@@ -242,6 +272,8 @@ def seal(
     site outside the pool is named (`outside_pool`), never dropped silently."""
     if kind not in KIND_ROLE:
         raise WcCalibrationError(f"kind {kind!r} is none of {', '.join(KIND_ROLE)}")
+    for run in runs:
+        _need_round_role(kind, run, KIND_ROLE[kind])
     pool = {case.partition("/")[2] for case in CC.case_ids(handoff, batches)}
     found = expectations(kind, runs, handoff=handoff if kind == "verify" else None)
     inside = [e for e in found if e["label"] in pool]
@@ -279,8 +311,10 @@ def _lane(root: Path, calibration_id: str) -> tuple[dict[str, Any], dict[str, An
 
 
 def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
-    """`calibrate_claude.prepare` of a sealed lane WC pool, the judge pool registered."""
-    _lane(root, calibration_id)
+    """`calibrate_claude.prepare` of a sealed lane WC pool, the judge pool registered. Refused when
+    `run` answers the pool's kind of round in another role than the sealed one (`round_role`)."""
+    sealed, lane = _lane(root, calibration_id)
+    _need_round_role(lane["kind"], run, sealed["role"])
     return CC.prepare(root, calibration_id=calibration_id, run=run, register=register_judge_pool)
 
 

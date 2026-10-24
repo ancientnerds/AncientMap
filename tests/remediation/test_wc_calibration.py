@@ -19,6 +19,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import calibrate_claude as CC  # noqa: E402
+import roles as RO  # noqa: E402
 from wc import calibration as K  # noqa: E402
 from wc import cli as C  # noqa: E402
 
@@ -192,15 +193,16 @@ def test_the_check_pool_agrees_with_keep_and_trimmed_as_one_and_misses_a_known_e
         FX.SITE_B: _check(FX.SITE_B, "KEEP", "KEEP"),
         FX.SITE_C: _check(FX.SITE_C, "DROP", "DROP"),
     }
-    FX.record_answers(out, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
+    FX.record_answers(out, fresh, by="fact_checker:opus-check-r1", model=OH.OPUS_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert report["agreement"] == 1.0 and report["merged"] is True and report["kind"] == "check"
     assert report["extra_wrong"] == 0
     assert report["lane_failures"] and "known error" in report["lane_failures"][0]
     assert report["known"][0]["fresh"] == "KEEP" and report["known"][0]["missed"] is True
     result = CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)
-    assert result["passed"] is False and result["tier_move"]["to"] == "claude-opus-5-5"
-    assert "known error" in result["tier_move"]["reason"]
+    # the fact checker is on Opus since the tier move of wc-fc-1: a miss is held for the owner
+    assert result["passed"] is False and result["model"] == "claude-opus-5-5"
+    assert result["tier_move"] is None and "no higher tier" in result["held"]
 
 
 def test_a_check_pool_that_finds_every_known_error_passes_and_only_a_dropped_sentence_differs(
@@ -217,7 +219,7 @@ def test_a_check_pool_that_finds_every_known_error_passes_and_only_a_dropped_sen
         FX.SITE_C: _check(FX.SITE_C, "DROP", "DROP"),
     }
     assert K._sentences(fresh[FX.SITE_B]) != K._sentences(recorded[FX.SITE_B])
-    FX.record_answers(out, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
+    FX.record_answers(out, fresh, by="fact_checker:opus-check-r1", model=OH.OPUS_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert report["lane_failures"] == []
     assert [d["unit"] for d in report["disagreements"]][0] == "sentence-3"
@@ -301,7 +303,7 @@ def test_the_kind_fixes_the_role_and_whether_the_verdicts_merge(tmp_path: Path) 
     run = _pilot(tmp_path)
     for kind, role, merged in (
         ("check", "fact_checker", True),
-        ("verify", "web_verifier", False),
+        ("verify", "wc_web_verifier", False),
         ("judge", "pilot_judge", False),
     ):
         sealed = K.seal(
@@ -310,6 +312,7 @@ def test_the_kind_fixes_the_role_and_whether_the_verdicts_merge(tmp_path: Path) 
             runs=[run], now=lambda: NOW,
         )  # fmt: skip
         assert sealed["role"] == role and sealed["lane"]["merge"] is merged
+        assert sealed["model"] == "claude-opus-5-5"  # all three lane WC roles stand on Opus now
 
 
 # ------------------------------------------------------------------------------ a verify pool
@@ -321,7 +324,7 @@ def test_a_fresh_verification_must_not_support_what_the_judge_found_wrong(tmp_pa
         FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED", "SUPPORTED", "SUPPORTED"]),
         FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED", "SUPPORTED"]),
     }
-    FX.record_answers(out, fresh, by="web_verifier:sonnet-wc", model=OH.SONNET_MODEL)
+    FX.record_answers(out, fresh, by="wc_web_verifier:opus-wc", model=OH.OPUS_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert [row["missed"] for row in report["known"]] == [
         True,
@@ -343,7 +346,7 @@ def test_a_fresh_verification_that_finds_both_known_errors_passes(tmp_path: Path
             FX.SITE_B, ["SUPPORTED", "SUPPORTED"], coherent=False, broken=[2]
         ),
     }
-    FX.record_answers(out, fresh, by="web_verifier:sonnet-wc", model=OH.SONNET_MODEL)
+    FX.record_answers(out, fresh, by="wc_web_verifier:opus-wc", model=OH.OPUS_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert report["lane_failures"] == [] and report["merged"] is False
     assert CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)["passed"] is True
@@ -457,3 +460,107 @@ def test_the_command_line_seals_prints_the_expectations_and_refuses_with_exit_tw
     assert "REFUSED" in capsys.readouterr().err
     assert K.main(["compare", "--root", str(root), "--id", "cli"]) == 2  # sealed, not prepared
     assert "is not prepared" in capsys.readouterr().err
+
+
+# ---------------------------------------- the roles lane WC's pools calibrate (D45, D51; 2026-10-24)
+@pytest.mark.parametrize(
+    ("kind", "by", "model", "match"),
+    [
+        ("verify", "web_verifier:sonnet-wc", OH.SONNET_MODEL, "recorded under role web_verifier"),
+        ("verify", "wc_web_verifier:sonnet-wc", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
+        ("check", "fact_checker:sonnet-check-r1", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
+    ],
+)
+def test_a_fresh_answer_of_the_shared_verifier_or_on_sonnet_is_not_the_pools_role(
+    tmp_path: Path, kind: str, by: str, model: str, match: str
+) -> None:
+    """A verify pool measures lane WC's own `wc_web_verifier`, a check pool the fact checker, both on
+    Opus: a fresh answer of the shared `web_verifier`, or a Sonnet answer under either role, is never
+    counted as the role's."""
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, kind, threshold=0.5)
+    out = _prepare(root, run)
+    if kind == "verify":
+        fresh = {
+            FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED", "SUPPORTED", "UNSUPPORTED"]),
+            FX.SITE_B: FX.verification(
+                FX.SITE_B, ["SUPPORTED", "SUPPORTED"], coherent=False, broken=[2]
+            ),
+        }
+    else:
+        fresh = {FX.SITE_A: _check(FX.SITE_A, "KEEP", "KEEP", "DROP")}
+    FX.record_answers(out, fresh, by=by, model=model)
+    # another role's answer is the calibration's refusal, a wrong stamp the registry's
+    with pytest.raises((CC.CalibrationError, RO.RoleError), match=match):
+        K.compare(root, calibration_id="c1")
+    assert not (out / CC.COMPARISON_FILE).exists()
+
+
+def test_a_verify_pool_calibrates_wc_web_verifier_and_its_brief_prints_that_role(
+    tmp_path: Path,
+) -> None:
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "verify", threshold=0.5)
+    sealed = CC._sealed(root, "c1")
+    assert (sealed["role"], sealed["model"], sealed["effort"]) == (
+        "wc_web_verifier",
+        "claude-opus-5-5",
+        "high",
+    )
+    assert sealed["role_sha256"] == RO.role_sha256("wc_web_verifier")
+    prepared = K.prepare(root, calibration_id="c1", run=run)
+    text = C.verify_brief(
+        Path(prepared["calibration_run"]), Path(prepared["prepared"]), "verify-0001"
+    )
+    assert "--model claude-opus-5-5 --role wc_web_verifier" in text
+    assert "--answered-by opus-wc-verify-0001" in text
+
+
+def _foreign_run(tmp_path: Path, **population: object) -> Path:
+    run = tmp_path / "runs" / f"foreign-{len(list(tmp_path.glob('runs/foreign-*')))}"
+    run.mkdir(parents=True)
+    (run / C.POPULATION_FILE).write_text(json.dumps(population), encoding="utf-8")
+    return run
+
+
+@pytest.mark.parametrize(
+    ("kind", "population", "answered_in"),
+    [
+        ("check", {"kind": "wc-list", "adversarial": True}, "adversarial"),
+        ("check", {"kind": "wn-enrich"}, "enrich_writer"),
+        ("verify", {"kind": "wn-enrich"}, "web_verifier"),
+    ],
+)
+def test_a_pool_whose_run_answers_its_rounds_in_another_role_is_refused(
+    tmp_path: Path, kind: str, population: dict[str, object], answered_in: str
+) -> None:
+    """An adversarial run's check rounds are the adversarial role's, an enrichment run's check and
+    verification rounds lane E's: as a lane WC pool they would calibrate a role that never answers
+    them. `seal` refuses such a run among the pilots it reads, `prepare` such a source run."""
+    foreign = _foreign_run(tmp_path, **population)
+    name, batches = POOLS[kind]
+    with pytest.raises(K.WcCalibrationError, match=f"answered as {answered_in}"):
+        K.seal(
+            tmp_path / "cal-seal", calibration_id="c1", kind=kind,
+            handoff=_handoff(tmp_path, name), batches=batches, threshold=0.9, runs=[foreign],
+            now=lambda: NOW,
+        )  # fmt: skip
+    assert not (tmp_path / "cal-seal").exists()
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, kind)
+    with pytest.raises(K.WcCalibrationError, match=f"answered as {answered_in}"):
+        K.prepare(root, calibration_id="c1", run=foreign)
+    assert not (root / "c1").exists()
+    assert K.round_role(kind, run) == K.KIND_ROLE[kind]  # the pilot's own rounds are the role's
+
+
+def test_the_kinds_are_bound_to_the_roles_the_lanes_rounds_answer_in() -> None:
+    assert (
+        K.KIND_ROLE
+        == {
+            "check": C.ROLE_CHECK,
+            "verify": C.ROLE_VERIFY,
+            "judge": C.ROLE_JUDGE,
+        }
+        == {"check": "fact_checker", "verify": "wc_web_verifier", "judge": "pilot_judge"}
+    )

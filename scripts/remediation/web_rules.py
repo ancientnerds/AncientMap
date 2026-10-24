@@ -105,6 +105,7 @@ VERIFIER_ROLES = frozenset(
         "web_verifier",
         "card_fact_checker",
         "card_web_verifier",
+        "wc_web_verifier",
         "adversarial",
         "card_adversarial",
         "pilot_judge",

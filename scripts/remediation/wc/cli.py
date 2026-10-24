@@ -208,11 +208,13 @@ SUMMARY_FILE = "SUMMARY.json"
 PLAN_FILE = "WC4.jsonl"
 JUDGE_DIR = "judge"
 #: The roles that answer lane WC (`roles.ROLES`, owner decision D6 of 2026-10-08): the check rounds
-#: and lane WN's write round are the fact checker's, the verification rounds the web verifier's, the
+#: and lane WN's write round are the fact checker's, the verification rounds lane WC's own web
+#: verifier's (`wc_web_verifier`, since the WC calibrations wc-wv-1/2 of 2026-10-24 failed the shared
+#: `web_verifier`, D45/D51; lane E's verification stays the shared role's, `verify_role`), the
 #: judge's questions the pilot judge's, the adversarial second check the adversarial role's. A
 #: brief takes its `--model`, `--role` and the agent's family from the registry, and the imports
 #: refuse an answer that names another role or carries another role's stamp (`_require_role`).
-ROLE_CHECK, ROLE_VERIFY, ROLE_JUDGE = "fact_checker", "web_verifier", "pilot_judge"
+ROLE_CHECK, ROLE_VERIFY, ROLE_JUDGE = "fact_checker", "wc_web_verifier", "pilot_judge"
 ROLE_ADVERSARIAL = "adversarial"
 #: The day the role registry went live (owner decision D6, 2026-10-08). An answer given before it may
 #: name no role; every answer given from this day on names the role of the round it answers
@@ -532,6 +534,13 @@ def check_role(run: Path) -> str:
     if run_kind(run) == KIND_ENRICH:
         return E.WRITER_ROLE
     return ROLE_ADVERSARIAL if run_adversarial(run) else ROLE_CHECK
+
+
+def verify_role(run: Path) -> str:
+    """The role that answers the run's verification rounds (`verify`, `verify2`): lane E's verifier
+    (`enrich.VERIFIER_ROLE`, the shared `web_verifier`) for an enrichment run, lane WC's own
+    `wc_web_verifier` for every other kind (D45: the shared role is not moved for one lane)."""
+    return E.VERIFIER_ROLE if run_kind(run) == KIND_ENRICH else ROLE_VERIFY
 
 
 def _role_fields(role_name: str, writer: bool = False) -> dict[str, str]:
@@ -1934,8 +1943,9 @@ def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
+    role_name = verify_role(run)
     return P.VERIFY_BRIEF.format(
-        **_role_fields(ROLE_VERIFY),
+        **_role_fields(role_name),
         batch=batch_id,
         round=record["round"],
         stage=record["stage"],
@@ -1945,7 +1955,7 @@ def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
         run=_shown(run),
         python=Path(sys.executable).as_posix(),
         repo=REPO.as_posix(),
-        batch_agent=f"{_agent_family(ROLE_VERIFY)}-wc-{batch_id}",
+        batch_agent=f"{_agent_family(role_name)}-wc-{batch_id}",
     )
 
 

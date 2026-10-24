@@ -1,7 +1,9 @@
 """Lane WC answers by role (owner decision D6, 2026-10-08): the check rounds and lane WN's write
-round are the fact checker's (Sonnet, high), the verification rounds the web verifier's (Sonnet,
-high), the judge the pilot judge's (Opus, xhigh), the adversarial second check of a standing defect
-the adversarial role's (Sonnet, high). A brief takes its model, role and agent family from
+round are the fact checker's (Opus, high, since the tier move of wc-fc-1, D51), the verification
+rounds lane WC's own web verifier's (`wc_web_verifier`, Opus, high: D45/D51 after wc-wv-1/2; lane E's
+verification stays the shared `web_verifier`'s), the judge the pilot judge's (Opus, xhigh), the
+adversarial second check of a standing defect the adversarial role's (Sonnet, high). A brief takes
+its model, role and agent family from
 `roles.ROLES`; an import accepts only a Claude answer given in the round's role; a chunk is judged
 by a sample (`judge-export --sample N --seed S`) that never approves a plan.
 
@@ -49,12 +51,12 @@ def test_the_check_brief_is_the_fact_checkers_and_names_the_registry_model_and_r
     run, handoff = _run(tmp_path)
     text = C.brief(run, handoff, "wc-0002")
     entry = RO.role("fact_checker")
-    assert (entry.model, entry.effort) == ("claude-sonnet-5-5", "high")
-    assert "You are Sonnet checker wc-0002" in text
+    assert (entry.model, entry.effort) == ("claude-opus-5-5", "high")
+    assert "You are Opus checker wc-0002" in text
     assert f"--model {entry.model} --role fact_checker" in text
-    assert "--answered-by sonnet-check-r1-wc-0002" in text
+    assert "--answered-by opus-check-r1-wc-0002" in text
     _no_braces_left(text)
-    assert "claude-opus-5-5" not in text and "<the model id" not in text
+    assert "claude-sonnet-5-5" not in text and "<the model id" not in text
 
 
 def test_every_brief_sends_the_agent_to_the_shared_wikipedia_cache_first(tmp_path: Path) -> None:
@@ -101,9 +103,10 @@ def test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_jud
     run = _checked(tmp_path)
     C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
     verify = C.verify_brief(run, _hv(tmp_path), "verify-0001")
-    assert "You are Sonnet verifier verify-0001" in verify
-    assert "--model claude-sonnet-5-5 --role web_verifier" in verify
-    assert "--answered-by sonnet-wc-verify-0001" in verify
+    assert "You are Opus verifier verify-0001" in verify
+    assert "--model claude-opus-5-5 --role wc_web_verifier" in verify
+    assert "--answered-by opus-wc-verify-0001" in verify
+    assert "--role web_verifier" not in verify and "--role fact_checker" not in verify
     _no_braces_left(verify)
     built = FX.build_run(tmp_path / "b", _rows(), _answers(), pilot=True, judged=False)[0]
     handoff = tmp_path / "b" / "handoff" / "judge"
@@ -118,17 +121,15 @@ def test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_jud
 
 def test_the_write_brief_of_lane_wn_is_the_fact_checkers_too(tmp_path: Path) -> None:
     """No writer role is registered: the web research that writes a sentence on a quote is the fact
-    checker's (Sonnet, high)."""
+    checker's (Opus, high, since the tier move of wc-fc-1)."""
     run = tmp_path / "wn"
     run.mkdir()
     C.cmd_read(run, runner=FX.ReadRunner([WX.wn_row(WX.SITE_N)]))
     handoff = tmp_path / "wn-w"
     C.cmd_export(run, handoff, batch_size=5, exclude=None, after=[], pilot=None, seed=None, wn=True)
     text = C.brief(run, handoff, "wn-0001")
-    assert "You are Sonnet writer wn-0001" in text
-    assert (
-        "--answered-by sonnet-write-wn-0001 --model claude-sonnet-5-5 --role fact_checker" in text
-    )
+    assert "You are Opus writer wn-0001" in text
+    assert "--answered-by opus-write-wn-0001 --model claude-opus-5-5 --role fact_checker" in text
     _no_braces_left(text)
     # a writer reads the article first; its text is no second witness for what it must establish
     assert P.WIKI_CACHE_NOTE_WRITER.format(wiki_cache=C._shown(C.WIKI_CACHE)) in text
@@ -199,7 +200,8 @@ def test_a_minimax_judge_answer_is_never_imported(tmp_path: Path) -> None:
     [
         ("web_verifier:sonnet-check-r1", OH.SONNET_MODEL, "was given in role web_verifier"),
         ("pilot_judge:opus-check-r1", OH.OPUS_MODEL, "was given in role pilot_judge"),
-        ("fact_checker:sonnet-check-r1", OH.OPUS_MODEL, "registered to claude-sonnet-5-5"),
+        ("wc_web_verifier:opus-check-r1", OH.OPUS_MODEL, "was given in role wc_web_verifier"),
+        ("fact_checker:opus-check-r1", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
     ],
 )
 def test_a_check_answer_given_in_another_role_or_under_another_stamp_is_refused(
@@ -225,14 +227,14 @@ def test_an_answer_in_the_rounds_own_role_imports_and_so_does_a_legacy_unnamed_c
     _record(
         handoff,
         {FX.SITE_A: answers[FX.SITE_A]},
-        by="fact_checker:sonnet-check-r1",
-        model=OH.SONNET_MODEL,
+        by="fact_checker:opus-check-r1",
+        model=OH.OPUS_MODEL,
     )
     rest = {k: v for k, v in answers.items() if k != FX.SITE_A}
-    _record(handoff, rest, by="opus-check", model=OH.OPUS_MODEL)  # recorded before the registry
+    _record(handoff, rest, by="sonnet-check", model=OH.SONNET_MODEL)  # recorded before the registry
     assert C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)["answers"] == 3
     rows = read_jsonl(run / "round-1" / "ANSWERS.jsonl")
-    assert {r["answered_by"] for r in rows} >= {"fact_checker:sonnet-check-r1-wc-0001"}
+    assert {r["answered_by"] for r in rows} >= {"fact_checker:opus-check-r1-wc-0001"}
 
 
 # ------------------------------------------------------------------------------ the adversary
@@ -522,7 +524,7 @@ def test_the_verification_and_the_judge_name_their_role_from_the_registry_day_on
         FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
     }
     FX.record_answers(handoff, answers, by="anyname", model=OH.HAIKU_MODEL, at=NEW)
-    with pytest.raises(C.WcRunError, match="names no role.*answer --role web_verifier"):
+    with pytest.raises(C.WcRunError, match="names no role.*answer --role wc_web_verifier"):
         C.cmd_verify_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     pilot = FX.build_run(tmp_path / "j", _rows(), _answers(), pilot=True, judged=False)[0]
     judge = tmp_path / "handoff" / "judge"
@@ -537,7 +539,7 @@ def test_one_agent_cannot_check_and_then_verify_the_same_site_under_two_role_pre
     tmp_path: Path,
 ) -> None:
     run, handoff = _check_round(tmp_path)
-    FX.record_answers(handoff, _answers(), by="fact_checker:agent-7", model=OH.SONNET_MODEL, at=NEW)
+    FX.record_answers(handoff, _answers(), by="fact_checker:agent-7", model=OH.OPUS_MODEL, at=NEW)
     C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     verify = tmp_path / "handoff" / "wc-test-verify"
     C.cmd_verify_export(run, verify, batch_size=5)
@@ -545,12 +547,12 @@ def test_one_agent_cannot_check_and_then_verify_the_same_site_under_two_role_pre
         FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
         FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
     }
-    FX.record_answers(verify, answers, by="web_verifier:agent-7", model=OH.SONNET_MODEL, at=NEW)
+    FX.record_answers(verify, answers, by="wc_web_verifier:agent-7", model=OH.OPUS_MODEL, at=NEW)
     # the checkers are fact_checker:agent-7-wc-0001; this verifier is the same agent in another role
     for line in OH.manifest(verify):
         path = verify / line["answer_path"]
         stored = json.loads(path.read_text(encoding="utf-8"))
-        stored["answered_by"] = "web_verifier:agent-7-wc-0001"
+        stored["answered_by"] = "wc_web_verifier:agent-7-wc-0001"
         path.write_text(json.dumps(stored), encoding="utf-8")
     with pytest.raises(C.WcRunError, match="checked or verified this site before"):
         C.cmd_verify_import(run, verify, client=FX.FakeClient(), pace=0.0)
@@ -625,3 +627,109 @@ def test_a_chunk_whose_sampled_judge_passed_on_this_plan_is_written_and_only_thi
     result_path.write_text(json.dumps({**result, "plan_sha256": "0" * 64}), encoding="utf-8")
     with pytest.raises(C.WcRunError, match="not the plan the sampled judge judged"):
         C.pilot_approval([pilot, plan])
+
+
+# --------------------------------------------- lane WC's roles after its calibrations of 2026-10-24
+#: The roles lane WC binds its stages to, quoted as a name in code (`"fact_checker"`): a role used by
+#: one lane only may move for that lane's calibration (D51); a shared one gets a lane role (D45).
+_ROLE_LITERAL = r"""["']{name}["']"""
+#: Files that name every role by design: the registry, the web rules, the mutation sweeps' anchors.
+_REGISTRY_FILES = {"roles.py", "web_rules.py", "mutation_sweep.py"}
+
+
+def _code_naming(role_name: str) -> set[str]:
+    import re
+
+    pattern = re.compile(_ROLE_LITERAL.format(name=re.escape(role_name)))
+    root = REPO / "scripts" / "remediation"
+    return {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*.py")
+        if path.name not in _REGISTRY_FILES and pattern.search(path.read_text(encoding="utf-8"))
+    }
+
+
+def test_the_fact_checker_and_lane_wcs_web_verifier_answer_lane_wc_only() -> None:
+    """D51 moved `fact_checker` to Opus because no other lane answers as it (the card lane has
+    `card_fact_checker`); `wc_web_verifier` is lane WC's own. A new user of either name in another
+    lane's code would ride on lane WC's calibration: it gets a role of its own instead (D45)."""
+    assert _code_naming("fact_checker") == {"wc/cli.py"}
+    assert _code_naming("wc_web_verifier") == {"wc/cli.py"}
+    # the shared verifier is still the other lanes' (identity, lane E, image identity)
+    shared = _code_naming("web_verifier")
+    assert {"wc/prompts_enrich.py", "image_roles/identity.py"} <= shared
+    assert not any(path.startswith("wc/") and path != "wc/prompts_enrich.py" for path in shared)
+
+
+def test_every_wc_run_kind_but_lane_e_is_verified_by_wc_web_verifier(tmp_path: Path) -> None:
+    """`verify_role`: plain, site-list (the defect runs, the D10 re-check) and WN runs are verified by
+    lane WC's own role; an enrichment run by lane E's verifier, the shared `web_verifier`."""
+    roles = {}
+    for kind in (C.KIND_WC, C.KIND_LIST, C.KIND_WN, C.KIND_ENRICH):
+        run = tmp_path / kind
+        run.mkdir()
+        (run / C.POPULATION_FILE).write_text(json.dumps({"kind": kind}), encoding="utf-8")
+        roles[kind] = C.verify_role(run)
+    assert roles == {
+        C.KIND_WC: "wc_web_verifier",
+        C.KIND_LIST: "wc_web_verifier",
+        C.KIND_WN: "wc_web_verifier",
+        C.KIND_ENRICH: "web_verifier",
+    }
+    legacy = tmp_path / "legacy"  # exported before 2026-10-01: no kind recorded, a plain WC run
+    legacy.mkdir()
+    (legacy / C.POPULATION_FILE).write_text(json.dumps({"pilot": None}), encoding="utf-8")
+    assert C.verify_role(legacy) == "wc_web_verifier"
+    assert (RO.role("wc_web_verifier").model, RO.role("web_verifier").model) == (
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+    )
+
+
+@pytest.mark.parametrize(
+    ("by", "model", "match"),
+    [
+        ("web_verifier:sonnet-v", OH.SONNET_MODEL, "was given in role web_verifier"),
+        ("wc_web_verifier:sonnet-v", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
+        ("fact_checker:opus-v", OH.OPUS_MODEL, "was given in role fact_checker"),
+    ],
+)
+def test_a_wc_verification_given_as_the_shared_verifier_or_on_sonnet_is_refused(
+    tmp_path: Path, by: str, model: str, match: str
+) -> None:
+    """The shared `web_verifier` failed lane WC's calibrations on Sonnet: its answer no longer enters a
+    WC verification round, and neither does a Sonnet answer stamped as lane WC's own role."""
+    run = _checked(tmp_path)
+    handoff = _hv(tmp_path)
+    C.cmd_verify_export(run, handoff, batch_size=5)
+    answers = {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
+    }
+    FX.record_answers(handoff, answers, by=by, model=model, at=NEW)
+    with pytest.raises(C.WcRunError, match=match):
+        C.cmd_verify_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    assert not (run / "verify" / "round-1" / "VERIFIED.jsonl").exists()
+
+
+def test_a_wc_verification_in_lane_wcs_own_role_on_opus_imports(tmp_path: Path) -> None:
+    run = _checked(tmp_path)
+    handoff = _hv(tmp_path)
+    C.cmd_verify_export(run, handoff, batch_size=5)
+    answers = {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
+    }
+    FX.record_answers(handoff, answers, by="wc_web_verifier:opus-v", model=OH.OPUS_MODEL, at=NEW)
+    C.cmd_verify_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    rows = read_jsonl(run / "verify" / "round-1" / "VERIFIED.jsonl")
+    assert {row["site_id"] for row in rows} == {FX.SITE_A, FX.SITE_B}
+
+
+def test_lane_wcs_web_verifier_reads_the_verifier_rule() -> None:
+    """A role added to the registry is classified in `web_rules` before a brief for it is built:
+    lane WC's own verifier confirms or rejects, as the shared one does."""
+    import web_rules as WR
+
+    assert WR.rule_for_role(C.ROLE_VERIFY) == WR.VERIFIER_RULE
+    assert WR.rule_for_role("web_verifier") == WR.VERIFIER_RULE

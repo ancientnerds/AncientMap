@@ -30,14 +30,18 @@ import roles as RO  # noqa: E402
 #: stays on Opus; `enrich_writer` is the lane E writer that never left Sonnet. D40 as scoped by D45
 #: (2026-10-17) added the card lane's own checkers on Opus; D46 (2026-10-19) moved `card_writer` back
 #: to Opus after its Sonnet pilot. The card lane's adversarial reviewer `card_adversarial` (Opus,
-#: 2026-10-24) settles the shared role's failed card calibration (`SETTLED_TIER_MOVES`).
+#: 2026-10-24) settles the shared role's failed card calibration (`SETTLED_TIER_MOVES`). Lane WC's
+#: calibrations of 2026-10-24 (D51): `fact_checker`, which answers lane WC only, moved on to Opus by the
+#: tier move of wc-fc-1; lane WC's verification got a role of its own, `wc_web_verifier` (Opus), which
+#: settles the failed wc-wv-1/2 of the shared `web_verifier` (D45).
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "medium"),
-    "fact_checker": ("claude-sonnet-5-5", "high"),
+    "fact_checker": ("claude-opus-5-5", "high"),
     "web_verifier": ("claude-sonnet-5-5", "high"),
     "card_fact_checker": ("claude-opus-5-5", "high"),
     "card_web_verifier": ("claude-opus-5-5", "high"),
+    "wc_web_verifier": ("claude-opus-5-5", "high"),
     "field_researcher": ("claude-sonnet-5-5", "high"),
     "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-sonnet-5-5", "high"),
@@ -113,9 +117,12 @@ def test_the_model_id_of_the_cli_is_checked_against_the_registry() -> None:
     RO.require_model("enrich_writer", "claude-sonnet-5-5")
     with pytest.raises(RO.RoleError, match="enrich_writer.*claude-sonnet-5-5.*claude-opus-5-5"):
         RO.require_model("enrich_writer", "claude-opus-5-5")
-    RO.require_model("fact_checker", "claude-sonnet-5-5")  # back on Sonnet by owner move D36
-    with pytest.raises(RO.RoleError, match="fact_checker.*claude-sonnet-5-5.*claude-opus-5-5"):
-        RO.require_model("fact_checker", "claude-opus-5-5")
+    RO.require_model("web_verifier", "claude-sonnet-5-5")  # back on Sonnet by owner move D36
+    with pytest.raises(RO.RoleError, match="web_verifier.*claude-sonnet-5-5.*claude-opus-5-5"):
+        RO.require_model("web_verifier", "claude-opus-5-5")
+    RO.require_model("fact_checker", "claude-opus-5-5")  # on to Opus by the tier move of wc-fc-1
+    with pytest.raises(RO.RoleError, match="fact_checker.*claude-opus-5-5.*claude-sonnet-5-5"):
+        RO.require_model("fact_checker", "claude-sonnet-5-5")
 
 
 # ----------------------------------------------------------------------------- answered_by
@@ -174,7 +181,8 @@ def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() 
     """Three tier moves, oldest first, each copied from the failed verdict that named it
     (`verdicts/fr-general-001.json`, `VERDICT-fact_checker.json` and `VERDICT-web_verifier.json` of
     teaser-2026-10-09b), then the seven owner moves of D36 (`test_the_owner_moves_of_d36...`), then the
-    hook rater's tier move of teaser-2026-10-10 (`VERDICT-hook_rater.json`)."""
+    hook rater's tier move of teaser-2026-10-10 (`VERDICT-hook_rater.json`), the owner move of D46 and
+    the fact checker's tier move of lane WC's calibration wc-fc-1 (`verdicts/wc-fc-1.json`)."""
     moves = [dict(move) for move in RO.APPLIED_ESCALATIONS[:3]]
     assert moves == [
         {
@@ -200,14 +208,109 @@ def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() 
         },
     ]
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
-    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-2])
-    assert dict(RO.APPLIED_ESCALATIONS[-2]) == {
+    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-3])
+    assert dict(RO.APPLIED_ESCALATIONS[-3]) == {
         "role": "hook_rater",
         "from": "claude-sonnet-5-5",
         "to": "claude-opus-5-5",
         "calibration_id": "teaser-2026-10-10",
         "reason": "failed: hook_pairs",
     }
+    assert RO.APPLIED_ESCALATIONS[-2] == RO.owner_move("card_writer", "D46")
+    assert dict(RO.APPLIED_ESCALATIONS[-1]) == WC_FC_1_TIER_MOVE
+
+
+#: The `tier_move` of `verdicts/wc-fc-1.json` (2026-10-24, fact_checker on Sonnet), as written there.
+WC_FC_1_TIER_MOVE = {
+    "role": "fact_checker",
+    "from": "claude-sonnet-5-5",
+    "to": "claude-opus-5-5",
+    "calibration_id": "wc-fc-1",
+    "reason": "known error 5facc061-8835-4129-9e3c-7b17ebf2d5e8/sentence-4 missed: the fresh answer "
+    "says 'KEEP', expected not ['KEEP', 'KEEP_TRIMMED']",
+}
+#: The `tier_move`s of `verdicts/wc-wv-1.json` and `wc-wv-2.json` (web_verifier on Sonnet).
+WC_WV_TIER_MOVES = {
+    calibration_id: {
+        "role": "web_verifier",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": calibration_id,
+        "reason": f"agreement {agreement} is below the sealed threshold 0.95",
+    }
+    for calibration_id, agreement in (("wc-wv-1", "0.8193"), ("wc-wv-2", "0.8986"))
+}
+#: The calibration root the verdicts live in (not versioned: present in the main checkout only).
+VERDICTS = REPO / "output" / "remediation" / "calibration" / "verdicts"
+
+
+def test_the_fact_checkers_tier_move_of_lane_wc_is_applied_and_it_stands_at_opus_high() -> None:
+    """D51: the fact checker, which answers lane WC only, failed wc-fc-1 and wc-fc-2 on Sonnet, each
+    with a tier move to Opus. The move of wc-fc-1 is applied (one record: wc-fc-2 named the same
+    move, which cannot start from Sonnet a second time); the effort stays high, and the D36 release
+    of its Sonnet card verdict no longer stands for it."""
+    assert dict(RO.last_move("fact_checker")) == WC_FC_1_TIER_MOVE
+    entry = RO.ROLES["fact_checker"]
+    assert (entry.model, entry.effort) == ("claude-opus-5-5", "high")
+    chain = [
+        (m["from"], m["to"], m.get("kind"))
+        for m in RO.APPLIED_ESCALATIONS
+        if m["role"] == "fact_checker"
+    ]
+    assert chain == [
+        ("claude-sonnet-5-5", "claude-opus-5-5", None),  # teaser-2026-10-09b
+        ("claude-opus-5-5", "claude-sonnet-5-5", "owner"),  # D36
+        ("claude-sonnet-5-5", "claude-opus-5-5", None),  # wc-fc-1
+    ]
+    second = {**WC_FC_1_TIER_MOVE, "calibration_id": "wc-fc-2", "reason": "agreement 0.8841"}
+    with pytest.raises(RO.RoleError, match="does not start where the last one ended"):
+        RO.check_applied_escalations((*RO.APPLIED_ESCALATIONS, second), RO.ROLES)
+    with pytest.raises(RO.RoleError, match="registered to claude-opus-5-5, not claude-sonnet-5-5"):
+        RO.require_owner_move(
+            "fact_checker", "D36", model="claude-sonnet-5-5", calibration_id="teaser-2026-10-09b"
+        )
+    assert RO.settled_tier_move("fact_checker", "wc-fc-1") is None
+
+
+def test_lane_wcs_failed_verify_calibrations_are_settled_by_wc_web_verifier() -> None:
+    """wc-wv-1 and wc-wv-2 failed the shared `web_verifier` on Sonnet with a tier move to Opus. Neither
+    is applied (D45: the shared role serves identity, lane E and image identity and is calibrated per
+    lane): lane WC's verification moved to `wc_web_verifier` on Opus, a new role."""
+    for calibration_id, tier_move in WC_WV_TIER_MOVES.items():
+        settled = RO.settled_tier_move("web_verifier", calibration_id)
+        assert settled is not None
+        assert {k: settled[k] for k in tier_move} == tier_move
+        assert (settled["settled_by"], settled["decision"]) == ("wc_web_verifier", "D45")
+        assert "wc_web_verifier" in settled["how"] and "Sonnet" in settled["how"]
+        assert not any(
+            m["role"] == "web_verifier" and m.get("calibration_id") == calibration_id
+            for m in RO.APPLIED_ESCALATIONS
+        )
+    assert RO.ROLES["web_verifier"].model == "claude-sonnet-5-5"
+    own = RO.ROLES["wc_web_verifier"]
+    assert (own.model, own.effort, own.calibration_set) == (
+        "claude-opus-5-5",
+        "high",
+        "wc_verify_rounds",
+    )
+    assert RO.last_move("wc_web_verifier") is None  # a new role, not a move
+    assert RO.role_sha256("wc_web_verifier") != RO.role_sha256("card_web_verifier")
+    RO.check_settled_tier_moves(RO.SETTLED_TIER_MOVES, RO.APPLIED_ESCALATIONS, RO.ROLES)
+
+
+@pytest.mark.parametrize("calibration_id", ["wc-fc-1", "wc-wv-1", "wc-wv-2"])
+def test_the_records_are_the_verdicts_tier_moves_as_written(calibration_id: str) -> None:
+    """Where the calibration root is at hand (the main checkout), each record is the failed verdict's
+    `tier_move` exactly as `calibrate_claude.py verdict` wrote it."""
+    path = VERDICTS / f"{calibration_id}.json"
+    if not path.is_file():
+        pytest.skip(f"{path} is not in this checkout (the calibration root is not versioned)")
+    verdict = json.loads(path.read_text(encoding="utf-8"))
+    assert verdict["passed"] is False
+    expected = (
+        WC_FC_1_TIER_MOVE if calibration_id == "wc-fc-1" else WC_WV_TIER_MOVES[calibration_id]
+    )
+    assert verdict["tier_move"] == expected
 
 
 def test_a_registry_that_moved_without_its_record_is_refused() -> None:
@@ -294,9 +397,9 @@ def test_the_owner_moves_of_d36_put_seven_roles_from_opus_to_sonnet() -> None:
             "D36",
         )
         assert move["evidence"] and move["reason"].startswith("weekly Claude quota at 69 %")
-        # the hook rater moved on up one tier after D36 (teaser-2026-10-10) and the card writer
-        # back to Opus by D46; their moves end there
-        if move["role"] not in ("hook_rater", "card_writer"):
+        # the hook rater moved on up one tier after D36 (teaser-2026-10-10), the card writer back to
+        # Opus by D46 and the fact checker on up one tier (wc-fc-1, D51); their moves end there
+        if move["role"] not in ("hook_rater", "card_writer", "fact_checker"):
             assert RO.ROLES[move["role"]].model == "claude-sonnet-5-5"
         assert RO.ROLES[move["role"]].effort == move["effort"]
     # the roles D36 left alone carry no owner move
@@ -405,35 +508,35 @@ def test_require_owner_move_names_what_is_missing() -> None:
         )
     with pytest.raises(RO.RoleError, match="registered to claude-sonnet-5-5, not claude-opus-5-5"):
         RO.require_owner_move(
-            "fact_checker", "D36", model="claude-opus-5-5", calibration_id="teaser-2026-10-09c"
+            "web_verifier", "D36", model="claude-opus-5-5", calibration_id="teaser-2026-10-09c"
         )
     with pytest.raises(RO.RoleError, match="does not rest on cal-x"):
         RO.require_owner_move(
-            "fact_checker", "D36", model="claude-sonnet-5-5", calibration_id="cal-x"
+            "web_verifier", "D36", model="claude-sonnet-5-5", calibration_id="cal-x"
         )
 
 
 # ---------------------------------------------------------------------- the candidate model
 def test_a_candidate_is_a_registrable_model_that_is_not_the_registered_one() -> None:
-    assert RO.candidate_model("fact_checker", "claude-haiku-5-5") == "claude-haiku-5-5"
-    with pytest.raises(RO.RoleError, match="is the registered model of fact_checker"):
-        RO.candidate_model("fact_checker", "claude-sonnet-5-5")
+    assert RO.candidate_model("web_verifier", "claude-haiku-5-5") == "claude-haiku-5-5"
+    with pytest.raises(RO.RoleError, match="is the registered model of web_verifier"):
+        RO.candidate_model("web_verifier", "claude-sonnet-5-5")
     with pytest.raises(RO.RoleError, match="not a model a role may be registered to"):
-        RO.candidate_model("fact_checker", "MiniMax-M3.1-Flash-Preview")
+        RO.candidate_model("web_verifier", "MiniMax-M3.1-Flash-Preview")
     with pytest.raises(RO.RoleError, match="no role"):
         RO.candidate_model("writer", "claude-haiku-5-5")
 
 
 def test_a_candidate_digest_is_the_entry_with_the_candidate_and_leaves_the_registry_alone() -> None:
-    registered = RO.role_sha256("fact_checker")
-    candidate = RO.role_sha256("fact_checker", model="claude-haiku-5-5")
+    registered = RO.role_sha256("web_verifier")
+    candidate = RO.role_sha256("web_verifier", model="claude-haiku-5-5")
     assert candidate != registered
-    assert RO.role_sha256("fact_checker", model="claude-sonnet-5-5") == registered
-    assert RO.ROLES["fact_checker"].model == "claude-sonnet-5-5"
-    entry = RO.ROLES["fact_checker"]
+    assert RO.role_sha256("web_verifier", model="claude-sonnet-5-5") == registered
+    assert RO.ROLES["web_verifier"].model == "claude-sonnet-5-5"
+    entry = RO.ROLES["web_verifier"]
     body = json.dumps(
         {
-            "name": "fact_checker",
+            "name": "web_verifier",
             "model": "claude-haiku-5-5",
             "effort": entry.effort,
             "calibration_set": entry.calibration_set,
@@ -607,7 +710,7 @@ def test_a_candidate_trial_answer_needs_a_role(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("model", "candidate", "message"),
     [
-        ("claude-sonnet-5-5", "claude-sonnet-5-5", "is the registered model of fact_checker"),
+        ("claude-sonnet-5-5", "claude-sonnet-5-5", "is the registered model of web_verifier"),
         ("claude-sonnet-5-5", "claude-haiku-5-5", "is not the candidate model claude-haiku-5-5"),
     ],
 )
@@ -619,7 +722,7 @@ def test_a_candidate_trial_answer_names_a_candidate_that_is_not_the_registered_m
     text.write_text("x\n", encoding="utf-8")
     refused = _run(
         _answer_argv(
-            tmp_path, text, "--model", model, "--role", "fact_checker",
+            tmp_path, text, "--model", model, "--role", "web_verifier",
             "--candidate-model", candidate,
         )
     )  # fmt: skip
@@ -627,26 +730,11 @@ def test_a_candidate_trial_answer_names_a_candidate_that_is_not_the_registered_m
     assert not (tmp_path / OH.answer_relpath("batch-0001", "check", "site-1")).exists()
 
 
-def test_an_owner_decision_does_not_reach_past_a_later_move_of_the_role(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """D36 put `fact_checker` on Sonnet; if a later tier move took it to Opus, a verdict made on Opus
-    is not the model the decision kept, whatever the registry holds."""
-    later = {
-        "role": "fact_checker",
-        "from": "claude-sonnet-5-5",
-        "to": "claude-opus-5-5",
-        "calibration_id": "teaser-2026-10-09b",
-        "reason": "failed again",
-    }
-    roles = dict(RO.ROLES)
-    roles["fact_checker"] = RO.Role(
-        "fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"
-    )
-    monkeypatch.setattr(RO, "ROLES", roles)
-    monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, later))
-    RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, roles)
-    assert RO.last_move("fact_checker") == later
+def test_an_owner_decision_does_not_reach_past_a_later_move_of_the_role() -> None:
+    """D36 put `fact_checker` on Sonnet; the later tier move of wc-fc-1 (D51) took it to Opus, so a
+    verdict made on Opus is not the model the decision kept, whatever the registry holds."""
+    assert RO.ROLES["fact_checker"].model == "claude-opus-5-5"
+    assert RO.last_move("fact_checker")["calibration_id"] == "wc-fc-1"
     with pytest.raises(RO.RoleError, match="ends at claude-sonnet-5-5, not claude-opus-5-5"):
         RO.require_owner_move(
             "fact_checker", "D36", model="claude-opus-5-5", calibration_id="teaser-2026-10-09b"
