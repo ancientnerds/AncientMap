@@ -685,10 +685,11 @@ git commit -m "Lane WB steps A-B: the trail of the sitting"
 
 - **The static export** (`public/data/sites/`) follows the database through the export routine, not
   through a push of a card file.
-- **`public/data/card_descriptions.json`** stays in the tree until the code of D25 is live, then a
-  later push deletes it. It is a dead copy meanwhile: never edit it, never render it, nobody reads
-  it. `scripts/import_card_descriptions.py`, `scripts/merge_rewrites.py` and the `audit_enrich.py`
-  Wave-4 merge are not used for card work.
+- **`public/data/card_descriptions.json`** is deleted (2026-10-24, branch `closeout/phase8`): the
+  code of D25 is live since the Phase-1 deploy of 2026-10-09, and nothing in `api/`, `pipeline/`,
+  `ancient-nerds-map/src` or the deploy read the dead copy. Never recreate it.
+  `scripts/import_card_descriptions.py` (its copy into the file is gone), `scripts/merge_rewrites.py`
+  and the `audit_enrich.py` Wave-4 merge are not used for card work.
 
 A red CI inside a sitting changes nothing for the cards: the database holds them whatever the
 deploy does.

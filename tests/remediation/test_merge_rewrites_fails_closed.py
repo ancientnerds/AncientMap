@@ -354,9 +354,11 @@ def test_complete_valid_merge_is_published(tmp_path):
 
 
 def test_sandbox_never_touches_the_real_repository(tmp_path):
-    """The real public/data/card_descriptions.json is the API's startup input - prove it is safe."""
+    """The sandboxed merge never writes the real repository: public/data/card_descriptions.json
+    was deleted on 2026-10-24 (D25: the database is the one copy of a card text, nothing reads
+    the file), and a run in the sandbox must not bring it back."""
     real = REPO / "public" / "data" / "card_descriptions.json"
-    before = real.read_bytes()
+    assert not real.exists()
     root = build_sandbox(tmp_path, batches=valid_batches())
     run_merge(root)
-    assert real.read_bytes() == before
+    assert not real.exists()
