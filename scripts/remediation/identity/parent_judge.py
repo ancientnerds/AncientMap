@@ -54,6 +54,8 @@ STAGE_VERDICT = "parent-verdict"
 STAGE_RECHECK = "parent-recheck"
 ROLE_VERDICT = "web_verifier"
 ROLES_RECHECK = ("adversarial", "pilot_judge")
+#: The `pair_calibration.py` kind whose gold rounds ask this module's verdict questions.
+CALIBRATION_KIND = "parent"
 VERDICTS = ("PART", "NOT_PART", "DUPLICATE")
 RECHECK_DECISIONS = ("CONFIRM", "REJECT")
 PARENT_DECISIONS = "PARENT_DECISIONS.jsonl"
@@ -705,7 +707,7 @@ For each question:
 3. Write only the JSON object the prompt specifies to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is fetched, your verdict is not judged):
-   {python} {run_tool} check-answer --stage {stage} --round {round} --label <label> \\
+   {check} --label <label> \\
 --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
@@ -728,30 +730,36 @@ def brief(
     handoff: str | None = None,
     role: str | None = None,
 ) -> str:
-    """The instruction of the agent that answers one batch of one round (see `dup_judge.brief`)."""
+    """The instruction of the agent that answers one batch of one round (see `dup_judge.brief`; a
+    pair calibration's directory is `<run>/calibration/parent`, and a production `parent-verdict`
+    round never briefs the pilot judge)."""
     import roles as RO
 
     record = rounds.find_round(stage_run or parent_run(run), stage, round_name)
     if batch_id not in record.batches:
         raise rounds.RoundError(f"{batch_id} is no batch of {stage} round {round_name}")
-    allowed = (ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK
-    role = role or allowed[0]
-    if role not in allowed:
-        raise rounds.RoundError(f"{role} is no role of {stage}: it asks {' or '.join(allowed)}")
     where = handoff or record.handoff
+    gold = rounds.is_gold_run(stage_run, CALIBRATION_KIND)
+    role = rounds.brief_role(
+        stage, role, (ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK, gold=gold,
+        into_round_handoff=rounds.same_handoff(where, record.handoff),
+    )  # fmt: skip
     text = BRIEF.format(
         batch=batch_id, stage=stage, round=round_name, role=role, model=RO.role(role).model,
         count=len(record.batches[batch_id]), handoff=where,
-        scratch=f"{where}-scratch/{batch_id}", python="./.venv/Scripts/python.exe",
-        run_tool="scripts/remediation/identity/parent_judge.py",
+        scratch=f"{where}-scratch/{batch_id}", python=rounds.PYTHON,
         handoff_tool="scripts/remediation/opus_handoff.py",
+        check=rounds.check_command(
+            "scripts/remediation/identity/parent_judge.py", stage, round_name,
+            gold_run=stage_run if gold else None,
+        ),
     )  # fmt: skip
     return text if check else _without_check(text)
 
 
 def _without_check(text: str) -> str:
-    """The brief of a calibration copy: it has no run to check an answer's shape against, so step 4
-    is dropped and step 5 becomes step 4."""
+    """The brief without its shape check (`--no-check`): step 4 is dropped and step 5 becomes
+    step 4."""
     head, _, rest = text.partition("4. Check its shape")
     _, _, tail = rest.partition("5. Record it")
     return head + "4. Record it" + tail
@@ -810,11 +818,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     brief_cmd.add_argument(
         "--role", help="the role the agent answers in (default: the stage's first)"
     )
-    brief_cmd.add_argument("--stage-run", type=Path, help="a calibration's own rounds directory")
-    brief_cmd.add_argument("--handoff", help="the handoff directory the agent answers into")
     brief_cmd.add_argument(
-        "--no-check", action="store_true", help="drop the shape check (a calibration copy)"
+        "--stage-run", type=Path, help="a pair calibration's directory, <run>/calibration/<kind>"
     )
+    brief_cmd.add_argument("--handoff", help="the handoff directory the agent answers into")
+    brief_cmd.add_argument("--no-check", action="store_true", help="drop the shape check")
     check = sub.add_parser("check-answer")
     check.add_argument("--stage", choices=stages, required=True)
     check.add_argument("--round", required=True)
@@ -824,6 +832,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = ap.parse_args(argv)
     run = common.run_dir(args.root)
     try:
+        if args.command == "brief":
+            # a brief reads only the round record: no context, so a calibration's gold round is
+            # briefed before the run's stage inputs exist
+            print(
+                brief(
+                    run,
+                    args.stage,
+                    args.round,
+                    args.batch_id,
+                    stage_run=args.stage_run,
+                    check=not args.no_check,
+                    handoff=args.handoff,
+                    role=args.role,
+                )
+            )
+            return 0
         from identity.entities import default_store
 
         ctx = load_context(run, root=args.root, store=default_store(args.root))
@@ -852,19 +876,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ),  # fmt: skip
                     indent=1,
                     sort_keys=True,
-                )
-            )
-        elif args.command == "brief":
-            print(
-                brief(
-                    run,
-                    args.stage,
-                    args.round,
-                    args.batch_id,
-                    stage_run=args.stage_run,
-                    check=not args.no_check,
-                    handoff=args.handoff,
-                    role=args.role,
                 )
             )
         elif args.command == "check-answer":

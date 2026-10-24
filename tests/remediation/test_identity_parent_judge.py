@@ -642,6 +642,11 @@ class TestTheRounds:
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         with pytest.raises(rounds.RoundError, match="adversarial is no role of parent-verdict"):
             J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", role="adversarial")
+        with pytest.raises(
+            rounds.RoundError,
+            match="pilot_judge is no role of parent-verdict: it asks web_verifier",
+        ):
+            J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", role="pilot_judge")
         text = J.brief(
             run, J.STAGE_VERDICT, "r1", "r1-b01", handoff="calibration/copy", check=False
         )

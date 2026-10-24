@@ -46,6 +46,12 @@ ANSWERS_DIR = "answers"
 PER_BATCH = 5
 #: The first round and two re-asks: what is held after them stays held and is listed.
 MAX_ROUNDS = 3
+#: A pair calibration (`pair_calibration.py`) keeps its cases, its read and the rounds of its gold
+#: in `<run>/calibration/<kind>`; `CASES.jsonl` is what its `read` wrote there.
+CALIBRATION_DIR = "calibration"
+CASES_FILE = "CASES.jsonl"
+#: The role whose blind answers are a calibration's gold (Opus xhigh, owner decision D6).
+GOLD_ROLE = "pilot_judge"
 
 
 class RoundError(ValueError):
@@ -201,6 +207,77 @@ def role_problem(answer: OH.Answer, allowed_roles: Iterable[str]) -> str | None:
     if named not in allowed:
         return f"answered in role {named}, but this stage asks {' or '.join(allowed)}"
     return RO.answer_problem(answer.answered_by, answer.model)
+
+
+def gold_dir(run: Path, kind: str) -> Path:
+    """The directory of a pair calibration of `kind` (`dup`, `parent`) in the identity run `run`."""
+    return run / CALIBRATION_DIR / kind
+
+
+def is_gold_run(stage_run: Path | None, kind: str) -> bool:
+    """Whether `stage_run` is the directory of a pair calibration of `kind`: named
+    `calibration/<kind>` and holding the `CASES.jsonl` its `read` wrote. A stage's own run directory
+    (`<run>/dup`, `<run>/parent`) never is one."""
+    return (
+        stage_run is not None
+        and stage_run.name == kind
+        and stage_run.parent.name == CALIBRATION_DIR
+        and (stage_run / CASES_FILE).is_file()
+    )
+
+
+def brief_role(
+    stage: str,
+    role: str | None,
+    stage_roles: Sequence[str],
+    *,
+    gold: bool,
+    into_round_handoff: bool,
+) -> str:
+    """The role a brief of `stage` names (`role`, or the first one allowed), refused when not allowed.
+
+    * A production round asks the stage's own roles (`stage_roles`): a verdict stage never briefs
+      the pilot judge.
+    * A calibration's gold round answered into its own handoff is the gold labelling, which only
+      `GOLD_ROLE` gives (`pair_calibration.gold_check` refuses every other answer there).
+    * A calibration's gold round briefed into another handoff is the copy `calibrate_claude.py
+      prepare` made, which the role under calibration re-answers: the stage's roles, never the gold
+      role, which would be measured against itself."""
+    if gold and into_round_handoff:
+        allowed: tuple[str, ...] = (GOLD_ROLE,)
+        where = f"the gold round of a calibration of {stage}"
+    elif gold:
+        allowed = tuple(r for r in stage_roles if r != GOLD_ROLE)
+        where = f"a re-answer of a calibration copy of {stage}"
+    else:
+        allowed = tuple(stage_roles)
+        where = stage
+    chosen = role or allowed[0]
+    if chosen not in allowed:
+        raise RoundError(f"{chosen} is no role of {where}: it asks {' or '.join(allowed)}")
+    return chosen
+
+
+def same_handoff(a: str | Path, b: str | Path) -> bool:
+    """Whether two handoff paths (as a brief prints them, or absolute) name one directory."""
+    return resolve(a).resolve() == resolve(b).resolve()
+
+
+#: The interpreter a brief tells its agent to run (the main checkout's venv, relative to it).
+PYTHON = "./.venv/Scripts/python.exe"
+PAIR_CALIBRATION_TOOL = "scripts/remediation/identity/pair_calibration.py"
+
+
+def check_command(run_tool: str, stage: str, round_name: str, *, gold_run: Path | None) -> str:
+    """The shape check a brief's agent runs, up to its `--label`. A production round is checked by
+    the stage's own tool against the run; a calibration's round has questions of its own (its cases,
+    read at `read`), so `pair_calibration.py` checks it against the calibration directory."""
+    if gold_run is not None:
+        return (
+            f"{PYTHON} {PAIR_CALIBRATION_TOOL} check-answer --stage-run {shown(gold_run)} "
+            f"--round {round_name}"
+        )
+    return f"{PYTHON} {run_tool} check-answer --stage {stage} --round {round_name}"
 
 
 def parse_calibrations(values: Iterable[str]) -> dict[str, str]:

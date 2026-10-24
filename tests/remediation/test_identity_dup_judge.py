@@ -1114,6 +1114,10 @@ class TestTheBriefAndTheCheck:
         run = self.exported(tmp_path)
         with pytest.raises(rounds.RoundError, match="adversarial is no role of dup-verdict"):
             J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", role="adversarial")
+        with pytest.raises(
+            rounds.RoundError, match="pilot_judge is no role of dup-verdict: it asks web_verifier"
+        ):
+            J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", role="pilot_judge")
         assert "role web_verifier" in J.brief(
             run, J.STAGE_VERDICT, "r1", "r1-b01", role="web_verifier"
         )
