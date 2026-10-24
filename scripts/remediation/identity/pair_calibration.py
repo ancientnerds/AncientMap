@@ -41,7 +41,7 @@ import argparse
 import hashlib
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,21 +53,28 @@ for _root in (REPO, REPO / "scripts" / "remediation"):
         sys.path.insert(0, str(_root))
 
 import opus_handoff as OH  # noqa: E402
+from fields import harvest as H  # noqa: E402
 from mechanical import dups  # noqa: E402
 from mechanical import plan as P  # noqa: E402
 
-from identity import common, dup_clusters, dup_judge, export, parent_judge  # noqa: E402
+from identity import common, dup_clusters, dup_judge, export, parent_judge, parents  # noqa: E402
 from identity import label_rounds as rounds  # noqa: E402
 from identity.wiki import WikiIndex, load_cache  # noqa: E402
 
-CAL_DIR = "calibration"
 BCASES = common.REPO / "output" / "remediation" / "bcases"
 DUPLICATES = BCASES / "DUPLICATES.jsonl"
 DUP_PAIRS = BCASES / "dup_pairs.jsonl"
 N_NEGATIVES = 15
 N_PARENT_POSITIVES = 20
 N_PARENT_NEGATIVES = 10
-GOLD_ROLE = "pilot_judge"
+GOLD_ROLE = rounds.GOLD_ROLE
+READ_FILE = "READ.jsonl"
+KINDS = (dup_judge.CALIBRATION_KIND, parent_judge.CALIBRATION_KIND)
+#: The verdict stage whose questions a calibration of each kind asks.
+STAGES = {
+    dup_judge.CALIBRATION_KIND: dup_judge.STAGE_VERDICT,
+    parent_judge.CALIBRATION_KIND: parent_judge.STAGE_VERDICT,
+}
 NEGATIVE_CLASSES = ("WRONG-ID", "NEITHER")
 
 
@@ -255,7 +262,7 @@ def dup_context(facts: Facts, cases: Sequence[Case], wiki: WikiIndex | None) -> 
 
 
 def cal_dir(run: Path, kind: str) -> Path:
-    return run / CAL_DIR / kind
+    return rounds.gold_dir(run, kind)
 
 
 def export_gold(
@@ -333,46 +340,209 @@ def false_merges(comparison: Mapping[str, Any]) -> int:
 
 
 # --------------------------------------------------------------------------------------- parents
+#: The would-be parent types that hold no other site record: one built structure or one monument
+#: (a temple or a pyramid with its own precinct counts as one). A candidate pair whose parent has
+#: only such types is a neighbour, a predecessor, a namesake or the same structure - not a parent
+#: and its component - unless Wikidata says the one contains the other (which takes it out).
+#: Settlements, sanctuaries, forts, palaces, fora, necropoleis, henges and the like are containers
+#: and are not here; `Monument` is (an altar, a bridge, a column).
+STRUCTURE_TYPES = frozenset(
+    {
+        "Temple", "Temple complex", "Pyramid complex", "Theatre", "Theater", "Amphitheatre",
+        "Stadium", "Bath", "Gate", "Gate/archway/bridge", "Bridge", "Aqueduct", "Minaret/tower",
+        "Well", "Church", "Church/cathedral", "Tomb", "Burial", "Dolmen", "Cairn", "Barrow",
+        "Mound/tumulus", "Stone circle", "Timber circle", "Standing stone", "Megalithic stones",
+        "Megalithic statues", "Sculptured stone", "Inscription", "Rock art", "Petroglyphs",
+        "Rock relief/carving", "Geoglyphs", "Monument", "Shipwreck",
+    }
+)  # fmt: skip
+#: The seed of the draw among the structure-parent candidates (a new seed is a new pool).
+PARENT_NEGATIVE_SEED = "d25-parent-negatives-v1"
+P_PART_OF, P_HAS_PART = "P361", "P527"
+NEITHER_SOURCE = "bcases/dup_pairs.jsonl NEITHER"
+STRUCTURE_SOURCE = "PARENT_CANDIDATES.jsonl structure parent, no P361/P527 between the items"
+EntityOf = Callable[[str], Mapping[str, Any] | None]
+
+
+def _seeded_order(seed: str, a: str, b: str) -> str:
+    return hashlib.sha256(f"{seed}|{a}|{b}".encode()).hexdigest()
+
+
+def site_types(value: str | None) -> frozenset[str]:
+    """The types of a `site_type` cell (`"City/town/settlement, Pyramid complex"` holds two)."""
+    return frozenset(t.strip() for t in (value or "").split(",") if t.strip())
+
+
+def nested_cases(
+    pairs: Sequence[Mapping[str, Any]], shown: Mapping[str, Any], klass: str, kind: str
+) -> list[Case]:
+    """The pairs of one owner-case class whose names are contained in each other, both shown, as
+    parent questions in a hash order. The parent of a pair is the one whose significant words are
+    the subset (`parents.candidate_pairs`' rule); a pair whose words are not nested has no parent and
+    is left out."""
+    out: list[Case] = []
+    for pair in sorted((p for p in pairs if p["class"] == klass), key=_hash_order):
+        if pair["a"] not in shown or pair["b"] not in shown:
+            continue
+        left, right = common.tokens(pair["a_name"]), common.tokens(pair["b_name"])
+        if not left or not right or not (left < right or right < left):
+            continue
+        parent, child = (pair["a"], pair["b"]) if left < right else (pair["b"], pair["a"])
+        out.append(
+            Case(
+                case_id("par-" + kind[:3], parent, child),
+                kind,
+                parent,
+                child,
+                None,
+                f"bcases/dup_pairs.jsonl {klass}",
+            )
+        )
+    return out
+
+
+def structure_negatives(
+    candidates: Sequence[Mapping[str, Any]],
+    shown: Mapping[str, Any],
+    entity_of: EntityOf,
+    *,
+    exclude: Iterable[frozenset[str]],
+    seed: str = PARENT_NEGATIVE_SEED,
+) -> tuple[list[Case], dict[str, int]]:
+    """The second source of true non-parent pairs: the run's own parent candidates
+    (`PARENT_CANDIDATES.jsonl`, the very pairs the parent verdict is asked about) on which a would-be
+    parent of `STRUCTURE_TYPES` only meets a child whose Wikidata item it does not contain.
+
+    A pair counts when both sites are shown, the pair is not in `exclude` (the owner-case pairs: a
+    class of their own), both carry Wikidata items and share none (a shared item is D14's question),
+    every item is read (`entity_of` answers it: an item nobody read is not taken as silent), and
+    neither the child's P361 names a parent item nor the parent's P527 a child item. The pairs are
+    drawn in the order of `seed`, at most one per would-be parent and one per child, so one big
+    family (the Giza pyramids) cannot fill the set. Returns the cases and what was counted."""
+    skip = set(exclude)
+    counts = {"candidate_pairs": 0, "structure_parent": 0, "eligible": 0, "drawn": 0}
+    counts |= {"left_out_" + k: 0 for k in ("not_shown", "owner_case", "no_item", "shared_item",
+                                            "item_unread", "contained")}  # fmt: skip
+    eligible: list[tuple[str, str]] = []
+    for record in candidates:
+        parent = record["parent"]
+        types = site_types(parent["site_type"])
+        structure = bool(types) and types <= STRUCTURE_TYPES
+        for child in record["children"]:
+            counts["candidate_pairs"] += 1
+            if not structure:
+                continue
+            counts["structure_parent"] += 1
+            reason = _structure_left_out(parent, child, shown, entity_of, skip)
+            if reason is not None:
+                counts["left_out_" + reason] += 1
+                continue
+            eligible.append((parent["id"], child["id"]))
+    counts["eligible"] = len(eligible)
+    used: set[str] = set()
+    out: list[Case] = []
+    for parent_id, child_id in sorted(eligible, key=lambda pc: _seeded_order(seed, *pc)):
+        if parent_id in used or child_id in used:
+            continue
+        used |= {parent_id, child_id}
+        out.append(
+            Case(
+                case_id("par-neg", parent_id, child_id),
+                "negative",
+                parent_id,
+                child_id,
+                None,
+                STRUCTURE_SOURCE,
+            )
+        )
+    counts["drawn"] = len(out)
+    return out, counts
+
+
+def _structure_left_out(
+    parent: Mapping[str, Any],
+    child: Mapping[str, Any],
+    shown: Mapping[str, Any],
+    entity_of: EntityOf,
+    exclude: set[frozenset[str]],
+) -> str | None:
+    """Why a structure-parent candidate is no negative, or `None` when it is one."""
+    if parent["id"] not in shown or child["id"] not in shown:
+        return "not_shown"
+    if frozenset((parent["id"], child["id"])) in exclude:
+        return "owner_case"
+    parent_items, child_items = set(parent["qids"]), set(child["qids"])
+    if not parent_items or not child_items:
+        return "no_item"
+    if parent_items & child_items:
+        return "shared_item"
+    read = {q: entity_of(q) for q in sorted(parent_items | child_items)}
+    entities = {q: e for q, e in read.items() if e is not None}
+    if len(entities) < len(read):
+        return "item_unread"
+    part_of = {i for q in child_items for i in H.item_ids(entities[q], P_PART_OF)}
+    has_part = {i for q in parent_items for i in H.item_ids(entities[q], P_HAS_PART)}
+    if part_of & parent_items or has_part & child_items:
+        return "contained"
+    return None
+
+
 def parent_cases(
     pairs: Sequence[Mapping[str, Any]],
     shown: Mapping[str, Mapping[str, Any]],
     *,
+    candidates: Sequence[Mapping[str, Any]],
+    entity_of: EntityOf,
     n_positive: int = N_PARENT_POSITIVES,
     n_negative: int = N_PARENT_NEGATIVES,
 ) -> list[Case]:
-    """The `PART-OF` pairs (positives) and the contained-name `NEITHER` pairs (negatives) of the
-    owner-case classification, each as a parent question with one child. The parent of a pair is the
-    one whose significant words are the subset (`parents.candidate_pairs`' rule); a pair whose words
-    are not nested has no parent and is left out."""
-    out: list[Case] = []
-    for klass, kind, wanted in (
-        ("PART-OF", "positive", n_positive),
-        ("NEITHER", "negative", n_negative),
-    ):
-        taken = 0
-        for pair in sorted((p for p in pairs if p["class"] == klass), key=_hash_order):
-            if taken >= wanted:
-                break
-            if pair["a"] not in shown or pair["b"] not in shown:
-                continue
-            left, right = common.tokens(pair["a_name"]), common.tokens(pair["b_name"])
-            if not left or not right or not (left < right or right < left):
-                continue
-            parent, child = (pair["a"], pair["b"]) if left < right else (pair["b"], pair["a"])
-            out.append(
-                Case(
-                    case_id("par-" + kind[:3], parent, child),
-                    kind,
-                    parent,
-                    child,
-                    None,
-                    f"bcases/dup_pairs.jsonl {klass}",
-                )
-            )
-            taken += 1
-        if taken < wanted:
-            raise P.PlanError(f"only {taken} {klass} pairs with nested names, {wanted} wanted")
-    return out
+    """The parent calibration cases: `n_positive` `PART-OF` pairs of the owner-case classification
+    (positives), then `n_negative` negatives - the contained-name `NEITHER` pairs first (two parts of
+    one shared item, neither the other's), the rest drawn from the structure-parent candidates
+    (`structure_negatives`). Fewer than either count is an error, never a smaller set."""
+    return parent_pool(
+        pairs, shown, candidates=candidates, entity_of=entity_of, n_positive=n_positive,
+        n_negative=n_negative,
+    )[0]  # fmt: skip
+
+
+def parent_pool(
+    pairs: Sequence[Mapping[str, Any]],
+    shown: Mapping[str, Mapping[str, Any]],
+    *,
+    candidates: Sequence[Mapping[str, Any]],
+    entity_of: EntityOf,
+    n_positive: int = N_PARENT_POSITIVES,
+    n_negative: int = N_PARENT_NEGATIVES,
+) -> tuple[list[Case], dict[str, Any]]:
+    """`parent_cases` with what each source held (the dry run prints it)."""
+    positives = nested_cases(pairs, shown, "PART-OF", "positive")
+    if len(positives) < n_positive:
+        raise P.PlanError(
+            f"only {len(positives)} PART-OF pairs with nested names, {n_positive} wanted"
+        )
+    neither = nested_cases(pairs, shown, "NEITHER", "negative")
+    structure, counts = structure_negatives(
+        candidates, shown, entity_of, exclude={frozenset((p["a"], p["b"])) for p in pairs}
+    )
+    negatives = (neither + structure)[:n_negative]
+    if len(negatives) < n_negative:
+        raise P.PlanError(
+            f"only {len(neither) + len(structure)} parent negatives - {len(neither)} NEITHER pairs "
+            f"with nested names and {len(structure)} structure-parent candidates - "
+            f"{n_negative} wanted"
+        )
+    pool = {
+        "positives_available": len(positives),
+        "neither_nested_available": len(neither),
+        "structure": counts,
+        "drawn": {
+            "positive": n_positive,
+            "negative_neither": sum(1 for c in negatives if c.source == NEITHER_SOURCE),
+            "negative_structure": sum(1 for c in negatives if c.source == STRUCTURE_SOURCE),
+        },
+    }
+    return positives[:n_positive] + negatives, pool
 
 
 def parent_context(
@@ -460,12 +630,59 @@ def parent_gold_check(
 
 
 # ------------------------------------------------------------------------------------------ CLI
-def _load_cases(run: Path, kind: str) -> list[Case]:
-    path = cal_dir(run, kind) / "CASES.jsonl"
+def load_cases(out: Path) -> list[Case]:
+    """The cases `read` wrote into the calibration directory `out`."""
     return [
         Case(c["case_id"], c["kind"], c["a"], c["b"], c["expected"], c["source"])
-        for c in common.read_jsonl(path)
+        for c in common.read_jsonl(out / rounds.CASES_FILE)
     ]
+
+
+def check_answer(stage_run: Path, round_name: str, label: str, text: str) -> str | None:
+    """The shape problem of an answer to a question of a calibration's round, or `None` - the
+    calibration's own cases and read (`stage_run` is `<run>/calibration/<kind>`), never the run's
+    clusters or parents, which hold no calibration case. Nothing is fetched, no verdict judged."""
+    kind = stage_run.name
+    if kind not in KINDS or not rounds.is_gold_run(stage_run, kind):
+        raise rounds.RoundError(
+            f"{stage_run} is no pair calibration directory (<run>/{rounds.CALIBRATION_DIR}/<kind>, "
+            f"kind {' or '.join(KINDS)}, with the {rounds.CASES_FILE} its read wrote)"
+        )
+    stage = STAGES[kind]
+    record = rounds.find_round(stage_run, stage, round_name)
+    if label not in record.labels:
+        raise rounds.RoundError(f"{label} is no question of {stage} round {round_name}")
+    cases = load_cases(stage_run)
+    ids = sorted({s for c in cases for s in c.sites()})
+    facts = parse_facts((stage_run / READ_FILE).read_text(encoding="utf-8"), ids)
+    try:
+        if kind == "dup":
+            dup_judge.parse_verdict(text, dup_context(facts, cases, None).clusters[label])
+        else:
+            parent_judge.parse_verdict(text, parent_context(facts, cases, None).questions[label])
+    except rounds.AnswerError as exc:
+        return str(exc)
+    return None
+
+
+def _case_rows(cases: Sequence[Case]) -> list[dict[str, Any]]:
+    return [
+        {"case_id": c.case_id, "kind": c.kind, "a": c.a, "b": c.b, "expected": c.expected,
+         "source": c.source}
+        for c in cases
+    ]  # fmt: skip
+
+
+def _counts(cases: Sequence[Case]) -> dict[str, Any]:
+    by_source: dict[str, int] = {}
+    for c in cases:
+        by_source[f"{c.kind}: {c.source}"] = by_source.get(f"{c.kind}: {c.source}", 0) + 1
+    return {
+        "cases": len(cases),
+        **{k: sum(1 for c in cases if c.kind == k) for k in ("positive", "negative")},
+        "sites": len({s for c in cases for s in c.sites()}),
+        "by_source": dict(sorted(by_source.items())),
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -476,29 +693,48 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     ap.add_argument("--root", type=Path, default=None, help="main checkout (default: found)")
     sub = ap.add_subparsers(dest="command", required=True)
-    kinds = ("dup", "parent")
     read = sub.add_parser("read", help="choose the cases and read their sites (read-only)")
-    read.add_argument("--kind", choices=kinds, required=True)
+    read.add_argument("--kind", choices=KINDS, required=True)
     read.add_argument("--negative", action="append", default=[], metavar="A=B",
                       help="dup only: a named negative pair, two shown site names")  # fmt: skip
+    read.add_argument(
+        "--dry-run", action="store_true",
+        help="print the cases and the pool they are drawn from; read and write nothing",
+    )  # fmt: skip
     export_cmd = sub.add_parser("export", help="export every case as a verdict question")
-    export_cmd.add_argument("--kind", choices=kinds, required=True)
+    export_cmd.add_argument("--kind", choices=KINDS, required=True)
     export_cmd.add_argument("--handoff", type=Path, required=True)
     check = sub.add_parser("gold-check", help="hold the gold answers to what was known")
-    check.add_argument("--kind", choices=kinds, required=True)
+    check.add_argument("--kind", choices=KINDS, required=True)
     check.add_argument("--handoff", type=Path, required=True)
+    shape = sub.add_parser("check-answer", help="the shape check of an answer to a calibration")
+    shape.add_argument("--stage-run", type=Path, required=True,
+                       help="the calibration directory, <run>/calibration/<kind>")  # fmt: skip
+    shape.add_argument("--round", required=True)
+    shape.add_argument("--label", required=True)
+    shape.add_argument("--text-file", type=Path, required=True)
     fm = sub.add_parser("false-merges", help="count the MERGEs a re-answer made against the gold")
     fm.add_argument("--comparison", type=Path, required=True)
     args = ap.parse_args(argv)
-    run = common.run_dir(args.root)
     try:
         if args.command == "false-merges":
             print(false_merges(json.loads(args.comparison.read_text(encoding="utf-8"))))
             return 0
+        if args.command == "check-answer":
+            problem = check_answer(
+                rounds.resolve(args.stage_run, args.root),
+                args.round,
+                args.label,
+                args.text_file.read_text(encoding="utf-8"),
+            )
+            print(problem or "shape ok")
+            return 1 if problem else 0
+        run = common.run_dir(args.root)
         out = cal_dir(run, args.kind)
-        stage = dup_judge.STAGE_VERDICT if args.kind == "dup" else parent_judge.STAGE_VERDICT
+        stage = STAGES[args.kind]
         if args.command == "read":
             exported = export.load_export(run / common.EXPORT_FILE)
+            pool: dict[str, Any] = {}
             if args.kind == "dup":
                 extra = [
                     resolve_named(exported.shown, *spec.split("=", 1)) for spec in args.negative
@@ -511,25 +747,32 @@ def main(argv: Sequence[str] | None = None) -> int:
                     extra_negatives=extra,
                 )
             else:
-                cases = parent_cases(
-                    common.read_jsonl(DUP_PAIRS), common.rows_by_id(exported.shown)
+                from identity.entities import default_store
+
+                store = default_store(args.root)
+                cases, pool = parent_pool(
+                    common.read_jsonl(DUP_PAIRS),
+                    common.rows_by_id(exported.shown),
+                    candidates=common.read_jsonl(run / parents.OUTPUT),
+                    entity_of=lambda qid: store.get(qid)[0],
+                    n_positive=N_PARENT_POSITIVES,
+                    n_negative=N_PARENT_NEGATIVES,
                 )
-            ids = sorted({s for c in cases for s in c.sites()})
-            read_facts(out / "READ.jsonl", ids)
-            common.write_jsonl(
-                out / "CASES.jsonl",
-                [
-                    {"case_id": c.case_id, "kind": c.kind, "a": c.a, "b": c.b,
-                     "expected": c.expected, "source": c.source}
-                    for c in cases
-                ],
-            )  # fmt: skip
-            counts = {k: sum(1 for c in cases if c.kind == k) for k in ("positive", "negative")}
-            print(json.dumps({"cases": len(cases), **counts, "sites": len(ids)}, indent=1))
+            summary = _counts(cases)
+            if args.dry_run:
+                names = {r["id"]: r["name"] for r in exported.shown}
+                print(json.dumps({**summary, "pool": pool, "dry_run": True, "cases_drawn": [
+                    {**row, "a_name": names.get(row["a"]), "b_name": names.get(row["b"])}
+                    for row in _case_rows(cases)
+                ]}, ensure_ascii=False, indent=1))  # fmt: skip
+                return 0
+            read_facts(out / READ_FILE, sorted({s for c in cases for s in c.sites()}))
+            common.write_jsonl(out / rounds.CASES_FILE, _case_rows(cases))
+            print(json.dumps({**summary, "pool": pool}, ensure_ascii=False, indent=1))
             return 0
-        cases = _load_cases(run, args.kind)
+        cases = load_cases(out)
         ids = sorted({s for c in cases for s in c.sites()})
-        facts = parse_facts((out / "READ.jsonl").read_text(encoding="utf-8"), ids)
+        facts = parse_facts((out / READ_FILE).read_text(encoding="utf-8"), ids)
         wiki = load_cache(args.root)
         if args.command == "export":
             if args.kind == "dup":

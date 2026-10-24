@@ -64,6 +64,8 @@ STAGE_RECHECK = "dup-recheck"
 ROLE_VERDICT = "web_verifier"
 #: The recheck is the adversarial Opus's; the pilot judge (Opus xhigh) reads the first ten clusters.
 ROLES_RECHECK = ("adversarial", "pilot_judge")
+#: The `pair_calibration.py` kind whose gold rounds ask this module's verdict questions.
+CALIBRATION_KIND = "dup"
 VERDICTS = ("DISTINCT", "MERGE", "PART_OF", "WRONG_ID")
 RECHECK_DECISIONS = ("CONFIRM", "RETARGET", "REJECT")
 #: The default distance a survivor may be at, `lane.DUP_RETIRE_METRES`, the owner-case list's cap.
@@ -896,7 +898,7 @@ For each question:
 3. Write only the JSON object the prompt specifies to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is fetched, your verdict is not judged):
-   {python} {run_tool} check-answer --stage {stage} --round {round} --label <label> \\
+   {check} --label <label> \\
 --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
@@ -921,33 +923,40 @@ def brief(
 ) -> str:
     """The instruction of the agent that answers one batch of one round.
 
-    `stage_run` and `handoff` point a calibration's brief at its own rounds and at the copy of the
-    pool the role re-answers into; `check=False` drops the shape check, which a copy has no run for;
-    `role` names the role the agent answers in when it is not the stage's first (the pilot judge
-    rechecks the first clusters)."""
+    `stage_run` points the brief at another rounds directory than the run's: a pair calibration's
+    (`pair_calibration.py`, `<run>/calibration/dup`), whose gold round is answered by the pilot judge
+    into its own handoff and re-answered by the role under calibration into the copy `handoff` names
+    (`rounds.brief_role`); its shape check is `pair_calibration.py check-answer`, which reads the
+    calibration's own cases. `check=False` drops the shape check; `role` names the role the agent
+    answers in when it is not the default (the pilot judge rechecks the first clusters). A
+    production `dup-verdict` round never briefs the pilot judge."""
     import roles as RO
 
     record = rounds.find_round(stage_run or dup_run(run), stage, round_name)
     if batch_id not in record.batches:
         raise rounds.RoundError(f"{batch_id} is no batch of {stage} round {round_name}")
-    allowed = (ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK
-    role = role or allowed[0]
-    if role not in allowed:
-        raise rounds.RoundError(f"{role} is no role of {stage}: it asks {' or '.join(allowed)}")
     where = handoff or record.handoff
+    gold = rounds.is_gold_run(stage_run, CALIBRATION_KIND)
+    role = rounds.brief_role(
+        stage, role, (ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK, gold=gold,
+        into_round_handoff=rounds.same_handoff(where, record.handoff),
+    )  # fmt: skip
     text = BRIEF.format(
         batch=batch_id, stage=stage, round=round_name, role=role, model=RO.role(role).model,
         count=len(record.batches[batch_id]), handoff=where,
-        scratch=f"{where}-scratch/{batch_id}", python="./.venv/Scripts/python.exe",
-        run_tool="scripts/remediation/identity/dup_judge.py",
+        scratch=f"{where}-scratch/{batch_id}", python=rounds.PYTHON,
         handoff_tool="scripts/remediation/opus_handoff.py",
+        check=rounds.check_command(
+            "scripts/remediation/identity/dup_judge.py", stage, round_name,
+            gold_run=stage_run if gold else None,
+        ),
     )  # fmt: skip
     return text if check else _without_check(text)
 
 
 def _without_check(text: str) -> str:
-    """The brief of a calibration copy: it has no run to check an answer's shape against, so step 4
-    is dropped and step 5 becomes step 4."""
+    """The brief without its shape check (`--no-check`): step 4 is dropped and step 5 becomes
+    step 4."""
     head, _, rest = text.partition("4. Check its shape")
     _, _, tail = rest.partition("5. Record it")
     return head + "4. Record it" + tail
@@ -1005,11 +1014,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     brief_cmd.add_argument(
         "--role", help="the role the agent answers in (default: the stage's first)"
     )
-    brief_cmd.add_argument("--stage-run", type=Path, help="a calibration's own rounds directory")
-    brief_cmd.add_argument("--handoff", help="the handoff directory the agent answers into")
     brief_cmd.add_argument(
-        "--no-check", action="store_true", help="drop the shape check (a calibration copy)"
+        "--stage-run", type=Path, help="a pair calibration's directory, <run>/calibration/<kind>"
     )
+    brief_cmd.add_argument("--handoff", help="the handoff directory the agent answers into")
+    brief_cmd.add_argument("--no-check", action="store_true", help="drop the shape check")
     check = sub.add_parser("check-answer")
     check.add_argument("--stage", choices=(STAGE_VERDICT, STAGE_RECHECK), required=True)
     check.add_argument("--round", required=True)
