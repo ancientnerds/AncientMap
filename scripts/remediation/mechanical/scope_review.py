@@ -111,7 +111,7 @@ from mechanical.plan import (  # noqa: E402
     write_skipped_jsonl,
     write_tagged_export,
 )
-from pipeline.normalizers.dates import OCEANIA, e3_region, passes_date_cutoff  # noqa: E402
+from pipeline.normalizers.dates import OCEANIA, e3_region, passes_e3_cutoff  # noqa: E402
 from pipeline.utils.public_sites import RETIRED  # noqa: E402
 
 DEFAULT_OUT = REPO / "output" / "remediation" / SCOPE_REVIEW_ROOT
@@ -715,7 +715,7 @@ def reinstatements(export: Export) -> list[tuple[dict[str, Any], dict[str, Any]]
             continue
         if not str(site["scope_reason"] or "").startswith("E3: period_start"):
             continue
-        if e3_region(site) == OCEANIA and passes_date_cutoff(site):
+        if e3_region(site) == OCEANIA and passes_e3_cutoff(site):
             out.append((site, entry))
     return out
 

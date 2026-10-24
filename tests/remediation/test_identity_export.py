@@ -49,10 +49,16 @@ class TestTheReadIsReadOnly:
         assert tuple(kind for kind, _ in export.PARTS) == export.KINDS
 
     def test_the_window_in_the_shown_part_is_the_scope_lanes_own_rule(self) -> None:
-        from mechanical.lane import outside_e3_window
+        """D58: the window is the label rule, and the borderline flag rides along."""
+        from mechanical.lane import label_borderline_sql, outside_e3_window, outside_label_window
 
-        assert outside_e3_window("u.") in export.SHOWN_SQL
-        assert outside_e3_window("u.") in export.PERIOD_JOURNAL_SQL
+        assert outside_label_window("u.") in export.SHOWN_SQL
+        assert outside_label_window("u.") in export.PERIOD_JOURNAL_SQL
+        assert f"coalesce({label_borderline_sql('u.')}, false) AS label_borderline" in (
+            export.SHOWN_SQL
+        )
+        assert label_borderline_sql("u.") in export.PERIOD_JOURNAL_SQL
+        assert outside_e3_window("u.") not in export.SHOWN_SQL
 
     def test_the_period_journal_keeps_rollbacks_and_leaves_out_probes(self) -> None:
         # a reversal is the last row of its column: leaving it out names the reverted write

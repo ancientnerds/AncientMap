@@ -16,7 +16,12 @@ label like `2026-10-12` or `2026-10-12b`; a stamp is applied once):
   an alias in `<kind>-alias-<wave>`, a chunk of the shared writer (`identity.name_write`);
 * `spoken-<wave>` (D23) - `unified_sites.spoken_name` (migration 0029), filled where it is NULL, on
   the premise of the name it was derived from. A spoken name is never blank and never longer than
-  `SPOKEN_MAX_CHARS`.
+  `SPOKEN_MAX_CHARS`;
+* `scope-unretire-<wave>` (D58 and D50) - `scope_status` and `scope_reason` of a retired site, back
+  to `in_scope` (`mechanical/scope_unretire.py` plans it): a date retirement the label rule no
+  longer carries, and a D50 mystery site once its description is a lane-E dispute enrichment. The
+  premise holds the description too, and an invariant checks in the transaction that every
+  un-retired site carries one of the two reasons and what that reason rests on.
 
 `mechanical.lane.resolve_lane` reaches these lazily (`lane_of`), like the other wave families.
 """
@@ -30,20 +35,24 @@ from mechanical.lane import (
     _CURATED_ROWS,
     _NAME_KEY_DIFFERS,
     _STATUS_WITHOUT_REASON,
-    _UNDECIDED_OUT_OF_WINDOW_O7,
+    D50_DISPUTED_SITES,
     LOCK_TIMEOUT,
     NAME_CELLS,
     NAME_FIX_PREMISE_SQL,
     NOT_A_SITE_PREFIX,
     SCOPE_REVIEW_PREMISE_SQL,
     STATEMENT_TIMEOUT,
+    UNDECIDED_OUTSIDE_LABEL_WINDOW,
     UNIFIED_SITES,
     Column,
     Lane,
     Residual,
     SiteInvariant,
+    in_medieval_old_world_sql,
     journal_readback,
+    label_borderline_sql,
     name_journal_metrics,
+    outside_label_window,
     scope_status_counts,
     sql_literal,
 )
@@ -55,14 +64,25 @@ SCOPE_WINDOW_LANE = re.compile(rf"^scope-window-{WAVE}\Z")
 NAME_CLEAN_LANE = re.compile(rf"^name-clean-{WAVE}\Z")
 RETARGET_NAME_LANE = re.compile(rf"^retarget-name-{WAVE}\Z")
 SPOKEN_LANE = re.compile(rf"^spoken-{WAVE}\Z")
+SCOPE_UNRETIRE_LANE = re.compile(rf"^scope-unretire-{WAVE}\Z")
 #: The lane families of this module, for `resolve_lane` and the read-back choice.
-LANE_PATTERNS = (SCOPE_WINDOW_LANE, NAME_CLEAN_LANE, RETARGET_NAME_LANE, SPOKEN_LANE)
+LANE_PATTERNS = (
+    SCOPE_WINDOW_LANE,
+    NAME_CLEAN_LANE,
+    RETARGET_NAME_LANE,
+    SPOKEN_LANE,
+    SCOPE_UNRETIRE_LANE,
+)
 
 SCOPE_WINDOW_ROOT = "mechanical_scope_window"
 NAME_ROOT = "mechanical_names"
 SPOKEN_ROOT = "mechanical_spoken"
+SCOPE_UNRETIRE_ROOT = "mechanical_scope_unretire"
 #: The reason prefix of a retirement for the date (`E3: period_start N is past the cutoff; <quote>`).
 DATE_RETIRED_PREFIX = "E3: period_start"
+#: The reason prefix of a retirement by the label (D58: a borderline entry whose subject is
+#: Byzantine, Crusader or Norse; `identity.scope_judge.MEDIEVAL_SUBJECT`).
+LABEL_RETIRED_PREFIX = "D58: a medieval Old World subject"
 #: A spoken name is a few words the narrator says in one breath; the triage's own bound
 #: (`identity.names_triage.SPOKEN_MAX_CHARS`) is the same 40 characters, the lane allows a little
 #: more because a model may keep a long attested form the rule would have flagged.
@@ -82,8 +102,8 @@ def scope_window_lane(wave: str) -> Lane:
         label="D20 scope window",
         plan_table="_scope_window_plan",
         out_dir_name=f"{SCOPE_WINDOW_ROOT}/{wave}",
-        post_commit_residual=_UNDECIDED_OUT_OF_WINDOW_O7,
-        rehearsal_residual=_UNDECIDED_OUT_OF_WINDOW_O7,
+        post_commit_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,
+        rehearsal_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,
         premise_sql=SCOPE_REVIEW_PREMISE_SQL,
         lock_timeout=LOCK_TIMEOUT,
         statement_timeout=STATEMENT_TIMEOUT,
@@ -104,8 +124,8 @@ def scope_window_readback(lane: Lane) -> str:
         [
             *scope_status_counts(),
             (
-                _UNDECIDED_OUT_OF_WINDOW_O7.metric,
-                _CURATED_ROWS + _UNDECIDED_OUT_OF_WINDOW_O7.predicate,
+                UNDECIDED_OUTSIDE_LABEL_WINDOW.metric,
+                _CURATED_ROWS + UNDECIDED_OUTSIDE_LABEL_WINDOW.predicate,
             ),
             (
                 "curated rows retired for their date",
@@ -116,6 +136,11 @@ def scope_window_readback(lane: Lane) -> str:
                 "curated rows retired as no archaeological site",
                 _CURATED_ROWS
                 + f"scope_status = 'retired' AND scope_reason LIKE {sql_literal(NOT_A_SITE_PREFIX + '%')}",
+            ),
+            (
+                "curated rows retired as a medieval Old World subject",
+                _CURATED_ROWS
+                + f"scope_status = 'retired' AND scope_reason LIKE {sql_literal(LABEL_RETIRED_PREFIX + '%')}",
             ),
             _STATUS_WITHOUT_REASON,
             (
@@ -235,11 +260,166 @@ def spoken_readback(lane: Lane) -> str:
     )
 
 
+# ---------------------------------------------------------------- the un-retire (D58 and D50)
+#: The reason prefixes of an un-retirement (`scope_unretire.py` writes the texts): a date
+#: retirement the label rule no longer carries, a museum whose exhibits the label rule keeps, a D50
+#: mystery site shown as disputed.
+D58_REASON_PREFIX = "D58 label rule (owner, 2026-10-24): "
+D58_MUSEUM_REASON_PREFIX = "D58 label rule (owner, 2026-10-24), museum rule: "
+D50_REASON_PREFIX = "D50 disputed site (owner, 2026-10-19): "
+#: What an un-retirement rests on, as the database prints it: the entry's name, type, point,
+#: country and dates (`SCOPE_REVIEW_PREMISE_SQL`'s, which the label rule reads) and the md5 of its
+#: description - a D50 site is shown only with the dispute text the plan checked, and a text
+#: rewritten between plan and apply is refused by guard 5.
+SCOPE_UNRETIRE_PREMISE_SQL = (
+    SCOPE_REVIEW_PREMISE_SQL.removesuffix(")") + ", md5(coalesce(u.description, '')))"
+)
+
+
+def _d50_ids_sql() -> str:
+    return ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
+
+
+def dispute_enriched_sql(alias: str = "u") -> str:
+    """SQL: the site's description is a lane-E dispute enrichment (D21 written for D50): a journal
+    row of `unified_sites.description` of this site whose new value is the description as it stands,
+    whose evidence is an enrichment's (`wc4.EVIDENCE_DECISION_ENRICH`), carries the adjudicated
+    dispute brief and appended a sentence of each position (`wc4.DISPUTE_A`, `wc4.DISPUTE_B`).
+    Postgres' `->`/`->>` on the jsonb evidence; SQLite reads the same operators on JSON text, which
+    is where the tests evaluate it."""
+    from phase4 import wc4
+
+    a = alias
+    classes = f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'classes'"
+    return (
+        "EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.table_name = 'unified_sites' "
+        f"AND l.column_name = 'description' AND l.row_pk = CAST({a}.id AS text) "
+        f"AND l.new_value = {a}.description "
+        f"AND l.evidence->>'decision' = {sql_literal(wc4.EVIDENCE_DECISION_ENRICH)} "
+        f"AND l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'dispute' IS NOT NULL "
+        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_A}{chr(34)}%')} "
+        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})"
+    )
+
+
+def unretire_violation_sql() -> str:
+    """SQL over the written site `u`, TRUE for an un-retired site that rests on nothing: every
+    planned site carries one of the three reasons, and what that reason says holds in the same
+    transaction -
+
+    * `D58_REASON_PREFIX`: a site no D50 site, inside the label window and not label-borderline;
+    * `D58_MUSEUM_REASON_PREFIX`: a Museum outside the medieval Old World, no D50 site;
+    * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment."""
+    d50 = f"CAST(u.id AS text) IN ({_d50_ids_sql()})"
+    date_kept = (
+        f"(u.scope_reason LIKE {sql_literal(D58_REASON_PREFIX + '%')} AND NOT {d50} "
+        f"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')})"
+    )
+    museum_kept = (
+        f"(u.scope_reason LIKE {sql_literal(D58_MUSEUM_REASON_PREFIX + '%')} AND NOT {d50} "
+        f"AND u.site_type = 'Museum' AND NOT {in_medieval_old_world_sql('u.')})"
+    )
+    disputed = (
+        f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "
+        f"AND {dispute_enriched_sql('u')})"
+    )
+    return f"NOT ({date_kept} OR {museum_kept} OR {disputed})"
+
+
+def scope_unretire_lane(wave: str) -> Lane:
+    """The un-retire's write of one wave (D58, D50): its own stamp, key prefix and directory. The
+    one transition is `retired` -> `in_scope` with a new reason; its rollback retires the site
+    again with the reason it had."""
+    if SCOPE_UNRETIRE_LANE.match(f"scope-unretire-{wave}") is None:
+        raise ValueError(f"{wave!r} is not a wave label like 2026-10-24 or 2026-10-24b")
+    return Lane(
+        name=f"scope-unretire-{wave}",
+        key_prefix=f"scope-unretire-{wave}",
+        run_stamp=f"{wave}_mechanical-scope-unretire",
+        test_id="D58/scope-unretire",
+        confidence="authoritative",
+        label="D58 D50 scope unretire",
+        plan_table="_scope_unretire_plan",
+        out_dir_name=f"{SCOPE_UNRETIRE_ROOT}/{wave}",
+        post_commit_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,
+        rehearsal_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,
+        premise_sql=SCOPE_UNRETIRE_PREMISE_SQL,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        target=UNIFIED_SITES,
+        cells=(
+            Column("scope_status", "text", allowed_new_values=(IN_SCOPE,)),
+            Column("scope_reason", "text"),
+        ),
+        site_invariants=(
+            SiteInvariant(
+                says="planned site(s) leave retired without the reason D58 or D50 gives them",
+                predicate=unretire_violation_sql(),
+                probe_column="scope_reason",
+                probe_values=(
+                    "a reason that names no rule",
+                    "D58 label rule probe",
+                    D50_REASON_PREFIX + "a probe on a site without a dispute text",
+                ),
+            ),
+        ),
+    )
+
+
+#: The un-retire's read-back metrics over `unified_sites u`.
+_CURATED_U = "FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND "
+
+
+@functools.cache
+def scope_unretire_readback(lane: Lane) -> str:
+    """The read-only verification of an un-retire wave, before and after its write: the scope
+    counts, the D58 residual, the date retirements the label window keeps (the wave's own
+    population, borderline ones apart), the D50 sites shown and those shown without their dispute
+    text (0, always), and the statuses the run wrote."""
+    stamp = sql_literal(lane.run_stamp)
+    d50 = f"CAST(u.id AS text) IN ({_d50_ids_sql()})"
+    return journal_readback(
+        lane,
+        [
+            *scope_status_counts(),
+            (
+                UNDECIDED_OUTSIDE_LABEL_WINDOW.metric,
+                _CURATED_ROWS + UNDECIDED_OUTSIDE_LABEL_WINDOW.predicate,
+            ),
+            (
+                "curated rows retired for their date inside the D58 window, not borderline",
+                _CURATED_U
+                + "u.scope_status = 'retired' AND u.scope_reason LIKE "
+                + f"{sql_literal(DATE_RETIRED_PREFIX + '%')} AND NOT {outside_label_window('u.')} "
+                + f"AND NOT {label_borderline_sql('u.')}",
+            ),
+            (
+                "curated rows retired for their date that are D58 borderline",
+                _CURATED_U
+                + "u.scope_status = 'retired' AND u.scope_reason LIKE "
+                + f"{sql_literal(DATE_RETIRED_PREFIX + '%')} AND {label_borderline_sql('u.')}",
+            ),
+            ("curated D50 sites shown", _CURATED_U + f"{d50} AND {not_retired('u')}"),
+            (
+                "curated D50 sites shown without a dispute-enriched description",
+                _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {dispute_enriched_sql('u')}",
+            ),
+            _STATUS_WITHOUT_REASON,
+            (
+                "journal rows for this run that write a status other than in_scope",
+                f"FROM remediation_change_log WHERE run_stamp = {stamp} AND "
+                "column_name = 'scope_status' AND new_value IS DISTINCT FROM 'in_scope'",
+            ),
+        ],
+    )
+
+
 def lane_of(name: str) -> Lane:
-    """`scope-window-2026-10-12`, `name-clean-...`, `retarget-name-...` or `spoken-...` -> the
-    lane; `KeyError` for any other name."""
+    """`scope-window-2026-10-12`, `scope-unretire-...`, `name-clean-...`, `retarget-name-...` or
+    `spoken-...` -> the lane; `KeyError` for any other name."""
     for pattern, build in (
         (SCOPE_WINDOW_LANE, scope_window_lane),
+        (SCOPE_UNRETIRE_LANE, scope_unretire_lane),
         (SPOKEN_LANE, spoken_lane),
         (NAME_CLEAN_LANE, lambda wave: name_lane("name-clean", wave)),
         (RETARGET_NAME_LANE, lambda wave: name_lane("retarget-name", wave)),
@@ -254,6 +434,8 @@ def readback(lane: Lane) -> str:
     """The read-only verification text of any lane of this module."""
     if SCOPE_WINDOW_LANE.match(lane.name):
         return scope_window_readback(lane)
+    if SCOPE_UNRETIRE_LANE.match(lane.name):
+        return scope_unretire_readback(lane)
     if SPOKEN_LANE.match(lane.name):
         return spoken_readback(lane)
     if NAME_CLEAN_LANE.match(lane.name) or RETARGET_NAME_LANE.match(lane.name):

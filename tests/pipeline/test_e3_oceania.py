@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """The E3 scope rule with Oceania (owner decision O7, 2026-09-26: "Ozeanien wie Amerika").
 
-`passes_date_cutoff` is the one rule the loader, the prospector, Lyra's promotion gate and the
-remediation's census and lanes share (the lanes render it as SQL from the same lists, pinned in
+`passes_e3_cutoff` is the E3 rule (`passes_date_cutoff` until the label rule D58 of 2026-10-24,
+`tests/pipeline/test_scope_label_rule.py`) that the remediation's census and delivered lanes
+share (the lanes render it as SQL from the same lists, pinned in
 `tests/remediation/test_mechanical_scope.py`). Oceania is decided by the row's country - the UN
 M49 list - or, for the rows that carry a state's name, by the Pacific island group the point lies
 on. The coordinates below are production's rows where one exists (read-only, 2026-09-26).
@@ -176,7 +177,9 @@ class TestTheCutoff:
         ],
     )
     def test_passes_date_cutoff(self, record: dict, passes: bool) -> None:
-        assert D.passes_date_cutoff(record) is passes
+        """The E3 rule with O7, under its own name since the label rule D58 took
+        `passes_date_cutoff` (`tests/pipeline/test_scope_label_rule.py`)."""
+        assert D.passes_e3_cutoff(record) is passes
 
     def test_period_end_decides_before_period_start(self) -> None:
         record = row("Australia", -37.21, 144.81, 1000)

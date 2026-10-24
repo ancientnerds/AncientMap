@@ -938,6 +938,26 @@ def test_the_population_is_every_march_text_that_stays_and_lists_the_rest(tmp_pa
     ]  # fmt: skip
 
 
+def test_a_retired_d50_site_is_asked_and_every_other_retired_site_is_not(tmp_path: Path) -> None:
+    """D50 (owner, 2026-10-19): the six retired mystery sites return as disputed sites once their
+    description is checked and enriched, so WC, the repair passes and lane E ask them; any other
+    retired site stays listed `retired` (`cli.hidden`)."""
+    from mechanical.lane import D50_DISPUTED_SITES
+
+    baltic = next(s for s, n in D50_DISPUTED_SITES.items() if n == "Baltic Sea Anomaly")
+    rows = [
+        FX.row(baltic, FX.TEXT_A, raw_data=FX.legacy_raw(FX.TEXT_A), scope_status="retired"),
+        FX.row(FX.SITE_D, "Retired text.", raw_data=None, scope_status="retired", name="Gone"),
+    ]
+    run, _ = _run(tmp_path, rows=rows)
+    population = json.loads((run / C.POPULATION_FILE).read_text(encoding="utf-8"))
+    assert list(C.read_sites(run)) == [baltic]
+    assert population["listed_counts"] == {"retired": 1}
+    assert C.hidden({"id": FX.SITE_D, "scope_status": "retired"})
+    assert not C.hidden({"id": baltic, "scope_status": "retired"})
+    assert not C.hidden({"id": FX.SITE_D, "scope_status": "pending"})
+
+
 @pytest.mark.parametrize(
     ("raw", "reason"),
     [

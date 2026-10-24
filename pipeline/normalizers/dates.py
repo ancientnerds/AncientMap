@@ -6,8 +6,15 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-# Global date cutoffs - defines the project scope: Ancient History (owner decision E3, 2026-09-19;
-# Oceania joined the Americas' cutoff by decision O7, 2026-09-26: "Ozeanien wie Amerika")
+# Global date cutoffs - defines the project scope: Ancient History.
+#
+# The rule in force is the owner's LABEL rule (decision D58, 2026-10-24): only the medieval Old
+# World - Europe, Byzantium and the Vikings - is out after 500 AD; every other region keeps its sites
+# through 1500 AD (`scope_region`, `LABEL_CUTOFFS`, `passes_date_cutoff`).
+#
+# The numeric rule it replaces (owner decision E3, 2026-09-19; Oceania joined the Americas' cutoff by
+# decision O7, 2026-09-26: "Ozeanien wie Amerika") stays here because the delivered scope lanes were
+# rehearsed and applied with it (`e3_region`, `E3_CUTOFFS`, `passes_e3_cutoff`):
 # Americas: Pre-Columbian (up to 1500 AD)
 # Oceania: pre-contact, like the Americas (up to 1500 AD)
 # Rest of World: Classical/Ancient (up to 500 AD)
@@ -203,6 +210,190 @@ def e3_region(record: Mapping[str, Any]) -> str | None:
     return REST_OF_WORLD
 
 
+# ------------------------------------------------------------------- the label rule (D58, 2026-10-24)
+#: D58 (owner, 2026-10-24): "only the medieval Old World of Europe, Byzantium and the Vikings is
+#: out; non-European sites of 500-1500 stay in". The rule was always a label - the word "medieval"
+#: carries the region in itself (no Americanist calls the Maya of 1200 AD medieval) - and Lalibela,
+#: Angkor, Great Zimbabwe, Ife, Nara and the Islamic Golden Age are its named examples of what stays.
+#: In machine form it is a region test: a site of the medieval Old World keeps the 500 AD cutoff,
+#: every other site has 1500 AD.
+MEDIEVAL_OLD_WORLD = "medieval Old World"
+LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 500
+LABEL_CUTOFF_REST_OF_WORLD = 1500
+#: The four regions of the label rule, in the order `scope_region` tests them, and their cutoffs.
+LABEL_CUTOFFS: Mapping[str, int] = {
+    OCEANIA: DATE_CUTOFF_OCEANIA,
+    AMERICAS: DATE_CUTOFF_AMERICAS,
+    MEDIEVAL_OLD_WORLD: LABEL_CUTOFF_MEDIEVAL_OLD_WORLD,
+    REST_OF_WORLD: LABEL_CUTOFF_REST_OF_WORLD,
+}
+
+#: The medieval Old World, by the `country` a row carries (compared as `country_key` reads it):
+#:
+#: * **Europe** as the United Nations geoscheme draws it (M49 region 150: Eastern, Northern,
+#:   Southern and Western Europe) - the whole of Russia is Eastern Europe there, so Russia is
+#:   listed and its Asian part taken out by `NON_EUROPEAN_PARTS` (east of the Urals, 60 E) -, the
+#:   four nations the curated rows name instead of the United Kingdom, Kosovo, and the sea names
+#:   the curated rows carry for a point off a European coast ("Baltic Sea");
+#: * **Byzantium**: Turkiye (Anatolia and Thrace, the empire's heartland from 500 to 1453; the
+#:   Seljuk and Ottoman sites of the same centuries count with it - the rule asks the region, not
+#:   the dynasty) and Cyprus (Byzantine 395-1191). The empire's other lands of 500-1500 - the
+#:   Levant, Egypt and Byzantine Africa until the Arab conquests of 636-698, and the Crusader states
+#:   of 1099-1291 there - are `LABEL_BORDERLINE_COUNTRIES`: there the subject decides, not the place;
+#: * **the Vikings**: Scandinavia, Iceland and the British Isles are Europe already; Norse Greenland
+#:   is a borderline country, and L'Anse aux Meadows is named by its item (`VIKING_SUBJECT_QIDS`).
+#:
+#: As with Oceania, the ISO 3166-1 alpha-2 codes are listed too (`geonames` and `dare` store them).
+EUROPE_ISO_CODES = frozenset(
+    {
+        # Eastern Europe
+        "by", "bg", "cz", "hu", "pl", "md", "ro", "ru", "sk", "ua",
+        # Northern Europe
+        "ax", "dk", "ee", "fo", "fi", "gg", "is", "ie", "im", "je", "lv", "lt", "no", "sj", "se",
+        "gb", "uk",
+        # Southern Europe
+        "al", "ad", "ba", "hr", "gi", "gr", "va", "it", "mt", "me", "mk", "pt", "sm", "rs", "si",
+        "es", "xk",
+        # Western Europe
+        "at", "be", "fr", "de", "li", "lu", "mc", "nl", "ch",
+    }
+)  # fmt: skip
+BYZANTIUM_ISO_CODES = frozenset({"tr", "cy"})
+MEDIEVAL_OLD_WORLD_COUNTRIES = (
+    EUROPE_ISO_CODES
+    | BYZANTIUM_ISO_CODES
+    | frozenset(
+        {
+            # Eastern Europe
+            "belarus", "bulgaria", "czechia", "czech republic", "hungary", "poland", "moldova",
+            "republic of moldova", "romania", "russia", "russian federation", "slovakia",
+            "ukraine",
+            # Northern Europe
+            "aland islands", "åland islands", "denmark", "estonia", "faroe islands", "finland",
+            "guernsey", "iceland", "ireland", "isle of man", "jersey", "latvia", "lithuania",
+            "norway", "svalbard and jan mayen", "sweden", "united kingdom", "great britain",
+            "england", "scotland", "wales", "northern ireland", "channel islands",
+            # Southern Europe
+            "albania", "andorra", "bosnia and herzegovina", "croatia", "gibraltar", "greece",
+            "holy see", "vatican city", "italy", "malta", "montenegro", "north macedonia",
+            "macedonia", "portugal", "san marino", "serbia", "slovenia", "spain", "kosovo",
+            # Western Europe
+            "austria", "belgium", "france", "germany", "liechtenstein", "luxembourg", "monaco",
+            "netherlands", "the netherlands", "switzerland",
+            # the seas a curated point off a European coast names
+            "baltic sea", "north sea",
+            # Byzantium
+            "türkiye", "turkiye", "turkey", "cyprus", "northern cyprus",
+        }
+    )
+)  # fmt: skip
+
+_ASIAN_RUSSIA = (
+    (60.0, -90.0, 180.0, 90.0),  # east of the Urals: Siberia and the Russian Far East
+    (-180.0, -90.0, -170.0, 90.0),  # Chukotka east of the antimeridian
+)
+_CANARY_ISLANDS = ((-18.5, 27.3, -13.0, 29.5),)  # the Guanche islands, conquered 1402-1496
+_FRENCH_INDIAN_OCEAN = (
+    (55.2, -21.4, 55.9, -20.8),  # Reunion
+    (44.9, -13.1, 45.4, -12.6),  # Mayotte (Swahili coast)
+)
+
+#: The parts of a medieval Old World state that lie outside it: a row whose `country_key` is the key
+#: and whose point lies in one of the key's boxes (`(lon_min, lat_min, lon_max, lat_max)`, the edges
+#: counting) is not in the medieval Old World. The Americas' and Oceania's parts of these states
+#: (French Guiana, Greenland, French Polynesia, ...) are placed before this test, by
+#: `in_oceania` and the Americas' longitude window.
+NON_EUROPEAN_PARTS: Mapping[str, tuple[tuple[float, float, float, float], ...]] = {
+    "russia": _ASIAN_RUSSIA,
+    "russian federation": _ASIAN_RUSSIA,
+    "ru": _ASIAN_RUSSIA,
+    "spain": _CANARY_ISLANDS,
+    "es": _CANARY_ISLANDS,
+    "france": _FRENCH_INDIAN_OCEAN,
+    "fr": _FRENCH_INDIAN_OCEAN,
+}
+
+#: The countries where the label - not the region - decides a site dated 500-1500 AD: the window
+#: keeps them through 1500 (they are not Europe), but a site there may be of the medieval Old World
+#: by its subject, and a scope verdict asks it (`label_borderline`):
+#:
+#: * the Levant (Syria, Lebanon, Israel, Palestine, Jordan): Byzantine until 636-640, the Crusader
+#:   states of 1099-1291; the Umayyad, Abbasid, Fatimid, Ayyubid and Mamluk sites stay;
+#: * Egypt and Byzantine Africa (Libya, Tunisia, Algeria): Byzantine until 641 and 698;
+#: * the Caucasus (Georgia, Armenia, Azerbaijan): Christian kingdoms under Byzantine influence, not
+#:   the empire itself;
+#: * Greenland: the Norse settlements of 985-1450 are the Vikings; the Thule and Dorset sites stay.
+LABEL_BORDERLINE_COUNTRIES = frozenset(
+    {
+        "syria", "lebanon", "israel", "palestine", "state of palestine", "west bank", "gaza",
+        "jordan", "egypt", "libya", "tunisia", "algeria", "georgia", "armenia", "azerbaijan",
+        "greenland",
+        "sy", "lb", "il", "ps", "jo", "eg", "ly", "tn", "dz", "ge", "am", "az", "gl",
+    }
+)  # fmt: skip
+
+#: Sites the label puts out by their subject wherever they lie: the Viking settlement of
+#: L'Anse aux Meadows in Newfoundland (D58: "L'Anse aux Meadows stays out (Viking subject)"), by
+#: its Wikidata item (read in `site_proposals` on 2026-10-24: Q189113).
+VIKING_SUBJECT_QIDS: Mapping[str, str] = {"Q189113": "L'Anse aux Meadows"}
+
+
+def in_medieval_old_world(country: str | None, lat: float | None, lon: float | None) -> bool:
+    """Whether a row lies in the medieval Old World (Europe and Byzantium): its country is one of
+    `MEDIEVAL_OLD_WORLD_COUNTRIES` and its point does not lie in a non-European part of that state
+    (`NON_EUROPEAN_PARTS`; without a point no part can be told, and the country decides)."""
+    key = country_key(country)
+    if key is None or key not in MEDIEVAL_OLD_WORLD_COUNTRIES:
+        return False
+    if None in (lat, lon):
+        return True
+    return not any(
+        lon_min <= lon <= lon_max and lat_min <= lat <= lat_max
+        for lon_min, lat_min, lon_max, lat_max in NON_EUROPEAN_PARTS.get(key, ())
+    )
+
+
+def scope_region(record: Mapping[str, Any]) -> str | None:
+    """The region of a record under the label rule (D58): `OCEANIA`, `AMERICAS`,
+    `MEDIEVAL_OLD_WORLD` or `REST_OF_WORLD`, or None when it cannot be told - no longitude, or a
+    point outside the Americas and Oceania without a country.
+
+    Oceania first and the Americas by the longitude window second, as in `e3_region`; then the
+    medieval Old World by the country; every other country is the rest of the world.
+    """
+    lon = record.get("lon")
+    if lon is None:
+        return None
+    country = record.get("country")
+    if in_oceania(country, record.get("lat"), lon):
+        return OCEANIA
+    if AMERICAS_LON_MIN <= lon <= AMERICAS_LON_MAX:
+        return AMERICAS
+    if country is None:
+        return None
+    if in_medieval_old_world(country, record.get("lat"), lon):
+        return MEDIEVAL_OLD_WORLD
+    return REST_OF_WORLD
+
+
+def window_date(record: Mapping[str, Any]) -> int | None:
+    """The date the window tests: `period_end` unless it is missing or 0, else `period_start`."""
+    return record.get("period_end") or record.get("period_start")
+
+
+def label_borderline(record: Mapping[str, Any]) -> bool:
+    """Whether the label, not the region, decides the record (D58): it has a longitude, is dated
+    after 500 AD and through 1500 AD, and its country is one of `LABEL_BORDERLINE_COUNTRIES` (none
+    of them Oceania's or the medieval Old World's, so the window keeps the record through 1500). A
+    scope verdict asks whether its subject is Byzantine, Crusader or Norse."""
+    date = window_date(record)
+    if record.get("lon") is None or date is None:
+        return False
+    if not LABEL_CUTOFF_MEDIEVAL_OLD_WORLD < date <= LABEL_CUTOFF_REST_OF_WORLD:
+        return False
+    return country_key(record.get("country")) in LABEL_BORDERLINE_COUNTRIES
+
+
 _BC_AD_RE = re.compile(
     r"^\s*(\d+)\s*(?:-\s*\d+\s*)?(?:(B)\s*\.?\s*C|(?:(A)\s*\.?\s*D))",
     re.IGNORECASE,
@@ -243,26 +434,47 @@ def parse_year(value) -> int | None:
     return None
 
 
-def passes_date_cutoff(record: dict) -> bool:
+def passes_date_cutoff(record: Mapping[str, Any]) -> bool:
     """
-    Check if record passes the GLOBAL regional date cutoff.
+    Check if record passes the GLOBAL regional date cutoff: the label rule (owner decision D58,
+    2026-10-24).
 
     Applied to ALL sources during loading. This defines project scope.
 
-    Rules:
-    - Oceania (`e3_region`: the country, or a Pacific island group of the state named): <= 1500 AD
-    - Americas (lon -170 to -30): Must be <= 1500 AD
-    - Rest of World: Must be <= 500 AD
+    Rules (`scope_region`):
+    - Oceania (the country, or a Pacific island group of the state named): <= 1500 AD
+    - Americas (lon -170 to -30): <= 1500 AD
+    - The medieval Old World (Europe, Byzantium): <= 500 AD
+    - Rest of World (Asia, Africa, the Near East outside Byzantium): <= 1500 AD
     - Records WITHOUT dates: INCLUDED (can't filter unknown)
+    - Records whose region cannot be told (no longitude; outside the Americas and Oceania
+      without a country): INCLUDED
+
+    A record of a `LABEL_BORDERLINE_COUNTRIES` country passes; whether its subject is Byzantine,
+    Crusader or Norse is a scope verdict's question (`label_borderline`), not this check's.
 
     Args:
-        record: Site record dict with period_start, period_end, lat, lon and country fields; a
-            record without a country is placed by its longitude alone
+        record: Site record dict with period_start, period_end, lat, lon and country fields
 
     Returns:
         True if record should be included, False if it should be filtered out
     """
-    # Get the relevant date (prefer period_end, fallback to period_start)
+    date = window_date(record)
+    if date is None:
+        return True  # No date = include (conservative)
+
+    region = scope_region(record)
+    if region is None:
+        return True  # No location = include
+
+    return date <= LABEL_CUTOFFS[region]
+
+
+def passes_e3_cutoff(record: Mapping[str, Any]) -> bool:
+    """The numeric rule D58 replaced (E3 with O7): Oceania and the Americas through 1500 AD, the
+    rest of the world through 500 AD (`e3_region`). Kept for the delivered scope lanes, whose
+    rendered SQL (`mechanical.lane.outside_e3_window`) is this rule negated, and for the E3
+    census (`census/tests/t11_scope_window.py`)."""
     date = record.get("period_end") or record.get("period_start")
     if date is None:
         return True  # No date = include (conservative)

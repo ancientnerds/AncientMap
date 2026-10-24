@@ -654,6 +654,28 @@ def _defect(site_id: str, sha: str, **kw) -> dict[str, Any]:
     return {**line, **kw}
 
 
+def test_a_dispute_defect_of_a_retired_d50_site_is_listed(tmp_path: Path) -> None:
+    """D50: the repair pass reads a retired D50 site's dispute defects (its asserting sentences
+    must go before lane E appends both positions); another retired site stays out."""
+    from mechanical.lane import D50_DISPUTED_SITES
+
+    sun = next(s for s, n in D50_DISPUTED_SITES.items() if n == "Bosnian Pyramid of the Sun")
+    rows = [
+        FX.row(sun, WX.P4_TEXT, raw_data=WX.p4_site_raw(), scope_status="retired"),
+        FX.row(SITE_RET, WX.P4_TEXT, raw_data=WX.p4_site_raw(), scope_status="retired"),
+    ]
+    run = _read(tmp_path, rows)
+    sha = M.text_sha256(WX.P4_TEXT)
+    defects = tmp_path / "ds" / "DISPUTE_DEFECTS.jsonl"
+    defects.parent.mkdir()
+    defects.write_text(
+        "".join(json.dumps(_defect(s, sha)) + "\n" for s in (sun, SITE_RET)), encoding="utf-8"
+    )
+    report = cli.cmd_defect_sites(run, [defects], tmp_path / "list.txt")
+    assert (tmp_path / "list.txt").read_text(encoding="utf-8").split() == [sun]
+    assert report["skipped"] == {"retired": 1}
+
+
 def test_the_site_list_is_built_from_the_defects_that_still_describe_the_served_text(
     tmp_path: Path,
 ) -> None:

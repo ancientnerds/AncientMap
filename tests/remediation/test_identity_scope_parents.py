@@ -87,6 +87,16 @@ class TestThePopulation:
         records, _ = scope_window.build(export_of([pending, hadrian()]))
         assert [r["groups"] for r in records if r["name"] == "Pending"] == [["pending"]]
 
+    def test_a_label_borderline_site_is_asked_although_the_window_keeps_it(self) -> None:
+        """D58: the Levant, Egypt, Byzantine Africa, the Caucasus and Greenland of 500-1500 -
+        the label, not the region, decides them (Nimrod Fortress, Comer's Midden)."""
+        nimrod = site(name="Nimrod Fortress", label_borderline=True, period_start=1227)
+        records, counts = scope_window.build(export_of([nimrod, hadrian()]))
+        assert [r["groups"] for r in records if r["name"] == "Nimrod Fortress"] == [
+            ["label_borderline"]
+        ]
+        assert counts["group_label_borderline"] == 1
+
     def test_a_site_can_be_in_several_groups(self) -> None:
         both = site(name="Both", outside_window=True, scope_status="pending")
         records, counts = scope_window.build(export_of([both, hadrian()]))

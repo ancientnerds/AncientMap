@@ -114,6 +114,7 @@ def answer(verdict: str, **over: Any) -> dict[str, Any]:
                 "kind": "modern",
                 "quotes": [q(FORT_PAGE, FORT_TEXT), q(OTHER_PAGE, OTHER_TEXT)],
             },
+            "MEDIEVAL_SUBJECT": {"kind": "crusader"},
         }[verdict]
     )
     base.update(over)
@@ -128,14 +129,16 @@ def parse(data: dict[str, Any], ctx: dict[str, Any] | None = None) -> SJ.Answer:
 class TestTheContext:
     def test_the_context_holds_the_region_the_cutoff_and_the_provenance(self) -> None:
         ctx = context()
-        assert (ctx["region"], ctx["cutoff"]) == ("rest of world", 500)
+        assert (ctx["region"], ctx["cutoff"]) == ("rest of world", 1500)  # D58: Asia keeps 1500
+        assert ctx["label_borderline"] is False
         assert ctx["recheck_d10"] and ctx["period_writes"]["period_start"]["family"] == "fields-wd3"
         assert ctx["qids"] == ["Q42"] and ctx["cache"][0]["title"] == "Ali Masjid"
         json.dumps(ctx)
 
     @pytest.mark.parametrize(
         ("lon", "country", "region", "cutoff"),
-        [(-70.0, "Peru", "Americas", 1500), (143.0, "Australia", "Oceania", 1500), (71.2, "Pakistan", "rest of world", 500)],
+        [(-70.0, "Peru", "Americas", 1500), (143.0, "Australia", "Oceania", 1500), (71.2, "Pakistan", "rest of world", 1500),
+         (-1.5, "England", "medieval Old World", 500), (35.6, "Lebanon", "rest of world", 1500), (40.9, "Türkiye", "medieval Old World", 500)],
     )  # fmt: skip
     def test_the_cutoff_follows_the_dates_module_s_region_rule(
         self, lon: float, country: str, region: str, cutoff: int
@@ -145,16 +148,25 @@ class TestTheContext:
     def test_a_record_without_a_longitude_has_no_window(self) -> None:
         with pytest.raises(common.IdentityError, match="no longitude"):
             SJ.cutoff_of(record(lon=None))
+        with pytest.raises(common.IdentityError, match="no country outside the Americas"):
+            SJ.cutoff_of(record(country=None))
+
+    def test_the_context_says_whether_the_label_decides(self) -> None:
+        assert context(groups=["label_borderline"])["label_borderline"] is True
+        assert context(groups=["outside_window", "pending"])["label_borderline"] is False
 
 
 class TestTheQuestion:
     def test_the_prompt_says_the_window_the_provenance_and_the_verdicts(self) -> None:
         text = SJ.render_web(context())
-        assert "prompt scope-window-v1" in text
+        assert "prompt scope-window-v2" in text
         assert (
-            "The map covers the rest of world through 500 AD (the rest of the world: 500 AD)"
-            in text
+            "The map covers the rest of world through 1500 AD (the rest of the world - Asia, "
+            "Africa and the Near East outside Byzantium: 1500 AD)" in text
         )
+        assert "Only the medieval Old World of Europe, Byzantium and the Vikings is out" in text
+        assert "THE LABEL" not in text, "only a borderline entry gets the label note"
+        assert "MEDIEVAL_SUBJECT not for this entry" in text
         assert "here 1837" in text and "do NOT trust it" in text
         assert "withdrawn by owner decision D10" in text
         assert (
@@ -162,10 +174,28 @@ class TestTheQuestion:
             in text
         )
         assert 'en.wikipedia "Ali Masjid": C:/cache/en/x.json' in text
-        assert "its date 1837 lies past the cutoff 500 AD" in text
+        assert "its date 1837 lies past the cutoff 1500 AD" in text
         assert "never answer it" in text, "an entry that is no museum never gets MUSEUM_KEEP"
         assert "at least 2 different websites" in text
-        assert '"verdict": "PERIOD_WRONG | OUT_OF_WINDOW | MUSEUM_KEEP | NOT_A_SITE"' in text
+        assert (
+            '"verdict": "PERIOD_WRONG | OUT_OF_WINDOW | MUSEUM_KEEP | NOT_A_SITE | MEDIEVAL_SUBJECT"'
+            in text
+        )
+
+    def test_a_european_entry_has_the_500_cutoff_and_a_borderline_one_the_label(self) -> None:
+        europe = SJ.render_web(context(country="England", lon=-1.5, lat=52.6))
+        assert "The map covers the medieval Old World through 500 AD" in europe
+        assert "Europe and Byzantium (Anatolia, Cyprus): 500 AD" in europe
+        niha = context(
+            country="Lebanon", lon=35.6, lat=33.6, period_start=975, date_used=975,
+            groups=["label_borderline"],
+        )  # fmt: skip
+        text = SJ.render_web(niha)
+        assert "THE LABEL (owner decision D58): this entry lies in Lebanon" in text
+        assert "a Crusader site (1099-1291)" in text and "Mamluk" in text
+        assert "it lies in Lebanon and is dated 975: the label, not the region" in text
+        assert "MEDIEVAL_SUBJECT the entry's subject is of the medieval Old World" in text
+        assert "pending or label-borderline - already right" in text
 
     def test_a_museum_may_be_kept_and_an_americas_entry_has_the_later_cutoff(self) -> None:
         museum = context(MUSEUM, museum_question=True, groups=["outside_window"])
@@ -219,7 +249,10 @@ class TestTheQuestion:
 class TestTheAnswerShape:
     @pytest.mark.parametrize("verdict", SJ.VERDICTS)
     def test_each_verdict_parses_with_its_own_field(self, verdict: str) -> None:
-        ctx = context(museum_question=verdict == "MUSEUM_KEEP")
+        ctx = context(
+            museum_question=verdict == "MUSEUM_KEEP",
+            label_borderline=verdict == "MEDIEVAL_SUBJECT",
+        )
         got = parse(answer(verdict), ctx)
         assert got.verdict == verdict
         assert (got.period_start, got.found_start, got.kind) == {
@@ -227,6 +260,7 @@ class TestTheAnswerShape:
             "OUT_OF_WINDOW": (None, 1837, None),
             "MUSEUM_KEEP": (None, None, None),
             "NOT_A_SITE": (None, None, "modern"),
+            "MEDIEVAL_SUBJECT": (None, None, "crusader"),
         }[verdict]
 
     @pytest.mark.parametrize(
@@ -234,11 +268,14 @@ class TestTheAnswerShape:
         [
             ("PERIOD_WRONG", {"period_start": None}, "period_start must be set for PERIOD_WRONG"),
             ("PERIOD_WRONG", {"found_start": 1900}, "found_start must be null"),
-            ("PERIOD_WRONG", {"period_start": 501}, "is past the cutoff 500"),
+            ("PERIOD_WRONG", {"period_start": 1501}, "is past the cutoff 1500"),
             ("PERIOD_WRONG", {"period_start": "300"}, "is not a year"),
             ("PERIOD_WRONG", {"period_start": True}, "is not a year"),
             ("PERIOD_WRONG", {"period_start": 5000}, "is not a year"),
-            ("OUT_OF_WINDOW", {"found_start": 500}, "is not past the cutoff 500"),
+            ("OUT_OF_WINDOW", {"found_start": 1500}, "is not past the cutoff 1500"),
+            ("MEDIEVAL_SUBJECT", {}, "is for a label-borderline entry"),
+            ("MEDIEVAL_SUBJECT", {"kind": None}, "kind must be set for MEDIEVAL_SUBJECT"),
+            ("MEDIEVAL_SUBJECT", {"found_start": 1100}, "found_start must be null"),
             ("OUT_OF_WINDOW", {"found_start": None}, "found_start must be set for OUT_OF_WINDOW"),
             ("OUT_OF_WINDOW", {"kind": "modern"}, "kind must be null"),
             ("MUSEUM_KEEP", {}, "is for an entry of type Museum"),
@@ -275,6 +312,19 @@ class TestTheAnswerShape:
         with pytest.raises(R.AnswerError, match="past the cutoff 1500"):
             parse(answer("PERIOD_WRONG", site_id=PENDING, period_start=1501), ctx)
 
+    def test_a_medieval_subject_names_one_of_its_kinds(self) -> None:
+        ctx = context(label_borderline=True)
+        for kind in ("byzantine", "crusader", "norse"):
+            assert parse(answer("MEDIEVAL_SUBJECT", kind=kind), ctx).kind == kind
+        with pytest.raises(R.AnswerError, match="is not one of"):
+            parse(answer("MEDIEVAL_SUBJECT", kind="modern"), ctx)
+
+    def test_a_european_entry_has_the_500_cutoff(self) -> None:
+        ctx = context(country="England", lon=-1.5, lat=52.6)
+        with pytest.raises(R.AnswerError, match="is past the cutoff 500"):
+            parse(answer("PERIOD_WRONG", period_start=501), ctx)
+        assert parse(answer("OUT_OF_WINDOW", found_start=501), ctx).found_start == 501
+
     def test_a_museum_keep_for_a_museum_parses(self) -> None:
         assert parse(answer("MUSEUM_KEEP"), context(museum_question=True)).verdict == "MUSEUM_KEEP"
 
@@ -297,7 +347,10 @@ def library(tmp_path: Path) -> Q.Library:
 def decide(
     data: dict[str, Any], library: Q.Library, ctx: dict[str, Any] | None = None
 ) -> R.Outcome:
-    c = ctx or context(museum_question=data["verdict"] == "MUSEUM_KEEP")
+    c = ctx or context(
+        museum_question=data["verdict"] == "MUSEUM_KEEP",
+        label_borderline=data["verdict"] == "MEDIEVAL_SUBJECT",
+    )
     return SJ.decide_web(parse(data, c), c, R.Env(library, {}))
 
 
@@ -338,7 +391,12 @@ def web_decision(
     out = decide(
         answer(verdict, site_id=sid),
         library,
-        context(sid, museum_question=verdict == "MUSEUM_KEEP", **ctx_over),
+        context(
+            sid,
+            museum_question=verdict == "MUSEUM_KEEP",
+            label_borderline=verdict == "MEDIEVAL_SUBJECT",
+            **ctx_over,
+        ),
     )
     return {"site_id": sid, "status": out.status, "reason": out.reason, "round": "r1",
             "answered_by": "web_verifier:r1-b01", "data": out.data}  # fmt: skip
@@ -359,6 +417,12 @@ class TestTheRecheck:
         assert got[1].context["proposal"]["kind"] == "modern"
         period = {FORT: web_decision(library, "PERIOD_WRONG")}
         assert SJ.recheck_questions(asked[:1], period) == []
+        label = {FORT: web_decision(library, "MEDIEVAL_SUBJECT")}
+        (medieval,) = SJ.recheck_questions(asked[:1], label)
+        assert medieval.context["proposal"]["kind"] == "crusader"
+        text = SJ.render_recheck(medieval.context)
+        assert "kind: crusader" in text and "a Byzantine site of the empire's rule" in text
+        assert "only reused stays" in text
 
     def test_the_prompt_asks_to_refute_a_retirement_and_says_what_a_410_is(
         self, library: Q.Library
@@ -430,6 +494,8 @@ def decision_for(verdict: str, sid: str = FORT, **over: Any) -> dict[str, Any]:
     }  # fmt: skip
     if verdict == "NOT_A_SITE":
         data["kind"] = "modern"
+    if verdict == "MEDIEVAL_SUBJECT":
+        data["kind"] = "crusader"
     data.update(over)
     return {
         "site_id": sid,
@@ -520,6 +586,17 @@ class TestThePlan:
             {MUSEUM: live_row(MUSEUM, name="Museum", scope_status="in_scope", scope_reason="x")}, "2026-10-12",
         )  # fmt: skip
         assert same.changes == [] and same.skipped[0]["reason"] == "already-decided"
+
+    def test_a_medieval_subject_is_retired_with_the_label_s_reason_after_a_confirm(self) -> None:
+        asked = {FORT: context(FORT, label_borderline=True)}
+        plan = build({FORT: decision_for("MEDIEVAL_SUBJECT")}, {FORT: live_row()}, asked)
+        cells = {c.column: c for c in plan.changes}
+        assert cells["scope_status"].new_value == "retired"
+        assert cells["scope_reason"].new_value == (
+            f"D58: a medieval Old World subject (crusader): The sources date it.; {FORT_TEXT}"
+        )
+        with pytest.raises(MP.PlanError, match="only after a CONFIRM"):
+            build({FORT: decision_for("MEDIEVAL_SUBJECT")}, {FORT: live_row()}, asked, rechecks={})
 
     def test_a_museum_keep_fills_the_status_from_null(self) -> None:
         plan = SJ.build(

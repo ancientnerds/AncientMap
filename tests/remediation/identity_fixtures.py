@@ -69,6 +69,7 @@ def site(**over: Any) -> dict[str, Any]:
         "names_rows": 1,
         "has_card": False,
         "outside_window": False,
+        "label_borderline": False,
     }
     row.update(over)
     return row

@@ -1,4 +1,4 @@
-"""D20: the scope window - which sites past the E3 cutoff stay, which are dated wrongly, which go.
+"""D20: the scope window - which sites past the cutoff stay, which are dated wrongly, which go.
 
 Owner decision D20 (2026-10-08): "check and retire autonomously: a wrong period is corrected
 (sourced), a truly out-of-window site is retired (journalled)". The discovery (`scope_window.py`,
@@ -6,7 +6,14 @@ Owner decision D20 (2026-10-08): "check and retire autonomously: a wrong period 
 stored date came from*: 78 were written by the MiniMax-answered field waves WD3/WD4 (`recheck_d10`),
 so the question never trusts the stored date.
 
-**The question** (stage `scope-window-web`, role `web_verifier`, Sonnet; prompt `scope-window-v1`):
+**The window is the label rule** (owner decision D58, 2026-10-24; "D20 uses this window"): only the
+medieval Old World of Europe, Byzantium and the Vikings is out after 500 AD, every other region keeps
+its sites through 1500 AD (`dates.scope_region`, `dates.LABEL_CUTOFFS`). Where the label and not the
+region decides - a site dated 500-1500 in the Levant, Egypt, Byzantine Africa, the Caucasus or
+Greenland (`dates.label_borderline`, the discovery's group `label_borderline`) - the question asks
+whether its subject is Byzantine, Crusader or Norse.
+
+**The question** (stage `scope-window-web`, role `web_verifier`, Sonnet; prompt `scope-window-v2`):
 
 * `PERIOD_WRONG`   - a source dates the site's start at or before the region's cutoff (give that
                      year with a quote; the stored one is wrong, or empty, or already right). The
@@ -17,16 +24,20 @@ so the question never trusts the stored date.
 * `MUSEUM_KEEP`    - a museum that exhibits ancient material (scope rule d; quote): `in_scope`;
 * `NOT_A_SITE`     - not an archaeological site at all (natural formation, modern, object, legend
                      or hoax; quotes from at least two different websites, the Wikimedia projects
-                     counting as one, as `scope_review` demands): retired.
+                     counting as one, as `scope_review` demands): retired;
+* `MEDIEVAL_SUBJECT` - a label-borderline entry whose subject is of the medieval Old World (kind
+                     `byzantine`, `crusader` or `norse`; a quote that names it): retired.
 
-**The re-check** (stage `scope-window-recheck`, role `adversarial`, Opus) asks every `OUT_OF_WINDOW`
-and `NOT_A_SITE`, because a retirement is a 410 for that URL (and the `in_scope` -> `retired` and
+**The re-check** (stage `scope-window-recheck`, role `adversarial`, Opus) asks every `OUT_OF_WINDOW`,
+`NOT_A_SITE` and `MEDIEVAL_SUBJECT`, because a retirement is a 410 for that URL (and the `in_scope` -> `retired` and
 `pending` -> `retired` transitions are the dangerous ones).
 
 **The write** is `scope-window-<wave>` (`mechanical/identity_lanes.py`): `scope_status` and
 `scope_reason` of one site in one transaction, the premise the entry the decision judged. A date
-retirement's reason is `E3: period_start N is past the cutoff; <quote>`, a not-a-site retirement's
-`scope_review`'s `E3: not an archaeological site (<kind>): <reason>`.
+retirement's reason is `E3: period_start N is past the cutoff; <quote>` (the prefix every scope
+read-back and the un-retire key on, kept under D58), a not-a-site retirement's `scope_review`'s
+`E3: not an archaeological site (<kind>): <reason>`, a label retirement's `D58: a medieval Old World
+subject (<kind>): <reason>; <quote>`.
 """
 
 from __future__ import annotations
@@ -44,7 +55,11 @@ for _root in (str(REPO), str(_HERE.parents[1])):
         sys.path.insert(0, _root)
 
 from mechanical import plan as MP  # noqa: E402
-from mechanical.identity_lanes import IN_SCOPE, scope_window_lane  # noqa: E402
+from mechanical.identity_lanes import (  # noqa: E402
+    IN_SCOPE,
+    LABEL_RETIRED_PREFIX,
+    scope_window_lane,
+)
 from mechanical.lane import (  # noqa: E402
     NOT_A_SITE_PREFIX,
     SCOPE_REVIEW_PREMISE_SQL,
@@ -70,21 +85,30 @@ from identity.rounds import (  # noqa: E402
     Question,
     StageSpec,
 )
-from pipeline.normalizers.dates import E3_CUTOFFS, e3_region  # noqa: E402
+from pipeline.normalizers.dates import (  # noqa: E402
+    AMERICAS,
+    LABEL_CUTOFFS,
+    MEDIEVAL_OLD_WORLD,
+    OCEANIA,
+    scope_region,
+)
 from pipeline.utils.public_sites import RETIRED  # noqa: E402
 
 LANE = "scope-window"
 WEB, RECHECK = "scope-window-web", "scope-window-recheck"
-PROMPT_ID = "scope-window-v1"
-PERIOD_WRONG, OUT_OF_WINDOW, MUSEUM_KEEP, NOT_A_SITE = (
+PROMPT_ID = "scope-window-v2"
+PERIOD_WRONG, OUT_OF_WINDOW, MUSEUM_KEEP, NOT_A_SITE, MEDIEVAL_SUBJECT = (
     "PERIOD_WRONG",
     "OUT_OF_WINDOW",
     "MUSEUM_KEEP",
     "NOT_A_SITE",
+    "MEDIEVAL_SUBJECT",
 )
-VERDICTS = (PERIOD_WRONG, OUT_OF_WINDOW, MUSEUM_KEEP, NOT_A_SITE)
+VERDICTS = (PERIOD_WRONG, OUT_OF_WINDOW, MUSEUM_KEEP, NOT_A_SITE, MEDIEVAL_SUBJECT)
 #: The verdicts a retirement rests on: the adversarial re-check asks them.
-RETIRING = (OUT_OF_WINDOW, NOT_A_SITE)
+RETIRING = (OUT_OF_WINDOW, NOT_A_SITE, MEDIEVAL_SUBJECT)
+#: What a medieval Old World subject of a label-borderline entry is (D58).
+MEDIEVAL_KINDS = ("byzantine", "crusader", "norse")
 CONFIRM, REJECT = "CONFIRM", "REJECT"
 ANSWER_KEYS = frozenset(
     {"site_id", "verdict", "why", "period_start", "found_start", "kind", "quotes"}
@@ -98,11 +122,15 @@ DIR = "scope-window"
 
 # ------------------------------------------------------------------------------------ the contexts
 def cutoff_of(record: Mapping[str, Any]) -> tuple[str, int]:
-    """The region of a record and its cutoff year (`dates.e3_region`, `dates.E3_CUTOFFS`)."""
-    region = e3_region(record)
+    """The region of a record and its cutoff year under the label rule D58 (`dates.scope_region`,
+    `dates.LABEL_CUTOFFS`)."""
+    region = scope_region(record)
     if region is None:
-        raise common.IdentityError(f"{record['id']} has no longitude: the window cannot be told")
-    return region, E3_CUTOFFS[region]
+        raise common.IdentityError(
+            f"{record['id']} has no longitude, or no country outside the Americas and Oceania: "
+            "the window cannot be told"
+        )
+    return region, LABEL_CUTOFFS[region]
 
 
 def site_context(
@@ -123,6 +151,7 @@ def site_context(
         "lon": record["lon"],
         "groups": list(record["groups"]),
         "museum_question": bool(record["museum_question"]),
+        "label_borderline": "label_borderline" in record["groups"],
         "scope_status": record["scope_status"],
         "scope_reason": record["scope_reason"],
         "period_start": record["period_start"],
@@ -183,14 +212,16 @@ WHY IT IS ASKED
 {why}
 WHERE THE STORED DATE CAME FROM (do NOT trust it: research the date yourself)
 {writes}{cache}{earlier}
-THE WINDOW (owner decisions E3 and O7)
-The map covers the {region} through {cutoff} AD ({cutoff_note}). The date the window tests is the \
-entry's period_end when it is set, else its period_start: here {date_used}. A museum stays when it \
-exhibits ancient material; its own date is its founding year.
-
+THE WINDOW (owner decisions E3, O7 and D58)
+The map covers the {region} through {cutoff} AD ({cutoff_note}). Only the medieval Old World of \
+Europe, Byzantium and the Vikings is out after 500 AD; every other region keeps its sites through \
+1500 AD. The date the window tests is the entry's period_end when it is set, else its period_start: \
+here {date_used}. A museum stays when it exhibits ancient material; its own date is its founding year.
+{label}
 THE QUESTION. Decide ONE verdict:
   PERIOD_WRONG   a source dates the start of the site at or before {cutoff} AD, so the stored date \
-is wrong (or empty, or - for an entry that is only asked because it is pending - already right). Give \
+is wrong (or empty, or - for an entry that is only asked because it is pending or label-borderline - \
+already right). Give \
 that year as "period_start" (an integer; BC is negative) and quote the source. The entry stays on \
 the map; the year goes to the field lane that writes dates with its own gates.
   OUT_OF_WINDOW  sources show that the site began after {cutoff} AD and that nothing of it is older. \
@@ -203,6 +234,7 @@ object (a movable object or a collection, not a place) or legend_or_hoax (a plac
 in legend or an unsupported claim). Give quotes from at least {min_sites} different websites (the \
 Wikipedias, Wikidata and Commons count as one website, and so do copies of Wikipedia). The entry is \
 retired.
+  MEDIEVAL_SUBJECT {medieval_note}
 
 THE RULES
 1. A quote is verbatim text (whitespace may differ) of a page you cite by its URL. The machine \
@@ -215,15 +247,15 @@ town around it.
 ANSWER with only this JSON object:
 {{
  "site_id": "{site_id}",
- "verdict": "PERIOD_WRONG | OUT_OF_WINDOW | MUSEUM_KEEP | NOT_A_SITE",
+ "verdict": "PERIOD_WRONG | OUT_OF_WINDOW | MUSEUM_KEEP | NOT_A_SITE | MEDIEVAL_SUBJECT",
  "why": "one or two sentences",
  "period_start": null,
  "found_start": null,
  "kind": null,
  "quotes": [{{"url": "https://...", "quote": "..."}}]
 }}
-"period_start" is set for PERIOD_WRONG, "found_start" for OUT_OF_WINDOW, "kind" for NOT_A_SITE; the \
-others are null.
+"period_start" is set for PERIOD_WRONG, "found_start" for OUT_OF_WINDOW, "kind" for NOT_A_SITE and \
+MEDIEVAL_SUBJECT; the others are null.
 """
 
 RECHECK_TEMPLATE = """You are the adversarial reviewer of the scope review (owner decision D20) of \
@@ -269,7 +301,32 @@ QUESTIONS = {
         "to find, nor a place known from ancient sources? A museum of ancient material, a heritage "
         "area with ancient remains and a site known only from texts are sites."
     ),
+    MEDIEVAL_SUBJECT: (
+        "Is it true that this site's subject is of the medieval Old World - a Byzantine site of the "
+        "empire's rule there, a Crusader site or a Norse site - and not of a culture the map keeps "
+        "(Umayyad, Abbasid, Fatimid, Ayyubid, Mamluk, Armenian, Georgian, Thule, Inuit)? A site "
+        "older than 500 AD that Byzantines or Crusaders only reused stays."
+    ),
 }
+
+#: The label note of a borderline entry (D58), and the verdict line it unlocks.
+LABEL_NOTE = """THE LABEL (owner decision D58): this entry lies in {country} and is dated between 500 and \
+1500 AD, where Byzantium, the Crusader states or the Norse once ruled. The window keeps it unless \
+its SUBJECT is of the medieval Old World: a Byzantine site of the empire's rule there (the Levant \
+and Egypt until 636-641, Byzantine Africa until 698), a Crusader site (1099-1291) or a Norse site \
+(Greenland 985-1450). An Umayyad, Abbasid, Fatimid, Ayyubid, Mamluk, Armenian, Georgian, Thule or \
+Inuit site stays (PERIOD_WRONG with its sourced start, which may be the stored one).
+"""
+MEDIEVAL_NOTE = (
+    'the entry\'s subject is of the medieval Old World (see THE LABEL): "kind" is byzantine, '
+    "crusader or norse; quote a page that says so. The entry is retired."
+)
+CUTOFF_NOTES = {
+    AMERICAS: "Americas and Oceania: 1500 AD",
+    OCEANIA: "Americas and Oceania: 1500 AD",
+    MEDIEVAL_OLD_WORLD: "the medieval Old World - Europe and Byzantium (Anatolia, Cyprus): 500 AD",
+}
+REST_NOTE = "the rest of the world - Asia, Africa and the Near East outside Byzantium: 1500 AD"
 
 
 def _period(ctx: Mapping[str, Any]) -> str:
@@ -308,6 +365,8 @@ def _why(ctx: Mapping[str, Any]) -> str:
         "pending": "  - an earlier scope review left it pending: "
         f"{ctx['scope_reason'] or 'no reason recorded'}",
         "hadrians_wall_path": "  - a footpath opened in 2003 with no scope decision",
+        "label_borderline": f"  - it lies in {ctx['country']} and is dated {ctx['date_used']}: the "
+        "label, not the region, decides it (see THE LABEL)",
         "calibration": "  - a calibration case: decide as for any entry of the window",
     }
     lines = [texts[g] for g in ctx["groups"]]
@@ -343,8 +402,12 @@ def render_web(ctx: Mapping[str, Any], earlier: str | None = None) -> str:
         earlier=earlier_section(earlier),
         region=ctx["region"],
         cutoff=cutoff,
-        cutoff_note=(
-            "Americas and Oceania: 1500 AD" if cutoff == 1500 else "the rest of the world: 500 AD"
+        cutoff_note=CUTOFF_NOTES.get(ctx["region"], REST_NOTE),
+        label=LABEL_NOTE.format(country=ctx["country"]) if ctx["label_borderline"] else "",
+        medieval_note=(
+            MEDIEVAL_NOTE
+            if ctx["label_borderline"]
+            else "not for this entry (the region, not the label, decides it): never answer it."
         ),
         date_used=_date_text(ctx),
         museum_note=(
@@ -390,6 +453,7 @@ def parse_web(text: str, ctx: Mapping[str, Any]) -> Answer:
         PERIOD_WRONG: "period_start",
         OUT_OF_WINDOW: "found_start",
         NOT_A_SITE: "kind",
+        MEDIEVAL_SUBJECT: "kind",
         MUSEUM_KEEP: None,
     }[verdict]
     for name, value in (("period_start", start), ("found_start", found), ("kind", kind)):
@@ -419,6 +483,13 @@ def parse_web(text: str, ctx: Mapping[str, Any]) -> Answer:
     elif verdict == MUSEUM_KEEP:
         if not ctx["museum_question"]:
             raise AnswerError("MUSEUM_KEEP is for an entry of type Museum")
+    elif verdict == MEDIEVAL_SUBJECT:
+        if not ctx["label_borderline"]:
+            raise AnswerError(
+                "MEDIEVAL_SUBJECT is for a label-borderline entry (D58): elsewhere the region decides"
+            )
+        if kind not in MEDIEVAL_KINDS:
+            raise AnswerError(f"kind {kind!r} is not one of {list(MEDIEVAL_KINDS)}")
     else:
         if kind not in KINDS:
             raise AnswerError(f"kind {kind!r} is not one of {list(KINDS)}")
@@ -663,6 +734,8 @@ def reason_of(verdict: str, data: Mapping[str, Any], ctx: Mapping[str, Any]) -> 
         return f"E3: period_start {data['found_start']} is past the cutoff; {quote}"
     if verdict == NOT_A_SITE:
         return f"{NOT_A_SITE_PREFIX} ({data['kind']}): {data['why']}"
+    if verdict == MEDIEVAL_SUBJECT:
+        return f"{LABEL_RETIRED_PREFIX} ({data['kind']}): {data['why']}; {quote}"
     if verdict == MUSEUM_KEEP:
         return f"E3 museum rule: the museum exhibits ancient material; {quote}"
     if ctx["date_used"] is not None and ctx["date_used"] > ctx["cutoff"]:

@@ -1,12 +1,16 @@
-"""D20: the sites the E3 window may not cover - the population, with where each period came from.
+"""D20: the sites the scope window may not cover - the population, with where each period came from.
 
-The scope rule E3 (`pipeline/normalizers/dates.py`): a site is in scope when the date of its last
-period is not past its region's cutoff (500 AD, 1500 AD for the Americas and Oceania). The window is
-tested in SQL by `mechanical.lane.outside_e3_window` (`export.SHOWN_SQL` carries it as
-`outside_window`), never re-typed here. The population:
+The scope rule is the owner's label rule D58 (2026-10-24, `pipeline/normalizers/dates.py`): a site
+is in scope when the date of its last period is not past its region's cutoff - 500 AD for the
+medieval Old World (Europe and Byzantium), 1500 AD for every other region. The window is tested in
+SQL by `mechanical.lane.outside_label_window` (`export.SHOWN_SQL` carries it as `outside_window`,
+and `label_borderline_sql` as `label_borderline`), never re-typed here. The population:
 
-* `outside_window`   - shown sites past the cutoff (127 on 2026-10-08: 110 undecided, 15 museums
-                       already `in_scope`, 2 pending);
+* `outside_window`   - shown sites past the cutoff (127 on 2026-10-08 under the numeric rule E3:
+                       110 undecided, 15 museums already `in_scope`, 2 pending);
+* `label_borderline` - shown sites dated 500-1500 in the Levant, Egypt, Byzantine Africa, the
+                       Caucasus or Greenland, where the label decides (a Byzantine, Crusader or
+                       Norse subject is out);
 * `pending`          - the five sites a scope review left `pending`, in the window or not;
 * `hadrians_wall_path` - a footpath opened in 2003, never decided.
 
@@ -73,6 +77,8 @@ def groups_of(row: Mapping[str, Any]) -> list[str]:
     found: list[str] = []
     if row["outside_window"]:
         found.append("outside_window")
+    if row["label_borderline"]:
+        found.append("label_borderline")
     if row["scope_status"] == "pending":
         found.append("pending")
     if row["id"].startswith(export.HADRIANS_WALL_PATH_PREFIX):

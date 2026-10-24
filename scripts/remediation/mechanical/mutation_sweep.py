@@ -6236,8 +6236,8 @@ WD2_CASES: list[Case] = [
     Case(
         "wd2 scope: O7 takes back Oceania only",
         SCOPE_REVIEW,
-        "        if e3_region(site) == OCEANIA and passes_date_cutoff(site):",
-        "        if passes_date_cutoff(site):",
+        "        if e3_region(site) == OCEANIA and passes_e3_cutoff(site):",
+        "        if passes_e3_cutoff(site):",
         "test_nothing_else_is_taken_back",
         SCOPE_REVIEW_TESTS,
     ),
@@ -12476,6 +12476,445 @@ WD5R_CASES: list[Case] = [
     ),
 ]
 CASES += WD5R_CASES
+
+
+# ---------------------------------------------- D58 the label rule, D50 the disputed sites (2026-10-24)
+#: The label rule (`pipeline/normalizers/dates.py`), its SQL (`lane.py`), the un-retire lane
+#: (`identity_lanes.scope_unretire_lane`) and its planner (`scope_unretire.py`). Every label starts
+#: with "d58" or "d50" - `mutation_sweep.py d58 d50` runs exactly these.
+UNRETIRE = MECHANICAL / "scope_unretire.py"
+IDENTITY_LANES = MECHANICAL / "identity_lanes.py"
+LABEL_TESTS = "tests/pipeline/test_scope_label_rule.py"
+UNRETIRE_TESTS = "tests/remediation/test_scope_unretire.py"
+UNRETIRE_STAYS = "test_a_date_retirement_the_label_rule_does_not_keep_stays"
+UNRETIRE_MUSEUM = "test_a_pinned_museum_comes_back_outside_the_medieval_old_world_only"
+UNRETIRE_D50_WAITS = "test_a_d50_site_waits_for_its_dispute_text"
+UNRETIRE_D50_SQL = "test_a_d50_site_passes_only_with_its_dispute_text"
+UNRETIRE_DATE_SQL = "test_a_label_un_retirement_inside_the_window_passes_and_every_other_fails"
+UNRETIRE_MUSEUM_SQL = "test_a_museum_un_retirement_needs_a_museum_outside_the_medieval_old_world"
+UNRETIRE_JOURNAL = "test_only_a_journalled_retirement_is_taken_back"
+UNRETIRE_WAVES = "test_a_wave_writes_its_files_and_is_never_replaced_or_planned_twice"
+_DATE_KEPT = (
+    "        f\"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')})\"\n"
+)
+_MUSEUM_KEPT = (
+    "        f\"AND u.site_type = 'Museum' AND NOT {in_medieval_old_world_sql('u.')})\"\n"
+)
+
+D58_CASES: list[Case] = [
+    # -- the rule
+    Case(
+        "d58 rule: the medieval Old World keeps 500 AD",
+        DATES,
+        "LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 500\n",
+        "LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 1500\n",
+        "test_passes_date_cutoff",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: the rest of the world keeps 1500 AD",
+        DATES,
+        "LABEL_CUTOFF_REST_OF_WORLD = 1500\n",
+        "LABEL_CUTOFF_REST_OF_WORLD = 500\n",
+        "test_passes_date_cutoff",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: Byzantium is Turkiye",
+        DATES,
+        '            "türkiye", "turkiye", "turkey", "cyprus", "northern cyprus",\n',
+        '            "cyprus", "northern cyprus",\n',
+        "test_the_medieval_old_world",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: Asian Russia is not Europe",
+        DATES,
+        '    "russia": _ASIAN_RUSSIA,\n',
+        "",
+        "test_the_other_regions",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: the Canaries are not Europe",
+        DATES,
+        '    "spain": _CANARY_ISLANDS,\n',
+        "",
+        "test_the_other_regions",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: a part of a state needs the point",
+        DATES,
+        "    if None in (lat, lon):",
+        "test_the_medieval_old_world",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: the region needs a country outside the Americas",
+        DATES,
+        "    if country is None:\n        return None\n    if in_medieval_old_world",
+        "    if False:\n        return None\n    if in_medieval_old_world",
+        "test_a_region_that_cannot_be_told_is_none",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: Oceania before Europe",
+        DATES,
+        '    if in_oceania(country, record.get("lat"), lon):\n        return OCEANIA',
+        "    if False:\n        return OCEANIA",
+        "test_the_other_regions",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: the cutoff is the label's",
+        DATES,
+        "    return date <= LABEL_CUTOFFS[region]",
+        "    return date <= E3_CUTOFFS.get(region, DATE_CUTOFF_REST_OF_WORLD)",
+        "test_passes_date_cutoff",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: borderline is dated 500-1500",
+        DATES,
+        "    if not LABEL_CUTOFF_MEDIEVAL_OLD_WORLD < date <= LABEL_CUTOFF_REST_OF_WORLD:",
+        "test_label_borderline",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: borderline needs a point and a date",
+        DATES,
+        '    if record.get("lon") is None or date is None:',
+        "test_label_borderline",
+        LABEL_TESTS,
+    ),
+    # -- the SQL
+    Case(
+        "d58 sql: the medieval cutoff is in the CASE",
+        LANE,
+        '        f"WHEN {in_medieval_old_world_sql(p)} THEN {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} "\n',
+        "",
+        "test_outside_label_window_is_passes_date_cutoff_negated",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: the boxes take a state's parts out",
+        LANE,
+        '        f"AND NOT coalesce(({_boxes_sql(prefix, NON_EUROPEAN_PARTS)}), false))"',
+        '        "AND true)"',
+        "test_in_medieval_old_world_sql_is_the_python_rule",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: an unknown region is inside",
+        LANE,
+        '        f"WHEN {p}country IS NOT NULL THEN {LABEL_CUTOFFS[REST_OF_WORLD]} END)"',
+        '        f"ELSE {LABEL_CUTOFFS[REST_OF_WORLD]} END)"',
+        "test_outside_label_window_is_passes_date_cutoff_negated",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: borderline lies past 500",
+        LANE,
+        '        f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "',
+        '        f"({p}lon IS NOT NULL AND {date} > -100000 "',
+        "test_label_borderline_sql_is_label_borderline",
+        UNRETIRE_TESTS,
+    ),
+    # -- the lane and its invariant
+    Case(
+        "d58 lane: an un-retirement stays inside the window",
+        IDENTITY_LANES,
+        _DATE_KEPT,
+        "        f\"AND NOT {label_borderline_sql('u.')})\"\n",
+        UNRETIRE_DATE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: a borderline un-retirement is refused",
+        IDENTITY_LANES,
+        _DATE_KEPT,
+        "        f\"AND NOT {outside_label_window('u.')})\"\n",
+        UNRETIRE_DATE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: a museum un-retirement needs a museum",
+        IDENTITY_LANES,
+        _MUSEUM_KEPT,
+        "        f\"AND NOT {in_medieval_old_world_sql('u.')})\"\n",
+        UNRETIRE_MUSEUM_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: a museum un-retirement lies outside Europe",
+        IDENTITY_LANES,
+        _MUSEUM_KEPT,
+        "        \"AND u.site_type = 'Museum')\"\n",
+        UNRETIRE_MUSEUM_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 lane: a D50 site needs its dispute text",
+        IDENTITY_LANES,
+        "        f\"AND {dispute_enriched_sql('u')})\"\n",
+        '        ")"\n',
+        UNRETIRE_D50_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 lane: a D58 reason on a D50 site is refused",
+        IDENTITY_LANES,
+        "        f\"(u.scope_reason LIKE {sql_literal(D58_REASON_PREFIX + '%')} AND NOT {d50} \"\n",
+        "        f\"(u.scope_reason LIKE {sql_literal(D58_REASON_PREFIX + '%')} \"\n",
+        UNRETIRE_D50_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the dispute text is the current description",
+        IDENTITY_LANES,
+        '        f"AND l.new_value = {a}.description "\n',
+        "",
+        UNRETIRE_D50_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: an enrichment's evidence",
+        IDENTITY_LANES,
+        "        f\"AND l.evidence->>'decision' = {sql_literal(wc4.EVIDENCE_DECISION_ENRICH)} \"\n",
+        "",
+        UNRETIRE_D50_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the brief is there",
+        IDENTITY_LANES,
+        "        f\"AND l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'dispute' IS NOT NULL \"\n",
+        "",
+        UNRETIRE_D50_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: both positions were appended",
+        IDENTITY_LANES,
+        "        f\"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})\"\n",
+        '        ")"\n',
+        UNRETIRE_D50_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: the invariant is the violation SQL",
+        IDENTITY_LANES,
+        "                predicate=unretire_violation_sql(),\n",
+        '                predicate="1 = 0",\n',
+        "test_the_one_transition_is_a_guarded_un_retirement_and_its_rollback_retires",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: the premise holds the description",
+        IDENTITY_LANES,
+        '    SCOPE_REVIEW_PREMISE_SQL.removesuffix(")") + ", md5(coalesce(u.description, \'\')))"\n',
+        "    SCOPE_REVIEW_PREMISE_SQL\n",
+        "test_its_identity_cells_and_premise",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: the scope window reads back the label window",
+        IDENTITY_LANES,
+        "        post_commit_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,\n"
+        "        rehearsal_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,\n"
+        "        premise_sql=SCOPE_REVIEW_PREMISE_SQL,\n",
+        '        post_commit_residual=Residual("x", "false"),\n'
+        "        rehearsal_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,\n"
+        "        premise_sql=SCOPE_REVIEW_PREMISE_SQL,\n",
+        "test_the_readback_counts_the_window_the_dates_and_the_statuses",
+        "tests/remediation/test_identity_b_lanes.py",
+    ),
+    # -- the planner
+    guard(
+        "d58 plan: a borderline site is skipped",
+        UNRETIRE,
+        "    if label_borderline(site):",
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: outside the label window stays",
+        UNRETIRE,
+        "    if not passes_date_cutoff(site):",
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a Viking subject stays out",
+        UNRETIRE,
+        "    if vikings:",
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: the region must be told",
+        UNRETIRE,
+        "    if region is None or window_date(site) is None:",
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: the retirement must be journalled",
+        UNRETIRE,
+        "        if entry is None:",
+        UNRETIRE_JOURNAL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 plan: the latest scope row decides",
+        UNRETIRE,
+        '    last = max(rows, key=lambda entry: int(entry["id"]))',
+        '    last = min(rows, key=lambda entry: int(entry["id"]))',
+        UNRETIRE_JOURNAL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 plan: only a retirement row counts",
+        UNRETIRE,
+        '    return last if last["new_value"] == RETIRED else None',
+        "    return last",
+        UNRETIRE_JOURNAL,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: no decision names another retirement",
+        UNRETIRE,
+        "        if not d50 and not reason_now.startswith((DATE_RETIRED_PREFIX, MUSEUM_PREFIX)):",
+        "test_a_retirement_no_decision_names_is_left_alone_and_not_listed",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a museum must be pinned",
+        UNRETIRE,
+        "    if exhibits is None:",
+        UNRETIRE_MUSEUM,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: the museum's reason names its exhibits",
+        UNRETIRE,
+        '    if exhibits not in str(site["scope_reason"]):',
+        UNRETIRE_MUSEUM,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a museum is a Museum",
+        UNRETIRE,
+        '    if site["site_type"] != "Museum":',
+        UNRETIRE_MUSEUM,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a European museum stays",
+        UNRETIRE,
+        "    if region == MEDIEVAL_OLD_WORLD:",
+        UNRETIRE_MUSEUM,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: a D50 site needs the review's retirement",
+        UNRETIRE,
+        '    if not str(site["scope_reason"] or "").startswith(NOT_A_SITE_PREFIX):',
+        "test_a_d50_site_retired_for_another_reason_is_not_its_lane_s",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: no dispute text, no un-retire",
+        UNRETIRE,
+        '    if problems:\n        return _skip(\n            site,\n            "d50-no-dispute-text",',
+        '    if False:\n        return _skip(\n            site,\n            "d50-no-dispute-text",',
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: the row is an enrichment",
+        UNRETIRE,
+        '    if row["decision"] != wc4.EVIDENCE_DECISION_ENRICH:',
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: a brief is there",
+        UNRETIRE,
+        "    if brief is None:",
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: the brief is well-formed",
+        UNRETIRE,
+        "    problems = list(E.dispute_record_problems(brief))",
+        "    problems = []",
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: the brief is this site's",
+        UNRETIRE,
+        '    if not problems and brief["site_id"] != site_id:',
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: both positions were appended",
+        UNRETIRE,
+        "    for needed in (wc4.DISPUTE_A, wc4.DISPUTE_B):",
+        "    for needed in ():",
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: the latest description row decides",
+        UNRETIRE,
+        '    row = max(mine, key=lambda r: int(r["id"]))',
+        '    row = min(mine, key=lambda r: int(r["id"]))',
+        "test_a_d50_site_with_its_dispute_text_comes_back_disputed",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a shown site stops the plan",
+        UNRETIRE,
+        '        if site["scope_status"] != RETIRED:',
+        "test_a_shown_site_in_the_export_stops_the_plan",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 plan: a wave is at most 100 sites",
+        UNRETIRE,
+        "    chosen = set(sorted({c.site_id for c in plan.changes})[:MAX_SITES])",
+        "    chosen = set(sorted({c.site_id for c in plan.changes}))",
+        "test_a_wave_is_its_first_hundred_sites",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: one export plans one wave",
+        UNRETIRE,
+        '        if json.loads(earlier.read_text(encoding="utf-8"))["export_sha256"] == export.sha256:',
+        UNRETIRE_WAVES,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a delivered wave is never replaced",
+        UNRETIRE,
+        '    if (target / "PLAN.jsonl").exists():',
+        UNRETIRE_WAVES,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a wave writes something",
+        UNRETIRE,
+        "    if not plan.changes:",
+        "test_a_wave_with_nothing_to_write_is_refused_and_says_why",
+        UNRETIRE_TESTS,
+    ),
+]
+CASES += D58_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

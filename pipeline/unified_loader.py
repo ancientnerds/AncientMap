@@ -805,9 +805,9 @@ class UnifiedLoader:
                     if record.get("country") and record.get("country") != original_country:
                         enriched_count += 1
 
-                # GLOBAL DATE CUTOFF - Applied to ALL sources (E3 with O7,
-                # pipeline/normalizers/dates.py): Americas and Oceania <= 1500 AD,
-                # the rest of the world <= 500 AD
+                # GLOBAL DATE CUTOFF - Applied to ALL sources (the label rule D58,
+                # pipeline/normalizers/dates.py): the medieval Old World (Europe,
+                # Byzantium) <= 500 AD, every other region <= 1500 AD
                 if not passes_date_cutoff(record):
                     filtered_by_date += 1
                     continue  # Skip this record entirely
