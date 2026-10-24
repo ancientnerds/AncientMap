@@ -8,7 +8,8 @@ and the 2025 import wrote (`Settlement`, `Fortress`, `Cave`). Both are canonical
 (`pipeline/normalizers/site_type.py:CANONICAL_TYPES`, the keys of the globe's `CATEGORY_COLORS`), so
 no normaliser joins them, and the filter, the cards' `mystery` (which counts `(site_type,
 period_name)` pairs) and the page titles treat one kind of site as two. Measured on production
-2026-10-24: 212 curated rows in 15 such values (`report`).
+2026-10-24: 212 curated rows in 15 such values (`report`); the decided map (orchestrator decision X14,
+adversarially checked) merges 16 values - City and Castle added, Megalithic kept - over 308 rows.
 
 ## The map (`site_type_merge.json`, pinned by `MAP_SHA256`)
 
@@ -113,7 +114,7 @@ from pipeline.normalizers.site_type import CANONICAL_TYPES, normalize_site_type 
 MAP_FILE = _HERE.with_name("site_type_merge.json")
 #: sha256 of the map's LF text. The map is reviewed data: a changed map is refused until this pin is
 #: moved with it, in one reviewed commit (the rule of `fields/classify.TABLE_SHA256`).
-MAP_SHA256 = "6eb67548b808a204ada1991b235e2484de5ddab5acdf125ddac13ca354387493"
+MAP_SHA256 = "56418e49a550e57e71e5c1f9f713e3c97d777ffc2c707969f49afa94cc8e257e"
 MAP_KEYS = frozenset({"_about", "decision", "aliases", "not_merged"})
 DECISION_KEYS = frozenset({"by", "at", "check"})
 ROOT_NAME = "mechanical_site_type_merge"

@@ -1,6 +1,10 @@
 {
  "_about": "The site_type merge map of owner decision D25 ('merge the site_type vocabulary'), read by scripts/remediation/mechanical/site_type_merge.py and pinned there by sha256 (MAP_SHA256). Each alias is a canonical type that names the same thing as the curated compound type of its own category group (api/cardgame/constants.py _GROUP_DEFINITIONS); the curated import's own vocabulary is the compound form (pipeline/ingesters/ancient_nerds_original.py keeps the compound names). Both CANONICAL_TYPES and the globe colours stay as they are: only the data moves (output/remediation/final-2026-10-08/plans/fields.md item 8 and trap 10). 'decision' stays null until the map is decided (fields.md item 8: Opus high decides, plus an adversarial check); `wave` refuses an undecided map.",
- "decision": null,
+ "decision": {
+  "by": "orchestrator decision X14 (claude-opus-5-5, close-out session)",
+  "at": "2026-10-24",
+  "check": "per-alias review against pipeline/normalizers/site_type.py (CANONICAL_TYPES, _SYNONYMS), ancient-nerds-map/src/constants/colors.ts CATEGORY_TO_GROUP, src/seo/display.ts SITE_TYPE_LABELS and the live curated rows of every alias; reasons in output/remediation/final-2026-10-08/X14_SITE_TYPE_MAP.md; independent adversarial check (claude-opus-5-5, 2026-10-24): 16 merges hold, Megalithic refuted and kept"
+ },
  "aliases": {
   "Settlement": {
    "target": "City/town/settlement",
@@ -38,10 +42,6 @@
    "target": "Necropolis/tombs complex",
    "why": "the compound type names a necropolis; same group Burial & Death"
   },
-  "Megalithic": {
-   "target": "Megalithic structures",
-   "why": "a bare 'Megalithic' is a megalithic structure (the site title already shows both as 'Megalithic site', ancient-nerds-map/src/seo/display.ts); same group Megalithic"
-  },
   "Cave": {
    "target": "Cave Structures",
    "why": "the curated cave type is 'Cave Structures' (title label 'Cave site'); same group Rock & Cave"
@@ -61,12 +61,18 @@
   "Theater": {
    "target": "Theatre",
    "why": "the American spelling of the same word (the site title already shows 'Theatre'); same group Monuments"
+  },
+  "City": {
+   "target": "City/town/settlement",
+   "why": "the compound type names a city (its first term), the same rule as Town; same group Settlements (X14)"
+  },
+  "Castle": {
+   "target": "Castle/palace",
+   "why": "the compound type names a castle (its first term); same group Fortifications (X14)"
   }
  },
  "not_merged": {
-  "City": "not in the plan's proposal: 'City/town/settlement' covers it, but a city is the one type of the group that also names size and rank - for the decision",
-  "Village": "not in the plan's proposal: 'City/town/settlement' covers it - for the decision",
-  "Castle": "not in the plan's proposal: 'Castle/palace' covers it - for the decision",
+  "Village": "kept (X14): a village is a kind of settlement, not a spelling or synonym of a term the compound names; Village is a filter value of its own",
   "Fort": "fort is not fortress (pipeline/normalizers/site_type.py: 'Do NOT merge distinct types (castle != fort != fortress)')",
   "Bridge": "another group: Bridge is Infrastructure, Gate/archway/bridge is Fortifications (fields.md item 8)",
   "Aqueduct": "another group: Aqueduct is Water & Ports, Reservoir/aqueduct/canal is Infrastructure (fields.md item 8)",
@@ -75,6 +81,7 @@
   "Museum": "a scope question, not vocabulary (fields.md item 8)",
   "Geological interest": "a scope question, not vocabulary (fields.md item 8)",
   "Natural feature": "a scope question, not vocabulary (fields.md item 8)",
-  "Magnetic anomaly": "a scope question, not vocabulary (fields.md item 8)"
+  "Magnetic anomaly": "a scope question, not vocabulary (fields.md item 8)",
+  "Megalithic": "kept (X14, adversarial check 2026-10-24): the Megalithic group's own generic word, shared by its four subtypes (stones, structures, statues, walls); the normaliser maps a single megalith to it, and its rows split between Megalithic stones (alignments such as Rinaghju) and Megalithic structures - a per-site question, not a spelling"
  }
 }

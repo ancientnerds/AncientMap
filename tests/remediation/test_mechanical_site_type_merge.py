@@ -38,6 +38,11 @@ def map_text(**over: Any) -> str:
     return json.dumps(data)
 
 
+def undecided() -> M.MergeMap:
+    """The delivered map with its decision taken away: what `wave` and `table` must refuse."""
+    return M.parse_map(map_text(decision=None), "u" * 64)
+
+
 def decided(**over: Any) -> M.MergeMap:
     return M.parse_map(map_text(decision=DECISION, **over), "d" * 64)
 
@@ -66,15 +71,16 @@ class TestTheMap:
         merge_map = M.load_map()
         groups = M.category_group()
         assert merge_map.sha256 == M.MAP_SHA256
-        assert len(merge_map.merges) == 15
+        assert len(merge_map.merges) == 16
         for m in merge_map.merges.values():
             assert m.alias in CANONICAL_TYPES and m.target in CANONICAL_TYPES
             assert normalize_site_type(m.target) == m.target
             assert groups[m.alias] == groups[m.target]
             assert m.target not in merge_map.merges
 
-    def test_the_delivered_map_is_a_proposal_until_it_is_decided(self) -> None:
-        assert M.load_map().decision is None
+    def test_the_delivered_map_is_decided(self) -> None:
+        decision = M.load_map().decision
+        assert decision is not None and "X14" in decision["by"]
 
     def test_an_edited_map_is_refused_until_its_pin_moves(self, tmp_path: Path) -> None:
         path = tmp_path / "map.json"
@@ -136,7 +142,6 @@ class TestTheMap:
         the pinned table still lists every alias, so a classify run reads the unmerged rows as
         before (the merge map is undecided today)."""
         merge_map = M.load_map()
-        assert merge_map.decision is None
         offered = {t for entry in FC.load_table().values() for t in entry.types}
         assert set(merge_map.merges) <= offered
 
@@ -166,7 +171,8 @@ class TestTheTable:
         aliases = set(decided().merges)
         assert changed > 0 and set(merged) == set(before)
         assert not {t for e in merged.values() for t in e.types} & aliases
-        assert merged["Q486972"].types == ("City", "City/town/settlement", "Village")
+        # City merges into the compound since the X14 decision; Village is kept
+        assert merged["Q486972"].types == ("City/town/settlement", "Village")
         assert all(
             e.kind == before[q].kind and e.label == before[q].label for q, e in merged.items()
         )
@@ -182,7 +188,7 @@ class TestTheTable:
 
     def test_an_undecided_map_moves_no_table(self) -> None:
         with pytest.raises(PlanError, match="map is undecided"):
-            M.table(M.load_map(), read=reader([]))
+            M.table(undecided(), read=reader([]))
 
     def test_the_table_waits_for_the_last_merge_wave(self, tmp_path: Path) -> None:
         path = tmp_path / "p31.json"
@@ -329,7 +335,7 @@ def reader(sites: list[str], rows: list[dict[str, Any]] | None = None, journal: 
 class TestTheWaveAndTheSteps:
     def test_an_undecided_map_plans_no_wave(self, tmp_path: Path) -> None:
         with pytest.raises(PlanError, match="the map is a proposal"):
-            M.build_wave(WAVE, merge_map=M.load_map(), read=reader([SITE]), root=tmp_path)
+            M.build_wave(WAVE, merge_map=undecided(), read=reader([SITE]), root=tmp_path)
 
     def test_the_wave_lists_the_alias_rows_in_steps_of_100(self, tmp_path: Path) -> None:
         sites = [f"00000000-0000-4000-8000-{n:012d}" for n in range(212)]
@@ -464,8 +470,10 @@ class TestTheReport:
             "retired": 1,
             "shown": 109,
         }
-        assert result["rows"] == 110 and result["shown_rows"] == 109
+        # the decided map (X14) merges City too: 110 + 92 rows
+        assert result["aliases"]["City"]["curated"] == 92
+        assert result["rows"] == 202 and result["shown_rows"] == 201
         assert result["targets_before"]["City/town/settlement"] == 1141
-        assert result["not_merged"]["City"] == 92
+        assert "City" not in result["not_merged"]
         assert result["refused"] == {"journal-disagrees": 1}
-        assert result["decided"] is False
+        assert result["decided"] is True

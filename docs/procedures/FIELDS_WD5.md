@@ -478,6 +478,12 @@ Measured read-only 2026-10-24 (`report`): **212 curated rows** (209 shown, 3 ret
 Settlement 110, Fortress 20, Cave 14, Villa 12, Town 11, Necropolis 9, Gate 9, Church 7, Megalithic 5, Road 3,
 Citadel 3, Quarry 3, Urban 3, Mine 2, Theater 1 - and 0 the plan would refuse. Retired rows are merged too.
 
+**Decided 2026-10-24 (orchestrator decision X14, `MASTER_PLAN.md`; Opus decided, an independent Opus check refuted one
+pair):** 16 merges - the 15 above minus Megalithic (the group's generic word, its rows split between Megalithic stones and
+Megalithic structures: a per-site question), plus City (92) and Castle (9), which the proposal left in `not_merged`; 308
+curated rows. Reasons per alias: `output/remediation/final-2026-10-08/X14_SITE_TYPE_MAP.md`. Page titles change for about
+135 sites (City/Town/Urban -> "Settlement", Gate -> "Gate or bridge", Castle -> "Castle or palace", ...).
+
 ```bash
 M=scripts/remediation/mechanical
 $PY $M/site_type_merge.py report                       # read-only: map, counts, refusals
