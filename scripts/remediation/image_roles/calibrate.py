@@ -25,7 +25,9 @@ enforced, not promised:
   high, then Opus medium.
 * `pilot_judge` (Opus xhigh) **adjudicates** 150 candidates of the MiniMax pool (50 per MiniMax verdict
   class) with web evidence: that adjudication is the pilot-judge gold, not a measured role.
-* `adversarial` (Opus high, the hero re-check): agreement >= 0.95 with the adjudication and the labelled
+* `adversarial` (the hero re-check; Sonnet high since D36 - the map asked for Opus high, and under
+  D45/D51 the shared role is calibrated here for the image lane and moves to Opus only if it
+  fails): agreement >= 0.95 with the adjudication and the labelled
   cases on whether a candidate called `depicts` really depicts the site.
 * `web_verifier` (Sonnet high, the identity researcher): >= 0.90 correct over 5 known wrong links and
   20 known good ones, and **all five** wrong links flagged.

@@ -11,7 +11,7 @@ without a network and without a model:
     pictures        PICTURES.jsonl                    the renderings on disk, with their paths
     prefilter       PREFILTER.jsonl                   Haiku: kind and usable, at 640 px
     depicts         DEPICTS.jsonl, VERDICTS.jsonl     Sonnet: verdict and quality, at 1280 px
-    recheck         RECHECK_NN.jsonl                  Opus: the best pick of every site, round by round
+    recheck         RECHECK_NN.jsonl                  adversarial: the best pick of every site, by round
     targets         TARGETS.jsonl                     the confirmed picks the INSERT lane fetches
     prune           PICTURES_SHA256.jsonl             the pictures deleted, their hashes kept
 

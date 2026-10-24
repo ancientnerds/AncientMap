@@ -99,8 +99,10 @@ UNCONFIRMED_ONLY = "unconfirmed"
 RECHECK = "recheck"
 POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
 #: The role (`roles.ROLES`, owner decision D6) that judges a recheck, in both of its stages: the
-#: adversarial Opus. The export records it; `brief`, the import and the plan hold the run to it, so
-#: an answer by another model cannot drive the swap of an owner-linked hero.
+#: shared `adversarial` role - Sonnet 5.5 high since D36, calibrated for the image lane in
+#: `image-roles-v1` and moved up only if that fails (D45/D51). The export records it; `brief`,
+#: the import and the plan hold the run to it, so an answer by another model cannot drive the swap
+#: of an owner-linked hero.
 RECHECK_ROLE = "adversarial"
 
 QUESTIONS_CHECK = "QUESTIONS_CHECK.jsonl"

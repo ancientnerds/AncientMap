@@ -4,7 +4,7 @@ The depicts role (`depicts.py`) leaves a site with zero or more `depicts` candid
 quality. The page gets one of them, and the one it gets is looked at twice. In rounds:
 
 1. the best-ranked `depicts` candidate of every site (`judge.rank_key`: quality, then pixels) that no
-   re-check has judged yet is re-checked (`hero_recheck.py`, Opus high);
+   re-check has judged yet is re-checked (`hero_recheck.py`, the role `adversarial`);
 2. a site whose pick was confirmed is done - that candidate is its target;
 3. a site whose pick was not confirmed goes on with its next-ranked `depicts`, in the next round;
 4. a site that has no `depicts` left, every one of them refused, is exhausted: it keeps no picture
