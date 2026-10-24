@@ -105,15 +105,32 @@ ROLES: Mapping[str, Role] = _registry(
     # (0.8601), so the D6 rule moves it up one tier to Opus, calibrated again in teaser-2026-10-18.
     Role("hook_rater", "claude-opus-5-5", "medium", "design_run_hand_drawn_60"),
     # Sonnet failed teaser-2026-10-09b (tier move to Opus), Opus showed no gain in teaser-2026-10-09c;
-    # D36 puts the role back on Sonnet, and the failed 09b verdict is released under that decision.
-    Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
+    # D36 put the role back on Sonnet. It answers lane WC only (the check rounds of every WC run kind
+    # and lane WN's write round, `wc/cli.py check_role`), and on Sonnet it failed lane WC's own
+    # calibrations of 2026-10-24: wc-fc-1 (0.9216, but a known error kept) and wc-fc-2
+    # (0.8841, a known error missed). D51 (a role that fails its calibration moves to Opus, the D6
+    # tier rule) applies the tier move of wc-fc-1 (`APPLIED_ESCALATIONS`); wc-fc-2 named the same
+    # move. A move, not a new role: no other lane answers as `fact_checker`. Calibrated again on Opus
+    # (wc-fc-1o, -2o, -3o) before its next answer.
+    Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    # The shared web verifier: identity, lane E (`wc/prompts_enrich.VERIFIER_ROLE`) and image
+    # identity, each calibrated on its own pools (D45). Lane WC's verification has its own role,
+    # `wc_web_verifier`, since the WC calibrations wc-wv-1/2 failed it (`SETTLED_TIER_MOVES`).
     Role("web_verifier", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
     # The card lane's own checkers. Owner decision D40 (after teaser-2026-10-10, in which no Sonnet
     # checker passed and the Haiku trial was weaker) put the card checks on Opus; D45 (2026-10-17)
     # scoped it to the card lane, so `fact_checker` (lane WC) and `web_verifier` (identity, lane E,
-    # image identity) stay on Sonnet. New roles, not moves: they are calibrated before first use.
+    # image identity) stayed on Sonnet then (lane WC's own calibrations moved `fact_checker` on
+    # 2026-10-24, see above). New roles, not moves: they are calibrated before first use.
     Role("card_fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"),
     Role("card_web_verifier", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    # Lane WC's own web verifier: the verification rounds `verify` and `verify2` of every WC run kind
+    # but lane E's (plain, site-list, WN, the D10 re-check, the defect runs; `wc/cli.py verify_role`).
+    # As `web_verifier` it failed lane WC's calibrations on Sonnet (wc-wv-1 0.8193 and wc-wv-2 0.8986
+    # of a sealed 0.95, tier moves to Opus); following D45 the WC context gets a role of its own on
+    # Opus (D51/D6: a failing role moves up) instead of moving the shared one. A new role, not a
+    # move: it is calibrated on the WC verify pools (wc-wv-1o, wc-wv-2o) before its first answer.
+    Role("wc_web_verifier", "claude-opus-5-5", "high", "wc_verify_rounds"),
     # Sonnet failed fr-general-001 at 0.8636 (tier move to Opus); Opus reached 0.871 in
     # fr-general-002; D36 puts the role back on Sonnet under a release of fr-general-001.
     Role("field_researcher", "claude-sonnet-5-5", "high", "wd1_wd3_rounds_and_bp_set"),
@@ -265,10 +282,31 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
             "evidence": ("wb-shorts-pilot-2026-10-18",),
         }
     ),
+    MappingProxyType(
+        {
+            # `verdicts/wc-fc-1.json` (2026-10-24, Sonnet: agreement 0.9216 of 0.9, the known error
+            # missed); wc-fc-2 named the same move (0.8841, a known error missed). D51.
+            "role": "fact_checker",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "wc-fc-1",
+            "reason": "known error 5facc061-8835-4129-9e3c-7b17ebf2d5e8/sentence-4 missed: the "
+            "fresh answer says 'KEEP', expected not ['KEEP', 'KEEP_TRIMMED']",
+        }
+    ),
 )
 _ESCALATION_KEYS = frozenset({"role", "from", "to", "calibration_id", "reason"})
 _OWNER_KEYS = frozenset({"kind", "role", "from", "to", "effort", "decision", "reason", "evidence"})
 _DECISION = re.compile(r"D\d+[a-z]?")
+
+#: How lane WC's failed verify calibrations were settled (`SETTLED_TIER_MOVES`, wc-wv-1 and -2).
+_WC_VERIFY_SETTLED = (
+    "the failure is lane WC's: lane WC's verification rounds (verify, verify2) moved to the new role "
+    "wc_web_verifier on Opus (D45: a shared role is not moved for one lane, the lane gets a role of "
+    "its own; D51: a failing role moves to Opus), calibrated on the same WC verify pools; the shared "
+    "web_verifier stays on Sonnet for identity, lane E and image identity, which calibrate it on "
+    "pools of their own"
+)
 
 #: The tier moves a failed verdict named that were never applied to the role it named, each with how
 #: it was settled instead: the verdict's `tier_move` copied (as `APPLIED_ESCALATIONS` copies an
@@ -291,6 +329,32 @@ SETTLED_TIER_MOVES: tuple[Mapping[str, Any], ...] = (
             "the new role card_adversarial on Opus (D45: the card lane gets roles of its own; D51: a "
             "failing role moves to Opus), calibrated on the same card cases; the shared adversarial "
             "stays on Sonnet for the fields, identity and image lanes, where it passed adv-truth-002",
+        }
+    ),
+    MappingProxyType(
+        {
+            # `verdicts/wc-wv-1.json` (2026-10-24, Sonnet: the pilot-27c verification, 68 of 83 units).
+            "role": "web_verifier",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "wc-wv-1",
+            "reason": "agreement 0.8193 is below the sealed threshold 0.95",
+            "settled_by": "wc_web_verifier",
+            "decision": "D45",
+            "how": _WC_VERIFY_SETTLED,
+        }
+    ),
+    MappingProxyType(
+        {
+            # `verdicts/wc-wv-2.json` (2026-10-24, Sonnet: the mass-02 verification, 62 of 69 units).
+            "role": "web_verifier",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "wc-wv-2",
+            "reason": "agreement 0.8986 is below the sealed threshold 0.95",
+            "settled_by": "wc_web_verifier",
+            "decision": "D45",
+            "how": _WC_VERIFY_SETTLED,
         }
     ),
 )

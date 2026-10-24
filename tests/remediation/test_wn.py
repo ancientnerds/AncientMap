@@ -325,14 +325,14 @@ def test_the_write_prompt_is_the_one_frozen_question_with_the_parsers_numbers(ru
     assert cli.check_prompt(entry, [], {}, cli.KIND_WN) == prompt
 
 
-def test_the_brief_names_a_sonnet_writer_and_the_sonnet_model(run_dirs) -> None:
+def test_the_brief_names_the_fact_checkers_family_and_model_for_the_writer(run_dirs) -> None:
+    """Lane WN's writer is the fact checker (no writer role is registered): Opus since the tier move
+    of wc-fc-1 (D51, 2026-10-24)."""
     _, run, _ = run_dirs
     (record,) = cli.read_rounds(run)
     brief = cli.brief(run, Path(record["handoff"]), "wn-0001")
-    assert "Sonnet writer wn-0001" in brief and "--stage write" in brief
-    assert (
-        "--answered-by sonnet-write-wn-0001 --model claude-sonnet-5-5 --role fact_checker" in brief
-    )
+    assert "Opus writer wn-0001" in brief and "--stage write" in brief
+    assert "--answered-by opus-write-wn-0001 --model claude-opus-5-5 --role fact_checker" in brief
     assert "check-answer --run-dir" in brief and "answer with no sentences" in brief
 
 

@@ -1355,18 +1355,22 @@ The prompts of the earlier runs are untouched (`prompts.py`, `prompts_sonnet.py`
 
 Owner decisions D6, D10, D22, D25 of 2026-10-08 (`output/remediation/OWNER_DECISIONS_2026-10-08.md`),
 master plan X6 (`final-2026-10-08/MASTER_PLAN.md`), workstream map `plans/descriptions.md`. Claude only:
-the check rounds and lane WN's write round are the **fact checker's** (`roles.ROLES`: Sonnet 5.5, high),
-the verification rounds the **web verifier's** (Sonnet 5.5, high), the judge the **pilot judge's** (Opus 5.5,
-xhigh), the adversarial second check the **adversarial** role's (Opus 5.5, high). Lane WN's writer is the
-fact checker too: no writer role is registered. A MiniMax answer is never ground truth.
+the check rounds and lane WN's write round are the **fact checker's** (`roles.ROLES`: Opus 5.5, high, since the
+tier move of wc-fc-1 on 2026-10-24, 15.2), the verification rounds `verify` and `verify2` of every run kind but
+lane E's are **lane WC's own web verifier's**, `wc_web_verifier` (Opus 5.5, high, since 2026-10-24, 15.2; lane E's
+verification stays the shared `web_verifier`'s, Sonnet 5.5, `cli.verify_role`), the judge the **pilot judge's**
+(Opus 5.5, xhigh), the adversarial second check the **adversarial** role's (Sonnet 5.5, high, since D36). Lane
+WN's writer is the fact checker too: no writer role is registered. A MiniMax answer is never ground truth.
 
 ### 15.1 What the code does now
 
 - **The briefs take model, role and family from the registry** (`cli._role_fields`): the printed `opus_handoff.py
   answer` command is `--answered-by <family>-check-r<round>-wc-000N --model <model> --role <role>`; `answer --role`
   refuses a model that is not the role's and records `answered_by` as `<role>:<agent>`. Agent names:
-  `sonnet-check-r<round>-<batch>` (Opus for the adversary), `sonnet-wc-<batch>` for a verification batch
-  (`sonnet-wc-verify-000N`, `sonnet-wc-verify2-000N`), `opus-wc-judge-<batch>`, `sonnet-write-wn-000N`. A verifier
+  `opus-check-r<round>-<batch>` (`sonnet-` for the adversary), `opus-wc-<batch>` for a verification batch
+  (`opus-wc-verify-000N`, `opus-wc-verify2-000N`; `sonnet-wc-...` in a lane-E run), `opus-wc-judge-<batch>`,
+  `opus-write-wn-000N` (the family prefix is the role's registered model, so these read `sonnet-` for answers
+  given before 2026-10-24). A verifier
   must not reuse a checker's name: the batch id in the name keeps them apart and `verify-import` still refuses
   a name that checked or verified the site before. `prompts.py` and `prompts_sonnet.py` carry `{family}`,
   `{model}`, `{role}`; `CHECK_BRIEF_SONNET`, `VERIFY_BRIEF_SONNET` and `JUDGE_BRIEF_SONNET` are gone (one brief
@@ -1390,8 +1394,16 @@ fact checker too: no writer role is registered. A MiniMax answer is never ground
 - **One agent is one agent in every role.** The independence rules compare the agent part of `answered_by`
   (`<role>:<agent>` -> `<agent>`): a verifier whose name checked or verified the site before is refused
   (`verify-import`), and a judge whose name checked or verified any site of the run is not independent
-  (`judge-import`), whatever role prefix the two names carry. Fact checker and web verifier are both Sonnet high,
-  so the model stamp does not separate them.
+  (`judge-import`), whatever role prefix the two names carry. Fact checker, `wc_web_verifier` and the pilot judge
+  are all Opus now, so the model stamp does not separate them.
+- **Lane WC's roles after its calibrations of 2026-10-24** (15.2; D45, D51): `cli.verify_role` binds the
+  verification rounds of every run kind but lane E's to `wc_web_verifier`, lane E's to the shared `web_verifier`
+  (`enrich.VERIFIER_ROLE`); `verify-brief` prints that role and `verify-import` requires it, so a WC verification
+  answered as the shared `web_verifier`, or on Sonnet, is refused. **A round exported before the move and answered
+  on Sonnet (a check as `fact_checker`, a verification as `web_verifier`) is no longer importable**: the import
+  names the answer and its role; the batch is answered again under the brief printed now (`verify-void` moves
+  MiniMax answers only - no tool sets a Sonnet answer aside yet, so check for such rounds before the next import).
+  Rounds already imported stay as they are: no build reads the role again.
 - **`verify-void`** (`wc/void.py`, 15.3) - **`judge-export --sample N --seed S`** (15.4) - the adversarial second
   check (`export --adversarial`, `defect-kept-sites`, `defect-closure`, 15.5) - **`minimax-sites`** (15.6) -
   `wc/calibration.py` (15.2).
@@ -1418,7 +1430,8 @@ judge - the WRONG sentence is found again, the incoherent text is found incohere
 Measured 2026-10-09: the verify pools hold no judged-WRONG site (pilot-27c's judge found none, mass-02 was not
 judged), so their list is empty and the verify bar is the agreement of 95 % plus the O18 spot check.
 
-    # fact checker (Sonnet, high): 6 batches, 30 sites of the three pilots; KEEP and KEEP_TRIMMED are one verdict
+    # fact checker, as sealed and run on Sonnet 2026-10-24 (failed: see below; the Opus re-run is wc-fc-1o/2o/3o)
+    # 6 batches, 30 sites of the three pilots; KEEP and KEEP_TRIMMED are one verdict
     $K seal --id wc-fc-1 --kind check --handoff $H/wc-pilot-2026-09-27-r1  --batches wc-0001 wc-0002 --threshold 0.9 --run $RUNS/pilot-2026-09-27     # Cloghanmore
     $K seal --id wc-fc-2 --kind check --handoff $H/wc-pilot-2026-09-27b-r1 --batches wc-0001 wc-0003 wc-0004 --threshold 0.9 --run $RUNS/pilot-2026-09-27b  # the Paris aqueduct, Nyons
     $K seal --id wc-fc-3 --kind check --handoff $H/wc-pilot-2026-09-27c-r1 --batches wc-0001 --threshold 0.9 --run $RUNS/pilot-2026-09-27c
@@ -1430,7 +1443,8 @@ judged), so their list is empty and the verify bar is the agreement of 95 % plus
     #   spot-check the URL and quote of every disagreement in COMPARISON.json (O18), count the false ones
     $CC verdict --id wc-fc-N --false-sources <n>
 
-    # web verifier (Sonnet, high): the pilot-27c verification (Opus-answered, 20 sites) and the 15 questions of mass-02
+    # web verifier, as sealed and run on Sonnet 2026-10-24 as `web_verifier` (failed: see below; the re-run on
+    # lane WC's own role is wc-wv-1o/2o): the pilot-27c verification (Opus-answered, 20 sites) and the 15 questions of mass-02
     $K seal --id wc-wv-1 --kind verify --handoff $H/wc-pilot-2026-09-27c-verify --batches verify-0001 verify-0002 verify-0003 verify-0004 --threshold 0.95 --run $RUNS/pilot-2026-09-27c
     $K seal --id wc-wv-2 --kind verify --handoff $H/wc-mass-2026-09-27-02-verify --batches verify-0003 verify-0004 verify-0005 --threshold 0.95
     $K prepare --id wc-wv-1 --run $RUNS/pilot-2026-09-27c   # and wc-wv-2 with --run $RUNS/mass-2026-09-27-02
@@ -1452,6 +1466,69 @@ judged), so their list is empty and the verify bar is the agreement of 95 % plus
 main checkout as the working directory**: a verify pool's round is found by its handoff path as the run recorded it
 (`output/remediation/handoff/...`, resolved against the working directory), so `seal --kind verify` from a worktree
 refuses with "is no verification round", and the briefs need the shared Wikipedia cache of the main checkout.
+
+**Answered on Sonnet 2026-10-24, and what moved** (verdicts in `$CAL/verdicts/`; owner decisions D45, D51 in
+`OWNER_DECISIONS_2026-10-08.md`):
+
+| id | role (model) | agreement | verdict |
+| --- | --- | --- | --- |
+| wc-fc-1 | `fact_checker` (Sonnet) | 0.9216 (47/51) of 0.9 | failed: a known error kept (`5facc061.../sentence-4` KEEP); tier move to Opus |
+| wc-fc-2 | `fact_checker` (Sonnet) | 0.8841 (61/69) of 0.9 | failed: below the threshold and a known error missed; tier move to Opus |
+| wc-fc-3 | `fact_checker` (Sonnet) | - | sealed and prepared, never compared: its seal binds the Sonnet entry, so it can no longer be compared or closed |
+| wc-wv-1 | `web_verifier` (Sonnet) | 0.8193 (68/83) of 0.95 | failed; tier move to Opus |
+| wc-wv-2 | `web_verifier` (Sonnet) | 0.8986 (62/69) of 0.95 | failed; tier move to Opus |
+| wc-pj-1/2 | `pilot_judge` (Opus) | 0.9565 / 0.8966 | failed, `held` (no tier above Opus): the owner decides; untouched here |
+
+- **`fact_checker` moved to Opus** (D51, the D6 tier rule): it answers lane WC only - the check rounds of every run
+  kind and lane WN's write round (`cli.check_role`; `test_the_fact_checker_and_lane_wcs_web_verifier_answer_lane_wc_only`
+  holds every other lane's code to that), the card lane has `card_fact_checker`. The tier move of wc-fc-1 is copied
+  into `roles.APPLIED_ESCALATIONS` (wc-fc-2 named the same move); the entry is `claude-opus-5-5`, high. Lane WN's
+  writer moves with it: no writer role is registered.
+- **Lane WC's verification got a role of its own, `wc_web_verifier`** (`claude-opus-5-5`, high, calibration set
+  `wc_verify_rounds`): the shared `web_verifier` also answers identity, lane E and image identity, so D45 keeps it
+  on Sonnet for them (each calibrates it on its own pools) and lane WC's context takes the move (D51). The tier moves
+  of wc-wv-1 and wc-wv-2 are `roles.SETTLED_TIER_MOVES` entries, `settled_by wc_web_verifier`, decision D45 - the
+  precedent is `card_adversarial`. `cli.verify_role` gives `verify` and `verify2` of every run kind but lane E's
+  (plain, site-list - the defect runs and the D10 re-check -, WN) to `wc_web_verifier`, lane E's to `web_verifier`;
+  `web_rules.VERIFIER_ROLES` classifies the new role.
+- **The calibration tooling seals and judges the roles the lane's rounds answer in**: `KIND_ROLE` is bound to
+  `cli.ROLE_CHECK`, `cli.ROLE_VERIFY`, `cli.ROLE_JUDGE` (`fact_checker`, `wc_web_verifier`, `pilot_judge`), so a seal
+  binds the role's Opus entry, `verify-brief` on the copy prints `--role wc_web_verifier`, and `compare` refuses a
+  fresh answer recorded as the shared `web_verifier` or stamped Sonnet. `seal` (for each `--run`) and `prepare`
+  refuse a pool whose source run answers that kind of round in another role (`calibration.round_role`: an
+  adversarial run's check, an enrichment run's check or verification). `calibrate_claude.py` needs no change: a
+  failure is `held` now (Opus has no tier above), and `verdict` names the model the pool was answered on.
+
+Every earlier seal of the two roles binds the entry they had (`role_sha256`), so the Opus re-run gets **new ids**,
+sealed before any agent answers, on the same pools, thresholds and known errors:
+
+    $K seal --id wc-fc-1o --kind check --handoff $H/wc-pilot-2026-09-27-r1  --batches wc-0001 wc-0002 --threshold 0.9 --run $RUNS/pilot-2026-09-27
+    $K seal --id wc-fc-2o --kind check --handoff $H/wc-pilot-2026-09-27b-r1 --batches wc-0001 wc-0003 wc-0004 --threshold 0.9 --run $RUNS/pilot-2026-09-27b
+    $K seal --id wc-fc-3o --kind check --handoff $H/wc-pilot-2026-09-27c-r1 --batches wc-0001 --threshold 0.9 --run $RUNS/pilot-2026-09-27c
+    $K seal --id wc-wv-1o --kind verify --handoff $H/wc-pilot-2026-09-27c-verify --batches verify-0001 verify-0002 verify-0003 verify-0004 --threshold 0.95 --run $RUNS/pilot-2026-09-27c
+    $K seal --id wc-wv-2o --kind verify --handoff $H/wc-mass-2026-09-27-02-verify --batches verify-0003 verify-0004 verify-0005 --threshold 0.95
+    #   read the "lane" of each seal in $CAL/THRESHOLDS.json; "role"/"model" must read fact_checker / wc_web_verifier, claude-opus-5-5
+    $K prepare --id wc-fc-1o --run $RUNS/pilot-2026-09-27
+    $K prepare --id wc-fc-2o --run $RUNS/pilot-2026-09-27b
+    $K prepare --id wc-fc-3o --run $RUNS/pilot-2026-09-27c
+    $K prepare --id wc-wv-1o --run $RUNS/pilot-2026-09-27c
+    $K prepare --id wc-wv-2o --run $RUNS/mass-2026-09-27-02
+    #   one Opus agent per batch (a new agent, none that answered the Sonnet copies), its instruction:
+    $C brief --run-dir $CAL/wc-fc-1o-run --handoff $CAL/wc-fc-1o --batch-id wc-0001          # wc-0002; wc-fc-2o: wc-0001 wc-0003 wc-0004; wc-fc-3o: wc-0001
+    $C verify-brief --run-dir $CAL/wc-wv-1o-run --handoff $CAL/wc-wv-1o --batch-id verify-0001  # to verify-0004; wc-wv-2o: verify-0003 to verify-0005
+    #   the briefs print `--model claude-opus-5-5 --role fact_checker` and `--model claude-opus-5-5 --role wc_web_verifier`
+    for N in wc-fc-1o wc-fc-2o wc-fc-3o wc-wv-1o wc-wv-2o; do $OH validate --dir $CAL/$N; done
+    for N in wc-fc-1o wc-fc-2o wc-fc-3o wc-wv-1o wc-wv-2o; do $K compare --id $N; done
+    #   spot-check the URL and quote of every disagreement in each COMPARISON.json (O18), count the false ones
+    $CC verdict --id wc-fc-1o --false-sources <n>     # likewise for each of the five
+
+A miss on Opus is `held`: the owner decides (`$CC release ... --decided-by --reason --evidence`, or another pool).
+**Measured 2026-10-24** (dry run, this branch's code with the main checkout as the working directory, `--root
+C:/tmp/...`, nothing sealed in `$CAL`): the five seals bind `fact_checker` / `wc_web_verifier` on `claude-opus-5-5`,
+high, with 10/15/5 and 20/15 cases and known errors 1/2/0 and none; the five prepares copy 10/15/5/20/15 questions;
+`brief` prints "You are Opus checker wc-0001 ... --answered-by opus-check-r1-wc-0001 --model claude-opus-5-5 --role
+fact_checker" and `verify-brief` "You are Opus verifier verify-0001 ... --answered-by opus-wc-verify-0001 --model
+claude-opus-5-5 --role wc_web_verifier".
 
 **Lane E's writer, `enrich-writer`** (`scripts/remediation/wc/enrich_calibration.py`; `enrich.require_writer_calibration`
 blocks every lane-E pilot until its verdict stands). A leave-one-out truth pool: texts lane E would enrich whose sentence
@@ -1611,7 +1688,7 @@ text, 5 cleared, 1 without a record) and the 17 WN texts; the report names the o
 WN's rerun takes them; `rewritten-since`; `retired`). Then a site-list run, no `--defects`:
 
     $C export --run-dir $RUNS/$R --handoff $H/$R-r1 --sites $RUNS/$R/MINIMAX_SITES.txt   # a WN text is asked as `web`
-    #   fact checker (Sonnet) check, web verifier (Sonnet) verify, build, a sampled Opus judge (15.4), write in the chain
+    #   fact checker (Opus) check, wc_web_verifier (Opus) verify, build, a sampled Opus judge (15.4), write in the chain
 
 ### 15.7 The WN rerun (D22)
 
@@ -1625,7 +1702,7 @@ duplicate pairs, retired sites) with `--exclude F`, and run it **after** the WC 
     R=wn-2026-10-09
     $C read --run-dir $RUNS/$R
     $C export --run-dir $RUNS/$R --handoff $H/wn-$R-w --wn --pilot 20 --seed <S> [--exclude F]
-    #   writer Sonnet (fact_checker), new Sonnet verifiers, an Opus xhigh judge of the pilot (judge-export, whole);
+    #   writer Opus (fact_checker), new Opus verifiers (wc_web_verifier), an Opus xhigh judge of the pilot (judge-export, whole);
     #   J_THRESHOLDS unchanged: 0 WRONG, <= 5 % UNSUPPORTED, 0 incoherent, >= 10 of 20 judged
     $C export --run-dir $RUNS/wn-2026-10-09b --handoff $H/wn-...-w --wn --after $RUNS/$R           # the rest, one chunk
 
@@ -1653,6 +1730,11 @@ re-pinned briefs in `test_wc.py` and `test_wn.py`. The guards of 2026-10-24 (15.
 disclosure, X10) are `mutation_sweep.py "wc write4" "wc gate" "closed batches" "wc minimax" "wc defects population"
 "enrich calibration" "p4 disclosure"`, over `tests/remediation/test_phase4_wc_write.py`, `test_wc_list.py`,
 `test_closed_wc_batches.py`, `test_wc_desc_population.py`, `test_enrich_calibration.py` and `test_phase4_review.py`.
+The role moves after the WC calibrations (15.2: `fact_checker` to Opus, `wc_web_verifier`, `verify_role`, the
+pool's round role) are thirteen more cases in the same families, `mutation_sweep.py "wc roles" "wc calibration"`,
+over `test_roles.py`, `test_wc_roles.py` and `test_wc_calibration.py`; the registry's own guards stay
+`mutation_sweep.py "claude roles"`, `mechanical/mutation_sweep.py "wd5-adv" "d36:"` and
+`teaser/mutation_sweep.py "teaser card-adversarial"`.
 
 ### 15.10 Closed batches and stale reads (2026-10-24)
 
