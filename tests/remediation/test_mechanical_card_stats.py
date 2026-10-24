@@ -586,6 +586,26 @@ class TestTheBasis:
                 export([*rows, *added], entries), NEXT, built_at="t", bases=bases_in(tmp_path)
             )
 
+    def test_a_site_the_insert_lane_created_after_the_horizon_was_not_there(
+        self, tmp_path: Path
+    ) -> None:
+        """D57: a journalled insert (the `id` row from NULL to the site's id) after the basis's
+        horizon explains the added site - absent from the counterfactual, counted in the recompute."""
+        rows, entries, _ = self.scenario(tmp_path)
+        added = {**row(SITE_B, site_type="Cairn", description=None), "has_card": False}
+        insert = {**jrow(len(entries) + 100, SITE_B, "id", None, SITE_B), "run_stamp": "d57_x-s001"}
+        result = C.build_card_stats_plan(
+            export([*rows, added], (*entries, insert)), NEXT, built_at="t", bases=bases_in(tmp_path)
+        )
+        assert result.proof.counters["counterfactual_cells_differing"] == 0
+        assert all(change.site_id != SITE_B for change in result.plan.changes)
+        below = {**insert, "id": 0}
+        with pytest.raises(P.PlanError, match="the curated sites are not the basis's"):
+            C.build_card_stats_plan(
+                export([*rows, added], (below, *entries)), NEXT, built_at="t",
+                bases=bases_in(tmp_path),
+            )  # fmt: skip
+
     def test_a_row_committed_below_the_horizon_after_the_export_refuses(
         self, tmp_path: Path
     ) -> None:

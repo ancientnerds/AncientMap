@@ -12797,6 +12797,23 @@ INSERT_SITE_CASES: list[Case] = [
         "test_accept_records_once_and_lists_the_sites",
         INSERT_TESTS,
     ),
+    # the card_stats lane after an insert (its counterfactual must know the new sites)
+    Case(
+        "insert-site: card_stats leaves an inserted site out",
+        CARD_STATS,
+        'for row in sites if row["id"] not in created}',
+        "for row in sites}",
+        "test_a_site_the_insert_lane_created_after_the_horizon_was_not_there",
+        CARD_TESTS,
+    ),
+    Case(
+        "insert-site: card_stats reads only inserts past the horizon",
+        CARD_STATS,
+        'and int(entry["id"]) > basis.since',
+        "and True",
+        "test_a_site_the_insert_lane_created_after_the_horizon_was_not_there",
+        CARD_TESTS,
+    ),
 ]
 CASES += INSERT_SITE_CASES
 
