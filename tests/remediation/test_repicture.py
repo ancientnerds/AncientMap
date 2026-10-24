@@ -110,6 +110,24 @@ def test_a_429_stops_the_run_instead_of_refusing_the_picture(tmp_path: Path) -> 
     assert not PL.picture_path(tmp_path, _candidate()).exists()
 
 
+def test_a_stopped_run_leaves_a_manifest_of_the_disk_it_left(tmp_path: Path) -> None:
+    second = URL.replace("Tomb", "Wall")
+    third = URL.replace("Tomb", "Gate")
+    (tmp_path / "REPICTURE_credit.jsonl").write_text('{"status": "old run"}\n', encoding="utf-8")
+    commons = FakeCommons({URL: _ok(), second: CM.CommonsError(f"{second}: HTTP 429")})
+    needed = [
+        (SITE, _candidate()),
+        (SITE_B, _candidate(second, "Wall.jpg")),
+        (SITE_B, _candidate(third, "Gate.jpg")),
+    ]
+    with pytest.raises(CM.CommonsError, match="429"):
+        RP.repicture(tmp_path, "credit", needed, commons)
+    lines = [json.loads(x) for x in (tmp_path / "REPICTURE_credit.jsonl").read_text().splitlines()]
+    assert [line["status"] for line in lines] == [RP.FETCHED, RP.STOPPED]
+    assert lines[1]["file"] == "Wall.jpg" and "HTTP 429" in lines[1]["reason"]
+    assert lines[1]["not_asked"] == 2 and third not in commons.asked
+
+
 @pytest.mark.parametrize(
     ("answer", "reason"),
     [

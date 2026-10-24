@@ -27,7 +27,9 @@ a thumbnail URL that names the lane's width (`/1280px-`, `commons.RENDER_WIDTH`)
 a still picture, bytes Pillow decodes, at most that width. A picture already on disk is decoded again
 and kept (`present`), never fetched twice. The manifest `REPICTURE_<need>.jsonl` is written into the
 old run with one line per needed picture - `fetched`, `present`, `gone` or `refused` with the reason,
-the sha256 and size of the bytes; the command exits 1 while any line is not on disk.
+the sha256 and size of the bytes; the command exits 1 while any line is not on disk. A run that an
+HTTP 429, a 5xx or a timeout stops writes the lines it has, then a `stopped` line naming the error and
+the pictures never asked, before it exits - the manifest always describes the disk this run left.
 
     repicture.py --old-run OLD --need recheck     --run-dir C --served-run S   [--dry-run]
     repicture.py --old-run OLD --need credit      --sites CREDIT_SITES_CLAUDE.txt [--dry-run]
@@ -71,6 +73,9 @@ HOSTS = frozenset({"upload.wikimedia.org", "thumb.wikimedia.org"})
 RENDER_MIMES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 FETCHED, PRESENT, GONE, REFUSED = "fetched", "present", "gone", "refused"
 ON_DISK = frozenset({FETCHED, PRESENT})
+#: The last line of a manifest whose run a CommonsError stopped: the picture it stopped on and how
+#: many were never asked.
+STOPPED = "stopped"
 
 
 class RepictureError(ST.StateError):
@@ -236,6 +241,11 @@ def fetch_one(
     return _line(site_id, candidate, path, FETCHED, **facts)
 
 
+def _write_manifest(old_run: Path, need: str, lines: Sequence[Mapping[str, Any]]) -> None:
+    text = "".join(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n" for line in lines)
+    (old_run / manifest_name(need)).write_text(text, encoding="utf-8", newline="\n")
+
+
 def repicture(
     old_run: Path,
     need: str,
@@ -261,9 +271,16 @@ def repicture(
         missing = [p for p in unique if not p.is_file()]
         return {"need": need, "needed": len(unique), "on_disk": len(unique) - len(missing),
                 "missing": len(missing), "dry_run": True}  # fmt: skip
-    lines = [fetch_one(old_run, sid, c, commons) for sid, c in unique.values()]
-    text = "".join(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n" for line in lines)
-    (old_run / manifest_name(need)).write_text(text, encoding="utf-8", newline="\n")
+    lines: list[dict[str, Any]] = []
+    for site_id, candidate in unique.values():
+        try:
+            lines.append(fetch_one(old_run, site_id, candidate, commons))
+        except CM.CommonsError as exc:
+            path = PL.picture_path(old_run, candidate)
+            stop = _line(site_id, candidate, path, STOPPED, reason=str(exc))
+            _write_manifest(old_run, need, [*lines, stop | {"not_asked": len(unique) - len(lines)}])
+            raise
+    _write_manifest(old_run, need, lines)
     counts: dict[str, int] = {}
     for line in lines:
         counts[line["status"]] = counts.get(line["status"], 0) + 1
