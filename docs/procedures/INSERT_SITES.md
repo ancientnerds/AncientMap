@@ -141,6 +141,14 @@ as planned with a page (`curated_page`), the markers hash their values, exactly 
 and ids, the proposals approved for the site, the contributions promoted to the site, the D25 parent
 invariants, exactly the planned journal rows per site.
 
+**Each probe corrupts the temp table its guard reads** (`writer.probe_cases`): `_ins_site` for
+guards 1-4 and 7, `_ins_name` for 5, `_ins_prop` for 6, `_ins_contrib` for 8. Probe 5 corrupts the
+label's key in the name rows (`names[0]["name_key"]`) and leaves the site row's `name_key` alone: a
+corrupted site key never reaches guard 5 and is refused only later by the invariant "rows", which
+`probe-guards` counts as NOT PROVEN (fixed 2026-10-24 after review;
+`test_every_probe_corrupts_the_table_its_guard_reads` renders every probe and compares its rows
+with the real APPLY's in that table).
+
 **The old-value guard rides on the two UPDATEs too.** `site_proposals` and `user_contributions` are
 no target of `apply_remediation_change()`, so their UPDATEs carry what it carries: every value the
 plan read is part of the UPDATE's own `WHERE` (`writer.proposal_held`, `writer.contribution_held`),
@@ -216,7 +224,8 @@ insert: the plan refuses an item a curated row holds, retired or not.
    the card part of D57 needs a follow-up task that does not exist yet: **a journalled `card_stats`
    insert step for the rows of `INSERTED_SITES.txt`, built on this lane's pattern** (plan -> emit ->
    rehearse -> probe-guards -> apply -> read-back -> accept, with its own journalled undo), owned by
-   the close-out orchestrator; never `python -m
+   the close-out orchestrator as an explicit sub-task of S10 that has to be done before S10 is
+   marked done; never `python -m
    api.cardgame.generator`, which rewrites every card unjournalled. Until it lands, the card waves
    skip every new site and D57 is not done for cards. After it: the card_stats wave computes the
    stats, then `scripts/remediation/teaser/run.py select --sites INSERTED_SITES.txt` after the

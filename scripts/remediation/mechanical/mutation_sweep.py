@@ -12883,6 +12883,22 @@ INSERT_SITE_CASES: list[Case] = [
         "test_the_undo_reads_back_the_restored_proposal_and_contribution",
         INSERT_TESTS,
     ),
+    Case(
+        "insert-site: probe 5 corrupts the name rows",
+        INSERT_WRITER,
+        '        (5, replace(first, names=[{**first.names[0], "name_key": bad_key}, *first.names[1:]])),',
+        "        (5, replace(first, name_key=bad_key)),",
+        "test_every_probe_corrupts_the_table_its_guard_reads",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: probe 5 spares guard 4's rows",
+        INSERT_WRITER,
+        '        (5, replace(first, names=[{**first.names[0], "name_key": bad_key}, *first.names[1:]])),',
+        "        (5, replace(first, name_key=bad_key)),",
+        "test_the_guard_5_probe_reaches_the_name_rows_and_spares_guard_4",
+        INSERT_TESTS,
+    ),
     guard(
         "insert-site: guard 8 gets its probe",
         INSERT_WRITER,

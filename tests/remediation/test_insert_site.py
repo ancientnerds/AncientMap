@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -1270,6 +1271,26 @@ class TestTheReadback:
             W.accept(target, read=landed(step))
 
 
+#: The temp table each APPLY guard selects from: its probe has to change that table's rows.
+GUARD_READS = {
+    1: "_ins_site",
+    2: "_ins_site",
+    3: "_ins_site",
+    4: "_ins_site",
+    5: "_ins_name",
+    6: "_ins_prop",
+    7: "_ins_site",
+    8: "_ins_contrib",
+}
+
+
+def _values(sql: str, table: str) -> str:
+    """The rows APPLY.sql loads into `table` (its `INSERT INTO <table> VALUES ...;` block)."""
+    found = re.search(rf"INSERT INTO {table} VALUES\n(.*?\));\n", sql, re.DOTALL)
+    assert found is not None, table
+    return found[1]
+
+
 class TestTheProbes:
     def test_every_guard_gets_a_probe_that_corrupts_only_its_input(self, step: P.Step) -> None:
         cases = dict(W.probe_cases(step))
@@ -1279,7 +1300,8 @@ class TestTheProbes:
         assert cases[2].inserts[0].source_record_id == step.probe["shown"]["source_record_id"]
         assert cases[3].inserts[0].qid == step.probe["shown"]["qid"]
         assert cases[4].inserts[0].name_key == step.probe["shown"]["name_normalized"]
-        assert cases[5].inserts[0].name_key != first.name_key
+        assert cases[5].inserts[0].name_key == first.name_key
+        assert cases[5].inserts[0].names[0]["name_key"] != first.names[0]["name_key"]
         assert cases[6].inserts[0].proposals[0]["old"]["status"] == "rejected"
         assert cases[7].inserts[0].parent_site_id == step.probe["retired"]["site_id"]
         for case in cases.values():
@@ -1296,6 +1318,27 @@ class TestTheProbes:
         }
         for case in cases.values():
             W.lint(W.render_apply(case), "apply")
+
+    def test_the_guards_read_the_tables_the_probes_are_built_for(self) -> None:
+        for number, sql in W.apply_guards().items():
+            assert re.search(r"FROM (_ins_\w+)", sql)[1] == GUARD_READS[number], number
+
+    def test_every_probe_corrupts_the_table_its_guard_reads(self, radar_step: P.Step) -> None:
+        base = W.render_apply(radar_step)
+        cases = dict(W.probe_cases(radar_step))
+        assert sorted(cases) == sorted(GUARD_READS)
+        for number, case in cases.items():
+            table = GUARD_READS[number]
+            assert _values(W.render_apply(case), table) != _values(base, table), number
+
+    def test_the_guard_5_probe_reaches_the_name_rows_and_spares_guard_4(self, step: P.Step) -> None:
+        base, probe = W.render_apply(step), W.render_apply(dict(W.probe_cases(step))[5])
+        label = step.inserts[0].names[0]
+        bad = W._lit(label["name_key"] + " (not the key)")
+        assert f"{W._lit(label['name'])}, {bad}, " in _values(probe, "_ins_name")
+        assert bad not in _values(base, "_ins_name")
+        # guard 4 reads the site rows: they must stand as planned, or guard 4 could refuse first
+        assert _values(probe, "_ins_site") == _values(base, "_ins_site")
 
     def test_probes_need_their_rows(self, step: P.Step) -> None:
         step.probe = {}

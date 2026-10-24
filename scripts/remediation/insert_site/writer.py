@@ -1342,6 +1342,7 @@ def probe_cases(step: P.Step) -> list[tuple[int, P.Step]]:
     if shown is None or retired is None:
         raise WriterError("the plan read no probe rows (a shown and a retired curated site)")
     first = step.inserts[0]
+    bad_key = first.names[0]["name_key"] + " (not the key)"
     cases: list[tuple[int, P.Insert]] = [
         (1, replace(first, site_id=str(shown["site_id"]))),
         (2, replace(first, source_record_id=str(shown["source_record_id"]))),
@@ -1356,7 +1357,9 @@ def probe_cases(step: P.Step) -> list[tuple[int, P.Step]]:
                 lon=float(shown["lon"]),
             ),
         ),
-        (5, replace(first, name_key=first.name_key + " (not the key)")),
+        # guard 5 reads `_ins_name` only, which renders from `names`: the label's key is corrupted
+        # there, while `Insert.name_key` (`_ins_site`, guard 4's input) keeps its true key
+        (5, replace(first, names=[{**first.names[0], "name_key": bad_key}, *first.names[1:]])),
         (7, replace(first, parent_site_id=str(retired["site_id"]))),
     ]
     proposal_holder = next((i for i in step.inserts if i.proposals), None)
