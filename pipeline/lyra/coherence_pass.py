@@ -146,9 +146,15 @@ def extract_title_terms(title: str) -> list[str]:
          contributes both "Luminous Beings" and "Ancient Mythology", not a
          joined "Luminous Beings Ancient Mythology" that never appears
          verbatim in prose.
-      3. Drop pure filler (`a`, `an`, `the`) from each phrase.
-      4. Keep phrases of >= 2 content words; deduplicate while preserving
-         first-occurrence order.
+      3. Strip filler (`a`, `an`, `the`) and connectors from the phrase's
+         edges only. An article INSIDE a phrase stays: the body is searched
+         for the phrase verbatim, and "Mogollon Pithouse Sites Across Upper
+         Gila" (the title's "the" dropped) occurs in no grammatical sentence,
+         so the term was undefined for every possible text - the stored
+         undefined_title_terms = 1 that held mogollon-pithouse-sites-across-
+         the-upper-gila on every correction (measured 2026-10-24, D60).
+      4. Keep phrases of >= 2 content words (filler does not count);
+         deduplicate while preserving first-occurrence order.
     """
     if not title:
         return []
@@ -168,15 +174,16 @@ def extract_title_terms(title: str) -> list[str]:
         )
         sub_phrases = connector_re.split(frag)
 
+        edge = _CONNECTORS | _FILLER
         for phrase in sub_phrases:
-            words = [w for w in phrase.split() if w.lower() not in _FILLER]
-            # Strip any leading/trailing connectors that survived (e.g.
-            # "and Human Genius" after a comma split → "Human Genius").
-            while words and words[0].lower() in _CONNECTORS:
+            words = phrase.split()
+            # Strip leading/trailing connectors and filler that survived (e.g.
+            # "and the Human Genius" after a comma split → "Human Genius").
+            while words and words[0].lower() in edge:
                 words.pop(0)
-            while words and words[-1].lower() in _CONNECTORS:
+            while words and words[-1].lower() in edge:
                 words.pop()
-            if len(words) >= 2:
+            if sum(1 for w in words if w.lower() not in _FILLER) >= 2:
                 joined = " ".join(words)
                 lower = joined.lower()
                 if lower not in seen:
@@ -189,3 +196,20 @@ def check_title_terms_in_body(terms: list[str], body: str) -> dict[str, bool]:
     """Case-insensitive substring check for each term."""
     body_lc = body.lower()
     return {t: (t.lower() in body_lc) for t in terms}
+
+
+def undefined_title_terms(title: str, body: str) -> list[str]:
+    """The title terms (extract_title_terms) that `body` does not contain.
+
+    The one computation of the quality gate's `undefined_title_terms` (as a
+    count). The caller chooses the body. The studio's coherence gate passes the
+    prose paragraphs only (pipeline/studio/paper/gates.py: the `# <title>` line
+    would define every term), the rule a new paper is held to. The publish and
+    correction gates (theo_publishing.check_quality) pass the whole served text:
+    that is the rule every stored value was computed with - measured 2026-10-24
+    on the 41 public papers, 41 of 41 stored counts equal it, while the
+    prose-only rule fails 26 of them - so their recompute re-derives the stored
+    verdict from the text instead of reading it (D60).
+    """
+    found = check_title_terms_in_body(extract_title_terms(title), body)
+    return [term for term, ok in found.items() if not ok]

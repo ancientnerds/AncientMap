@@ -51,7 +51,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pipeline.lyra import paper_claim_gate, theo_image_gate
-from pipeline.lyra.coherence_pass import check_title_terms_in_body, extract_title_terms
+from pipeline.lyra.coherence_pass import undefined_title_terms
 from pipeline.lyra.hallucination_gate import extract_specifics, verify_against_pack
 from pipeline.lyra.hero_picker import HERO_MIN_WIDTH, pick_hero_image
 from pipeline.lyra.quality_gate import (
@@ -189,13 +189,22 @@ def gate_meta(meta: Any, question: str) -> Gate:
         problems.append("title starts with a question stem")
     if title.lower().rstrip("?. ") == question.lower().rstrip("?. "):
         problems.append("title echoes the research question")
+    problems.extend(card_problems(card))
+    return Gate("meta", not problems, {"problems": problems})
+
+
+def card_problems(card: str) -> list[str]:
+    """The house rule of a card description: the meta gate's, and `paper correct
+    --card-file`'s for a corrected card (D60), so a card the session writes is held to one
+    rule whichever path sends it."""
+    problems: list[str] = []
     if not card or len(card) > CARD_MAX_CHARS:
         problems.append(f"card_description must be 1 to {CARD_MAX_CHARS} characters")
     elif len(split_sentences(card)) > 3:
         problems.append("card_description has more than three sentences")
     if any(tok in card for tok in ("[", "](", "#", "*")):
         problems.append("card_description must be plain text (no citations, no markdown)")
-    return Gate("meta", not problems, {"problems": problems})
+    return problems
 
 
 def gate_references(report: str, sources_rows: list[dict[str, Any]], dossier: Dossier) -> Gate:
@@ -253,8 +262,7 @@ def gate_coherence(title: str, report: str, status: ClaimStatus | None) -> Gate:
     """Title terms are looked up in the prose paragraphs only: paper.md opens with the
     `# <title>` line itself (numbering.compose), which would otherwise define every term."""
     body = "\n".join(_plain(p.text) for p in paragraphs(report))
-    terms = extract_title_terms(title)
-    undefined = [t for t, ok in check_title_terms_in_body(terms, body).items() if not ok]
+    undefined = undefined_title_terms(title, body)
     conflicts = status.coherence_conflicts if status is not None else 0
     problems = []
     if undefined:

@@ -320,19 +320,29 @@ def pick_hero_image(
         best.reason,
     )
 
-    cand = _cand_from_entry(best.entry)
-    rationale = best.entry.get("rationale") or ""
+    return hero_from_entry(best.entry)
+
+
+def hero_from_entry(entry: dict) -> dict:
+    """The banner dict of one probative_images entry, as the frontend reads it.
+
+    The one builder: pick_hero_image uses it for its choice, and theo_publish
+    --correct (`hero_image`, D60) for a hero a correction names among the
+    paper's own stored pictures.
+    """
+    cand = _cand_from_entry(entry)
+    rationale = entry.get("rationale") or ""
     caption = build_caption(cand, rationale)
     # build_caption wraps in asterisks — strip for the frontend payload
     # (the hero renders plain text, not markdown).
     caption_text = caption.strip("*").rstrip(".")
 
     return {
-        "src": best.entry.get("web_path", ""),
-        "title": _clean_title(best.entry.get("title", "")) or "",
+        "src": entry.get("web_path", ""),
+        "title": _clean_title(entry.get("title", "")) or "",
         "caption": caption_text,
-        "sourceUrl": best.entry.get("source_url", "") or "",
-        "web_path": best.entry.get("web_path", ""),
-        "source_name": best.entry.get("source_name", ""),
+        "sourceUrl": entry.get("source_url", "") or "",
+        "web_path": entry.get("web_path", ""),
+        "source_name": entry.get("source_name", ""),
         "rationale": rationale,
     }

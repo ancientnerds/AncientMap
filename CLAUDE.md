@@ -201,7 +201,13 @@ ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_p
   without `rewrite`; a full
   republish (`result`, the complete publish result, which excludes `report` and `evidence`), which
   keeps slug, `published_at` and `published_by`, optionally with `dossier_request_id`: the fresh
-  `researched` run it was written from, closed as `cancelled` in the same transaction.
+  `researched` run it was written from, closed as `cancelled` in the same transaction. The small
+  kinds of owner decision D60 (alone or with `report`, never with `result`; no writer stored, no
+  notice) change one part within what the paper carries: `probative_image_changes` (flip a stored
+  `verified: false`, drop a stored record), `hero_image` (one of the paper's own pictures,
+  landscape, at least 600 px), `card_description`, and `evidence_changes` (retire named ids, add
+  re-anchored entries under new ids). The quality gate recomputes `undefined_title_terms` from the
+  whole served text.
 - **Journal** `theo_paper_publications` (migration 0025): one row per committed write, in the
   write's transaction, none for a dry run. `bundle_sha256` is the sha256 of the exact stdin bytes:
   after a timeout or exit 4, a row of the paper with the hash you sent means the write committed
@@ -268,7 +274,10 @@ weekly-plan stop.
   A public paper changes through `paper correct ID --text …|--entries FILE`: a log entry alone, or
   with `--with-report`, `--republish`, or `--report-file FILE [--rewrite]` (the full markdown of a
   legacy paper without a studio check, starting from the `content` of `GET /api/v1/research/{slug}`;
-  `--rewrite` marks a full rewrite by this session's model). A legacy rewrite from a fresh Theo run
+  `--rewrite` marks a full rewrite by this session's model), and the D60 small kinds
+  `--image-changes FILE`, `--hero WEB_PATH`, `--card-file FILE`, `--evidence-changes FILE` (alone
+  or with `--report-file`; the added evidence quotes are checked against the workspace's dossier
+  before the dry run). A legacy rewrite from a fresh Theo run
   is `paper pull ID --dossier-from RUN`, then `paper correct ID --republish`, never `paper publish`.
   Exit 3 committed nothing (re-run after `paper check`); exit 4, a timeout or no JSON answer is a
   `RemoteOutcomeUnknown`: follow the adoption procedure it prints and never re-run the write.

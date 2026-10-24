@@ -31,7 +31,14 @@ def test_complete_workspace_passes_every_gate(tmp_path):
     score = result["quality_score"]
     assert score["badge"] == "Claim-checked"
     assert score["audit_gate_failures"]["hallucination_final"] == 0
-    assert recompute_quality_passed(score, result["audit"]) is True
+    assert (
+        recompute_quality_passed(
+            score,
+            result["audit"],
+            undefined_title_terms=score["audit_gate_failures"]["undefined_title_terms"],
+        )
+        is True
+    )
     assert score["meta"]["images_verified"] == 6
     images_gate = _gate(result, "images")
     assert images_gate["details"]["images_per_section"] == {
@@ -201,7 +208,14 @@ def test_run_check_fails_a_title_term_only_the_title_line_carries(tmp_path):
     score = result["quality_score"]
     assert score["audit_gate_failures"]["undefined_title_terms"] == 2
     assert score["badge"] == "Unverified"
-    assert recompute_quality_passed(score, result["audit"]) is False
+    assert (
+        recompute_quality_passed(
+            score,
+            result["audit"],
+            undefined_title_terms=score["audit_gate_failures"]["undefined_title_terms"],
+        )
+        is False
+    )
 
 
 def test_pick_hero_offers_only_wide_images_when_any_exist():

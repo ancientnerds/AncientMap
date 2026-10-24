@@ -6,7 +6,9 @@ travels on stdin, credentials stay on the VPS. The input shapes are stream A's C
     --dry-run|--apply            {version, request_id, writer, result}            (bundle.json)
     --correct [--dry-run]        {version, request_id, writer, corrections_append,
                                   report? + evidence? | report? + rewrite? |
-                                  result? + dossier_request_id?}
+                                  result? + dossier_request_id?,
+                                  and without result: probative_image_changes?,
+                                  hero_image?, card_description?, evidence_changes?}
     --register-video [--dry-run] {version, request_id, writer, youtube_id, title, published_at,
                                   evidence_timestamps, poster?}
 
@@ -50,10 +52,14 @@ from pipeline.lyra.theo_publishing import EVIDENCE_ID_RE, YOUTUBE_ID_RE, poster_
 from pipeline.studio import config, remote
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.bundle import WRITER, require_fresh_check, upload_names
+from pipeline.studio.paper.claims import source_texts
+from pipeline.studio.paper.evidence import added_entry_problems
+from pipeline.studio.paper.gates import card_problems
 from pipeline.studio.paper.numbering import build_paper
 from pipeline.studio.paper.workspace import (
     PaperWorkspace,
     dossier_request_id,
+    load_dossier,
     published_slug,
     read_json,
     read_meta,
@@ -306,6 +312,53 @@ def _published_bundle(ws: PaperWorkspace) -> dict[str, Any]:
     return json.loads(ws.published_bundle.read_text(encoding="utf-8"))
 
 
+def _evidence_changes_problems(ws: PaperWorkspace, changes: Any) -> list[str]:
+    """What the studio checks of `--evidence-changes` before the dry run (D60).
+
+    The added entries' quotes are checked against the workspace's dossier: a re-anchored
+    entry goes out without a MiniMax claim check, so its quote must at least be verbatim
+    in the archived text of the source it names. `cited_ids` are the source ids of the
+    published paper's numbered references (sources.json). Retirements need nothing of the
+    workspace; the server checks the ids (gates `evidence_changes`, `retention`).
+    """
+    if not isinstance(changes, dict):
+        return ["evidence_changes must be an object {retire?, add?}"]
+    added = changes.get("add", [])
+    if not added:
+        return []
+    dossier = load_dossier(ws)
+    rows = read_json(ws.sources_json, "the numbered paper's sources (`paper number`)")
+    cited = {row["source_id"] for row in rows}
+    return added_entry_problems(added, dossier, cited, source_texts(ws, dossier))
+
+
+def _part_payload(
+    ws: PaperWorkspace,
+    *,
+    image_changes: dict[str, Any] | None,
+    hero: str | None,
+    card: str | None,
+    evidence_changes: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """The small kinds' keys of a correction (stream A's C5 as amended by D60)."""
+    parts: dict[str, Any] = {}
+    if evidence_changes is not None:
+        problems = _evidence_changes_problems(ws, evidence_changes)
+        if problems:
+            raise StudioError(f"--evidence-changes refused: {problems}")
+        parts["evidence_changes"] = evidence_changes
+    if image_changes is not None:
+        parts["probative_image_changes"] = image_changes
+    if hero is not None:
+        parts["hero_image"] = {"web_path": hero}
+    if card is not None:
+        problems = card_problems(card)
+        if problems:
+            raise StudioError(f"--card-file refused: {problems}")
+        parts["card_description"] = card
+    return parts
+
+
 def correct(
     ws: PaperWorkspace,
     entries: list[dict[str, Any]],
@@ -314,13 +367,17 @@ def correct(
     republish: bool = False,
     report: str | None = None,
     rewrite: bool = False,
+    image_changes: dict[str, Any] | None = None,
+    hero: str | None = None,
+    card: str | None = None,
+    evidence_changes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Append corrections to a published paper (stream A's C5); at most one of the modes.
 
     - neither: only the corrections log grows;
-    - with_report: the re-checked paper's report and evidence replace the published ones. A
-      correction cannot change the images, the title or the card description (theo_publish
-      keeps the stored ones), so the image set, title and card description must equal the
+    - with_report: the re-checked paper's report and evidence replace the published ones. It
+      cannot change the images, the title or the card description (theo_publish keeps the
+      stored ones), so the image set, title and card description must equal the
       published baseline's (published_bundle.json; the images are on the VPS already); a
       changed title or card is a --republish;
     - republish: the checked workspace's bundle.json `result` replaces the published result
@@ -337,6 +394,15 @@ def correct(
       shows the Claude disclosure line, and sends the `paper_published` owner notice of a
       republish (side effect `notify`, owner decisions 18 and 21); a small fix such as the
       Roswell date goes without it and sends no notice.
+    The small kinds of owner decision D60 go alone or with `report`, never with
+    `with_report` or `republish`, and each changes only what the paper carries (stream A
+    gates it on the stored row): `image_changes` {verify?, drop?} flips stored `verified:
+    false` flags or drops stored records; `hero` names the web path of one of the paper's
+    own pictures as its banner; `card` replaces the card description (held to the house
+    rule, gates.card_problems); `evidence_changes` {retire?, add?} retires evidence ids
+    (each named by an entry's evidence_id) and adds re-anchored entries under new ids, whose
+    quotes are checked verbatim against the workspace's dossier first. None of them stores
+    a writer or sends the owner notice; with `rewrite` only `evidence_changes` is refused.
     Every mode dry-runs first and applies only when the dry run passes. Every record in
     corrections/ carries `body_sha256`, the sha256 of the exact bytes sent: theo_publish
     journals that hash (theo_paper_publications.bundle_sha256), so a write whose outcome is
@@ -349,11 +415,32 @@ def correct(
             "--rewrite goes with --report-file: it marks the full rewrite of a paper "
             "without a studio workspace check (a studio rewrite is --republish)"
         )
+    small = {
+        "--image-changes": image_changes,
+        "--hero": hero,
+        "--card-file": card,
+        "--evidence-changes": evidence_changes,
+    }
+    sent_small = [flag for flag, value in small.items() if value is not None]
+    if sent_small and (with_report or republish):
+        raise StudioError(
+            f"{', '.join(sent_small)} go alone or with --report-file: --with-report sends the "
+            "re-checked paper as published, --republish a whole new result"
+        )
+    if evidence_changes is not None and rewrite:
+        raise StudioError("--evidence-changes excludes --rewrite (a rewrite carries no evidence)")
     payload: dict[str, Any] = {
         "version": 1,
         "request_id": ws.request_id,
         "writer": WRITER,
         "corrections_append": entries,
+        **_part_payload(
+            ws,
+            image_changes=image_changes,
+            hero=hero,
+            card=card,
+            evidence_changes=evidence_changes,
+        ),
     }
     sent_bundle: bytes | None = None
     if with_report:

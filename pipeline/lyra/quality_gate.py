@@ -54,7 +54,9 @@ def quality_gate_passed(
     )
 
 
-def recompute_quality_passed(quality_score: dict, audit_result: dict) -> bool:
+def recompute_quality_passed(
+    quality_score: dict, audit_result: dict, *, undefined_title_terms: int
+) -> bool:
     """Re-run the gate for a stored paper against a freshly computed audit.
 
     `quality_score` is the stored dict (audit_gate_failures); `audit_result`
@@ -62,7 +64,12 @@ def recompute_quality_passed(quality_score: dict, audit_result: dict) -> bool:
     to is taken from the fresh result — including citation coverage and
     reference integrity, which are pure functions of the audit: until
     2026-09-24 they were read from the stored metrics, so a paper whose
-    marker was repaired stayed held on the write-time score. The rest —
+    marker was repaired stayed held on the write-time score.
+    `undefined_title_terms` is the same kind of value: a pure function of the
+    title and the text (coherence_pass.undefined_title_terms), so the caller
+    computes it from the text being gated. Until 2026-10-24 (D60) it was read
+    from the stored summary, which held mogollon-pithouse-sites-across-the-
+    upper-gila on every correction whatever its text said. The rest —
     hallucination and contradiction counts, which are LLM measurements that
     cannot be redone without re-running the pipeline — comes from the stored
     summary. No stored summary means no judge verdict to vouch for them.
@@ -78,5 +85,5 @@ def recompute_quality_passed(quality_score: dict, audit_result: dict) -> bool:
         language_bleed=len(audit_result.get("language_bleed") or []),
         hallucination_final=int(stored.get("hallucination_final", 0)),
         high_contradictions=int(stored.get("high_contradictions", 0)),
-        undefined_title_terms=int(stored.get("undefined_title_terms", 0)),
+        undefined_title_terms=undefined_title_terms,
     )

@@ -74,6 +74,30 @@ def _entry_problems(
     return problems
 
 
+def added_entry_problems(
+    entries: Any,
+    dossier: Dossier,
+    cited_ids: set[str],
+    texts: Mapping[str, str],
+) -> list[str]:
+    """Every problem of the entries a correction adds (`paper correct --evidence-changes`, D60).
+
+    The shape rule of the publish gate (theo_publishing.evidence_shape_issues), then the
+    dossier-bound checks of a new paper's entries: source ids in the dossier and cited by
+    the paper, the quote verbatim in its source's archived text or saved live text. The
+    anchors are the server's to resolve against the text it serves (the dry run); the claim
+    is the session's judgement. No model vouches for another model's quotation.
+    """
+    if not isinstance(entries, list):
+        return ["evidence_changes.add must be a list of evidence entries"]
+    problems = theo_publishing.evidence_shape_issues(entries)
+    if problems:
+        return problems
+    for entry in entries:
+        problems.extend(_entry_problems(entry, dossier, cited_ids, texts, True))
+    return problems
+
+
 def evidence_problems(
     evidence: Any,
     report: str,
