@@ -18,20 +18,33 @@ agents answer it blind in the role `pilot_judge`, and `gold-check` holds those a
 known - every positive must come out MERGE, and a positive the gold calls something else is listed
 for the orchestrator to decide before the pool is sealed. The pool is then the answered batches.
 
-**Parents** - `parent_cases`: the `PART-OF` class of `dup_pairs.jsonl` and the pairs of the `NEITHER`
-class whose names are contained in each other, oriented by `parents.candidate_pairs`' rule (the
-shorter name is the parent); the same blind labelling by Opus xhigh makes the gold, and the
-heuristic classes are the cross-check that `gold-check` reports (they are a heuristic, so
-a disagreement is listed, not failed).
+**Parents** - `parent_cases`: 20 `PART-OF` pairs of `dup_pairs.jsonl` with nested names (positives) and
+10 negatives: the 2 `NEITHER` pairs with nested names (two parts of one item, neither the other's),
+completed from the run's own `PARENT_CANDIDATES.jsonl` (`structure_negatives`: a would-be parent of
+`STRUCTURE_TYPES` only, both sites with distinct Wikidata items that were read, no P361/P527 statement
+placing the child in the parent; a seeded draw, one per parent and per child). A pair's parent is the
+one whose significant words are the subset (`parents.candidate_pairs`' rule). Fewer than the sealed
+count is refused, never a smaller set. The same blind labelling by Opus xhigh makes the gold, and the
+classes are the cross-check that `gold-check` reports (a heuristic: a disagreement is listed, not
+failed).
+
+**Briefing the gold.** `read` and `export` keep a calibration in `<run>/calibration/<kind>`. Briefed
+with `--stage-run` at that directory, `dup_judge.py brief` / `parent_judge.py brief` name the gold
+role `pilot_judge` (the default, and the only role allowed into the round's own handoff) and point the
+shape check at `check-answer` here, which reads the calibration's own cases; briefed into another
+handoff (the `calibrate_claude.py prepare` copy) they name the role under calibration, never
+`pilot_judge`. A production verdict round refuses `pilot_judge` (`label_rounds.brief_role`).
 
 Sealing is `calibrate_claude.py seal --id ID --role web_verifier --handoff DIR --batches ...
 --threshold 0.92` (the plan's 92 %), and the gate of "0 false MERGE" is carried by the verdict's
 `--false-sources`: pass the spot-check count plus `false_merges(comparison)`.
 
     PY=./.venv/Scripts/python.exe
+    $PY scripts/remediation/identity/pair_calibration.py read --kind dup --dry-run   # the pool, no read
     $PY scripts/remediation/identity/pair_calibration.py read --kind dup
     $PY scripts/remediation/identity/pair_calibration.py export --kind dup --handoff output/remediation/handoff/cal-dup-gold
-    # Opus xhigh agents answer (role pilot_judge), then:
+    $PY scripts/remediation/identity/dup_judge.py brief --stage dup-verdict --round r1 --batch-id r1-b01 --stage-run <run>/calibration/dup
+    # Opus xhigh agents answer as pilot_judge, then:
     $PY scripts/remediation/identity/pair_calibration.py gold-check --kind dup --handoff output/remediation/handoff/cal-dup-gold
 """
 

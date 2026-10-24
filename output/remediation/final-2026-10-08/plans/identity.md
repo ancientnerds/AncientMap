@@ -116,6 +116,15 @@ Order: 3.0 foundation, then D14 and D25 shared pieces, D13, D23, D20. Every writ
 - Negatives, 15: Lycian Mezari 2 / Amyntas, Themistoclean Wall, and `NEITHER` and `WRONG-ID` pairs.
 - The negatives are not Opus-judged today. One Opus xhigh gold labelling must fill them first.
 - Seal at ≥92 % verdict agreement and 0 false MERGE. A role below that moves up one tier.
+- **How the gold is briefed (2026-10-24, branch `closeout/ident-cal`).** `pair_calibration.py read --kind dup`
+  writes `CASES.jsonl` and `READ.jsonl` into `<run>/calibration/dup`, `export` asks every case there as a
+  `dup-verdict` round. A brief whose `--stage-run` is that directory (`label_rounds.is_gold_run`: named
+  `calibration/<kind>`, holding `CASES.jsonl`) is the gold labelling when it answers into the round's own
+  handoff: role `pilot_judge` only (the default), and step 4 is `pair_calibration.py check-answer
+  --stage-run <dir>`, which reads the calibration's cases. Briefed into another handoff (the copy
+  `calibrate_claude.py prepare` made) it is the re-answer of the role under calibration (`web_verifier`),
+  never `pilot_judge`. A production `dup-verdict` round still refuses `pilot_judge`
+  (`label_rounds.brief_role`). `read --dry-run` prints the cases and the pool without reading production.
 
 **Write path** (two lanes per wave, ≤100 sites).
 1. `dup-merge-move-<wave>`:
@@ -207,6 +216,35 @@ Order: 3.0 foundation, then D14 and D25 shared pieces, D13, D23, D20. Every writ
 **Order.** After D14. A merged loser must never be a parent.
 
 **Calibration.** The `PART-OF` class of `dup_pairs` and the 8 PART_OF groups from D14.
+
+- **The sealed set** (`pair_calibration.py --kind parent`): 20 positives and 10 negatives. Positives are
+  `PART-OF` pairs of `dup_pairs.jsonl` with nested names, both shown.
+- **Negatives (2026-10-24).** The `NEITHER` class holds only 2 pairs with nested names (the Nether Largie
+  cairns: two parts of one item, neither the other's), so the rest come from a second source, the run's
+  own `PARENT_CANDIDATES.jsonl` (the very pairs the verdict is asked about). A candidate counts when:
+  - every type of the would-be parent is in `STRUCTURE_TYPES` (one temple or pyramid with its precinct,
+    a theatre, a bridge, a cairn, a stone circle, a monument; settlements, sanctuaries, forts, palaces,
+    fora, necropoleis and henges are containers and never count);
+  - both sites carry Wikidata items, none shared (a shared item is D14's question);
+  - every item was read (harvest or delta; an unread item is not taken as silent);
+  - neither the child's P361 names a parent item nor the parent's P527 a child item. The reverse
+    statement (the shorter-named site is the part) keeps a pair, since the asked direction is false.
+- **The draw.** Pairs of the owner-case list are left out. The order is seeded
+  (`PARENT_NEGATIVE_SEED = d25-parent-negatives-v1`), with at most one pair per parent and one per
+  child, so the Giza pyramids cannot fill the set. The `NEITHER` pairs come first. A shortfall below
+  10 is refused, and the message names both counts; it never seals a smaller set.
+- **Dry run on `identity-2026-10-24`** (`read --kind parent --dry-run`, no production read):
+  - 20 of 30 nested `PART-OF` pairs taken as positives.
+  - 2 `NEITHER` pairs.
+  - The structure source: 205 candidate pairs, of which 33 have a structure parent. 7 were dropped as
+    owner-case pairs, 1 for a missing item, 1 for a shared item and 0 for a contained one, leaving 24
+    eligible pairs and 12 after the one-per-site rule. 8 of those were drawn: Great/Small Aten Temple,
+    Roman Temple/Roman Bridge of Córdoba, Bryn Gwyn Stones/Castell Bryn Gwyn, Old Temple of
+    Athena/Gate of Athena Archegetis, Pyramid G1-d/Pyramid of Khafre, Cave of El Castillo/Caves of
+    Monte Castillo, Little Meg/Long Meg and Her Daughters, and Pyramid G1-c/Great Pyramid.
+- **How it is used.** The gold is briefed exactly like D14's (role `pilot_judge` into the gold handoff;
+  check through `pair_calibration.py check-answer`). `gold-check` lists any negative the gold calls
+  `PART` as a finding about the case.
 **Model answers.** About 100 Sonnet clusters (20 calls) plus about 50 Opus re-checks.
 
 ## 4. Dependencies on other workstreams
