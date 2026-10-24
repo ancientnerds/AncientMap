@@ -44,70 +44,23 @@ LOST_SITE = "31000000-0000-4000-8000-000000000031"
 
 
 # ------------------------------------------------------------------------------ minimax-sites
-def _closed_record(path: Path, site_id: str, run: str, *, minimax: bool = True) -> Path:
-    path.write_text(
-        json.dumps(
-            {
-                "kind": C.CLOSED_BATCH_KIND,
-                "reconstructed": True,
-                "batch_id": "p4wc-4325",
-                "site_list": [{"site_id": site_id, "run": run, "minimax": minimax}],
-            }
-        ),
-        encoding="utf-8",
-    )
-    return path
-
-
-def test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list(tmp_path: Path) -> None:
-    """The WN pilot's run is gone (its handoffs too): its texts are named from the closed batch's
-    record, under the rule every source run follows - the live text still the one the run wrote."""
-    wn_root = tmp_path / "wn"
-    wn_run, wn_plan = WX.build_wn_run(
-        wn_root, [WX.wn_row(WX.SITE_N)], {WX.SITE_N: WX.good(WX.SITE_N)}, pilot=False
-    )
-    run = _read(tmp_path, _fresh_rows(wn_plan, [WX.wn_row(WX.SITE_N)]))
-    shutil.rmtree(wn_root)  # lost with its worktree
-    record = _closed_record(tmp_path / "p4wc-4325.closed.json", WX.SITE_N, wn_run.name)
-    out = tmp_path / "minimax.txt"
-    report = C.cmd_minimax_sites(run, [], out, closed=[record])
-    assert out.read_text(encoding="utf-8").split() == [WX.SITE_N]
-    assert report["touched"] == 1 and report["closed"][0]["path"].endswith("p4wc-4325.closed.json")
-    other = _closed_record(tmp_path / "other.json", WX.SITE_N, "another-run")
-    assert C.cmd_minimax_sites(run, [], tmp_path / "o.txt", closed=[other])["others"] == {
-        "rewritten-since": [WX.SITE_N]
-    }
-    claude = _closed_record(tmp_path / "claude.json", WX.SITE_N, wn_run.name, minimax=False)
-    assert C.cmd_minimax_sites(run, [], tmp_path / "c.txt", closed=[claude])["touched"] == 0
-    (tmp_path / "bad.json").write_text(json.dumps({"kind": "x"}), encoding="utf-8")
+# A closed batch's texts on the D10 list, from a record that holds: `test_closed_wc_batches.py`
+# (`test_minimax_sites_names_a_closed_batchs_texts_only_from_a_record_that_holds`).
+def test_a_file_that_is_no_closed_batch_record_is_refused(tmp_path: Path) -> None:
+    run = _read(tmp_path, _p4_rows())
+    bad = tmp_path / "p4wc-4325.closed.json"
+    bad.write_text(json.dumps({"kind": "x"}), encoding="utf-8")
     with pytest.raises(C.WcRunError, match="not the record of a closed WC batch"):
-        C.cmd_minimax_sites(run, [], tmp_path / "b.txt", closed=[tmp_path / "bad.json"])
+        C.cmd_minimax_sites(run, [], tmp_path / "b.txt", closed=[bad], apply_root=tmp_path)
 
 
-def test_closed_and_source_runs_add_up_and_the_cli_takes_closed(tmp_path: Path) -> None:
-    wc_root = tmp_path / "wc"
-    from tests.remediation.test_wc_verify import _answers, _rows
-
-    wc_run, wc_plan = FX.build_run(wc_root, _rows(), _answers(), pilot=False, name="wc-02")
-    assert _restamp(wc_root / "handoff" / "wc-02-verify") == 2
-    wn_root = tmp_path / "wn"
-    wn_run, wn_plan = WX.build_wn_run(
-        wn_root, [WX.wn_row(WX.SITE_N)], {WX.SITE_N: WX.good(WX.SITE_N)}, pilot=False
-    )
-    fresh = _fresh_rows(wc_plan, _rows()) + _fresh_rows(wn_plan, [WX.wn_row(WX.SITE_N)])
-    run = _read(tmp_path, fresh)
-    record = _closed_record(tmp_path / "p4wc-4325.closed.json", WX.SITE_N, wn_run.name)
-    out = tmp_path / "m.txt"
-    code = C.main(
-        ["minimax-sites", "--run-dir", str(run), "--from", str(wc_run), "--closed", str(record),
-         "--out", str(out)]
-    )  # fmt: skip
-    assert code == 0
-    assert out.read_text(encoding="utf-8").split() == sorted([FX.SITE_A, FX.SITE_B, WX.SITE_N])
-
-
-def test_the_real_record_of_p4wc_4325_names_the_17_wn_texts() -> None:
-    names = C.closed_minimax_sites(RECORDS / "p4wc-4325.closed.json")
+def test_the_real_record_of_p4wc_4325_names_the_17_wn_texts_where_it_holds() -> None:
+    """Where the gitignored WC apply root is present (the main checkout) the record holds and
+    names 17 texts; elsewhere (a worktree, CI) there is nothing to hold it against."""
+    root = REPO / "output" / "remediation" / "logs" / "_write_apply_p4wc"
+    if not (root / "p4wc-4325").is_dir():
+        pytest.skip(f"the gitignored WC apply root is not in this checkout ({root})")
+    names = C.closed_minimax_sites(RECORDS / "p4wc-4325.closed.json", apply_root=root)
     assert len(names) == 17 and set(names.values()) == {"wn-2026-10-06"}
 
 
@@ -128,10 +81,11 @@ def _lost_record(path: Path, sites: list[tuple[str, str]]) -> Path:
 def test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost(
     tmp_path: Path,
 ) -> None:
-    """Three sites carry standing defect lines; an earlier repair run asks two of them; a lost
-    record names a fourth (its lines gone); one line is on a text that changed and one on a retired
-    site. The population is four: two asked, one new, one lost; the list is the new one, with its
-    claims in `defect-sites`' shape, and drives `export --sites --defects` directly."""
+    """Three sites carry standing defect lines; an earlier repair run asks two of them with the
+    claims its prompts carried; a lost record names a fourth (its lines gone); one line is on a text
+    that changed and one on a retired site. The population is four: two asked, one new, one lost;
+    the list is the new one, with its claims in `defect-sites`' shape, and drives `export --sites
+    --defects` directly."""
     sha = M.text_sha256(WX.P4_TEXT)
     run = _read(tmp_path, _p4_rows())
     defects = tmp_path / "wb-ws" / "DESCRIPTION_DEFECTS.jsonl"
@@ -146,9 +100,7 @@ def test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_
     defects.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
     earlier = tmp_path / "runs" / "defects-earlier"
     earlier.mkdir(parents=True)
-    (earlier / C.SITES_FILE).write_text(
-        "".join(json.dumps({"site_id": s}) + "\n" for s in (SITE_P4, SITE_ALL)), encoding="utf-8"
-    )
+    _asked_with(earlier, {SITE_P4: [lines[0]], SITE_ALL: [lines[1]]})
     lost = _lost_record(tmp_path / "lost.json", [(LOST_SITE, "A lost site")])
     out = tmp_path / "DEFECT_SITES.txt"
     report = C.cmd_defect_population(run, [defects], out, asked=[earlier], lost=[lost])
@@ -172,6 +124,56 @@ def test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_
     )  # fmt: skip
     (asked,) = read_jsonl(run / C.SITES_FILE)
     assert asked["site_id"] == SITE_NONE and asked["defects"][0]["claim"] == "Not here"
+
+
+def _asked_with(run: Path, claims: dict[str, list[dict]]) -> None:
+    """An earlier repair run's `SITES.jsonl`: each site with the claims its frozen prompt carried
+    (`export --defects`: the report's claims, `DEFECT_CLAIM_KEYS`)."""
+    (run / C.SITES_FILE).write_text(
+        "".join(
+            json.dumps(
+                {"site_id": s, "defects": [{k: c[k] for k in C.DEFECT_CLAIM_KEYS} for c in cs]}
+            )
+            + "\n"
+            for s, cs in claims.items()
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_a_claim_a_later_pilot_found_on_an_asked_site_puts_the_site_on_the_list_again(
+    tmp_path: Path,
+) -> None:
+    """The review of 2026-10-24: a shorts pilot found a claim on a text an earlier repair run asks,
+    which that run's frozen prompt does not carry. The site is `asked+new-claims` and on the list
+    with every standing claim - the new run's plan is the later one and takes the site over, so its
+    agent sees the earlier claim too. The same claim found again (another run, other evidence, the
+    same sentence and claim) is carried."""
+    sha = M.text_sha256(WX.P4_TEXT)
+    run = _read(tmp_path, _p4_rows())
+    first = _defect(SITE_P4, sha)
+    again = _defect(SITE_ALL, sha, run="wb-shorts-pilot2-2026-10-19", url="https://x.example/")
+    found = _defect(SITE_P4, sha, run="wb-shorts-pilot2-2026-10-19", claim="It is 3600 BC")
+    defects = tmp_path / "d.jsonl"
+    defects.write_text(
+        "".join(json.dumps(line) + "\n" for line in (first, again, found)), encoding="utf-8"
+    )
+    earlier = tmp_path / "runs" / "defects-earlier"
+    earlier.mkdir(parents=True)
+    _asked_with(earlier, {SITE_P4: [first], SITE_ALL: [_defect(SITE_ALL, sha)]})
+    out = tmp_path / "DEFECT_SITES.txt"
+    report = C.cmd_defect_population(run, [defects], out, asked=[earlier])
+    assert report["counts"] == {"asked": 1, "asked+new-claims": 1}
+    assert report["asked_by_run"] == {"defects-earlier": 1}
+    assert out.read_text(encoding="utf-8").split() == [SITE_P4]
+    population = json.loads(
+        out.with_name(out.name + C.POPULATION_SUFFIX).read_text(encoding="utf-8")
+    )
+    assert population["sites"][SITE_P4]["state"] == "asked+new-claims:defects-earlier"
+    assert population["sites"][SITE_P4]["new_claims"] == 1
+    assert population["sites"][SITE_ALL]["new_claims"] == 0
+    listed = json.loads(out.with_name(out.name + ".report.json").read_text(encoding="utf-8"))
+    assert [c["claim"] for c in listed["claims"][SITE_P4]] == [first["claim"], "It is 3600 BC"]
 
 
 def test_a_lost_record_that_is_not_one_stops_the_population(tmp_path: Path) -> None:
