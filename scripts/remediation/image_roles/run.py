@@ -20,7 +20,10 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
     run.py write-targets   --run-dir C                           -> C/TARGETS.jsonl (confirmed picks)
     run.py prune-pictures  --run-dir C                           delete the pictures, keep their hashes
 
-The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run:
+The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run.
+Its pictures are gone since 2026-10-24; `candidate_search/repicture.py --old-run OLD --need recheck
+--run-dir C --served-run S` (and `--need credit`, `--need calibration`, `--need pool`) fetches exactly
+the ones a step needs again, with a manifest, before the step runs:
 
     run.py pool            --run-dir C --old-run OLD             -> C/PICTURES.jsonl (pictures on disk)
     run.py pool-picks      --run-dir C --old-run OLD --served-run S --out FILE

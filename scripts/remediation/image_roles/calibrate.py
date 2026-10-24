@@ -420,6 +420,37 @@ def _site_context(
     }
 
 
+def adjudication_sample(
+    shown: Collection[str],
+    pool_candidates: Sequence[Mapping[str, Any]],
+    pool_verdicts: Sequence[Mapping[str, Any]],
+    *,
+    per_class: int,
+    seed: int,
+) -> list[tuple[str, dict[str, Any]]]:
+    """`(site id, candidate)` of the MiniMax pool the pilot judge adjudicates: `per_class` of every
+    MiniMax verdict class, drawn with the sealed seed from the candidates of the sites the fresh read
+    still shows (a site retired since has no record to ask about).
+
+    The draw does not look at the disk: the sample is the seal's and the files', never the
+    accident of which pictures happen to be there (the pool's pictures were gone on 2026-10-24, and a
+    draw over what is on disk would have drawn nothing). `candidate_search/repicture.py --need
+    calibration` fetches exactly this sample, and `build_gold` refuses while one is missing."""
+    candidates = {
+        (str(s["site_id"]), str(c["file"])): c for s in pool_candidates for c in s["candidates"]
+    }
+    by_class: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for v in pool_verdicts:
+        key = (str(v["site_id"]), str(v["file"]))
+        if key in candidates and key[0] in shown:
+            by_class[str(v["verdict"])].append({"site_id": key[0], "file": key[1]})
+    return [
+        (item["site_id"], dict(candidates[(item["site_id"], item["file"])]))
+        for cls in sorted(by_class)
+        for item in sample(by_class[cls], per_class, seed)
+    ]
+
+
 def build_gold(
     *,
     state: ST.State,
@@ -508,35 +539,33 @@ def build_gold(
     for item in sample(claude_other, roles["image_depicts"]["claude_other_site"], seed):
         cases.append(gallery_case("hard_negative", int(item["image_id"]), "not_depicts", "cos"))
     # ---- the MiniMax pool, adjudicated by the pilot judge (Opus xhigh): no truth yet
-    by_class: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    candidates = {
-        (str(s["site_id"]), str(c["file"])): (s, c)
-        for s in pool_candidates
-        for c in s["candidates"]
-    }
-    for v in pool_verdicts:
-        key = (str(v["site_id"]), str(v["file"]))
-        # a pool site the fresh read no longer shows (retired since) has no record to ask about
-        if (
-            key in candidates
-            and key[0] in state.sites
-            and Path(pool_path(candidates[key][1])).is_file()
-        ):
-            by_class[str(v["verdict"])].append({"site_id": key[0], "file": key[1]})
-    adjudicated = [
-        item
-        for cls in sorted(by_class)
-        for item in sample(by_class[cls], roles["pilot_judge"]["per_class"], seed)
+    adjudicated = adjudication_sample(
+        set(state.sites),
+        pool_candidates,
+        pool_verdicts,
+        per_class=roles["pilot_judge"]["per_class"],
+        seed=seed,
+    )
+    missing = [
+        f"{site_id}: {candidate['file']}"
+        for site_id, candidate in adjudicated
+        if not Path(pool_path(candidate)).is_file()
     ]
-    for item in adjudicated:
-        _, candidate = candidates[(item["site_id"], item["file"])]
+    if missing:
+        raise CalibrationError(
+            f"{len(missing)} of the {len(adjudicated)} pool pictures the pilot judge adjudicates "
+            f"are not on disk (first {missing[0]}): fetch them with "
+            "`candidate_search/repicture.py --need calibration` first"
+        )
+    for site_id, candidate in adjudicated:
+        file = str(candidate["file"])
         case = depicts_case(
             "adjudicated",
-            _site_context(state.sites[item["site_id"]], context, lead),
-            item["file"],
+            _site_context(state.sites[site_id], context, lead),
+            file,
             pool_path(candidate),
             None,
-            case_id=f"adj-{hashlib.sha256((item['site_id'] + item['file']).encode()).hexdigest()[:12]}",
+            case_id=f"adj-{hashlib.sha256((site_id + file).encode()).hexdigest()[:12]}",
         )
         case["why"] = str(candidate.get("why") or "a Commons picture search")
         cases.append(case)

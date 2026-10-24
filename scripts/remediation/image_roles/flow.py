@@ -388,11 +388,14 @@ def pool(run: Path, old_run: Path) -> dict[str, Any]:
     }
 
 
-def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
-    """The old run's targets that Claude has to re-check, as picks for `recheck_export`: those of
-    this run's population (sites that serve nothing), and those that are **live heroes** in the
-    fresh read `state` - the written ones (178 of the 192 first heroes), whose sites are no longer
-    in the population. A written hero's site record is the read's (`PL.state_record`)."""
+def pool_pick_sites(
+    run: Path, old_run: Path, state: ST.State
+) -> tuple[list[dict[str, Any]], set[str]]:
+    """`(site records, wanted site ids)` of the old targets Claude has to re-check: those of this
+    run's population (sites that serve nothing), and those that are **live heroes** in the fresh
+    read `state` - the written ones (178 of the 192 first heroes), whose sites are no longer in the
+    population. A written hero's site record is the read's (`PL.state_record`). `pool_picks` and
+    `candidate_search/repicture.py --need recheck` ask this one question."""
     population = _population(run)
     in_population = {s["site_id"] for s in population}
     heroes = PL.live_hero_files(state)
@@ -405,7 +408,14 @@ def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]
         elif ST.canonical_file(target["commons_file"]) in heroes.get(site_id, ()):
             wanted.add(site_id)
             records[site_id] = PL.state_record(state, site_id)
-    return PL.target_picks(old_run, list(records.values()), wanted)
+    return list(records.values()), wanted
+
+
+def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
+    """The old run's targets that Claude has to re-check (`pool_pick_sites`), as picks for
+    `recheck_export`."""
+    records, wanted = pool_pick_sites(run, old_run, state)
+    return PL.target_picks(old_run, records, wanted)
 
 
 def denied(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:

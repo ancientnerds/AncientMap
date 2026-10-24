@@ -3,8 +3,11 @@
 The candidate run of 2026-10-06 (`candidates-2026-10-06`) was judged by `MiniMax-M3.1-Flash-Preview` -
 5,739 verdicts - and its `depicts` picked 226 targets, of which 178 were written as heroes (192 first
 heroes in all). Owner decision D10: a MiniMax answer is never ground truth; it is re-checked with
-Claude and what fails is excluded or swapped through the journal. The pictures are still on disk (5,756
-files, named by the sha256 of their rendering URL), so the re-judge costs no download:
+Claude and what fails is excluded or swapped through the journal. The pictures were kept on disk
+(5,756 files, named by the sha256 of their rendering URL) - and are gone since the worktree that held
+them was removed (measured 2026-10-24: 0 files). `candidate_search/repicture.py` fetches exactly the
+renderings a step needs again, into the same names, with a manifest; every step here still refuses a
+picture that is not on disk by name:
 
 * `pool_sites` hands the old run's candidates of the sites that still serve no picture to the
   prefilter and the depicts role, each candidate with its picture's `path`; a candidate whose picture
@@ -106,12 +109,12 @@ def state_record(state: ST.State, site_id: str) -> dict[str, Any]:
     }
 
 
-def target_picks(
+def target_candidates(
     old_run: Path, population: Sequence[Mapping[str, Any]], site_ids: Collection[str] | None = None
-) -> list[dict[str, Any]]:
-    """The old run's targets as picks for the adversarial re-check: the site, the file, the old
-    judge's note and stamp, the candidate's picture. A target whose candidate or picture is gone is
-    refused by name."""
+) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
+    """`(site record, candidate, MiniMax depicts verdict)` of every old target of the named sites,
+    whether its picture is on disk or not (`repicture.py` asks exactly this). A target without its
+    site record, its candidate or its verdict is refused by name."""
     by_site = {str(p["site_id"]): p for p in population}
     candidates = {str(s["site_id"]): s for s in _jsonl(old_run / CS.CANDIDATES)}
     verdicts = {
@@ -119,7 +122,7 @@ def target_picks(
         for v in _jsonl(old_run / CJ.VERDICTS)
         if v.get("verdict") == CJ.DEPICTS
     }
-    picks = []
+    out = []
     for target in _jsonl(old_run / CJ.TARGETS):
         site_id, file = str(target["site_id"]), str(target["commons_file"])
         if site_ids is not None and site_id not in site_ids:
@@ -132,9 +135,25 @@ def target_picks(
         verdict = verdicts.get((site_id, file))
         if site is None or candidate is None or verdict is None:
             raise PoolError(f"{site_id}: target {file!r} has no site, candidate or verdict")
+        out.append((dict(site), dict(candidate), dict(verdict)))
+    return out
+
+
+def target_picks(
+    old_run: Path, population: Sequence[Mapping[str, Any]], site_ids: Collection[str] | None = None
+) -> list[dict[str, Any]]:
+    """The old run's targets as picks for the adversarial re-check: the site, the file, the old
+    judge's note and stamp, the candidate's picture. A target whose candidate or picture is gone is
+    refused by name (`repicture.py --need recheck` fetches the pictures again)."""
+    picks = []
+    for site, candidate, verdict in target_candidates(old_run, population, site_ids):
+        site_id, file = str(site["site_id"]), str(candidate["file"])
         path = picture_path(old_run, candidate)
         if not path.is_file():
-            raise PoolError(f"{site_id}: the picture of target {file!r} is gone ({path})")
+            raise PoolError(
+                f"{site_id}: the picture of target {file!r} is gone ({path}) - fetch it again "
+                "with `candidate_search/repicture.py --need recheck`"
+            )
         picks.append(
             {
                 **site,

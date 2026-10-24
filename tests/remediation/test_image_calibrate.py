@@ -255,6 +255,26 @@ class TestBuildingTheGold:
         )
         return {"state": ST.load_read(tmp_path / "READ.json"), "rows": rows}
 
+    def test_a_pool_picture_missing_from_disk_stops_the_gold_by_name(self, tmp_path: Path) -> None:
+        """Gap 1 (2026-10-24): the draw never looks at the disk, and a drawn picture that is not
+        there refuses the gold and names the command that fetches it again."""
+        world = self._world(tmp_path)
+        thresholds = json.loads(CAL.thresholds_text())
+        thresholds["roles"]["pilot_judge"]["per_class"] = 1
+        pool = [{"site_id": "site5", "name": "Pool 5", "country": "Italy", "candidates": [
+            {"file": "P1.jpg", "picture_url": "u1", "why": "a search"}]}]  # fmt: skip
+        with pytest.raises(CAL.CalibrationError, match="repicture.py --need calibration"):
+            CAL.build_gold(
+                state=world["state"], context={}, lead=lambda sid: None,
+                path_of=lambda sid, filename: f"/img/{sid}/{filename}",
+                c1_jobs=[], c1_verdicts=[], labelled=[], gold_rows=[], owner_links={},
+                excluded_images=set(), served_checks=[], served_replaces=[],
+                pool_candidates=pool,
+                pool_verdicts=[{"site_id": "site5", "file": "P1.jpg", "verdict": "depicts"}],
+                pool_path=lambda c: str(tmp_path / c["picture_url"]),
+                identity_gold=[], population={}, thresholds=thresholds,
+            )  # fmt: skip
+
     def test_every_group_is_chosen_by_its_own_rule(self, tmp_path: Path) -> None:
         world = self._world(tmp_path)
         thresholds = json.loads(CAL.thresholds_text())
