@@ -12576,7 +12576,7 @@ CARD_EXACT_CASES: list[Case] = [
             (
                 "lane WB's acceptance takes two standing corrections",
                 TEASER,
-                "    if planned_raw is None or len(standing) != 1:",
+                "    if len(standing) != 1:",
                 "test_two_standing_corrections_are_not_the_steps",
             ),
             (
@@ -12637,6 +12637,20 @@ CARD_EXACT_CASES: list[Case] = [
                 "    if not names_disclosure(planned, correction.old):\n        return None\n",
                 "    if False:\n        return None\n",
                 "test_a_cell_that_names_another_value_is_not_corrected_by_this_lane",
+            ),
+            (
+                "lane WB's acceptance counts a correction of an earlier step's cell",
+                TEASER,
+                '        and canonical(j["old_value"]) == start',
+                "        and True",
+                "test_an_earlier_steps_correction_on_the_site_is_not_this_steps",
+            ),
+            (
+                "lane WB's acceptance takes a correction from another start",
+                TEASER,
+                '        and canonical(j["old_value"]) == start',
+                "        and True",
+                "test_a_correction_that_starts_from_another_value_is_not_the_steps",
             ),
             (
                 "verify_writes4 takes the exact lane's stamp for any keys",

@@ -900,7 +900,7 @@ models the string names.
 **What it fixes.** The 43 live version-3 cards of `wb-shorts-pilot2-2026-10-19` (23) and
 `wb-shorts-pilot3-2026-10-20` (20) carry `models` write/rate/check/verify = Opus only, but
 `ai_system` = `AI_SYSTEM_CLAUDE` ("Claude Opus and Claude Sonnet ..."): the pre-D56 rule. Pilot 1's 16
-cards (Opus writer, Sonnet checker and verifier) are right as they are. One step corrects the 43 before
+cards (Sonnet writer; Opus rater, checker and verifier) are right as they are. One step corrects the 43 before
 wave A writes.
 
 **The list** (`card_disclosure_exact.py list`, offline). Each site a closed lane-WB step left a
@@ -948,11 +948,16 @@ $PY $MW accept --step 36; $PY $MW accept --step 37   # lane WB's steps still 0 d
 ```
 
 **Gate: 0 deviations.** `teaser.py accept` (steps 36 and 37) reads this lane like 5.9's
-(`teaser.corrected_cell` over `teaser.CORRECTIONS`): one standing journal row of `wb-card-exact-sNNN`
-(regex `^wb-card-exact-s\d{3}$`) on that site's `raw_data`, from exactly what the step planned to exactly
-that value with the one key set to `AI_SYSTEM_CLAUDE_OPUS`; two standing corrections, another stamp, or a
-second key leave the cell a deviation. `verify_writes4 --allow-stamp 'wb-card-exact-s%'` supersedes such
-a link only as that one-key transition, whichever pattern allows it.
+(`teaser.corrected_cell` over `teaser.CORRECTIONS`): of the correction rows on that site's `raw_data`
+only those that start from exactly the `raw_data` the step planned count, and of them exactly one must
+stand - here one row of `wb-card-exact-sNNN` (regex `^wb-card-exact-s\d{3}$`) to exactly that value with
+the one key set to `AI_SYSTEM_CLAUDE_OPUS`; two standing corrections from the step's cell, another stamp,
+or a second key leave the cell a deviation. A correction of an earlier step's cell does not count: High
+Peak, Devon and Huerfano Butte (Arizona) also carry 5.9's applied `wb-card-disclosure-s001` row of the
+version-2 card of teaser step 17 and 14, which starts from that step's cell, not step 37's (pinned
+against the committed plans by `test_the_committed_plans_accept_all_43_after_both_lanes_wrote`).
+`verify_writes4 --allow-stamp 'wb-card-exact-s%'` supersedes such a link only as that one-key
+transition, whichever pattern allows it.
 
 **Undo** (only as a decision; the stamp is single-use): this lane's `ROLLBACK.sql` first, before any undo
 of steps 36/37, then `teaser.py accept --step 36|37` is 0 deviations again. Record the sitting in

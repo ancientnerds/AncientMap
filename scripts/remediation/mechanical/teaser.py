@@ -295,16 +295,23 @@ def corrected_cell(
     """The `raw_data` a site holds after a disclosure correction lane (`CORRECTIONS`) wrote it, as a
     step's acceptance may expect it - or `None` when no such write stands.
 
-    Only a correction lane's own stamp counts, and one standing write of all of them. The journal
-    row must be a transition from exactly the raw_data this step planned to exactly that value with
-    the one key corrected by that lane's pair (`rewrite_disclosure`), written once and not reversed;
-    any other later value of the cell stays what it is - a deviation of the step."""
+    Only a correction lane's own stamp counts, and only its rows that start from exactly the
+    raw_data this step planned: a site carries the correction of an earlier step's cell too (High
+    Peak, Devon and Huerfano Butte hold a 2026-10-01 `wb-card-disclosure-s001` row of the version-2
+    card of teaser step 17 and 14 under step 37's version-3 one), and that row is not this step's.
+    Of those, one standing write: a transition to exactly the planned value with the one key
+    corrected by that lane's pair (`rewrite_disclosure`), written once and not reversed; any other
+    later value of the cell stays what it is - a deviation of the step."""
+    if planned_raw is None:
+        return None
+    start = canonical(planned_raw)
     writes = [
         (j, correction)
         for j in journal
         if j["row_pk"] == site_id
         and j["column_name"] == "raw_data"
         and (correction := correction_of(j["run_stamp"])) is not None
+        and canonical(j["old_value"]) == start
     ]
     undone = {
         j["run_stamp"]
@@ -312,17 +319,14 @@ def corrected_cell(
         if j["row_pk"] == site_id and j["run_stamp"].endswith(ROLLBACK_SUFFIX)
     }
     standing = [(j, c) for j, c in writes if j["run_stamp"] + ROLLBACK_SUFFIX not in undone]
-    if planned_raw is None or len(standing) != 1:
+    if len(standing) != 1:
         return None
     ((entry, correction),) = standing
     planned = json.loads(planned_raw)
     if not names_disclosure(planned, correction.old):
         return None
     wanted = canonical(reprint(rewrite_disclosure(planned, correction)))
-    if (
-        canonical(entry["old_value"]) != canonical(planned_raw)
-        or canonical(entry["new_value"]) != wanted
-    ):
+    if canonical(entry["new_value"]) != wanted:
         return None
     return wanted
 

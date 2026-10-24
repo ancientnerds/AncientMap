@@ -712,6 +712,79 @@ class TestLaneWbAcceptsTheExactCorrectionByNameForItsOneKey:
         assert code == 1
         assert W.corrected_cell(T.SKARA, planned, [entry, again]) is None
 
+    def test_an_earlier_steps_correction_on_the_site_is_not_this_steps(
+        self, tmp_path: Path
+    ) -> None:
+        """High Peak, Devon and Huerfano Butte: a 2026-10-01 lane-1 row of an earlier step's v2
+        cell stands on the site beside this step's exact row; it starts elsewhere and is not counted."""
+        root, lives, journal, planned = step_one(tmp_path)
+        earlier_v2 = C.reprint(TC.raw_of(T.SKARA))  # an earlier step's cell, naming AI_SYSTEM_OPUS
+        lane_1 = {"row_pk": T.SKARA, "column_name": "raw_data",
+                  "run_stamp": "wb-card-disclosure-s001", "old_value": earlier_v2,
+                  "new_value": C.reprint(W.correct_disclosure(json.loads(earlier_v2)))}  # fmt: skip
+        entry = exact(planned)
+        lives[0] = replace(lives[0], raw_data=entry["new_value"])
+        assert accept_teaser(tmp_path, root, lives, [lane_1, *journal, entry]) == (0, [])
+        wanted = C.canonical(entry["new_value"])
+        assert W.corrected_cell(T.SKARA, planned, [lane_1, entry]) == wanted
+        # and the lane-1 row alone is still the earlier step's, never this one's
+        assert W.corrected_cell(T.SKARA, planned, [lane_1]) is None
+        assert W.corrected_cell(T.SKARA, earlier_v2, [lane_1, entry]) == C.canonical(
+            lane_1["new_value"]
+        )
+
+    def test_a_correction_that_starts_from_another_value_is_not_the_steps(
+        self, tmp_path: Path
+    ) -> None:
+        root, lives, journal, planned = step_one(tmp_path)
+        # a row that ends at the corrected cell but starts from a value the step never planned
+        elsewhere = C.reprint({**json.loads(planned), "description_citations": [1]})
+        entry = exact(planned, old_value=elsewhere)
+        lives[0] = replace(lives[0], raw_data=exact(planned)["new_value"])
+        code, found = accept_teaser(tmp_path, root, lives, [*journal, entry])
+        assert code == 1 and any("does not hold the planned value" in line for line in found)
+        assert W.corrected_cell(T.SKARA, planned, [entry]) is None
+
+    def test_the_committed_plans_accept_all_43_after_both_lanes_wrote(self) -> None:
+        """The committed step plans, lane 1's applied s001 plan and this lane's s001 plan: every
+        listed site's step cell, corrected by this lane, is what its step's acceptance expects -
+        the two sites that also carry lane 1's row of an earlier step included."""
+        root = REPO / "output/remediation"
+
+        def rows(path: Path) -> list[dict[str, Any]]:
+            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+        written = {r["site_id"]: r for r in rows(root / "mechanical_card_exact/s001/PLAN.jsonl")}
+        lane_1 = {
+            r["site_id"]: r for r in rows(root / "mechanical_card_disclosure/s001/PLAN.jsonl")
+        }
+        planned: dict[str, str] = {}
+        for path in sorted((root / "mechanical_teaser").glob("s[0-9][0-9][0-9]/prov/PLAN.jsonl")):
+            for row in rows(path):
+                held = written.get(row["site_id"])
+                if held is not None and C.canonical(row["new_value"]) == C.canonical(
+                    held["old_value"]
+                ):
+                    planned[row["site_id"]] = row["new_value"]
+        assert sorted(written) == sorted(planned) == list(LIST.SITE_IDS)
+        both = sorted(set(written) & set(lane_1))
+        assert both == [
+            "1da76491-5256-486f-b67e-ff6f762c46b5",  # High Peak, Devon
+            "7e97d2a5-3f87-44fc-9ad0-f0d5a2d84cab",  # Huerfano Butte (Arizona)
+        ]
+
+        def row(stamp: str, plan: dict[str, Any]) -> dict[str, Any]:
+            return {"row_pk": plan["site_id"], "column_name": "raw_data", "run_stamp": stamp,
+                    "old_value": plan["old_value"], "new_value": plan["new_value"]}  # fmt: skip
+
+        for site_id, plan in written.items():
+            journal = [row("wb-card-exact-s001", plan)]
+            if site_id in lane_1:
+                journal.insert(0, row("wb-card-disclosure-s001", lane_1[site_id]))
+            assert W.corrected_cell(site_id, planned[site_id], journal) == C.canonical(
+                plan["new_value"]
+            ), site_id
+
     def test_a_correction_that_was_undone_leaves_the_step_as_planned(self, tmp_path: Path) -> None:
         root, lives, journal, planned = step_one(tmp_path)
         entry = exact(planned)
@@ -721,7 +794,9 @@ class TestLaneWbAcceptsTheExactCorrectionByNameForItsOneKey:
 
     def test_a_cell_that_names_another_value_is_not_corrected_by_this_lane(self) -> None:
         opus_2026_09 = C.reprint(TC.raw_of(T.SKARA))  # names AI_SYSTEM_OPUS
-        assert W.corrected_cell(T.SKARA, opus_2026_09, [exact(C.reprint(raw_of()))]) is None
+        # an exact-lane row that starts from this very cell: the pair does not fit, no correction
+        entry = exact(C.reprint(raw_of()), old_value=opus_2026_09)
+        assert W.corrected_cell(T.SKARA, opus_2026_09, [entry]) is None
 
     def test_the_step_s_read_asks_for_both_corrections_rows_of_its_sites_only(
         self, tmp_path: Path
