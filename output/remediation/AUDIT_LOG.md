@@ -14318,3 +14318,15 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   CI green, deploy live (api+api2 fc35e092, all containers healthy, no new migration).
 - Lesson: sparse build worktrees without `public/data/` and `pfps/` (301 PNGs, 1.5 GB, tracked without LFS, read by no
   code) cost ~0.6 GB instead of 4.3 GB.
+- **S5 papers (D60) - done 2026-10-24.** Content prepared and adversarially verified (`wf_343a970b-db2`, 24 units:
+  summaries of all 41, anchor re-openings of 8 studio papers, 11 heroes, mogollon, enuma/solar image records); a legacy
+  card limit fix (`fff2d73`: a correction keeps a card's stored length, never lengthens past max(600, stored) - 29 of the
+  38 card fixes were longer than 600) and the mechanical sweep static check speed-up (`d65e2b9`: 105 s -> 10 s; the
+  first push of fff2d73 failed its 90 s timeout); then `wf_d3a36381-2e4`: per paper prepare, independent verify (+1 fix
+  round), server dry run, apply, read back. **41 of 41 papers corrected**, journal `theo_paper_publications` ids
+  192-236 (45 rows, some papers split into a text/evidence correction and a card correction), pilots younger-dryas (the
+  critical "glaciologist Andrei Petaev" -> "a team led by the cosmochemist Michail I. Petaev") and enuma-elish first.
+  Read back in production: 0 stored probative_images with verified=false, 0 `verified:no` markers in any public text.
+  The run hit the first account's weekly limit (39 agents) and was resumed from its run id after the account switch.
+  Not done by design: the 14 duplicate-log findings (owner 2026-10-20), badges (no decision), the quantum GIF/PNG hero
+  re-encode (needs patch-images with an upload).
