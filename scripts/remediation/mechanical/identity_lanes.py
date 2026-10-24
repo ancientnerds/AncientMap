@@ -52,14 +52,15 @@ from mechanical.lane import (
     SiteInvariant,
     _window_date_sql,
     d50_site_sql,
-    in_medieval_old_world_sql,
     journal_readback,
     label_borderline_sql,
+    label_cutoff_sql,
     name_journal_metrics,
     outside_label_window,
     scope_status_counts,
     sql_literal,
 )
+from pipeline.normalizers.dates import LABEL_CUTOFF_REST_OF_WORLD
 from pipeline.utils.public_sites import RETIRED, not_retired
 
 IN_SCOPE = "in_scope"
@@ -369,7 +370,8 @@ def unretire_violation_sql() -> str:
       dated, inside the label window, not label-borderline, no Viking subject and of no type that
       asks the not-a-site question first (`NON_SITE_TYPES`);
     * `D58_MUSEUM_REASON_PREFIX`: no D50 site, retired by the numeric cut, a placed Museum whose
-      country is not of the medieval Old World;
+      region has the 1500 AD cutoff (Oceania, the Americas or a recognised country of the rest of
+      the world - never the medieval Old World or a country no list recognises);
     * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment and whose card
       was written after it (`card_cleared_sql`)."""
     d50 = d50_site_sql("u")
@@ -383,8 +385,8 @@ def unretire_violation_sql() -> str:
     )
     museum_kept = (
         f"(u.scope_reason LIKE {sql_literal(D58_MUSEUM_REASON_PREFIX + '%')} AND NOT {d50} "
-        f"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' AND u.country IS NOT NULL "
-        f"AND u.lon IS NOT NULL AND NOT {in_medieval_old_world_sql('u.')})"
+        f"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' AND u.lon IS NOT NULL "
+        f"AND {label_cutoff_sql('u.')} = {LABEL_CUTOFF_REST_OF_WORLD})"
     )
     disputed = (
         f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "

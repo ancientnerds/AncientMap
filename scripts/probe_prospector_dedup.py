@@ -52,19 +52,28 @@ with get_session() as s:
         for t in v.trace[:6]:
             print("   ", json.dumps(t, ensure_ascii=False, default=str)[:220])
         if v.external:
-            print("    external:", {k: v.external[k] for k in ("source_id", "name", "via", "enrich")})
+            print(
+                "    external:", {k: v.external[k] for k in ("source_id", "name", "via", "enrich")}
+            )
 
     print("\n=== resolver (no LLM tiebreaks) ===", flush=True)
     budget = ResolverBudget(0)
     res = resolve_names(
-        ["Mogollon Village", "Sicyonian Treasury", "Smithsonian", "Texas", "Derinkuyu", "Harris Village"],
+        [
+            "Mogollon Village",
+            "Sicyonian Treasury",
+            "Smithsonian",
+            "Texas",
+            "Derinkuyu",
+            "Harris Village",
+        ],
         cited_titles=["https://en.wikipedia.org/wiki/Mogollon_culture"],
         budget=budget,
     )
     for name, r in res.items():
         print(
             f"{name:22s} {r.verdict:14s} via={r.path:9s} label={r.label!r:34s} "
-            f"qid={r.qid} pt=({r.lat},{r.lon}) prec={r.coord_precision} scope={r.in_scope} "
+            f"qid={r.qid} pt=({r.lat},{r.lon}) prec={r.coord_precision} scope={r.scope} "
             f"country={r.country} type={r.site_type} note={r.note}"
         )
     s.rollback()

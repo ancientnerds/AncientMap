@@ -244,6 +244,27 @@ def test_a_site_outside_the_date_window_or_undated_is_scope_pending(
     assert (M.SiteFlag.SCOPE_PENDING in site.flags) is pending
 
 
+@pytest.mark.parametrize(
+    ("country", "lat", "lon", "start", "qid", "pending"),
+    [
+        ("Syria", 34.76, 36.29, 1142, "Q1", True),  # borderline: a verdict's question
+        ("Spain", 40.74, -3.51, 860, "Q1", True),  # Islamic Europe: the owner's open question
+        ("Indonesia", -7.75, 110.49, 850, "Q1", False),  # the rest of the world keeps 850 (D58)
+        ("Poland", 51.56, 15.52, 1000, "Q1", True),  # Europe: past 500
+        ("Canada", 51.6, -55.53, 1000, "Q189113", True),  # L'Anse aux Meadows: a Viking subject
+        ("Canada", 51.6, -55.53, 1000, "Q1", False),
+    ],
+)
+def test_scope_pending_is_whatever_the_label_rule_does_not_admit(
+    country: str, lat: float, lon: float, start: int, qid: str, pending: bool
+) -> None:
+    """D58: Phase 4 holds every row `label_scope` does not admit `in_scope` - past the window, a
+    Viking item, or a borderline or open-question row only a scope verdict may admit."""
+    site_row = row(1, country=country, lat=lat, lon=lon, period_start=start, wikidata_qid=qid)
+    (site,) = build([site_row])
+    assert (M.SiteFlag.SCOPE_PENDING in site.flags) is pending
+
+
 def test_the_cleared_defects_flag_their_own_text() -> None:
     rows = [row(1), row(2), row(3)]
     cleared = {uuid(1): {"description"}, uuid(2): {"card_description"}}

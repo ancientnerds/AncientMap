@@ -14,6 +14,11 @@ and `label_borderline_sql` as `label_borderline`), never re-typed here. The popu
 * `pending`          - the five sites a scope review left `pending`, in the window or not;
 * `hadrians_wall_path` - a footpath opened in 2003, never decided.
 
+A site of Islamic Europe dated 500-1500 (Spain, Portugal, Malta, Sicily: the export's
+`label_open_question`, `mechanical.lane.label_open_question_sql`) is held out of the population and
+counted `held_label_open_question`: whether al-Andalus and the Emirate of Sicily stay is an open
+owner question (WD2 section 1b), and the window would retire them by their region alone.
+
 A museum among them (22: 15 already `in_scope`, 7 undecided) is flagged `museum_question`: scope
 rule (d) asks whether its exhibits are ancient, a different question from the period's. A D50 site
 (`mechanical.lane.D50_DISPUTED_SITES`, shown again as disputed by the un-retire) is never part of
@@ -122,6 +127,9 @@ def build(exported: export.Export) -> tuple[list[dict[str, Any]], dict[str, Any]
     for row in exported.shown:
         found = groups_of(row)
         if not found or row["id"] in D50_DISPUTED_SITES:
+            continue
+        if row["label_open_question"]:
+            counts["held_label_open_question"] += 1
             continue
         written = provenance(journal.get(row["id"], []))
         start = written.get("period_start")

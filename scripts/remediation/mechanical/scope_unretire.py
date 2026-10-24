@@ -19,7 +19,10 @@ the scope lane, journalled." A site comes back when
   `passes_date_cutoff` (`pipeline/normalizers/dates.py`, `scope_region`) and not
   `label_borderline`. A borderline site (Anatolia, the Levant, Egypt, Byzantine Africa, the
   Caucasus, Greenland, dated 500-1500) is skipped `label-borderline`: whether its subject is
-  Byzantine, Crusader or Norse is a scope verdict's question, not this lane's. A site whose Wikidata
+  Byzantine, Crusader or Norse is a scope verdict's question, not this lane's. A site of Islamic
+  Europe (Spain, Portugal, Malta or Sicily, dated 500-1500: `label_open_question`) is skipped
+  `label-open-question`: whether al-Andalus and the Emirate of Sicily stay is an open owner
+  question, and the window keeps them at 500 AD until it is answered. A site whose Wikidata
   item is a Viking subject (`VIKING_SUBJECT_QIDS`, L'Anse aux Meadows) stays out, and so does a
   site of a type that asks the scope review's not-a-site question first (`lane.NON_SITE_TYPES`:
   `not-a-site-question-first` - an un-retired natural feature would be the next round's candidate
@@ -27,6 +30,10 @@ the scope lane, journalled." A site comes back when
 * or it is one of the museums scope-e4 retired by the museum rule for exhibits dated past 500 AD
   (`MUSEUM_EXHIBITS`, pinned by id with the exhibits the reason names) whose country is not of
   the medieval Old World, so the label rule keeps its exhibits.
+
+The numeric cut's other retirements (its duplicates and its undated natural or modern places,
+`E3: no date, and ...`) are listed in SKIPPED.jsonl as `not-a-date-retirement`, so every
+retirement of the numeric cut that still stands is in PLAN.jsonl or SKIPPED.jsonl.
 
 **D50, the disputed sites.** "All return as disputed sites: un-retire them through the scope lane,
 journalled; each description states the scholarly position and the claim, both sourced; no card or
@@ -111,6 +118,7 @@ from pipeline.normalizers.dates import (  # noqa: E402
     UNPLACED_OLD_WORLD,
     VIKING_SUBJECT_QIDS,
     label_borderline,
+    label_open_question,
     passes_date_cutoff,
     scope_region,
     window_date,
@@ -337,6 +345,14 @@ def _date_decision(
             "label-rule-cannot-tell",
             "no longitude or no date: the label rule cannot place it, the retirement stands",
         )
+    if label_open_question(site):
+        return _skip(
+            site,
+            "label-open-question",
+            f"{site['country']}, date {window_date(site)}: Islamic Europe (al-Andalus, the "
+            "Emirate of Sicily, Arab Malta) is an open owner question - the retirement stands "
+            "until the owner answers it",
+        )
     if not passes_date_cutoff(site):
         return _skip(
             site,
@@ -476,9 +492,23 @@ def build_plan(export: Export, *, built_at: str, lane: Lane) -> Plan:
         d50 = sid in D50_DISPUTED_SITES
         if site["scope_status"] != RETIRED:
             raise UnretireError(f"{sid}: the export's site part holds a site that is not retired")
-        if not d50 and not reason_now.startswith((DATE_RETIRED_PREFIX, MUSEUM_PREFIX)):
-            continue  # duplicates, non-sites and the rest: no decision of D58 or D50 names them
         entry = latest_retirement(sid, export.journal)
+        if not d50 and not reason_now.startswith((DATE_RETIRED_PREFIX, MUSEUM_PREFIX)):
+            # duplicates, non-sites and the rest: no decision of D58 or D50 names them. The
+            # numeric cut's own retirements of that kind (its duplicates, `duplicate_of:`, and
+            # `E3: no date, and ...`: a natural or modern place without a date) are listed, so
+            # every retirement of the numeric cut is in PLAN.jsonl or SKIPPED.jsonl.
+            if entry is not None and entry["run_stamp"] in NUMERIC_CUT_STAMPS:
+                skipped.append(
+                    _skip(
+                        site,
+                        "not-a-date-retirement",
+                        f"retired by {entry['run_stamp']} as {reason_now!r}: not for a date past "
+                        "its cutoff nor by the museum rule, so D58 does not take it back",
+                    )
+                )
+            continue
+
         if entry is None:
             skipped.append(
                 _skip(site, "retirement-not-journalled", "no journal row of its retirement stands")

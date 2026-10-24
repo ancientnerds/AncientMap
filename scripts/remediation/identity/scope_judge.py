@@ -11,7 +11,10 @@ medieval Old World of Europe, Byzantium and the Vikings is out after 500 AD, eve
 its sites through 1500 AD (`dates.scope_region`, `dates.LABEL_CUTOFFS`). Where the label and not the
 region decides - a site dated 500-1500 in the Levant, Egypt, Byzantine Africa, the Caucasus or
 Greenland (`dates.label_borderline`, the discovery's group `label_borderline`) - the question asks
-whether its subject is Byzantine, Crusader or Norse.
+whether its subject is Byzantine, Crusader or Norse. A site of Islamic Europe dated 500-1500 (Spain,
+Portugal, Malta, Sicily: `dates.label_open_question`) is an open owner question: the discovery does
+not ask it, and an OUT_OF_WINDOW answer for one is skipped `label-open-question` - its region alone
+retires nothing.
 
 **The question** (stage `scope-window-web`, role `web_verifier`, Sonnet; prompt `scope-window-v2`):
 
@@ -92,6 +95,7 @@ from pipeline.normalizers.dates import (  # noqa: E402
     MEDIEVAL_OLD_WORLD,
     OCEANIA,
     UNPLACED_OLD_WORLD,
+    label_open_question,
     scope_region,
 )
 from pipeline.utils.public_sites import RETIRED  # noqa: E402
@@ -326,8 +330,9 @@ CUTOFF_NOTES = {
     OCEANIA: "Americas and Oceania: 1500 AD",
     MEDIEVAL_OLD_WORLD: "the medieval Old World - Europe and Byzantium (Cyprus): 500 AD",
     UNPLACED_OLD_WORLD: (
-        "an Old World entry whose country is not stored: 500 AD, as for Europe - only a stored "
-        "country outside Europe and Byzantium keeps an entry through 1500 AD"
+        "an Old World entry whose country is not stored or not recognised: 500 AD, as for "
+        "Europe - only a recognised country outside Europe and Byzantium keeps an entry through "
+        "1500 AD"
     ),
 }
 REST_NOTE = "the rest of the world - Asia, Africa and the Near East outside Byzantium: 1500 AD"
@@ -819,6 +824,14 @@ def build(
                 "d50-disputed",
                 "D50 (owner, 2026-10-19) shows it as a disputed site: the scope window does not "
                 "decide it (`lane.D50_NOT_RETIRED`)",
+            )
+            continue
+        if verdict == OUT_OF_WINDOW and label_open_question(now):
+            skip(
+                sid,
+                "label-open-question",
+                f"{now['country']}: Islamic Europe (al-Andalus, the Emirate of Sicily, Arab Malta) "
+                "is an open owner question - its region alone does not retire it",
             )
             continue
         if verdict == PERIOD_WRONG and data["period_start"] != ctx["period_start"]:

@@ -1037,6 +1037,20 @@ def in_medieval_old_world_sql(prefix: str = "") -> str:
     )
 
 
+def in_rest_of_world_sql(prefix: str = "") -> str:
+    """SQL: the row's country is positively of the rest of the world - `pipeline.normalizers.
+    dates.in_rest_of_world`, rendered from the same lists: its `country_key` is one of
+    `REST_OF_WORLD_COUNTRIES`, or its point lies in a `NON_EUROPEAN_PARTS` box of the medieval
+    Old World state it names (`coalesce`: a row without a point lies in no box)."""
+    from pipeline.normalizers.dates import NON_EUROPEAN_PARTS, REST_OF_WORLD_COUNTRIES
+
+    listed = ", ".join(sql_literal(name) for name in sorted(REST_OF_WORLD_COUNTRIES))
+    return (
+        f"({country_key_sql(prefix)} IN ({listed}) "
+        f"OR coalesce(({_boxes_sql(prefix, NON_EUROPEAN_PARTS)}), false))"
+    )
+
+
 def _window_date_sql(prefix: str) -> str:
     """SQL: `dates.window_date` - `period_end` unless it is NULL or 0, else `period_start`."""
     p = prefix
@@ -1048,8 +1062,10 @@ def _window_date_sql(prefix: str) -> str:
 
 def label_cutoff_sql(prefix: str = "") -> str:
     """SQL: the cutoff of the row's region under the label rule D58 (`dates.scope_region`,
-    `dates.LABEL_CUTOFFS`) - Oceania, the Americas' longitude window, a row without a country
-    (`UNPLACED_OLD_WORLD`), the medieval Old World, then the rest of the world."""
+    `dates.LABEL_CUTOFFS`) - Oceania, the Americas' longitude window, the rest of the world by a
+    recognised country (`in_rest_of_world_sql`), else 500 AD: the medieval Old World and the
+    unplaced Old World (no country, or one no list recognises) share the `ELSE`, as they share
+    the cutoff (the SQLite equivalence test holds the two renderings equal row for row)."""
     from pipeline.normalizers.dates import (
         AMERICAS,
         AMERICAS_LON_MAX,
@@ -1058,7 +1074,6 @@ def label_cutoff_sql(prefix: str = "") -> str:
         MEDIEVAL_OLD_WORLD,
         OCEANIA,
         REST_OF_WORLD,
-        UNPLACED_OLD_WORLD,
     )
 
     p = prefix
@@ -1066,9 +1081,8 @@ def label_cutoff_sql(prefix: str = "") -> str:
         f"(CASE WHEN {in_oceania_sql(p)} THEN {LABEL_CUTOFFS[OCEANIA]} "
         f"WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {LABEL_CUTOFFS[AMERICAS]} "
-        f"WHEN {p}country IS NULL THEN {LABEL_CUTOFFS[UNPLACED_OLD_WORLD]} "
-        f"WHEN {in_medieval_old_world_sql(p)} THEN {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} "
-        f"ELSE {LABEL_CUTOFFS[REST_OF_WORLD]} END)"
+        f"WHEN {in_rest_of_world_sql(p)} THEN {LABEL_CUTOFFS[REST_OF_WORLD]} "
+        f"ELSE {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} END)"
     )
 
 
@@ -1099,6 +1113,33 @@ def label_borderline_sql(prefix: str = "") -> str:
     return (
         f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "
         f"AND {date} <= {LABEL_CUTOFF_REST_OF_WORLD} AND {country_key_sql(p)} IN ({listed}))"
+    )
+
+
+def label_open_question_sql(prefix: str = "") -> str:
+    """SQL: `dates.label_open_question` - the owner's open question on Islamic Europe holds the
+    row: it has a point, is dated after 500 AD and through 1500 AD, lies in the medieval Old World
+    (outside the Americas' window: no Oceania state is one of these) and names Spain, Portugal or
+    Malta (`ISLAMIC_EUROPE_COUNTRIES`) or lies on Sicily (`ISLAMIC_EUROPE_PARTS`)."""
+    from pipeline.normalizers.dates import (
+        AMERICAS_LON_MAX,
+        AMERICAS_LON_MIN,
+        ISLAMIC_EUROPE_COUNTRIES,
+        ISLAMIC_EUROPE_PARTS,
+        LABEL_CUTOFF_MEDIEVAL_OLD_WORLD,
+        LABEL_CUTOFF_REST_OF_WORLD,
+    )
+
+    p = prefix
+    date = _window_date_sql(p)
+    listed = ", ".join(sql_literal(name) for name in sorted(ISLAMIC_EUROPE_COUNTRIES))
+    return (
+        f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "
+        f"AND {date} <= {LABEL_CUTOFF_REST_OF_WORLD} "
+        f"AND NOT ({p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX}) "
+        f"AND {in_medieval_old_world_sql(p)} "
+        f"AND ({country_key_sql(p)} IN ({listed}) "
+        f"OR coalesce(({_boxes_sql(p, ISLAMIC_EUROPE_PARTS)}), false)))"
     )
 
 

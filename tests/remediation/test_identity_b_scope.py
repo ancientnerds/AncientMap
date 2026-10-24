@@ -152,7 +152,9 @@ class TestTheContext:
             SJ.cutoff_of(record(lon=None))
         assert SJ.cutoff_of(record(country=None)) == ("Old World, country unknown", 500)
         unplaced = SJ.render_web(context(country=None))
-        assert "an Old World entry whose country is not stored: 500 AD" in unplaced
+        assert (
+            "an Old World entry whose country is not stored or not recognised: 500 AD" in unplaced
+        )
 
     def test_the_context_says_whether_the_label_decides(self) -> None:
         assert context(groups=["label_borderline"])["label_borderline"] is True
@@ -683,6 +685,26 @@ class TestThePlan:
                 "2026-10-12",
             )
             assert plan.changes == [] and plan.skipped[0]["reason"] == "d50-disputed", verdict
+
+    def test_the_region_alone_never_retires_a_site_of_islamic_europe(self) -> None:
+        """The owner's open question on al-Andalus and the Emirate of Sicily (WD2 section 1b): an
+        OUT_OF_WINDOW answer for a site of Spain, Portugal, Malta or Sicily dated 500-1500 writes
+        nothing; a site's other verdicts and every other European site are decided as before."""
+        talamanca = {"country": "Spain", "lat": 40.74, "lon": -3.51, "period_start": 860,
+                     "name": "Ruins of Talamanca", "site_type": "Fortress/citadel"}  # fmt: skip
+        asked = {FORT: context(FORT, **talamanca)}
+        live = {FORT: live_row(**talamanca)}
+        plan = build({FORT: decision_for("OUT_OF_WINDOW")}, live, asked)
+        assert plan.changes == [] and [s["reason"] for s in plan.skipped] == ["label-open-question"]
+        assert "open owner question" in plan.skipped[0]["note"]
+        retired = build({FORT: decision_for("NOT_A_SITE")}, live, asked)
+        assert {c.new_value for c in retired.changes if c.column == "scope_status"} == {"retired"}
+        venice = {**talamanca, "country": "Italy", "lat": 45.43, "lon": 12.33}
+        plan = build(
+            {FORT: decision_for("OUT_OF_WINDOW")}, {FORT: live_row(**venice)},
+            {FORT: context(FORT, **venice)},
+        )  # fmt: skip
+        assert {c.new_value for c in plan.changes if c.column == "scope_status"} == {"retired"}
 
     def test_the_lane_refuses_retiring_a_d50_site(self) -> None:
         assert IL.scope_window_lane("2026-10-12").site_invariants == (L.D50_NOT_RETIRED,)

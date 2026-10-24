@@ -12515,8 +12515,13 @@ _DATE_KEPT = (
     "        f\"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')} \"\n"
 )
 _NOT_VIKING_NOT_NON_SITE = "        f\"AND NOT {viking_subject_sql('u')} AND coalesce(u.site_type, '') NOT IN ({non_site}))\"\n"
-_MUSEUM_KEPT = "        f\"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' AND u.country IS NOT NULL \"\n"
-_MUSEUM_OUTSIDE = "        f\"AND u.lon IS NOT NULL AND NOT {in_medieval_old_world_sql('u.')})\"\n"
+_MUSEUM_KEPT = (
+    "        f\"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' AND u.lon IS NOT NULL \"\n"
+)
+_MUSEUM_OUTSIDE = "        f\"AND {label_cutoff_sql('u.')} = {LABEL_CUTOFF_REST_OF_WORLD})\"\n"
+SCOPE_WINDOW_PY = REPO / "scripts/remediation/identity/scope_window.py"
+SCOPE_JUDGE_PY = REPO / "scripts/remediation/identity/scope_judge.py"
+PLAN4 = REPO / "scripts/remediation/phase4/plan4.py"
 
 D58_CASES: list[Case] = [
     # -- the rule
@@ -12539,8 +12544,8 @@ D58_CASES: list[Case] = [
     Case(
         "d58 rule: Byzantium is Cyprus",
         LABEL_RULE,
-        '            "cyprus", "northern cyprus",\n',
-        "",
+        '            "cyprus", "northern cyprus", "akrotiri sovereign base area",\n',
+        '            "akrotiri sovereign base area",\n',
         "test_the_medieval_old_world",
         LABEL_TESTS,
     ),
@@ -12563,16 +12568,72 @@ D58_CASES: list[Case] = [
     guard(
         "d58 rule: a part of a state needs the point",
         LABEL_RULE,
-        "    if None in (lat, lon):",
+        "    if key is None or lat is None or lon is None:",
         "test_the_medieval_old_world",
         LABEL_TESTS,
     ),
     Case(
         "d58 rule: a row without a country is the unplaced Old World",
         LABEL_RULE,
-        "    if country is None:\n        return UNPLACED_OLD_WORLD\n",
-        "    if False:\n        return UNPLACED_OLD_WORLD\n",
+        '    if in_rest_of_world(country, record.get("lat"), lon):\n        return REST_OF_WORLD\n'
+        "    return UNPLACED_OLD_WORLD\n",
+        "    return REST_OF_WORLD\n",
         "test_a_region_that_cannot_be_told_is_none",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: an unrecognised country is the unplaced Old World",
+        LABEL_RULE,
+        '    if in_rest_of_world(country, record.get("lat"), lon):\n        return REST_OF_WORLD\n'
+        "    return UNPLACED_OLD_WORLD\n",
+        "    return REST_OF_WORLD\n",
+        "test_a_country_no_list_recognises_keeps_the_old_world_s_500",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: the rest of the world is a recognised country",
+        LABEL_RULE,
+        "    return key in REST_OF_WORLD_COUNTRIES or _in_boxes(key, lat, lon, NON_EUROPEAN_PARTS)",
+        "    return _in_boxes(key, lat, lon, NON_EUROPEAN_PARTS)",
+        "test_the_other_regions",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: the lookup's European names are listed",
+        LABEL_RULE,
+        '            "republic of serbia", "slovenia", "spain", "kosovo",\n',
+        '            "slovenia", "spain", "kosovo",\n',
+        "test_the_review_s_examples_are_out",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: Islamic Europe is a question",
+        LABEL_RULE,
+        "    if label_open_question(record):\n        return LABEL_QUESTION\n",
+        "    if False:\n        return LABEL_QUESTION\n",
+        "test_a_held_site_is_a_question_not_admitted_and_not_out",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: the open question is dated 500-1500",
+        LABEL_RULE,
+        "    if date is None or not LABEL_CUTOFF_MEDIEVAL_OLD_WORLD < date <= LABEL_CUTOFF_REST_OF_WORLD:",
+        "test_label_open_question",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: the open question is the medieval Old World's",
+        LABEL_RULE,
+        "    if scope_region(record) != MEDIEVAL_OLD_WORLD:",
+        "test_label_open_question",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 rule: Sicily is a box of Italy",
+        LABEL_RULE,
+        "    return key in ISLAMIC_EUROPE_COUNTRIES or _in_boxes(\n",
+        "    return key in ISLAMIC_EUROPE_COUNTRIES or False and _in_boxes(\n",
+        "test_label_open_question",
         LABEL_TESTS,
     ),
     Case(
@@ -12607,11 +12668,43 @@ D58_CASES: list[Case] = [
     ),
     # -- the SQL
     Case(
-        "d58 sql: the medieval cutoff is in the CASE",
+        "d58 sql: the medieval and the unplaced Old World keep 500",
         LANE,
-        '        f"WHEN {in_medieval_old_world_sql(p)} THEN {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} "\n',
+        '        f"ELSE {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} END)"',
+        '        f"ELSE {LABEL_CUTOFFS[REST_OF_WORLD]} END)"',
+        "test_outside_label_window_is_passes_date_cutoff_negated",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: the rest of the world is in the CASE",
+        LANE,
+        '        f"WHEN {in_rest_of_world_sql(p)} THEN {LABEL_CUTOFFS[REST_OF_WORLD]} "\n',
         "",
         "test_outside_label_window_is_passes_date_cutoff_negated",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: the rest of the world takes a state's parts in",
+        LANE,
+        '        f"OR coalesce(({_boxes_sql(prefix, NON_EUROPEAN_PARTS)}), false))"',
+        '        "OR false)"',
+        "test_in_rest_of_world_sql_is_the_python_rule",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: the open question keeps to the Old World",
+        LANE,
+        '        f"AND NOT ({p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX}) "\n',
+        "",
+        "test_label_open_question_sql_is_label_open_question",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 sql: the open question's Sicily box",
+        LANE,
+        '        f"OR coalesce(({_boxes_sql(p, ISLAMIC_EUROPE_PARTS)}), false)))"',
+        '        "OR false))"',
+        "test_label_open_question_sql_is_label_open_question",
         UNRETIRE_TESTS,
     ),
     Case(
@@ -12623,18 +12716,12 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d58 sql: a row without a country keeps 500",
-        LANE,
-        '        f"WHEN {p}country IS NULL THEN {LABEL_CUTOFFS[UNPLACED_OLD_WORLD]} "\n',
-        "",
-        "test_outside_label_window_is_passes_date_cutoff_negated",
-        UNRETIRE_TESTS,
-    ),
-    Case(
         "d58 sql: borderline lies past 500",
         LANE,
-        '        f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "',
-        '        f"({p}lon IS NOT NULL AND {date} > -100000 "',
+        '        f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "\n'
+        '        f"AND {date} <= {LABEL_CUTOFF_REST_OF_WORLD} AND {country_key_sql(p)} IN ({listed}))"',
+        '        f"({p}lon IS NOT NULL AND {date} > -100000 "\n'
+        '        f"AND {date} <= {LABEL_CUTOFF_REST_OF_WORLD} AND {country_key_sql(p)} IN ({listed}))"',
         "test_label_borderline_sql_is_label_borderline",
         UNRETIRE_TESTS,
     ),
@@ -12659,23 +12746,15 @@ D58_CASES: list[Case] = [
         "d58 lane: a museum un-retirement needs a museum",
         IDENTITY_LANES,
         _MUSEUM_KEPT,
-        "        f\"AND {numeric_cut_sql('u')} AND u.country IS NOT NULL \"\n",
+        "        f\"AND {numeric_cut_sql('u')} AND u.lon IS NOT NULL \"\n",
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
-        "d58 lane: a museum un-retirement lies outside Europe",
+        "d58 lane: a museum un-retirement has the 1500 cutoff",
         IDENTITY_LANES,
         _MUSEUM_OUTSIDE,
-        '        "AND u.lon IS NOT NULL)"\n',
-        UNRETIRE_MUSEUM_SQL,
-        UNRETIRE_TESTS,
-    ),
-    Case(
-        "d58 lane: a museum un-retirement needs its country",
-        IDENTITY_LANES,
-        _MUSEUM_KEPT,
-        "        f\"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' \"\n",
+        '        "AND true)"\n',
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
@@ -13156,17 +13235,58 @@ D58_CASES: list[Case] = [
         "d58 lane: a museum un-retirement rests on the numeric cut",
         IDENTITY_LANES,
         _MUSEUM_KEPT,
-        "        f\"AND u.site_type = 'Museum' AND u.country IS NOT NULL \"\n",
+        "        f\"AND u.site_type = 'Museum' AND u.lon IS NOT NULL \"\n",
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
         "d58 lane: a museum un-retirement has a point",
         IDENTITY_LANES,
-        _MUSEUM_OUTSIDE,
-        "        f\"AND NOT {in_medieval_old_world_sql('u.')})\"\n",
+        _MUSEUM_KEPT,
+        "        f\"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' \"\n",
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
+    ),
+    # -- the review of 2026-10-24, second round: Islamic Europe, the numeric cut's other retirements
+    Case(
+        "d58 plan: Islamic Europe stays retired",
+        UNRETIRE,
+        "    if label_open_question(site):\n",
+        "    if False:\n",
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 plan: the numeric cut's other retirements are listed",
+        UNRETIRE,
+        '            if entry is not None and entry["run_stamp"] in NUMERIC_CUT_STAMPS:\n',
+        "            if False:\n",
+        "test_the_numeric_cut_s_other_retirements_are_listed",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 window: Islamic Europe is not asked",
+        SCOPE_WINDOW_PY,
+        '        if row["label_open_question"]:\n',
+        "        if False:\n",
+        "test_a_site_of_islamic_europe_is_held_out_of_the_population",
+        "tests/remediation/test_identity_scope_parents.py",
+    ),
+    Case(
+        "d58 window: the region alone retires no Islamic Europe site",
+        SCOPE_JUDGE_PY,
+        "        if verdict == OUT_OF_WINDOW and label_open_question(now):\n",
+        "        if False:\n",
+        "test_the_region_alone_never_retires_a_site_of_islamic_europe",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+    Case(
+        "d58 phase4: scope-pending is what the label rule does not admit",
+        PLAN4,
+        '    return undated or label_scope(dict(row), (row["wikidata_qid"],)) != LABEL_IN_SCOPE',
+        '    return undated or label_scope(dict(row), (row["wikidata_qid"],)) == "out_of_scope"',
+        "test_scope_pending_is_whatever_the_label_rule_does_not_admit",
+        "tests/remediation/test_phase4_plan.py",
     ),
     Case(
         "d50 lane: a D50 site's card was written after its text",

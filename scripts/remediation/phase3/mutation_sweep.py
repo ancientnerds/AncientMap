@@ -11217,15 +11217,15 @@ PHASE4_SOURCES_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 plan4: an undated site is in scope",
         P4_PLAN,
-        "    return undated or not passes_date_cutoff(dict(row))\n",
-        "    return not passes_date_cutoff(dict(row))  # mutant\n",
+        '    return undated or label_scope(dict(row), (row["wikidata_qid"],)) != LABEL_IN_SCOPE\n',
+        '    return label_scope(dict(row), (row["wikidata_qid"],)) != LABEL_IN_SCOPE  # mutant\n',
         P4_PLAN_TEST,
         "test_a_site_outside_the_date_window_or_undated_is_scope_pending",
     ),
     (
         "p4 plan4: the date window is not applied",
         P4_PLAN,
-        "    return undated or not passes_date_cutoff(dict(row))\n",
+        '    return undated or label_scope(dict(row), (row["wikidata_qid"],)) != LABEL_IN_SCOPE\n',
         "    return undated  # mutant\n",
         P4_PLAN_TEST,
         "test_a_site_outside_the_date_window_or_undated_is_scope_pending",

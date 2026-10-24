@@ -14,8 +14,10 @@ The parts (the kind names the line's meaning):
 * `shown`   - the curated sites that are not retired (4,900 on 2026-10-08), with the facts every
               module needs, `outside_window`: the owner's label rule D58 of the scope lane
               (`mechanical.lane.outside_label_window`), built from the project's own
-              constants, and `label_borderline` (`mechanical.lane.label_borderline_sql`: a
-              site dated 500-1500 where the label, not the region, decides);
+              constants, `label_borderline` (`mechanical.lane.label_borderline_sql`: a
+              site dated 500-1500 where the label, not the region, decides) and
+              `label_open_question` (`mechanical.lane.label_open_question_sql`: a site of
+              Islamic Europe dated 500-1500, held by the owner's open question);
 * `ext_ids` - every `site_external_ids` row of those sites (a site can hold more than one item);
 * `names`   - the English alias rows and the label row of `unified_site_names`;
 * `pairs`   - two shown sites of one country within 300 m whose normalised names have a trigram
@@ -41,7 +43,11 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from mechanical.lane import label_borderline_sql, outside_label_window  # noqa: E402
+from mechanical.lane import (  # noqa: E402
+    label_borderline_sql,
+    label_open_question_sql,
+    outside_label_window,
+)
 from mechanical.plan import (  # noqa: E402
     parse_tagged_export,
     tagged_export_script,
@@ -80,7 +86,8 @@ SELECT u.id::text AS id, u.name, u.country, u.site_type, u.lat, u.lon, u.period_
        EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = u.id
                AND cs.card_description IS NOT NULL) AS has_card,
        coalesce({outside_label_window("u.")}, false) AS outside_window,
-       coalesce({label_borderline_sql("u.")}, false) AS label_borderline
+       coalesce({label_borderline_sql("u.")}, false) AS label_borderline,
+       coalesce({label_open_question_sql("u.")}, false) AS label_open_question
   FROM unified_sites u
  WHERE {SHOWN}
  ORDER BY u.id"""

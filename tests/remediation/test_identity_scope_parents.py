@@ -97,6 +97,20 @@ class TestThePopulation:
         ]
         assert counts["group_label_borderline"] == 1
 
+    def test_a_site_of_islamic_europe_is_held_out_of_the_population(self) -> None:
+        """The owner's open question (WD2 section 1b): Ruins of Talamanca (Spain, 860) is past the
+        window but not asked - the window would retire it by its region alone."""
+        talamanca = site(
+            name="Ruins of Talamanca",
+            country="Spain",
+            period_start=860,
+            outside_window=True,
+            label_open_question=True,
+        )
+        records, counts = scope_window.build(export_of([talamanca, hadrian()]))
+        assert [r["name"] for r in records] == ["Hadrian's Wall Path"]
+        assert counts["held_label_open_question"] == 1 and counts["population"] == 1
+
     def test_a_d50_site_is_never_in_the_population(self) -> None:
         """D50: the six disputed sites are shown again by the un-retire; their scope is decided,
         and the window lane's invariant refuses retiring one (`lane.D50_NOT_RETIRED`)."""

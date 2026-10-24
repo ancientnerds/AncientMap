@@ -218,11 +218,12 @@ def e3_region(record: Mapping[str, Any]) -> str | None:
 #: In machine form it is a region test: a site of the medieval Old World keeps the 500 AD cutoff,
 #: every other site has 1500 AD.
 MEDIEVAL_OLD_WORLD = "medieval Old World"
-#: A point outside the Americas and Oceania whose row names no country: the rule cannot tell
-#: Lisbon from Lagos, so the row keeps the Old World's stricter cutoff - only a country that is
-#: not Europe's or Byzantium's earns a site the 1500 AD of the rest of the world. (The E3 rule
-#: placed such a row in its rest of the world, 500 AD, too: for a row without a country the
-#: label rule changes nothing. The loader looks the country up before it asks.)
+#: A point outside the Americas and Oceania whose row names no country, or a country neither
+#: `MEDIEVAL_OLD_WORLD_COUNTRIES` nor `REST_OF_WORLD_COUNTRIES` recognises: the rule cannot tell
+#: Lisbon from Lagos, so the row keeps the Old World's stricter cutoff - only a recognised country
+#: that is not Europe's or Byzantium's earns a site the 1500 AD of the rest of the world. (The E3
+#: rule placed such a row in its rest of the world, 500 AD, too: for it the label rule changes
+#: nothing. The loader looks a missing country up before it asks.)
 UNPLACED_OLD_WORLD = "Old World, country unknown"
 LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 500
 LABEL_CUTOFF_REST_OF_WORLD = 1500
@@ -277,21 +278,23 @@ MEDIEVAL_OLD_WORLD_COUNTRIES = (
             "republic of moldova", "romania", "russia", "russian federation", "slovakia",
             "ukraine",
             # Northern Europe
-            "aland islands", "åland islands", "denmark", "estonia", "faroe islands", "finland",
+            "aland", "aland islands", "åland islands", "denmark", "estonia", "faroe islands", "finland",
             "guernsey", "iceland", "ireland", "isle of man", "jersey", "latvia", "lithuania",
             "norway", "svalbard and jan mayen", "sweden", "united kingdom", "great britain",
             "england", "scotland", "wales", "northern ireland", "channel islands",
             # Southern Europe
             "albania", "andorra", "bosnia and herzegovina", "croatia", "gibraltar", "greece",
-            "holy see", "vatican city", "italy", "malta", "montenegro", "north macedonia",
-            "macedonia", "portugal", "san marino", "serbia", "slovenia", "spain", "kosovo",
+            "holy see", "vatican", "vatican city", "italy", "malta", "montenegro",
+            "north macedonia", "macedonia", "portugal", "san marino", "serbia",
+            "republic of serbia", "slovenia", "spain", "kosovo",
             # Western Europe
             "austria", "belgium", "france", "germany", "liechtenstein", "luxembourg", "monaco",
             "netherlands", "the netherlands", "switzerland",
             # the seas a curated point off a European coast names
             "baltic sea", "north sea",
-            # Byzantium
-            "cyprus", "northern cyprus",
+            # Byzantium: the island and the names `lookup_country` gives its parts
+            "cyprus", "northern cyprus", "akrotiri sovereign base area",
+            "dhekelia sovereign base area", "cyprus no mans area",
         }
     )
 )  # fmt: skip
@@ -344,6 +347,97 @@ LABEL_BORDERLINE_COUNTRIES = frozenset(
     }
 )  # fmt: skip
 
+#: The rest of the world, positively: every state and territory of Asia, Africa, the Americas and
+#: Antarctica (the United Nations geoscheme's regions 002, 019, 142 and Antarctica) under the
+#: names `country_lookup.lookup_country` gives them (Natural Earth's `name`, read from
+#: `data/boundaries/countries.geojson`) and the ones `country_lookup.NAME_TO_ISO` files, with their
+#: ISO 3166-1 alpha-2 codes; the borderline countries are among them. Only a country on this list
+#: (or a `NON_EUROPEAN_PARTS` point of a medieval Old World state) earns a site the 1500 AD of the
+#: rest of the world: a country the rule does not recognise - a county ("Aberdeenshire"), a region
+#: ("Crete"), an exonym ("Italien", "Republik Türkei"), a spelling no list carries - keeps the Old
+#: World's 500 AD, as E3 gave it (`UNPLACED_OLD_WORLD`). A misspelt European country can therefore
+#: never let a medieval site in; a misspelt Asian one is held until its spelling is listed.
+#: Oceania is placed before this test (`in_oceania`), the Americas mostly by the longitude window;
+#: they are listed for the points outside it (the Aleutians west of -170, an Atlantic island).
+REST_OF_WORLD_COUNTRIES = LABEL_BORDERLINE_COUNTRIES | frozenset(
+    {
+        # Western, Central and South Asia
+        "afghanistan", "bahrain", "bangladesh", "baykonur cosmodrome", "bhutan", "india", "iran",
+        "iraq", "kazakhstan", "kuwait", "kyrgyzstan", "maldives", "nepal", "oman", "pakistan",
+        "qatar", "saudi arabia", "siachen glacier", "sri lanka", "tajikistan", "turkmenistan",
+        "united arab emirates", "uzbekistan", "yemen",
+        # Eastern and South-eastern Asia
+        "brunei", "burma", "cambodia", "china", "democratic people's republic of korea",
+        "east timor", "hong kong", "hong kong s.a.r.", "indonesia", "japan", "korea",
+        "lao people's democratic republic", "laos", "macao s.a.r", "macau", "malaysia",
+        "mongolia", "myanmar", "north korea", "philippines", "republic of korea",
+        "scarborough reef", "singapore", "south korea", "spratly islands", "taiwan", "thailand",
+        "timor-leste", "viet nam", "vietnam",
+        # Africa
+        "angola", "benin", "bir tawil", "botswana", "british indian ocean territory",
+        "burkina faso", "burundi", "cabo verde", "cameroon", "cape verde",
+        "central african republic", "chad", "comoros", "congo", "côte d'ivoire",
+        "democratic republic of the congo", "djibouti", "drc", "equatorial guinea", "eritrea",
+        "eswatini", "ethiopia", "gabon", "gambia", "ghana", "guinea", "guinea-bissau",
+        "ivory coast", "kenya", "lesotho", "liberia", "madagascar",
+        "malawi", "mali", "mauritania", "mauritius", "morocco", "mozambique", "namibia", "niger",
+        "nigeria", "republic of the congo", "republic of the gambia", "rwanda", "saint helena",
+        "são tomé and principe", "senegal", "seychelles", "sierra leone", "somalia", "somaliland",
+        "south africa", "south sudan", "sudan", "swaziland", "tanzania", "the gambia", "togo",
+        "uganda", "united republic of tanzania", "western sahara", "zambia", "zimbabwe",
+        # the Americas
+        "anguilla", "antigua and barbuda", "argentina", "aruba", "bahamas",
+        "bajo nuevo bank (petrel is.)", "barbados", "belize", "bermuda", "bolivia", "brazil",
+        "brazilian island", "british virgin islands", "canada", "cayman islands", "chile",
+        "clipperton island", "colombia", "costa rica", "cuba", "curaçao", "dominica",
+        "dominican republic", "ecuador", "el salvador", "falkland islands", "french guiana",
+        "grenada", "guatemala", "guyana", "haiti", "honduras", "jamaica", "mexico", "montserrat",
+        "nicaragua", "panama", "paraguay", "peru", "puerto rico", "saint barthelemy",
+        "saint kitts and nevis", "saint lucia", "saint martin", "saint pierre and miquelon",
+        "saint vincent and the grenadines", "serranilla bank", "sint maarten",
+        "south georgia and the islands", "southern patagonian ice field", "suriname",
+        "the bahamas", "trinidad and tobago", "turks and caicos islands", "united states",
+        "united states of america", "united states virgin islands",
+        "us naval base guantanamo bay", "uruguay", "usa", "venezuela",
+        # Antarctica
+        "antarctica", "french southern and antarctic lands",
+        # Australia's external territories under Natural Earth's names: Oceania in M49, listed
+        # here (the same 1500 AD) so that E3's Oceania list, which the delivered lanes rendered,
+        # stays as it was
+        "ashmore and cartier islands", "coral sea islands", "indian ocean territories",
+        # the ISO 3166-1 alpha-2 codes of all of them
+        "ae", "af", "ag", "ai", "ao", "aq", "ar", "aw", "bb", "bd", "bf", "bh", "bi", "bj", "bl",
+        "bm", "bn", "bo", "bq", "br", "bs", "bt", "bv", "bw", "bz", "ca", "cd", "cf", "cg", "ci",
+        "cl", "cm", "cn", "co", "cr", "cu", "cv", "cw", "dj", "dm", "do", "ec", "eh", "er", "et",
+        "fk", "ga", "gd", "gf", "gh", "gm", "gn", "gp", "gq", "gs", "gt", "gw", "gy", "hk", "hn",
+        "ht", "id", "in", "io", "iq", "ir", "jm", "jp", "ke", "kg", "kh", "km", "kn", "kp", "kr",
+        "kw", "ky", "kz", "la", "lc", "lk", "lr", "ls", "ma", "mf", "mg", "ml", "mm", "mn", "mo",
+        "mq", "mr", "ms", "mu", "mv", "mw", "mx", "my", "mz", "na", "ne", "ng", "ni", "np", "om",
+        "pa", "pe", "ph", "pk", "pm", "pr", "py", "qa", "re", "rw", "sa", "sc", "sd", "sg", "sh",
+        "sl", "sn", "so", "sr", "ss", "st", "sv", "sx", "sz", "tc", "td", "tf", "tg", "th", "tj",
+        "tl", "tm", "tt", "tw", "tz", "ug", "us", "uy", "uz", "vc", "ve", "vg", "vi", "vn", "ye",
+        "yt", "za", "zm", "zw",
+    }
+)  # fmt: skip
+
+#: Open owner question (WD2 section 1b, 2026-10-24): Islamic Europe - al-Andalus (711-1492: the
+#: Umayyad emirate and caliphate, the taifas, the Almoravids, Almohads and Nasrids), the Emirate of
+#: Sicily (831-1091) and Arab Malta (870-1091). The rule's own examples of what stays name "the
+#: Islamic Golden Age" among the non-European Old World, but these lands are Europe, so the region
+#: alone would cut their sites at 500 AD. Until the owner answers, a site there dated 500-1500 is
+#: neither admitted nor retired by its region: `label_open_question` holds it (the loader skips it,
+#: the Prospector files it for review, Lyra leaves it to the founder, the D20 scope window does not
+#: ask it, the un-retire skips it). The window itself stays 500 AD, so nothing comes back on it.
+#: Spain and Portugal by the country (the Canaries are not Europe already, `NON_EUROPEAN_PARTS`),
+#: Sicily as a box of Italy with Pantelleria, the Pelagie and Aeolian islands (the box takes in the
+#: Calabrian shore of the Strait of Messina around Reggio: such a site is held, not decided).
+ISLAMIC_EUROPE_COUNTRIES = frozenset({"spain", "es", "portugal", "pt", "malta", "mt"})
+_SICILY = ((11.9, 35.4, 15.7, 38.9),)
+ISLAMIC_EUROPE_PARTS: Mapping[str, tuple[tuple[float, float, float, float], ...]] = {
+    "italy": _SICILY,
+    "it": _SICILY,
+}
+
 #: Sites the label puts out by their subject wherever they lie: the Viking settlement of
 #: L'Anse aux Meadows in Newfoundland (D58: "L'Anse aux Meadows stays out (Viking subject)"), by
 #: its Wikidata item (read in `site_proposals` on 2026-10-24: Q189113). Every path that carries a
@@ -367,12 +461,31 @@ def in_medieval_old_world(country: str | None, lat: float | None, lon: float | N
     key = country_key(country)
     if key is None or key not in MEDIEVAL_OLD_WORLD_COUNTRIES:
         return False
-    if None in (lat, lon):
-        return True
-    return not any(
+    return not _in_boxes(key, lat, lon, NON_EUROPEAN_PARTS)
+
+
+def _in_boxes(
+    key: str | None,
+    lat: float | None,
+    lon: float | None,
+    parts: Mapping[str, tuple[tuple[float, float, float, float], ...]],
+) -> bool:
+    """Whether a point lies in one of the boxes `parts` holds for the country key (edges count;
+    without a point no box can be told)."""
+    if key is None or lat is None or lon is None:
+        return False
+    return any(
         lon_min <= lon <= lon_max and lat_min <= lat <= lat_max
-        for lon_min, lat_min, lon_max, lat_max in NON_EUROPEAN_PARTS.get(key, ())
+        for lon_min, lat_min, lon_max, lat_max in parts.get(key, ())
     )
+
+
+def in_rest_of_world(country: str | None, lat: float | None, lon: float | None) -> bool:
+    """Whether a row's country is positively of the rest of the world: one of
+    `REST_OF_WORLD_COUNTRIES`, or a medieval Old World state whose point lies in one of its
+    `NON_EUROPEAN_PARTS` (Asian Russia, the Canaries, Reunion and Mayotte)."""
+    key = country_key(country)
+    return key in REST_OF_WORLD_COUNTRIES or _in_boxes(key, lat, lon, NON_EUROPEAN_PARTS)
 
 
 def scope_region(record: Mapping[str, Any]) -> str | None:
@@ -381,7 +494,9 @@ def scope_region(record: Mapping[str, Any]) -> str | None:
     `MEDIEVAL_OLD_WORLD` or `REST_OF_WORLD`, or None without a longitude.
 
     Oceania first and the Americas by the longitude window second, as in `e3_region`; then the
-    medieval Old World by the country; every other country is the rest of the world.
+    medieval Old World by the country, then the rest of the world by the country
+    (`in_rest_of_world`); a missing country, or one neither list recognises, is
+    `UNPLACED_OLD_WORLD` - only a recognised country outside Europe and Byzantium earns 1500 AD.
     """
     lon = record.get("lon")
     if lon is None:
@@ -391,11 +506,11 @@ def scope_region(record: Mapping[str, Any]) -> str | None:
         return OCEANIA
     if AMERICAS_LON_MIN <= lon <= AMERICAS_LON_MAX:
         return AMERICAS
-    if country is None:
-        return UNPLACED_OLD_WORLD
     if in_medieval_old_world(country, record.get("lat"), lon):
         return MEDIEVAL_OLD_WORLD
-    return REST_OF_WORLD
+    if in_rest_of_world(country, record.get("lat"), lon):
+        return REST_OF_WORLD
+    return UNPLACED_OLD_WORLD
 
 
 def window_date(record: Mapping[str, Any]) -> int | None:
@@ -414,6 +529,23 @@ def label_borderline(record: Mapping[str, Any]) -> bool:
     if not LABEL_CUTOFF_MEDIEVAL_OLD_WORLD < date <= LABEL_CUTOFF_REST_OF_WORLD:
         return False
     return country_key(record.get("country")) in LABEL_BORDERLINE_COUNTRIES
+
+
+def label_open_question(record: Mapping[str, Any]) -> bool:
+    """Whether the owner's open question on Islamic Europe holds the record (`ISLAMIC_EUROPE_*`):
+    it lies in the medieval Old World in Spain, Portugal, Malta or on Sicily and is dated after 500
+    AD and through 1500 AD. Its region cuts it at 500 AD, but its subject may be of al-Andalus or
+    the Emirate of Sicily, which the owner has not decided: no path admits or retires it by its
+    region."""
+    date = window_date(record)
+    if date is None or not LABEL_CUTOFF_MEDIEVAL_OLD_WORLD < date <= LABEL_CUTOFF_REST_OF_WORLD:
+        return False
+    if scope_region(record) != MEDIEVAL_OLD_WORLD:
+        return False
+    key = country_key(record.get("country"))
+    return key in ISLAMIC_EUROPE_COUNTRIES or _in_boxes(
+        key, record.get("lat"), record.get("lon"), ISLAMIC_EUROPE_PARTS
+    )
 
 
 _BC_AD_RE = re.compile(
@@ -468,8 +600,9 @@ def passes_date_cutoff(record: Mapping[str, Any]) -> bool:
     - Americas (lon -170 to -30): <= 1500 AD
     - The medieval Old World (Europe, Byzantium): <= 500 AD
     - Rest of World (Asia, Africa, the Near East outside Byzantium): <= 1500 AD
-    - A point outside the Americas and Oceania without a country: <= 500 AD (only a country
-      proves a site is not of the medieval Old World)
+    - A point outside the Americas and Oceania without a country, or with one no list
+      recognises: <= 500 AD (only a recognised country proves a site is not of the medieval Old
+      World)
     - Records WITHOUT dates: INCLUDED (can't filter unknown)
     - Records without a longitude: INCLUDED
 
@@ -505,13 +638,17 @@ def label_scope(record: Mapping[str, Any], qids: Iterable[str | None] = ()) -> s
 
     * `LABEL_OUT_OF_SCOPE` - the record's Wikidata item is a Viking subject (`viking_subjects`),
       or its date is past its region's cutoff (`passes_date_cutoff`);
-    * `LABEL_QUESTION` - the label decides it (`label_borderline`: a borderline country, dated
-      500-1500), and only a verdict on its subject may admit it;
+    * `LABEL_QUESTION` - the owner's open question on Islamic Europe holds it
+      (`label_open_question`: Spain, Portugal, Malta or Sicily, dated 500-1500), or the label
+      decides it (`label_borderline`: a borderline country, dated 500-1500) and only a verdict on
+      its subject may admit it;
     * `LABEL_IN_SCOPE` - everything else.
 
     `qids` are the record's Wikidata items as the path carries them (None and '' are no item)."""
     if viking_subjects(qids):
         return LABEL_OUT_OF_SCOPE
+    if label_open_question(record):
+        return LABEL_QUESTION
     if not passes_date_cutoff(record):
         return LABEL_OUT_OF_SCOPE
     if label_borderline(record):

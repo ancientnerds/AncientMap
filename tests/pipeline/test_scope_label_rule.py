@@ -13,9 +13,35 @@ rows where one exists (read-only, 2026-10-24).
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from pipeline.normalizers import dates as D
+
+REPO = Path(__file__).resolve().parents[2]
+#: The boundaries `country_lookup.lookup_country` reads (tracked in the repository).
+COUNTRIES_GEOJSON = REPO / "data" / "boundaries" / "countries.geojson"
+#: Europe in the United Nations geoscheme (M49 region 150), by ISO 3166-1 alpha-3 - typed here from
+#: the M49 table, not derived from `dates`, so a European state the lists miss fails the test.
+M49_EUROPE_ALPHA3 = frozenset(
+    {
+        "ALA", "ALB", "AND", "AUT", "BEL", "BGR", "BIH", "BLR", "CHE", "CZE", "DEU", "DNK", "ESP",
+        "EST", "FIN", "FRA", "FRO", "GBR", "GGY", "GIB", "GRC", "HRV", "HUN", "IMN", "IRL", "ISL",
+        "ITA", "JEY", "LIE", "LTU", "LUX", "LVA", "MCO", "MDA", "MKD", "MLT", "MNE", "NLD", "NOR",
+        "POL", "PRT", "ROU", "RUS", "SJM", "SMR", "SRB", "SVK", "SVN", "SWE", "UKR", "VAT",
+    }
+)  # fmt: skip
+#: Byzantium by region: Cyprus (M49 files it under Western Asia).
+BYZANTIUM_ALPHA3 = frozenset({"CYP"})
+#: The features Natural Earth gives no ISO code ("-99"), placed by hand: the medieval Old World's.
+UNCODED_MEDIEVAL = frozenset(
+    {
+        "France", "Norway", "Kosovo", "Northern Cyprus", "Akrotiri Sovereign Base Area",
+        "Dhekelia Sovereign Base Area", "Cyprus No Mans Area",
+    }
+)  # fmt: skip
 
 
 def row(country: str | None, lat: float | None, lon: float | None, start: int | None) -> dict:
@@ -43,6 +69,14 @@ class TestTheRegion:
             ("Bavaria, Germany", 48.1, 11.6),  # "Region, Country": the last part decides
             ("Spain", 40.4, -3.7),
             ("Russia", None, None),  # without a point the country decides
+            # the names `lookup_country` gives (Natural Earth), which the Prospector, Lyra and
+            # the loader store
+            ("Republic of Serbia", 43.49, 20.53),  # Studenica Monastery
+            ("Aland", 60.2, 20.0),  # Kastelholm
+            ("Vatican", 41.9, 12.45),
+            ("Akrotiri Sovereign Base Area", 34.6, 32.95),
+            ("Dhekelia Sovereign Base Area", 35.0, 33.75),
+            ("Cyprus No Mans Area", 35.15, 33.3),
         ],
     )
     def test_the_medieval_old_world(
@@ -94,6 +128,27 @@ class TestTheRegion:
         )
         assert D.LABEL_CUTOFFS[D.UNPLACED_OLD_WORLD] == 500
 
+    @pytest.mark.parametrize(
+        "country",
+        ["Aberdeenshire", "Cork", "Crete", "Attica", "Italien", "Griechenland", "Deutschland",
+         "Republik Türkei", "Kashmir", "Atlantis", "Bavaria"],
+    )  # fmt: skip
+    def test_a_country_no_list_recognises_keeps_the_old_world_s_500(self, country: str) -> None:
+        """A county, a region, an exonym or a misspelling is not proof of a non-European site:
+        it keeps 500 AD, as E3 gave it - a European one can never let a medieval site in."""
+        record = row(country, 45.0, 20.0, 1190)
+        assert D.scope_region(record) == D.UNPLACED_OLD_WORLD
+        assert not D.passes_date_cutoff(record)
+        assert D.label_scope(record) == D.LABEL_OUT_OF_SCOPE
+
+    def test_the_review_s_examples_are_out(self) -> None:
+        """Studenica (1190) and Kastelholm (1388) under the names `lookup_country` gives them."""
+        studenica = row("Republic of Serbia", 43.486, 20.532, 1190)
+        kastelholm = row("Aland", 60.23, 20.08, 1388)
+        for record in (studenica, kastelholm):
+            assert D.scope_region(record) == D.MEDIEVAL_OLD_WORLD
+            assert D.label_scope(record) == D.LABEL_OUT_OF_SCOPE
+
     def test_the_urals_edge_counts_as_asia(self) -> None:
         assert D.scope_region({"country": "Russia", "lat": 56.8, "lon": 60.0}) == D.REST_OF_WORLD
         assert D.scope_region({"country": "Russia", "lat": 56.8, "lon": 59.99}) == (
@@ -109,10 +164,17 @@ class TestTheRegion:
             *D.MEDIEVAL_OLD_WORLD_COUNTRIES,
             *D.NON_EUROPEAN_PARTS,
             *D.LABEL_BORDERLINE_COUNTRIES,
+            *D.REST_OF_WORLD_COUNTRIES,
+            *D.ISLAMIC_EUROPE_COUNTRIES,
+            *D.ISLAMIC_EUROPE_PARTS,
         ):
             assert name == D.country_key(name) and name and "," not in name
         assert {n for n in D.MEDIEVAL_OLD_WORLD_COUNTRIES if not n.isascii()} == {"åland islands"}
         assert {n for n in D.LABEL_BORDERLINE_COUNTRIES if not n.isascii()} == {"türkiye"}
+        # their upper-case letters are ASCII, so SQLite's ASCII-only `lower` agrees on them too
+        assert {n for n in D.REST_OF_WORLD_COUNTRIES if not n.isascii()} == {
+            "türkiye", "côte d'ivoire", "são tomé and principe", "curaçao",
+        }  # fmt: skip
 
     def test_the_lists_do_not_overlap(self) -> None:
         """A borderline country is neither Oceania's nor the medieval Old World's (so the window
@@ -123,6 +185,11 @@ class TestTheRegion:
         assert not D.LABEL_BORDERLINE_COUNTRIES & set(D.OCEANIA_PARTS)
         assert not D.MEDIEVAL_OLD_WORLD_COUNTRIES & D.OCEANIA_COUNTRIES
         assert set(D.NON_EUROPEAN_PARTS) <= D.MEDIEVAL_OLD_WORLD_COUNTRIES
+        assert D.LABEL_BORDERLINE_COUNTRIES <= D.REST_OF_WORLD_COUNTRIES
+        assert not D.REST_OF_WORLD_COUNTRIES & D.MEDIEVAL_OLD_WORLD_COUNTRIES
+        assert not D.REST_OF_WORLD_COUNTRIES & D.OCEANIA_COUNTRIES
+        assert D.ISLAMIC_EUROPE_COUNTRIES <= D.MEDIEVAL_OLD_WORLD_COUNTRIES
+        assert set(D.ISLAMIC_EUROPE_PARTS) <= D.MEDIEVAL_OLD_WORLD_COUNTRIES
 
     def test_every_box_is_a_box(self) -> None:
         for boxes in D.NON_EUROPEAN_PARTS.values():
@@ -146,6 +213,46 @@ class TestTheRegion:
             if iso.lower() in codes and name not in D.MEDIEVAL_OLD_WORLD_COUNTRIES
         )
         assert missing == []
+
+    def test_every_name_the_lookup_files_is_recognised(self) -> None:
+        """`NAME_TO_ISO` is the project's name -> ISO table: none of its names is unrecognised,
+        and its non-European names are the rest of the world's or Oceania's."""
+        from pipeline.utils.country_lookup import NAME_TO_ISO
+
+        codes = D.EUROPE_ISO_CODES | D.BYZANTIUM_ISO_CODES
+        for name, iso in NAME_TO_ISO.items():
+            if iso.lower() in codes:
+                assert name in D.MEDIEVAL_OLD_WORLD_COUNTRIES, name
+            else:
+                assert name in D.REST_OF_WORLD_COUNTRIES | D.OCEANIA_COUNTRIES, name
+                assert iso.lower() in D.REST_OF_WORLD_COUNTRIES | D.OCEANIA_ISO_CODES, iso
+
+    def test_every_country_lookup_country_can_give_is_placed_by_its_un_region(self) -> None:
+        """Every feature of the boundaries `lookup_country` reads: a European (M49 region 150) or
+        Byzantine one is the medieval Old World, every other one is recognised as Oceania's or the
+        rest of the world's - never the unplaced Old World, which a new spelling would fall into.
+        Its ISO alpha-2 code is listed with it."""
+        features = json.loads(COUNTRIES_GEOJSON.read_text(encoding="utf-8"))["features"]
+        assert len(features) > 250
+        for feature in features:
+            props = feature["properties"]
+            name, alpha2, alpha3 = (
+                props["name"], props["ISO3166-1-Alpha-2"], props["ISO3166-1-Alpha-3"],
+            )  # fmt: skip
+            key = D.country_key(name)
+            medieval = alpha3 in M49_EUROPE_ALPHA3 | BYZANTIUM_ALPHA3 or name in UNCODED_MEDIEVAL
+            if medieval:
+                assert key in D.MEDIEVAL_OLD_WORLD_COUNTRIES, name
+                assert D.in_medieval_old_world(name, None, None), name
+            else:
+                assert key in D.REST_OF_WORLD_COUNTRIES | D.OCEANIA_COUNTRIES, name
+                assert not D.in_medieval_old_world(name, None, None), name
+            code = alpha2.lower()
+            if code != "-99" and alpha2 != "CN-TW":
+                listed = D.MEDIEVAL_OLD_WORLD_COUNTRIES if medieval else (
+                    D.REST_OF_WORLD_COUNTRIES | D.OCEANIA_ISO_CODES
+                )  # fmt: skip
+                assert code in listed, (name, code)
 
     def test_every_name_the_lookup_files_under_a_borderline_code_is_borderline(self) -> None:
         from pipeline.utils.country_lookup import NAME_TO_ISO
@@ -287,3 +394,39 @@ class TestTheLabelScope:
     def test_viking_subjects(self) -> None:
         assert D.viking_subjects(["Q189113", None, "", "Q189113", "Q5"]) == ["Q189113"]
         assert D.viking_subjects([]) == []
+
+
+class TestIslamicEurope:
+    """The owner's open question (WD2 section 1b, 2026-10-24): al-Andalus, the Emirate of Sicily and
+    Arab Malta. A site there dated 500-1500 is held - neither admitted nor retired by its region."""
+
+    @pytest.mark.parametrize(
+        ("record", "held"),
+        [
+            (row("Spain", 40.74, -3.51, 860), True),  # Ruins of Talamanca
+            (row("Spain", 37.6, -2.67, 1201), True),  # Huescar
+            (row("Portugal", 41.2, -8.3, 1000), True),  # Castle of Cola
+            (row("ES", 37.18, -3.59, 1238), True),  # the Alhambra
+            (row("Malta", 35.9, 14.5, 900), True),
+            (row("Italy", 38.12, 13.36, 1000), True),  # Palermo
+            (row("Italy", 36.83, 11.95, 900), True),  # Pantelleria
+            (row("Italy", 45.43, 12.33, 1000), False),  # Venice: the region decides
+            (row("Spain", 28.1, -15.4, 1200), False),  # Gran Canaria: not Europe
+            (row("Portugal", 39.4, -31.2, 1000), False),  # Flores: the Americas' window
+            (row("Spain", 40.74, -3.51, 500), False),  # 500 itself is in every window
+            (row("Spain", 40.74, -3.51, 1501), False),  # past 1500: out
+            (row("Spain", 40.74, -3.51, None), False),
+            (row("Spain", None, None, 860), False),
+            (row("Morocco", 31.6, -8.0, 1100), False),  # the rest of the world keeps it
+        ],
+    )
+    def test_label_open_question(self, record: dict, held: bool) -> None:
+        assert D.label_open_question(record) is held
+
+    def test_a_held_site_is_a_question_not_admitted_and_not_out(self) -> None:
+        talamanca = row("Spain", 40.74, -3.51, 860)
+        assert D.scope_region(talamanca) == D.MEDIEVAL_OLD_WORLD
+        assert not D.passes_date_cutoff(talamanca), "the window stays 500 AD: nothing comes back"
+        assert D.label_scope(talamanca) == D.LABEL_QUESTION
+        assert D.label_scope(talamanca, ("Q189113",)) == D.LABEL_OUT_OF_SCOPE
+        assert D.label_scope(row("Spain", 40.74, -3.51, 1600)) == D.LABEL_OUT_OF_SCOPE

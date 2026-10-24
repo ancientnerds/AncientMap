@@ -93,11 +93,30 @@ def _rows() -> list[tuple[str | None, float | None, float]]:
         (None, 20.0, -100.0),
         ("", 13.45, 103.86),
         ("Korea, South", 37.57, 126.98),
+        # the names `lookup_country` gives that the first lists lacked (review, 2026-10-24)
+        ("Republic of Serbia", 43.49, 20.53),  # Studenica Monastery
+        ("Aland", 60.2, 20.0),  # Kastelholm
+        ("Vatican", 41.9, 12.45),
+        ("Cyprus No Mans Area", 35.15, 33.3),
+        # countries no list recognises: the Old World's 500 AD
+        ("Aberdeenshire", 57.1, -2.5),
+        ("Italien", 41.9, 12.5),
+        ("Republik Türkei", 39.0, 35.0),
+        ("Kashmir", 34.1, 74.8),
+        # Islamic Europe (the owner's open question) and its neighbours
+        ("Spain", 40.74, -3.51),
+        ("Portugal", 39.4, -8.2),
+        ("Portugal", 39.4, -31.2),  # Flores, the Azores: inside the Americas' window
+        ("Malta", 35.9, 14.5),
+        ("Italy", 37.5, 14.0),  # Sicily
+        ("Italy", 45.43, 12.33),  # Venice
+        ("Morocco", 31.6, -8.0),
     ]
-    for state, boxes in D.NON_EUROPEAN_PARTS.items():
-        for lon_min, lat_min, lon_max, lat_max in boxes:
-            rows += [(state, lat_min, lon_min), (state, lat_max, lon_max)]
-            rows += [(state, lat_min - 0.5, lon_min + 0.1), (state, lat_max, lon_max + 0.5)]
+    for parts in (D.NON_EUROPEAN_PARTS, D.ISLAMIC_EUROPE_PARTS):
+        for state, boxes in parts.items():
+            for lon_min, lat_min, lon_max, lat_max in boxes:
+                rows += [(state, lat_min, lon_min), (state, lat_max, lon_max)]
+                rows += [(state, lat_min - 0.5, lon_min + 0.1), (state, lat_max, lon_max + 0.5)]
     return rows
 
 
@@ -167,6 +186,33 @@ class TestTheLabelWindowInSql:
         assert got[by[("Russia", 43.07, 132.68, 975)]] == 0
         assert got[by[(None, 51.0, 15.0, 975)]] == 1  # no country: the Old World's 500 AD
         assert got[by[(None, 20.0, -100.0, 975)]] == 0  # the Americas need no country
+        assert got[by[("Republic of Serbia", 43.49, 20.53, 975)]] == 1  # Studenica: Europe
+        assert got[by[("Aland", 60.2, 20.0, 975)]] == 1
+        assert got[by[("Aberdeenshire", 57.1, -2.5, 975)]] == 1  # unrecognised: 500 AD
+        assert got[by[("Italien", 41.9, 12.5, 975)]] == 1
+        assert got[by[("Morocco", 31.6, -8.0, 975)]] == 0
+
+    def test_in_rest_of_world_sql_is_the_python_rule(self) -> None:
+        records = self.records()
+        db = _sites_db(records)
+        got = dict(db.execute(f"SELECT id, {L.in_rest_of_world_sql('u.')} FROM unified_sites u"))
+        want = {r["id"]: D.in_rest_of_world(r["country"], r["lat"], r["lon"]) for r in records}
+        assert {k: bool(v) for k, v in got.items()} == want
+
+    def test_label_open_question_sql_is_label_open_question(self) -> None:
+        records = self.records()
+        db = _sites_db(records)
+        got = dict(db.execute(f"SELECT id, {L.label_open_question_sql('u.')} FROM unified_sites u"))
+        want = {r["id"]: D.label_open_question(r) for r in records}
+        assert {k: bool(v) for k, v in got.items()} == want
+        by = {(r["country"], r["lat"], r["lon"], r["period_start"]): r["id"] for r in records}
+        assert want[by[("Spain", 40.74, -3.51, 975)]] is True
+        assert want[by[("Italy", 37.5, 14.0, 975)]] is True
+        assert want[by[("Italy", 45.43, 12.33, 975)]] is False
+        assert want[by[("Portugal", 39.4, -31.2, 975)]] is False  # the Americas' window first
+        assert want[by[("Spain", 28.1, -15.4, 975)]] is False  # the Canaries: not Europe
+        assert want[by[("Spain", 40.74, -3.51, 500)]] is False
+        assert want[by[("Spain", 40.74, -3.51, 1501)]] is False
 
     def test_label_borderline_sql_is_label_borderline(self) -> None:
         records = self.records()
@@ -190,11 +236,18 @@ class TestTheLabelWindowInSql:
 
     def test_the_sql_is_rendered_from_the_lists(self) -> None:
         sql = L.outside_label_window()
-        assert f"THEN {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} " in sql
-        assert f"ELSE {D.LABEL_CUTOFF_REST_OF_WORLD} END" in sql
-        assert f"WHEN country IS NULL THEN {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} " in sql
-        assert "'cyprus'" in sql and "'baltic sea'" in sql and "'türkiye'" not in sql
-        assert "'türkiye'" in L.label_borderline_sql()
+        assert (
+            f"THEN {D.LABEL_CUTOFF_REST_OF_WORLD} ELSE {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} END"
+            in sql
+        )
+        assert L.in_rest_of_world_sql() in sql and "'indonesia'" in sql
+        # the medieval Old World and an unrecognised country share the ELSE: no list of theirs
+        assert "'cyprus'" not in sql and "'republic of serbia'" not in sql
+        medieval = L.in_medieval_old_world_sql()
+        assert "'cyprus'" in medieval and "'baltic sea'" in medieval
+        assert "'republic of serbia'" in medieval and "'aland'" in medieval
+        assert "'türkiye'" in L.label_borderline_sql() and "'türkiye'" in L.in_rest_of_world_sql()
+        assert "'türkiye'" not in L.in_medieval_old_world_sql()
         assert L.in_oceania_sql("u.") in L.outside_label_window("u.")
         assert L.outside_e3_window() != sql, "the delivered lanes keep the E3 text"
 
@@ -397,8 +450,9 @@ class TestTheInvariantInSql:
             ),  # fmt: skip
             self.site(OTHER_MUSEUM, museum, site_type="Temple complex", country="Mongolia"),
             self.site(NORSE, museum, site_type="Museum", country=None),
+            self.site(DUPLICATE, museum, site_type="Museum", country="Mongolei"),  # unrecognised
         ]
-        assert self.violators(rows, []) == {GROSS_RADEN, OTHER_MUSEUM, NORSE}
+        assert self.violators(rows, []) == {GROSS_RADEN, OTHER_MUSEUM, NORSE, DUPLICATE}
         khushuu = [rows[0]]
         assert self.violators(khushuu, [], stamp="2026-10-30_mechanical-scope-window") == {KHUSHUU}
         unplaced = [self.site(KHUSHUU, museum, site_type="Museum", country="Mongolia", lon=None)]
@@ -549,6 +603,13 @@ class TestThePlanner:
             ({"lon": None}, "label-rule-cannot-tell"),
             ({"period_start": None}, "label-rule-cannot-tell"),
             ({"country": None}, "outside-label-window"),  # an unplaced point keeps 500
+            ({"country": "Republic of Serbia", "lat": 43.49, "lon": 20.53, "period_start": 1190,
+              "scope_reason": "E3: period_start 1190 is past"}, "outside-label-window"),
+            ({"country": "Italien", "lat": 41.9, "lon": 12.5}, "outside-label-window"),
+            ({"country": "Spain", "lat": 40.74, "lon": -3.51, "period_start": 860},
+             "label-open-question"),  # al-Andalus: the owner's open question
+            ({"country": "Italy", "lat": 37.5, "lon": 14.0, "period_start": 1000},
+             "label-open-question"),  # the Emirate of Sicily
         ],
     )  # fmt: skip
     def test_a_date_retirement_the_label_rule_does_not_keep_stays(
@@ -593,10 +654,32 @@ class TestThePlanner:
         assert build(export([site_row(PRAMBANAN)], again)).counters["d58_date"] == 1
 
     def test_a_retirement_no_decision_names_is_left_alone_and_not_listed(self) -> None:
+        later = "2026-09-30_mechanical-scope-review"
         dup = site_row(DUPLICATE, scope_reason=f"duplicate_of:{PRAMBANAN}")
         nonsite = site_row(NORSE, scope_reason="E3: not an archaeological site (modern): a hotel")
-        plan = build(export([dup, nonsite], [journal(DUPLICATE, 1), journal(NORSE, 2)]))
+        plan = build(
+            export([dup, nonsite], [journal(DUPLICATE, 1, stamp=later), journal(NORSE, 2, stamp=later)])
+        )  # fmt: skip
         assert plan.changes == () and plan.skipped == ()
+        assert build(export([dup], [])).skipped == (), "not journalled: no decision names it"
+
+    def test_the_numeric_cut_s_other_retirements_are_listed(self) -> None:
+        """Every retirement of scope-e4 that stands is in PLAN.jsonl or SKIPPED.jsonl: its
+        duplicates and its undated natural or modern places (Popping Stone, Mookambika Wildlife
+        Sanctuary) are listed as `not-a-date-retirement`."""
+        undated = site_row(
+            NORSE, period_start=None,
+            scope_reason="E3: no date, and its own source places it outside the window: x",
+        )  # fmt: skip
+        dup = site_row(DUPLICATE, scope_reason=f"duplicate_of:{PRAMBANAN}")
+        plan = build(export([undated, dup], [journal(NORSE, 1), journal(DUPLICATE, 2)]))
+        assert plan.changes == ()
+        assert skipped(plan) == {
+            NORSE: "not-a-date-retirement",
+            DUPLICATE: "not-a-date-retirement",
+        }
+        assert "2026-09-23_mechanical-scope-e4" in plan.skipped[0].note
+        assert plan.counters["skipped_not-a-date-retirement"] == 2
 
     def test_a_pinned_museum_comes_back_outside_the_medieval_old_world_only(self) -> None:
         museum = site_row(
