@@ -230,8 +230,8 @@ function ConnectorStatusModal({ isOpen, onClose }: ConnectorStatusModalProps) {
             </div>
             <p className="connector-status-modal-description">
               Content is aggregated from museums, libraries, and archives worldwide.
-              This system is in beta — not all connectors are fully operational yet and
-              results may be incomplete or inaccurate. Actively being developed.
+              Coverage and accuracy vary by source, and some connectors may be
+              temporarily unavailable.
             </p>
           </div>
 

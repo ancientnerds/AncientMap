@@ -867,18 +867,6 @@ body {
   letter-spacing: 0.1em;
 }
 
-.beta-badge {
-  font-size: 0.6rem;
-  padding: 2px 8px;
-  background: transparent;
-  border: 1px solid var(--accent-warm);
-  color: var(--accent-warm);
-  border-radius: 3px;
-  letter-spacing: 0.1em;
-  font-weight: 600;
-  font-family: var(--font-body);
-}
-
 .footer-nav {
   display: flex;
   justify-content: center;

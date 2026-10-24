@@ -423,7 +423,6 @@ function FilterPanel({
             <div className="logo-main">{BRAND_NAME}</div>
             <div className="logo-sub">{BRAND_SUBTITLE}</div>
           </div>
-          <span className="beta-badge">BETA</span>
         </div>
       </div>
 

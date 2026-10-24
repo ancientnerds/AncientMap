@@ -1196,20 +1196,6 @@ body.mapbox-primary-mode .mapbox-globe-container canvas {
   white-space: nowrap;
 }
 
-.beta-badge {
-  position: absolute;
-  top: 61px;
-  right: 17px;
-  font-family: var(--font-heading);
-  font-size: 7px;
-  font-weight: 700;
-  color: #ffd700;
-  letter-spacing: 1px;
-  text-shadow:
-    0 0 3px rgba(0, 0, 0, 0.8),
-    0 0 6px rgba(0, 0, 0, 0.5);
-}
-
 .logo-main {
   font-family: var(--font-heading);
   font-size: 22px;
