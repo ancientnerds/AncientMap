@@ -159,12 +159,13 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <h4>Project Scope: Ancient &amp; Classical History</h4>
     <p>This map focuses on <strong>ancient and classical history</strong>. To maintain this focus, we apply regional date cutoffs:</p>
     <ul>
-      <li><strong>Old World (Europe, Asia, Africa):</strong> Sites dated up to <strong>500 AD</strong> (end of Classical Antiquity)</li>
+      <li><strong>Europe and Byzantium (Anatolia, Cyprus):</strong> Sites dated up to <strong>500 AD</strong> (end of Classical Antiquity)</li>
+      <li><strong>Asia, Africa and the Near East:</strong> Sites dated up to <strong>1500 AD</strong> (e.g. Angkor, Lalibela, Great Zimbabwe)</li>
       <li><strong>Americas:</strong> Sites dated up to <strong>1500 AD</strong> (Pre-Columbian era)</li>
       <li><strong>Oceania:</strong> Sites dated up to <strong>1500 AD</strong> (before European contact)</li>
       <li><strong>Sites without dates:</strong> Included (we don't exclude based on missing data)</li>
     </ul>
-    <p class="attribution-note">Medieval, Byzantine, and post-classical sites are intentionally excluded to keep the focus on ancient civilizations. Natural hazard events (earthquakes, tsunamis, volcanic eruptions) are filtered to show only historically documented ancient events.</p>
+    <p class="attribution-note">The medieval Old World - medieval Europe, Byzantium and the Vikings - and everything after 1500 AD are intentionally excluded to keep the focus on ancient civilizations. Natural hazard events (earthquakes, tsunamis, volcanic eruptions) are filtered to show only historically documented ancient events.</p>
     <h4>Dating Accuracy</h4>
     <ul>
       <li>All dates are <strong>approximate</strong> and based on current archaeological understanding.</li>

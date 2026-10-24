@@ -158,6 +158,8 @@ Order: 3.0 foundation, then D14 and D25 shared pieces, D13, D23, D20. Every writ
 
 ### 3.3 D20: scope review
 
+**D58 (owner, 2026-10-24): the window is the label rule** - only the medieval Old World (Europe, Byzantium = Turkiye/Cyprus, the Vikings) ends at 500 AD, every other region at 1500 AD (`dates.scope_region`, SQL `lane.outside_label_window`). Measured 2026-10-24: 68 shown sites outside the window (83 under E3); 2 label-borderline sites (Levant, Egypt, Byzantine Africa, Caucasus, Greenland dated 500-1500: Nimrod Fortress, Comer's Midden) are asked by subject with the new verdict MEDIEVAL_SUBJECT (prompt `scope-window-v2`, re-checked like every retirement). The retired sites the label rule keeps come back through `scope-unretire-<wave>` (`mechanical/scope_unretire.py`, `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` 2.2), as do the six D50 sites once lane E wrote their dispute text. The counts below are the 2026-10-08 ones under E3.
+
 **Population.** About 131 sites: the 127 in-window, the 3 pending not in window, and Hadrian's Wall Path (already among the 110). Add the 7 undecided in-window museums to the museum sub-question (scope rule (d): ancient exhibits, with a quote). Pilares do Lena is a leftover `not_a_site` case.
 
 **Order.** Run after the D12 period re-research of those 127. 77 of them have MiniMax `one_source` periods that may be rule-made.

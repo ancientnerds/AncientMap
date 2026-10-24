@@ -73,8 +73,82 @@ three as `France`.
   wave and plans `retired -> in_scope` for one that O7 carries.
 
 Tests: `tests/pipeline/test_e3_oceania.py`, `tests/remediation/test_mechanical_scope.py`
-(`TestTheWindowPredicate`: the rendered SQL evaluated in SQLite equals `not passes_date_cutoff`,
+(`TestTheWindowPredicate`: the rendered SQL evaluated in SQLite equals `not passes_e3_cutoff`,
 and `country_key_sql` equals `country_key`), `tests/remediation/test_t11.py`.
+
+**Since D58 (2026-10-24, section 1b) this rule is history:** `passes_date_cutoff` is the label
+rule, and the E3/O7 rule above keeps its own name, `passes_e3_cutoff`.
+
+---
+
+## 1b. The label rule (owner decision D58, 2026-10-24) - code, done
+
+**D58:** "Only the medieval Old World of Europe, Byzantium and the Vikings is out; non-European sites
+of 500-1500 stay in; the sites retired under the numeric cut come back through the scope lane,
+journalled. L'Anse aux Meadows stays out (Viking subject). D20 uses this window." The owner's rule
+was always a label (`project-medieval-scope-rule`: Angkor, Great Zimbabwe, Aksum/Lalibela, Ife/Benin,
+Nara/Heian, the Islamic Golden Age and Easter Island stay); D58 makes the curated database follow it.
+E3/O7 above stays the documented history: the applied scope-e4 and scope-review lanes ran with it.
+
+**The rule in machine form** (`pipeline/normalizers/dates.py`):
+
+| function | what it answers |
+|---|---|
+| `scope_region(record)` | `Oceania` (as O7), then `Americas` (the longitude window), then `medieval Old World` (by country), else `rest of world`; `None` without a longitude, or outside the Americas and Oceania without a country |
+| `LABEL_CUTOFFS` | Oceania 1500, Americas 1500, **medieval Old World 500**, **rest of world 1500** |
+| `passes_date_cutoff(record)` | the label rule (the loader, Lyra's promotion gate, the prospector and Phase 4's `scope-pending` flag share it); no date or no region: included |
+| `passes_e3_cutoff(record)` | the E3/O7 rule under its own name (T11's census, the scope review's O7 reinstatement) |
+| `label_borderline(record)` | dated after 500 and through 1500 in a `LABEL_BORDERLINE_COUNTRIES` country: the window keeps it, the label decides |
+| `VIKING_SUBJECT_QIDS` | `Q189113` L'Anse aux Meadows: out by its subject wherever it lies (an insert or scope lane asks it) |
+
+**The region definition** (exact, machine-checkable; every name compared as `country_key` reads it,
+the ISO alpha-2 codes listed beside the names as for Oceania):
+
+* **Medieval Old World = Europe + Byzantium** (`MEDIEVAL_OLD_WORLD_COUNTRIES`): the UN M49 region 150
+  (Eastern, Northern, Southern, Western Europe) - with the four UK nations the curated rows carry,
+  Kosovo, and the sea names of curated points off a European coast ("Baltic Sea", "North Sea") - plus
+  **Turkiye and Cyprus** (Byzantium: Anatolia and Thrace were the empire's heartland from 500 to
+  1453; Cyprus Byzantine 395-1191). The Seljuk and Ottoman sites of Anatolia count with it: the rule
+  asks the region, not the dynasty.
+* **Taken out again** (`NON_EUROPEAN_PARTS`, boxes by state, edges included): Russia east of the
+  Urals (lon >= 60, and Chukotka beyond the antimeridian), the Canary Islands (Spain; the Guanche
+  islands, conquered 1402-1496), Reunion and Mayotte (France). The Americas' and Oceania's parts of
+  European states (French Guiana, Greenland, French Polynesia) are placed before this test.
+* **Borderline** (`LABEL_BORDERLINE_COUNTRIES`, 1500 by the window, the label decides): the Levant
+  (Syria, Lebanon, Israel, Palestine, Jordan: Byzantine until 636-640, the Crusader states 1099-1291),
+  Egypt and Byzantine Africa (Libya, Tunisia, Algeria: Byzantine until 641 and 698), the Caucasus
+  (Georgia, Armenia, Azerbaijan: Christian kingdoms under Byzantine influence, not the empire) and
+  Greenland (the Norse settlements of 985-1450). The D20 question (`identity/scope_judge.py`, prompt
+  `scope-window-v2`) asks such a site whether its subject is Byzantine, Crusader or Norse
+  (`MEDIEVAL_SUBJECT`, retired after the adversarial re-check) - an Umayyad, Abbasid, Fatimid,
+  Ayyubid, Mamluk, Armenian, Georgian, Thule or Inuit site stays.
+* Everything else - Asia (Asian Russia, Central Asia, Iran, Iraq, the Arabian Peninsula included),
+  sub-Saharan Africa, Morocco - is the rest of the world: 1500 AD.
+
+**The SQL** (`scripts/remediation/mechanical/lane.py`, rendered from the same lists, never re-typed):
+`outside_label_window(prefix)` (= `not passes_date_cutoff`), `label_borderline_sql(prefix)`,
+`in_medieval_old_world_sql(prefix)`, `label_cutoff_sql(prefix)` and the residual
+`UNDECIDED_OUTSIDE_LABEL_WINDOW`. `outside_e3_window()` keeps the E3/O7 text: the delivered scope-e4
+and scope-review plans render it. Where the window is computed now: the identity export
+(`identity/export.py`: `outside_window`, `label_borderline`), the D20 population
+(`identity/scope_window.py`, groups `outside_window`, `label_borderline`, `pending`,
+`hadrians_wall_path`), the D20 question and its calibration pool (`scope_judge.cutoff_of`,
+`calibration.select_scope`), the scope-window lane's residual and read-back
+(`identity_lanes.scope_window_lane`) and the un-retire (section 2.2).
+
+**Measured on production (read-only, 2026-10-24):** shown curated rows outside the window 83 under
+E3 -> **68** under D58 (52 of them with no scope decision); the 15 the label rule keeps: Aihole,
+Arvalem Caves, Bars-Hot, Bhairavakona Waterfalls, Dungur Palace, Keno Daas Rock Carvings (pending),
+Lalibela, Mughal Minar, Nimrod Fortress, Pyongyang Castle, Taq Kasra, The Hwangnyongsa Belt, Tichit,
+Undavalli Caves, Waithali. Label-borderline shown rows: 2 (Nimrod Fortress, Syria 1227; Comer's
+Midden, Greenland 1301).
+
+The public statement of the rule is `ancient-nerds-map/src/shared/disclaimerContent.ts` ("Dating &
+Chronology").
+
+Tests: `tests/pipeline/test_scope_label_rule.py` (the regions, the edges, the lists, the cutoffs,
+the borderline), `tests/remediation/test_scope_unretire.py` (`TestTheLabelWindowInSql`: the
+rendered SQL evaluated in SQLite equals the Python rule row for row).
 
 ---
 
@@ -214,6 +288,77 @@ After the waves: the retired sites leave the static export, sitemap, Qdrant and 
 next WF export (`public_sites.not_retired()`); IndexNow and a push as in WF. The scope waves need
 **no card_stats recompute**: they write only `scope_status` and `scope_reason`, and neither is an
 input of a card (`mechanical/card_stats.py`, `INPUT_COLUMNS`).
+
+### 2.2 The un-retire (D58 and D50) - `mechanical/scope_unretire.py`, lane `scope-unretire-<wave>`
+
+Two decisions bring retired curated sites back (`retired` -> `in_scope`, a new reason), each wave a
+lane of its own (`identity_lanes.scope_unretire_lane`: stamp `<wave>_mechanical-scope-unretire`, test
+id `D58/scope-unretire`, directory `output/remediation/mechanical_scope_unretire/<wave>/`, at most 100
+sites, a stamp applied once):
+
+* **D58:** a retirement whose latest `scope_status` journal row wrote `retired` and whose reason is
+  a date retirement (`E3: period_start ...`) comes back when the label rule keeps it
+  (`passes_date_cutoff`) and it is not label-borderline and not a Viking subject. The museums
+  scope-e4 retired by the museum rule are pinned with their exhibits (`MUSEUM_EXHIBITS`); one comes
+  back when its stored reason still names them and it lies outside the medieval Old World.
+* **D50:** the six retired mystery sites (`lane.D50_DISPUTED_SITES`: Baltic Sea Anomaly, the three
+  Bosnian pyramids, Yonaguni Monument, Richat Structure) come back **only** when the description they
+  hold is a lane-E dispute enrichment: the journal row that wrote it carries
+  `wc4.EVIDENCE_DECISION_ENRICH`, a well-formed adjudicated brief of the site
+  (`enrich.dispute_record_problems`) and appended a `dispute_a` and a `dispute_b` sentence. Until
+  then each is skipped `d50-no-dispute-text`. The dispute screen and lane E ask the six although they
+  are retired (`wc/disputes.py screened`, `wc/cli.py hidden`), so the order is: `disputes.py`
+  candidates -> research -> adjudicate -> outputs; `cli.py defect-sites` + the repair run for the
+  asserting sentences; `cli.py export --enrich --disputes` and its write; then the un-retire wave.
+
+The guards: guard 3 (old values `retired` and the old reason), guard 5 (the premise: name, type,
+point, country, dates **and `md5(description)`** - a D50 text rewritten after the plan is refused),
+guard 4 (the lane owns `in_scope` only) and a site invariant inside the transaction
+(`unretire_violation_sql`): every planned site carries a D58 reason and lies inside the label window
+and is not borderline, or a D58 museum reason and is a Museum outside the medieval Old World, or a D50
+reason and is a D50 site whose description is a dispute enrichment (`dispute_enriched_sql`). The
+rollback is the retirement again: `ROLLBACK.sql` restores `retired` and the old reason.
+
+**The population measured on production (read-only export, 2026-10-24, dry plan
+`write --wave 2026-10-24 --out <scratch>`):** 104 retired curated rows; **10 un-retire now** - D58
+dates: Prambanan Temple (850), Preah Palilay (1100), Bhagwan Bharat's Statue (900), Great Kyz Kala
+(750), Buddhist Rock Carving in Manglawar (600), Mount Livadiyskaya (698, Asian Russia), Kameishi
+(600), Gondrani (700), Sakafune-ishi Ruins (655); D58 museum: Khushuu Tsaidam Museum (Gokturk Orkhon
+stelae, 8th century). Skipped: 6 `d50-no-dispute-text` (the six D50 sites: no lane-E text yet), 1
+`label-borderline` (Fortress of Niha, Lebanon 975: a scope verdict decides), 2 `museum-exhibits-out`
+(Gross Raden, King Richard III Visitor Centre), 44 `outside-label-window` (European medieval, or past
+1500). Duplicates and the other not-a-site retirements are no decision's and are not listed.
+
+```bash
+PY=./.venv/Scripts/python.exe
+U=scripts/remediation/mechanical/scope_unretire.py
+A=scripts/remediation/mechanical/apply.py
+$PY $U export                          # read-only, one repeatable-read snapshot -> export/export.jsonl
+$PY $U write --wave 2026-10-24         # PLAN.jsonl, SKIPPED.jsonl, PLAN.md, ROLLBACK.sql, SOURCE.json
+L=scope-unretire-2026-10-24
+$PY $A --lane $L --check-primitive
+$PY $A --lane $L --verify              # read-only read-back before (keep the output)
+$PY $A --lane $L --interests
+$PY $A --lane $L --emit
+$PY $A --lane $L --rehearse
+$PY $A --lane $L --probe-guards        # incl. invariant-scope_reason
+$PY $A --lane $L --apply
+$PY $A --lane $L --verify              # after: the planned deltas, 0 deviations
+$PY $A --lane $L --rehearse-rollback
+# the D50 wave, once lane E wrote the six texts: a fresh export, the next label
+$PY $U export && $PY $U write --wave 2026-10-24b
+```
+
+The read-back prints the scope counts, the D58 residual, the date retirements the label window keeps
+(0 after the wave) and the borderline ones, the D50 sites shown and those shown **without** a dispute
+text (always 0), statuses without a reason, and journal rows of the run that write another status.
+**After a landed wave:** the sites are shown again at once (the site page, the sitemap and IndexNow's
+`last_change` read `scope_status` and the journal at request time; a 410 becomes a page); the static
+export (`rebuild_static`, `static_export_check.py`), IndexNow for the un-retired URLs and the Qdrant
+vector sync (`api/routes/vector_sync.py`, `not_retired`) bring the globe and the search along. No
+card_stats recompute (the lane writes no card input). An un-retired site has no D20 verdict: it is
+in the window, so D20 does not ask it; Mount Livadiyskaya (type "Natural feature") is a scope-review
+funnel candidate (`NON_SITE_TYPES`) in its next round.
 
 ---
 
@@ -1153,6 +1298,15 @@ run; the page and the hub read the database at once and already show the new one
 * `tests/remediation/test_mechanical.py` - the scope-review wave runs through every generic lane
   test (`ALL_LANES`: apply, commit states, read-back, probes, identity) with a fabricated plan.
 * `tests/pipeline/test_e3_oceania.py`, `tests/remediation/test_mechanical_scope.py` - section 1.
+* `tests/pipeline/test_scope_label_rule.py` - section 1b, the label rule.
+* `tests/remediation/test_scope_unretire.py` - the label SQL in SQLite, the un-retire lane, its
+  invariant (every branch, in SQLite), the planner and its waves (section 2.2);
+  `tests/remediation/test_disputes.py`, `test_wc.py`, `test_wc_list.py` - the D50 sites in the
+  dispute screen and lane E.
+* `scripts/remediation/mechanical/mutation_sweep.py d58 d50` - the D58/D50 guards (`D58_CASES`);
+  `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20
+  window and question; `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
+  `enrich disputes` - the D50 exemptions of lane WC/E.
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
