@@ -578,12 +578,45 @@ class TestTheBasis:
                 bases=lambda wave: {**record, "wave": "2026-09-22"},
             )
 
-    def test_a_site_the_basis_does_not_know_refuses(self, tmp_path: Path) -> None:
+    def test_a_site_added_since_the_basis_is_left_out_of_the_proof(self, tmp_path: Path) -> None:
+        """A curated site inserted after the basis (the D57 insert lane) was no curated row at
+        the basis: the proof leaves it and its journal out, and the plan recomputes the cards it
+        now shares a `mystery` pair with - its own card included."""
         rows, entries, _ = self.scenario(tmp_path)
-        added = with_stored([row(SITE_B, site_type="Cairn")])
-        with pytest.raises(P.PlanError, match="the curated sites are not the basis's"):
+        # the new site shares SITE_A's pair; its card is the zeroed placeholder row a new site
+        # gets (`rarity_tier = 0`, FIELD_CONTRACT 2.3)
+        zeroed = {f"stored_{c}": 0 for c in C.COLUMNS}
+        zeroed.update(
+            stored_category_group="unknown", stored_civilization=None, stored_empires="[]"
+        )
+        added = [
+            {
+                **row(SITE_B),
+                "site_type": rows[0]["site_type"],
+                "period_name": rows[0]["period_name"],
+                **zeroed,
+            }
+        ]
+        insert = jrow(999, SITE_B, "description", None, "A temple.")
+        result = C.build_card_stats_plan(
+            export([*rows, *added], (*entries, insert)),
+            NEXT,
+            built_at="t",
+            bases=bases_in(tmp_path),
+        )
+        assert result.proof.counters["counterfactual_sites_added_since_basis"] == 1
+        assert result.proof.counters["counterfactual_cells_differing"] == 0
+        changed = {(c.site_id, c.column) for c in result.plan.changes}
+        assert (SITE_A, "mystery") in changed, "the new site moved SITE_A's mystery share"
+        assert (SITE_B, "mystery") in changed
+
+    def test_a_site_the_basis_names_that_is_gone_refuses(self, tmp_path: Path) -> None:
+        rows, entries, _ = self.scenario(tmp_path)
+        record = bases_in(tmp_path)(WAVE)
+        ghost = {**record, "unjournalled": {**record["unjournalled"], SITE_B: [[], 0, 0, 0]}}
+        with pytest.raises(P.PlanError, match="1 gone"):
             C.build_card_stats_plan(
-                export([*rows, *added], entries), NEXT, built_at="t", bases=bases_in(tmp_path)
+                export(rows, entries), NEXT, built_at="t", bases=lambda wave: ghost
             )
 
     def test_a_row_committed_below_the_horizon_after_the_export_refuses(

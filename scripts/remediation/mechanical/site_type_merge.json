@@ -1,0 +1,80 @@
+{
+ "_about": "The site_type merge map of owner decision D25 ('merge the site_type vocabulary'), read by scripts/remediation/mechanical/site_type_merge.py and pinned there by sha256 (MAP_SHA256). Each alias is a canonical type that names the same thing as the curated compound type of its own category group (api/cardgame/constants.py _GROUP_DEFINITIONS); the curated import's own vocabulary is the compound form (pipeline/ingesters/ancient_nerds_original.py keeps the compound names). Both CANONICAL_TYPES and the globe colours stay as they are: only the data moves (output/remediation/final-2026-10-08/plans/fields.md item 8 and trap 10). 'decision' stays null until the map is decided (fields.md item 8: Opus high decides, plus an adversarial check); `wave` refuses an undecided map.",
+ "decision": null,
+ "aliases": {
+  "Settlement": {
+   "target": "City/town/settlement",
+   "why": "the compound type names a settlement; same group Settlements"
+  },
+  "Town": {
+   "target": "City/town/settlement",
+   "why": "the compound type names a town; same group Settlements"
+  },
+  "Urban": {
+   "target": "City/town/settlement",
+   "why": "an urban site is a city or town; same group Settlements"
+  },
+  "Villa": {
+   "target": "Residence/villa/farmhouse",
+   "why": "the compound type names a villa; same group Settlements"
+  },
+  "Fortress": {
+   "target": "Fortress/citadel",
+   "why": "the compound type names a fortress; same group Fortifications"
+  },
+  "Citadel": {
+   "target": "Fortress/citadel",
+   "why": "the compound type names a citadel; same group Fortifications"
+  },
+  "Gate": {
+   "target": "Gate/archway/bridge",
+   "why": "the compound type names a gate; same group Fortifications"
+  },
+  "Church": {
+   "target": "Church/cathedral",
+   "why": "the compound type names a church; same group Religious"
+  },
+  "Necropolis": {
+   "target": "Necropolis/tombs complex",
+   "why": "the compound type names a necropolis; same group Burial & Death"
+  },
+  "Megalithic": {
+   "target": "Megalithic structures",
+   "why": "a bare 'Megalithic' is a megalithic structure (the site title already shows both as 'Megalithic site', ancient-nerds-map/src/seo/display.ts); same group Megalithic"
+  },
+  "Cave": {
+   "target": "Cave Structures",
+   "why": "the curated cave type is 'Cave Structures' (title label 'Cave site'); same group Rock & Cave"
+  },
+  "Road": {
+   "target": "Road/avenue/trackway",
+   "why": "the compound type names a road (the site title already shows both as 'Ancient road'); same group Infrastructure"
+  },
+  "Mine": {
+   "target": "Mine/quarry",
+   "why": "the compound type names a mine; same group Infrastructure"
+  },
+  "Quarry": {
+   "target": "Mine/quarry",
+   "why": "the compound type names a quarry; same group Infrastructure"
+  },
+  "Theater": {
+   "target": "Theatre",
+   "why": "the American spelling of the same word (the site title already shows 'Theatre'); same group Monuments"
+  }
+ },
+ "not_merged": {
+  "City": "not in the plan's proposal: 'City/town/settlement' covers it, but a city is the one type of the group that also names size and rank - for the decision",
+  "Village": "not in the plan's proposal: 'City/town/settlement' covers it - for the decision",
+  "Castle": "not in the plan's proposal: 'Castle/palace' covers it - for the decision",
+  "Fort": "fort is not fortress (pipeline/normalizers/site_type.py: 'Do NOT merge distinct types (castle != fort != fortress)')",
+  "Bridge": "another group: Bridge is Infrastructure, Gate/archway/bridge is Fortifications (fields.md item 8)",
+  "Aqueduct": "another group: Aqueduct is Water & Ports, Reservoir/aqueduct/canal is Infrastructure (fields.md item 8)",
+  "Tomb": "a tomb is not a tombs complex",
+  "Temple": "a temple is not a temple complex",
+  "Museum": "a scope question, not vocabulary (fields.md item 8)",
+  "Geological interest": "a scope question, not vocabulary (fields.md item 8)",
+  "Natural feature": "a scope question, not vocabulary (fields.md item 8)",
+  "Magnetic anomaly": "a scope question, not vocabulary (fields.md item 8)"
+ }
+}

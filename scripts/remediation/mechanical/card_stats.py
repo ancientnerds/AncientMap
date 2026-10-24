@@ -683,15 +683,19 @@ def counterfactual_sites(
     is put back, newest first, and every unjournalled input is the basis's. Returns the rows and
     how many journal rows were undone.
 
-    Refused unless the curated sites are the basis's own: a site added or removed since changes
-    every `mystery` share it takes part in, and no basis says what it was.
+    A curated site added since the basis (the insert lane of D57, 2026-10-24) is not one of its
+    rows: the basis names every curated site its export held (`unjournalled`), so a site it does
+    not name was no curated row then, took part in no `mystery` share and had no card the proof
+    could compare - it is left out, and its journal rows with it. A site the basis names that is
+    gone is refused: a curated row is retired, never deleted, and no basis explains one that
+    vanished.
     """
-    by_id = {row["id"]: dict(row) for row in sites}
-    if set(by_id) != set(basis.unjournalled):
-        added, gone = set(by_id) - set(basis.unjournalled), set(basis.unjournalled) - set(by_id)
+    by_id = {row["id"]: dict(row) for row in sites if row["id"] in basis.unjournalled}
+    gone = set(basis.unjournalled) - set(by_id)
+    if gone:
         raise PlanError(
-            f"the curated sites are not the basis's ({basis.label}): {len(added)} added "
-            f"{sorted(added)[:3]}, {len(gone)} gone {sorted(gone)[:3]}"
+            f"the curated sites are not the basis's ({basis.label}): {len(gone)} gone "
+            f"{sorted(gone)[:3]}"
         )
     seen = sum(1 for j in journal if int(j["id"]) <= basis.since)
     if seen != basis.journal_rows:
@@ -786,6 +790,7 @@ def prove_the_model(
             "counterfactual_journal_rows_undone": undone,
             "counterfactual_cells_compared": compared,
             "counterfactual_cells_differing": 0,
+            "counterfactual_sites_added_since_basis": len(export.sites) - len(rows),
         },
     )
 

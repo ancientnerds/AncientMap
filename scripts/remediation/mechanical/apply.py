@@ -65,6 +65,7 @@ from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
+    CARD_STATS_EXT_LANE,
     DUP_RETIRE_METRES,
     DUPLICATE_PREFIX,
     FIELD_PROV_LANE,
@@ -77,6 +78,7 @@ from mechanical.lane import (  # noqa: E402
     PROBE_NEIGHBOUR,
     PROBE_SELF,
     SCOPE_REVIEW_LANE,
+    SITE_TYPE_MERGE_LANE,
     T05,
     TEASER_LANE,
     Column,
@@ -1949,6 +1951,14 @@ def readback_for(lane: Lane) -> str:
         from mechanical.identity_lanes import readback as identity_wave_readback
 
         return identity_wave_readback(lane)
+    if SITE_TYPE_MERGE_LANE.match(lane.name):
+        from mechanical.site_type_merge import readback as merge_readback
+
+        return merge_readback(lane)
+    if CARD_STATS_EXT_LANE.match(lane.name):
+        from mechanical.card_stats_ext import readback as ext_readback
+
+        return ext_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1966,7 +1976,8 @@ def _lane_argument(name: str) -> str:
             "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
             "teaser-card-sNNN, card-disclosure-sNNN, dup-merge-move-<wave>, "
             "dup-merge-retire-<wave>, parent-<wave>, scope-window-<wave>, name-clean-<wave>, "
-            "retarget-name-<wave>, spoken-<wave>)"
+            "retarget-name-<wave>, spoken-<wave>, site-type-merge-<wave>-sNNN, "
+            "card-stats-ext-<wave>-sNNN)"
             + (f": {exc.args[0]}" if exc.args and exc.args[0] != name else "")
         ) from exc
     return name
