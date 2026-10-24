@@ -688,8 +688,9 @@ git commit -m "Lane WB steps A-B: the trail of the sitting"
 - **`public/data/card_descriptions.json`** is deleted (2026-10-24, branch `closeout/phase8`): the
   code of D25 is live since the Phase-1 deploy of 2026-10-09, and nothing in `api/`, `pipeline/`,
   `ancient-nerds-map/src` or the deploy read the dead copy. Never recreate it.
-  `scripts/import_card_descriptions.py` (its copy into the file is gone), `scripts/merge_rewrites.py`
-  and the `audit_enrich.py` Wave-4 merge are not used for card work.
+  `scripts/import_card_descriptions.py` and `scripts/merge_rewrites.py` (both copies into the file
+  are gone; a merge writes only its local `output/card_descriptions.json`, and its sandbox test checks
+  that no run creates the file) and the `audit_enrich.py` Wave-4 merge are not used for card work.
 
 A red CI inside a sitting changes nothing for the cards: the database holds them whatever the
 deploy does.
