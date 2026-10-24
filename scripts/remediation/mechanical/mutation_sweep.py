@@ -12483,6 +12483,8 @@ CASES += WD5R_CASES
 #: (`identity_lanes.scope_unretire_lane`) and its planner (`scope_unretire.py`). Every label starts
 #: with "d58" or "d50" - `mutation_sweep.py d58 d50` runs exactly these.
 UNRETIRE = MECHANICAL / "scope_unretire.py"
+#: `DATES` names `scripts/remediation/fields/dates.py` from the WD3 group on.
+LABEL_RULE = REPO / "pipeline/normalizers/dates.py"
 IDENTITY_LANES = MECHANICAL / "identity_lanes.py"
 LABEL_TESTS = "tests/pipeline/test_scope_label_rule.py"
 UNRETIRE_TESTS = "tests/remediation/test_scope_unretire.py"
@@ -12505,7 +12507,7 @@ D58_CASES: list[Case] = [
     # -- the rule
     Case(
         "d58 rule: the medieval Old World keeps 500 AD",
-        DATES,
+        LABEL_RULE,
         "LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 500\n",
         "LABEL_CUTOFF_MEDIEVAL_OLD_WORLD = 1500\n",
         "test_passes_date_cutoff",
@@ -12513,7 +12515,7 @@ D58_CASES: list[Case] = [
     ),
     Case(
         "d58 rule: the rest of the world keeps 1500 AD",
-        DATES,
+        LABEL_RULE,
         "LABEL_CUTOFF_REST_OF_WORLD = 1500\n",
         "LABEL_CUTOFF_REST_OF_WORLD = 500\n",
         "test_passes_date_cutoff",
@@ -12521,7 +12523,7 @@ D58_CASES: list[Case] = [
     ),
     Case(
         "d58 rule: Byzantium is Turkiye",
-        DATES,
+        LABEL_RULE,
         '            "türkiye", "turkiye", "turkey", "cyprus", "northern cyprus",\n',
         '            "cyprus", "northern cyprus",\n',
         "test_the_medieval_old_world",
@@ -12529,7 +12531,7 @@ D58_CASES: list[Case] = [
     ),
     Case(
         "d58 rule: Asian Russia is not Europe",
-        DATES,
+        LABEL_RULE,
         '    "russia": _ASIAN_RUSSIA,\n',
         "",
         "test_the_other_regions",
@@ -12537,7 +12539,7 @@ D58_CASES: list[Case] = [
     ),
     Case(
         "d58 rule: the Canaries are not Europe",
-        DATES,
+        LABEL_RULE,
         '    "spain": _CANARY_ISLANDS,\n',
         "",
         "test_the_other_regions",
@@ -12545,14 +12547,14 @@ D58_CASES: list[Case] = [
     ),
     guard(
         "d58 rule: a part of a state needs the point",
-        DATES,
+        LABEL_RULE,
         "    if None in (lat, lon):",
         "test_the_medieval_old_world",
         LABEL_TESTS,
     ),
     Case(
         "d58 rule: the region needs a country outside the Americas",
-        DATES,
+        LABEL_RULE,
         "    if country is None:\n        return None\n    if in_medieval_old_world",
         "    if False:\n        return None\n    if in_medieval_old_world",
         "test_a_region_that_cannot_be_told_is_none",
@@ -12560,7 +12562,7 @@ D58_CASES: list[Case] = [
     ),
     Case(
         "d58 rule: Oceania before Europe",
-        DATES,
+        LABEL_RULE,
         '    if in_oceania(country, record.get("lat"), lon):\n        return OCEANIA',
         "    if False:\n        return OCEANIA",
         "test_the_other_regions",
@@ -12568,7 +12570,7 @@ D58_CASES: list[Case] = [
     ),
     Case(
         "d58 rule: the cutoff is the label's",
-        DATES,
+        LABEL_RULE,
         "    return date <= LABEL_CUTOFFS[region]",
         "    return date <= E3_CUTOFFS.get(region, DATE_CUTOFF_REST_OF_WORLD)",
         "test_passes_date_cutoff",
@@ -12576,14 +12578,14 @@ D58_CASES: list[Case] = [
     ),
     guard(
         "d58 rule: borderline is dated 500-1500",
-        DATES,
+        LABEL_RULE,
         "    if not LABEL_CUTOFF_MEDIEVAL_OLD_WORLD < date <= LABEL_CUTOFF_REST_OF_WORLD:",
         "test_label_borderline",
         LABEL_TESTS,
     ),
     guard(
         "d58 rule: borderline needs a point and a date",
-        DATES,
+        LABEL_RULE,
         '    if record.get("lon") is None or date is None:',
         "test_label_borderline",
         LABEL_TESTS,
