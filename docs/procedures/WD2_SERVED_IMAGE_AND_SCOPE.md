@@ -1588,6 +1588,35 @@ for role in image_prefilter image_depicts adversarial web_verifier; do
 done
 ```
 
+**The pilot judge's adjudication (fixed 2026-10-25).** The sample holds no case in the role
+`pilot_judge`: the 150 MiniMax-pool candidates it adjudicates are depicts cases (role `image_depicts`,
+group `adjudicated`, `truth` null), so `export --role pilot_judge` refused "the sample holds no case
+for role pilot_judge" while it selected by role. It now takes exactly those depicts cases
+(`calibrate.cases_for`; the 50 re-check cases drawn from them, `rck-adj-*`, stay the re-check's) into
+the stage `image-adjudicate`: the depicts prompt and answer shape, plus the candidate's Commons file
+and the order to research each candidate on the web (`ADJUDICATE_PROMPT`, prompt id
+`image-adjudicate-v1`), and `check-answer`/`import` refuse a note that names no URL
+(`parse_adjudication`). On `image-roles-v1` that is 129 questions (one per site) in 22 batches, the
+same picture bytes the depicts role saw. `import` writes `$D/ADJUDICATE.jsonl` (every answer recorded
+as `pilot_judge:<batch>` in Opus's stamp, nothing answered before the sample was fixed). The depicts
+role is **not** asked again: its 344 answers (handoff `image-cal-image_depicts`, 449 candidates, every
+adjudicated one included) are imported as they are, and `evaluate --role image_depicts` takes the
+adjudication as the truth of the 150 (false-`depicts` rate and precision); `evaluate --role
+adversarial` takes it for the 50 `rck-adj-*` cases. Both refuse while `ADJUDICATE.jsonl` is missing
+("import the stage first"), and write no verdict.
+
+```bash
+H=output/remediation/handoff/image-cal-pilot_judge
+$PY $CAL export --dir $D --role pilot_judge --handoff $H            # 129 questions, 22 batches
+$PY scripts/remediation/image_roles/run.py brief --run-dir $D --handoff $H --stage image-adjudicate --batch-id dep-0001
+#   one Opus xhigh agent per batch (dep-0001 .. dep-0022), each given its brief
+$PY scripts/remediation/opus_handoff.py validate --dir $H
+$PY scripts/remediation/image_roles/run.py import --run-dir $D --handoff $H --stage image-adjudicate   # -> $D/ADJUDICATE.jsonl
+$PY scripts/remediation/image_roles/run.py import --run-dir $D --handoff output/remediation/handoff/image-cal-image_depicts --stage image-depicts-calibration
+$PY $CAL evaluate --dir $D --role image_depicts
+$PY $CAL evaluate --dir $D --role adversarial                     # after image-recheck is imported
+```
+
 ---
 
 ## 4. Tests and the mutation sweep

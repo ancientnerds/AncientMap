@@ -834,13 +834,73 @@ class TestTheProductionQuestions:
         assert sorted(q.label for q in questions) == ["s1", "s2"]
         assert "A refusal is better than a wrong depicts" in questions[0].prompt
 
-    def test_the_adjudication_asks_the_same_question_in_the_pilot_judge_s_role(self) -> None:
+    def test_the_adjudication_asks_the_depicts_question_with_web_evidence_in_its_role(
+        self,
+    ) -> None:
         assert CAL.ADJUDICATE_SPEC.role == "pilot_judge" and CAL.ADJUDICATE_SPEC.web is True
         assert (RO.role("pilot_judge").model, RO.role("pilot_judge").effort) == (
             "claude-opus-5-5",
             "xhigh",
         )
-        assert CAL.ADJUDICATE_SPEC.parse is DP.SPEC.parse
+        assert CAL.ADJUDICATE_SPEC.prompt_id == "image-adjudicate-v1"
+        assert CAL.ADJUDICATE_SPEC.result_file == "ADJUDICATE.jsonl"
+        cases = [case("a", "image_depicts", "adjudicated", None, "Kerr Batch.jpg", why="geo")]
+        (q,), _ = CAL.questions_for("pilot_judge", cases, read)
+        # the depicts question and its judge line, the Commons file to research, and the order
+        assert "A refusal is better than a wrong depicts" in q.prompt
+        assert 'Commons file "File:Kerr Batch.jpg"; found by geo' in q.prompt
+        assert "Research every candidate on the web before you decide" in q.prompt
+        assert "with the URL of each page that decided it" in q.prompt
+        # the depicts role's own question shows neither
+        (d,), _ = CAL.questions_for("image_depicts", cases, read)
+        assert "Kerr Batch" not in d.prompt and "Research every candidate" not in d.prompt
+        assert q.meta == d.meta  # one answer shape: `_verdicts_of` reads both alike
+
+    def test_an_adjudication_note_without_its_web_evidence_is_out_of_shape(self) -> None:
+        meta = {"site_id": "s1", "name": "n", "items": [{"label": "C1", "file": "a.jpg"}]}
+
+        def text(note: str) -> str:
+            return json.dumps(
+                {"candidates": {"C1": {"verdict": "other_site", "quality": None, "note": note}}}
+            )
+
+        with pytest.raises(SG.AnswerShapeError, match="URL of each page"):
+            CAL.ADJUDICATE_SPEC.parse(meta, text("a coin on white ground"))
+        got = CAL.ADJUDICATE_SPEC.parse(
+            meta, text("a coin; https://commons.wikimedia.org/wiki/File:A.jpg names Rome")
+        )
+        assert got["candidates"]["C1"]["verdict"] == "other_site"
+        with pytest.raises(SG.AnswerShapeError):  # the depicts shape still holds
+            CAL.ADJUDICATE_SPEC.parse(meta, json.dumps({"candidates": {}}))
+
+    def test_the_pilot_judge_is_asked_the_adjudicated_depicts_cases(self) -> None:
+        """The sample holds no case in the role pilot_judge: its export takes the depicts cases of
+        the group adjudicated - not the labelled ones, not the re-check's cases drawn from them."""
+        cases = [
+            case("pos-1", "image_depicts", "positive", "depicts", "p.jpg"),
+            case("frn-1", "image_depicts", "foreign", "not_depicts", "f.jpg"),
+            case("adj-1", "image_depicts", "adjudicated", None, "a.jpg"),
+            case("adj-2", "image_depicts", "adjudicated", None, "b.jpg", site_id="s2"),
+            case("rck-adj-1", "adversarial", "adjudicated", None, "a.jpg"),
+        ]
+        assert not [c for c in cases if c["role"] == "pilot_judge"]
+        assert [c["case_id"] for c in CAL.cases_for("pilot_judge", cases)] == ["adj-1", "adj-2"]
+        questions, pictures = CAL.questions_for("pilot_judge", cases, read)
+        asked = sorted((q.meta["site_id"], i["file"]) for q in questions for i in q.meta["items"])
+        assert asked == [("s1", "a.jpg"), ("s2", "b.jpg")] and len(pictures) == 2
+        # the depicts role is asked every depicts case, the adjudicated ones included
+        dep, _ = CAL.questions_for("image_depicts", cases, read)
+        assert sum(len(q.meta["items"]) for q in dep) == 4
+        with pytest.raises(CAL.CalibrationError, match="no case for role pilot_judge"):
+            CAL.questions_for("pilot_judge", cases[:2], read)
+
+    def test_a_case_that_does_not_fit_its_site_s_question_is_refused(self) -> None:
+        cases = [
+            case(f"a{i}", "image_depicts", "adjudicated", None, f"{i}.jpg")
+            for i in range(DP.MAX_PER_SITE + 1)
+        ]
+        with pytest.raises(CAL.CalibrationError, match="do not fit one question"):
+            CAL.questions_for("pilot_judge", cases, read)
 
     def test_the_recheck_cases_use_the_hero_recheck_prompt(self) -> None:
         cases = [case("r", "adversarial", "positive", "depicts", "a.jpg")]
@@ -865,3 +925,145 @@ class TestTheProductionQuestions:
             CAL.questions_for("image_prefilter", [], read)
         with pytest.raises(CAL.CalibrationError, match="no case for role"):
             CAL.questions_for("card_writer", [case("a", "image_prefilter", "kind", "x", "f")], read)
+
+
+# ================================================================ the pilot judge's adjudication
+class TestTheAdjudicationChain:
+    """export --role pilot_judge -> the agents answer in the pilot judge's role -> import writes
+    ADJUDICATE.jsonl -> evaluate takes it as the truth of the adjudicated depicts cases."""
+
+    def _sample(self, tmp_path: Path) -> tuple[Path, list[dict[str, Any]]]:
+        directory = tmp_path / "cal"
+        CAL.seal(directory, now=lambda: "2026-10-09T00:00:00Z")
+        cases = [
+            case(f"p{i}", "image_depicts", "positive", "depicts", f"p{i}.jpg") for i in range(10)
+        ]
+        cases += [
+            case(f"f{i}", "image_depicts", "foreign", "not_depicts", f"f{i}.jpg") for i in range(4)
+        ]
+        cases += [
+            case("adj-1", "image_depicts", "adjudicated", None, "a1.jpg", site_id="s2"),
+            case("adj-2", "image_depicts", "adjudicated", None, "a2.jpg", site_id="s2"),
+        ]
+        CAL.fix_gold(directory, cases, now=lambda: FIXED)
+        return directory, cases
+
+    def _depicts(self, tmp_path: Path, directory: Path, called: set[str]) -> None:
+        spec = CAL.ROLE_SPECS["image_depicts"]
+        cases, _ = CAL.fixed_gold(directory)
+        questions, pictures = CAL.questions_for("image_depicts", cases, read)
+        handoff = tmp_path / "h-dep"
+        SG.export(directory, handoff, spec, questions, pictures)
+        texts = {
+            q.label: json.dumps({"candidates": {
+                i["label"]: (
+                    {"verdict": "depicts", "quality": 4, "note": "the tomb"}
+                    if i["file"] in called
+                    else {"verdict": "other_site", "quality": None, "note": "elsewhere"}
+                )
+                for i in q.meta["items"]
+            }})
+            for q in questions
+        }  # fmt: skip
+        answer(handoff, spec, texts)
+        SG.import_answers(directory, handoff, spec)
+
+    def _adjudicate(self, tmp_path: Path, directory: Path, depicts: set[str]) -> dict[str, Any]:
+        spec = CAL.ROLE_SPECS["pilot_judge"]
+        assert spec is CAL.ADJUDICATE_SPEC
+        cases, _ = CAL.fixed_gold(directory)
+        questions, pictures = CAL.questions_for("pilot_judge", cases, read)
+        handoff = tmp_path / "h-adj"
+        SG.export(directory, handoff, spec, questions, pictures)
+        url = "https://commons.wikimedia.org/wiki/File:X.jpg"
+        texts = {
+            q.label: json.dumps({"candidates": {
+                i["label"]: (
+                    {"verdict": "depicts", "quality": 3, "note": f"the tomb, {url}"}
+                    if i["file"] in depicts
+                    else {"verdict": "region_or_type", "quality": None, "note": f"a hill, {url}"}
+                )
+                for i in q.meta["items"]
+            }})
+            for q in questions
+        }  # fmt: skip
+        answer(handoff, spec, texts)  # recorded as pilot_judge:<batch> in Opus's stamp
+        return SG.import_answers(directory, handoff, spec)
+
+    def test_the_depicts_role_is_measured_against_the_imported_adjudication(
+        self, tmp_path: Path
+    ) -> None:
+        directory, _ = self._sample(tmp_path)
+        heroes = {f"p{i}.jpg" for i in range(10)}
+        self._depicts(tmp_path, directory, heroes | {"a1.jpg", "a2.jpg"})
+        got = self._adjudicate(tmp_path, directory, {"a1.jpg"})
+        assert got["answers"] == 1 and (directory / "ADJUDICATE.jsonl").is_file()
+        rows = SG.read_results(directory, CAL.ADJUDICATE_SPEC)
+        assert {r["answered_by"].split(":")[0] for r in rows} == {"pilot_judge"}
+        verdict = CAL.evaluate(directory, "image_depicts", cp=cp)
+        metrics = verdict["metrics"]
+        # a1 is a depicts by the adjudication, a2 is not: the role's depicts on a2 is false
+        assert metrics["false_depicts"]["k"] == 1 and metrics["false_depicts"]["n"] == 5
+        assert metrics["precision"]["k"] == 11 and metrics["precision"]["n"] == 12
+        assert not verdict["passed"]
+
+    def test_a_role_with_adjudicated_cases_is_not_evaluated_before_the_adjudication(
+        self, tmp_path: Path
+    ) -> None:
+        directory, _ = self._sample(tmp_path)
+        self._depicts(tmp_path, directory, {f"p{i}.jpg" for i in range(10)})
+        with pytest.raises(SG.StageError, match="ADJUDICATE.jsonl does not exist"):
+            CAL.evaluate(directory, "image_depicts", cp=cp)
+        assert not (directory / CAL.VERDICTS_DIR / "image_depicts.json").exists()
+
+    def test_an_adjudication_older_than_the_sample_is_refused(self, tmp_path: Path) -> None:
+        directory, _ = self._sample(tmp_path)
+        self._depicts(tmp_path, directory, {f"p{i}.jpg" for i in range(10)})
+        self._adjudicate(tmp_path, directory, {"a1.jpg"})
+        path = directory / CAL.ADJUDICATE_SPEC.result_file
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        path.write_text(
+            "".join(
+                json.dumps({**r, "answered_at": "2026-10-08T00:00:00+00:00"}) + "\n" for r in rows
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(CAL.CalibrationError, match="adjudicated before the sample was fixed"):
+            CAL.evaluate(directory, "image_depicts", cp=cp)
+
+    def test_an_answer_in_another_role_is_no_adjudication(self, tmp_path: Path) -> None:
+        directory, _ = self._sample(tmp_path)
+        cases, _ = CAL.fixed_gold(directory)
+        questions, pictures = CAL.questions_for("pilot_judge", cases, read)
+        handoff = tmp_path / "h-adj"
+        SG.export(directory, handoff, CAL.ADJUDICATE_SPEC, questions, pictures)
+        url = "https://example.org/a"
+        text = json.dumps({"candidates": {
+            "C1": {"verdict": "depicts", "quality": 3, "note": url},
+            "C2": {"verdict": "other_site", "quality": None, "note": url},
+        }})  # fmt: skip
+        sonnet = CAL.ROLE_SPECS["image_depicts"]  # the depicts role's stamp and role name
+        for line in OH.manifest(handoff):
+            OH.write_answer(
+                handoff, batch_id=line["batch_id"], stage=CAL.ADJUDICATE_SPEC.name,
+                label=line["label"], text=text, answered_by=f"{sonnet.role}:{line['batch_id']}",
+                model=OH.ANSWER_MODELS[RO.role(sonnet.role).model], now=lambda: NOW,
+            )  # fmt: skip
+        with pytest.raises(SG.StageError, match="not in the role pilot_judge"):
+            SG.import_answers(directory, handoff, CAL.ADJUDICATE_SPEC)
+
+    def test_the_recheck_of_an_adjudicated_case_is_measured_against_the_adjudication(
+        self, tmp_path: Path
+    ) -> None:
+        directory, cases = self._sample(tmp_path)
+        self._adjudicate(tmp_path, directory, {"a1.jpg"})
+        rck = [c for c in cases if c["case_id"] in ("adj-1", "adj-2")]
+        recheck = CAL.adversarial_cases(rck, per_group=5, seed=1)
+        assert {c["case_id"] for c in recheck} == {"rck-adj-1", "rck-adj-2"}
+        results = [
+            {"verdict": "depicts", "meta": {"site_id": "rck-adj-1", "file": "a1.jpg"}},
+            {"verdict": "depicts", "meta": {"site_id": "rck-adj-2", "file": "a2.jpg"}},
+        ]
+        adjudication = SG.read_results(directory, CAL.ADJUDICATE_SPEC)
+        got = CAL.measure_adversarial(recheck, results, adjudication, cp)
+        assert got["agreement"]["k"] == 1 and got["agreement"]["n"] == 2

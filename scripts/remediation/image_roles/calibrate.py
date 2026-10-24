@@ -24,7 +24,14 @@ enforced, not promised:
   verdicts) and the adjudicated pool candidates; **every** foreign row not `depicts`. Failing: Sonnet
   high, then Opus medium.
 * `pilot_judge` (Opus xhigh) **adjudicates** 150 candidates of the MiniMax pool (50 per MiniMax verdict
-  class) with web evidence: that adjudication is the pilot-judge gold, not a measured role.
+  class) with web evidence: that adjudication is the pilot-judge gold, not a measured role. Those
+  candidates are depicts cases (role `image_depicts`, group `adjudicated`, no truth in the sample):
+  the depicts role answers them like every other depicts case, and `export --role pilot_judge` asks
+  the pilot judge the same cases (`cases_for`) in a question of its own - the depicts prompt plus the
+  Commons file and the order to research each candidate on the web, every note naming the page that
+  decided it (`ADJUDICATE_PROMPT`, `parse_adjudication`). Its imported answers (`ADJUDICATE.jsonl`)
+  are the truth of those cases for `image_depicts` (false-depicts rate, precision) and for the
+  `adversarial` cases drawn from them; neither is evaluated before the adjudication is imported.
 * `adversarial` (the hero re-check; Sonnet high since D36 - the map asked for Opus high, and under
   D45/D51 the shared role is calibrated here for the image lane and moves to Opus only if it
   fails): agreement >= 0.95 with the adjudication and the labelled
@@ -44,6 +51,7 @@ import hashlib
 import importlib.util
 import json
 import random
+import re
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -77,6 +85,8 @@ JOBS_FILE = "JOBS.jsonl"
 VERDICTS_DIR = "verdicts"
 #: The C1 calibration's pass over gallery pictures (its `hero` pass judged 50 of them again).
 C1_GALLERY = "gallery"
+#: The group of the depicts cases whose truth is the pilot judge's adjudication.
+ADJUDICATED = "adjudicated"
 
 #: What the map proposes; sealed before the first case is chosen. A number moves only by a new seal.
 THRESHOLDS: dict[str, Any] = {
@@ -123,13 +133,57 @@ DEPICTS_CAL_SPEC = replace(
     export_file="EXPORT_DEPICTS_CAL.json",
     result_file="DEPICTS_CAL.jsonl",
 )
+
+
+def _once(text: str, needle: str, replacement: str) -> str:
+    if text.count(needle) != 1:
+        raise RuntimeError(f"the depicts prompt no longer holds {needle!r} exactly once")
+    return text.replace(needle, replacement)
+
+
+#: The adjudication's research order (the map: "Opus xhigh labels 150 candidates ... with web
+#: evidence"). The depicts prompt tells a judge only the route that named a candidate; the
+#: adjudicator is given the Commons file so that it can read the file page, and is told to look
+#: outside it.
+ADJUDICATION_LINE = """You adjudicate: your verdicts are the truth against which the other judges of these pictures are measured. Research every candidate on the web before you decide - never from the picture and the file name alone. Read its Wikimedia Commons file page (https://commons.wikimedia.org/wiki/File:<the file name, spaces as underscores>): the description, the categories, the coordinates, the source. Then compare what the picture shows with pages about this site from outside Commons: its Wikipedia articles in any language, a heritage register, an excavation report, a museum or university page, other photographs of it. The pages tell you what a picture shows and where it was taken; the rules above still decide, and no page makes a picture depict this site when the picture does not show it."""
+
+#: The depicts prompt with the research order and a note that names its evidence; the answer shape
+#: (and so `_verdicts_of`) is the depicts role's.
+ADJUDICATE_PROMPT = _once(
+    _once(DP.PROMPT, "{judge_line}\n", "{judge_line}\n\n" + ADJUDICATION_LINE + "\n"),
+    '"note": "<what the picture shows and why, at most 30 words>"',
+    '"note": "<what the picture shows and why, at most 60 words, with the URL of each page that '
+    'decided it>"',
+)
+URL = re.compile(r"https?://\S+")
+
+
+def adjudication_line(candidate: Mapping[str, Any]) -> str:
+    """What the adjudicator is told about a candidate: its Commons file, then the route that named it."""
+    return f'Commons file "File:{candidate["file"]}"; found by {DP.source_line(candidate)}'
+
+
+def parse_adjudication(meta: Mapping[str, Any], text: str) -> dict[str, Any]:
+    """The depicts shape (`DP.parse`), and every note names at least one page (an http(s) URL): an
+    adjudication without its web evidence is not the gold the design asks for."""
+    parsed = DP.parse(meta, text)
+    bare = [label for label, entry in parsed["candidates"].items() if not URL.search(entry["note"])]
+    if bare:
+        raise SG.AnswerShapeError(
+            f"{', '.join(bare)}: the note must name the URL of each page that decided it"
+        )
+    return parsed
+
+
 ADJUDICATE_SPEC = replace(
     DP.SPEC,
     name="image-adjudicate",
     role="pilot_judge",
+    prompt_id="image-adjudicate-v1",
     questions_file="QUESTIONS_ADJUDICATE.jsonl",
     export_file="EXPORT_ADJUDICATE.json",
     result_file="ADJUDICATE.jsonl",
+    parse=parse_adjudication,
     what="adjudicate each candidate with web evidence (the pilot-judge gold)",
     web=True,
 )
@@ -610,11 +664,22 @@ def inserted_heroes(state: ST.State, insert_root: Path) -> set[int]:
     }
 
 
+def cases_for(role: str, cases: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The cases `role` is asked: its own, and for the pilot judge the depicts cases it adjudicates
+    (group `adjudicated`; the sample holds no case in the role `pilot_judge`, because the
+    adjudication is the truth of depicts cases, not a role measured on cases of its own). The
+    re-check's cases drawn from them (`rck-adj-...`, role `adversarial`) stay the re-check's."""
+    if role == "pilot_judge":
+        return [c for c in cases if c["role"] == "image_depicts" and c["group"] == ADJUDICATED]
+    return [c for c in cases if c["role"] == role]
+
+
 def questions_for(
     role: str, cases: Sequence[Mapping[str, Any]], read: Callable[[Mapping[str, Any]], bytes]
 ) -> tuple[list[SG.Question], dict[str, bytes]]:
-    """The production questions of `role` over its cases (the very prompts the lane will use)."""
-    mine = [c for c in cases if c["role"] == role]
+    """The production questions of `role` over its cases (the very prompts the lane will use; the
+    pilot judge's are the depicts questions with the adjudication's research order)."""
+    mine = cases_for(role, cases)
     if not mine:
         raise CalibrationError(f"the sample holds no case for role {role}")
     if role == "image_prefilter":
@@ -627,7 +692,17 @@ def questions_for(
             site["candidates"].append(
                 {"file": c["file"], "path": c["path"], "why": c.get("why") or "a Commons picture"}
             )
-        questions, pictures, _ = DP.build_questions(list(by_site.values()), read)
+        if role == "pilot_judge":
+            questions, pictures, left_out = DP.build_questions(
+                list(by_site.values()), read, prompt=ADJUDICATE_PROMPT, line=adjudication_line
+            )
+        else:
+            questions, pictures, left_out = DP.build_questions(list(by_site.values()), read)
+        if left_out:
+            raise CalibrationError(
+                f"{len(left_out)} case(s) of role {role} do not fit one question of their site "
+                f"(first {left_out[0]['site_id']}: {left_out[0]['file']})"
+            )
         return questions, pictures
     if role == "adversarial":
         # a question is labelled by its site: the case id stands in for it, so that two cases of
@@ -857,12 +932,15 @@ def evaluate(
                 f"{row['batch_id']}/{row['label']}: judged before the sample was fixed"
             )
     cp = cp or clopper_pearson()
-    adjudication = (
-        SG.read_results(directory, ADJUDICATE_SPEC)
-        if role in ("image_depicts", "adversarial")
-        and (directory / ADJUDICATE_SPEC.result_file).is_file()
-        else []
-    )
+    # a case without a truth in the sample takes the pilot judge's: its adjudication must be imported
+    adjudication: list[dict[str, Any]] = []
+    if any(c["truth"] is None for c in cases if c["role"] == role):
+        adjudication = SG.read_results(directory, ADJUDICATE_SPEC)
+        for row in adjudication:
+            if row["answered_at"] < fixed_at:
+                raise CalibrationError(
+                    f"{row['batch_id']}/{row['label']}: adjudicated before the sample was fixed"
+                )
     if role == "image_prefilter":
         metrics = measure_prefilter(cases, results, cp)
     elif role == "image_depicts":
