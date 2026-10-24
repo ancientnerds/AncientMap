@@ -97,6 +97,19 @@ class TestThePopulation:
         ]
         assert counts["group_label_borderline"] == 1
 
+    def test_a_d50_site_is_never_in_the_population(self) -> None:
+        """D50: the six disputed sites are shown again by the un-retire; their scope is decided,
+        and the window lane's invariant refuses retiring one (`lane.D50_NOT_RETIRED`)."""
+        richat = site(
+            id="84b456ff-0b44-4d75-92a4-5cbe22026b95",
+            name="Richat Structure",
+            scope_status="pending",
+            outside_window=True,
+        )
+        records, counts = scope_window.build(export_of([richat, hadrian()]))
+        assert [r["name"] for r in records] == ["Hadrian's Wall Path"]
+        assert counts["population"] == 1
+
     def test_a_site_can_be_in_several_groups(self) -> None:
         both = site(name="Both", outside_window=True, scope_status="pending")
         records, counts = scope_window.build(export_of([both, hadrian()]))

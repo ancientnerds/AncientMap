@@ -11,13 +11,19 @@ again with the reason it had.
 non-European sites of 500-1500 stay in; the sites retired under the numeric cut come back through
 the scope lane, journalled." A site comes back when
 
-* its retirement is journalled (its latest `scope_status` journal row wrote `retired`) and was made
-  for its date - the reason `E3: period_start ...` that scope-e4 rule (a) and the D20 window lane
-  write - and the label rule now keeps it: `passes_date_cutoff` (`pipeline/normalizers/dates.py`,
-  `scope_region`) and not `label_borderline`. A borderline site (the Levant, Egypt, Byzantine
-  Africa, the Caucasus, Greenland, dated 500-1500) is skipped `label-borderline`: whether its
-  subject is Byzantine, Crusader or Norse is a scope verdict's question, not this lane's. A site
-  whose Wikidata item is a Viking subject (`VIKING_SUBJECT_QIDS`, L'Anse aux Meadows) stays out;
+* its retirement is journalled and was the numeric cut's: its latest `scope_status` journal row
+  wrote `retired` under one of `identity_lanes.NUMERIC_CUT_STAMPS` (scope-e4) - a D20 scope-window
+  wave writes the same `E3: period_start N` reason, but under the label window, and is skipped
+  `not-the-numeric-cut` - for its date (the reason `E3: period_start N ...` of scope-e4 rule (a)),
+  and the label rule now keeps both the year the retirement named and the stored date:
+  `passes_date_cutoff` (`pipeline/normalizers/dates.py`, `scope_region`) and not
+  `label_borderline`. A borderline site (Anatolia, the Levant, Egypt, Byzantine Africa, the
+  Caucasus, Greenland, dated 500-1500) is skipped `label-borderline`: whether its subject is
+  Byzantine, Crusader or Norse is a scope verdict's question, not this lane's. A site whose Wikidata
+  item is a Viking subject (`VIKING_SUBJECT_QIDS`, L'Anse aux Meadows) stays out, and so does a
+  site of a type that asks the scope review's not-a-site question first (`lane.NON_SITE_TYPES`:
+  `not-a-site-question-first` - an un-retired natural feature would be the next round's candidate
+  and its URL would flip 410 -> 200 -> 410);
 * or it is one of the museums scope-e4 retired by the museum rule for exhibits dated past 500 AD
   (`MUSEUM_EXHIBITS`, pinned by id with the exhibits the reason names) whose country is not of
   the medieval Old World, so the label rule keeps its exhibits.
@@ -29,7 +35,11 @@ description as it stands is a lane-E dispute enrichment (`wc/disputes.py` -> `wc
 --enrich --disputes`, D21): the journal row that wrote the current description carries an
 enrichment's evidence (`wc4.EVIDENCE_DECISION_ENRICH`) with a well-formed adjudicated brief of this
 site (`wc.enrich.dispute_record_problems`) and appended a sentence of each position (`dispute_a`,
-`dispute_b`). Until then each is skipped `d50-no-dispute-text`, with what is missing.
+`dispute_b`). Until then each is skipped `d50-no-dispute-text`, with what is missing. Its card
+must not assert the claim either: a D50 site with a card text comes back only once the latest
+journal row of its `card_stats.card_description` is later than the one of its dispute text (the
+card lane wrote the card in the knowledge of the dispute, D21); until then it is skipped
+`d50-card-not-cleared`. Premise and invariant hold the card's md5 and the same test.
 
 **Waves.** A write lands at most `MAX_SITES` sites and a run stamp is applied once: `write --wave
 <label>` plans the first `MAX_SITES` sites (by id) of a fresh export into
@@ -46,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -68,12 +79,19 @@ from mechanical.identity_lanes import (  # noqa: E402
     D58_REASON_PREFIX,
     DATE_RETIRED_PREFIX,
     IN_SCOPE,
+    NUMERIC_CUT_STAMPS,
     SCOPE_UNRETIRE_LANE,
     SCOPE_UNRETIRE_PREMISE_SQL,
     SCOPE_UNRETIRE_ROOT,
     scope_unretire_lane,
 )
-from mechanical.lane import D50_DISPUTED_SITES, NOT_A_SITE_PREFIX, Lane, sql_literal  # noqa: E402
+from mechanical.lane import (  # noqa: E402
+    D50_DISPUTED_SITES,
+    NON_SITE_TYPES,
+    NOT_A_SITE_PREFIX,
+    Lane,
+    sql_literal,
+)
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
     Plan,
@@ -125,6 +143,10 @@ _SITE_COLUMNS = (
     "u.period_end, u.scope_status, u.scope_reason, "
     "(SELECT coalesce(json_agg(e.value ORDER BY e.value), '[]'::json) FROM site_external_ids e "
     "WHERE e.site_id = u.id AND e.kind = 'wikidata_qid') AS qids, "
+    "EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = u.id "
+    "AND cs.card_description IS NOT NULL) AS has_card, "
+    "(SELECT max(c.id) FROM remediation_change_log c WHERE c.table_name = 'card_stats' "
+    "AND c.column_name = 'card_description' AND c.row_pk = u.id::text) AS card_journal_id, "
     f"{SCOPE_UNRETIRE_PREMISE_SQL} AS premise"
 )
 #: Every retired curated site: the population the planner decides over.
@@ -223,6 +245,36 @@ def dispute_text_problems(site_id: str, rows: Sequence[Mapping[str, Any]]) -> li
     return problems
 
 
+def card_problem(site: Mapping[str, Any], written_id: int) -> str | None:
+    """Why a D50 site's card may still assert the claim, or None: it has a card text and no
+    journal row wrote that card after the journal row `written_id` that wrote its dispute text
+    (`identity_lanes.card_cleared_sql`, the invariant's form of the same test)."""
+    if not site["has_card"]:
+        return None
+    card = site["card_journal_id"]
+    if card is not None and int(card) > written_id:
+        return None
+    when = (
+        "by no journalled lane, so not after"
+        if card is None
+        else f"last by remediation_change_log:{card}, before"
+    )
+    return (
+        f"its card was written {when} the dispute text (remediation_change_log:{written_id}): D50 "
+        "shows it only once no card asserts the claim - the card lane (D21) rewrites the card first"
+    )
+
+
+#: The year a numeric-cut retirement names: `E3: period_start N is K years past the ... cutoff`.
+_RETIRED_YEAR = re.compile(r"^E3: period_start (-?\d+) ")
+
+
+def retired_year(reason: str) -> int | None:
+    """The year `N` of an `E3: period_start N ...` reason, or None for a reason without one."""
+    found = _RETIRED_YEAR.match(reason)
+    return int(found.group(1)) if found else None
+
+
 def _cells(
     site: Mapping[str, Any], reason: str, rule: str, evidence: Sequence[dict[str, Any]]
 ) -> list[Verdict]:
@@ -292,6 +344,25 @@ def _date_decision(
             f"date {window_date(site)} is past the {region} cutoff of {LABEL_CUTOFFS[region]} AD: "
             "the retirement stands",
         )
+    year = retired_year(str(site["scope_reason"]))
+    if year is None:
+        return _skip(
+            site, "retired-year-unread", "the reason names no year the label rule could test"
+        )
+    if not passes_date_cutoff({**site, "period_start": year, "period_end": None}):
+        return _skip(
+            site,
+            "retired-year-outside-label-window",
+            f"the retirement named period_start {year}, past the {region} cutoff of "
+            f"{LABEL_CUTOFFS[region]} AD: the retirement stands",
+        )
+    if site["site_type"] in NON_SITE_TYPES:
+        return _skip(
+            site,
+            "not-a-site-question-first",
+            f"site_type {site['site_type']!r} asks the scope review's not-a-site question first: "
+            "the retirement stands until it is answered",
+        )
     if label_borderline(site):
         return _skip(
             site,
@@ -327,6 +398,8 @@ def _museum_decision(
     if site["site_type"] != "Museum":
         return _skip(site, "museum-type-moved", f"site_type is {site['site_type']!r} now")
     region = scope_region(site)
+    if region is None:
+        return _skip(site, "label-rule-cannot-tell", "no longitude: the label rule cannot place it")
     if region in (MEDIEVAL_OLD_WORLD, UNPLACED_OLD_WORLD):
         return _skip(
             site,
@@ -368,6 +441,9 @@ def _dispute_decision(
     written = max(
         (row for row in disputes if str(row["row_pk"]) == sid), key=lambda r: int(r["id"])
     )
+    card = card_problem(site, int(written["id"]))
+    if card is not None:
+        return _skip(site, "d50-card-not-cleared", card)
     brief = written["dispute"]
     reason = (
         f"{D50_REASON_PREFIX}shown as disputed; its description states the scholarly position "
@@ -410,6 +486,14 @@ def build_plan(export: Export, *, built_at: str, lane: Lane) -> Plan:
             continue
         if d50:
             decided = _dispute_decision(site, entry, export.disputes)
+        elif entry["run_stamp"] not in NUMERIC_CUT_STAMPS:
+            decided = _skip(
+                site,
+                "not-the-numeric-cut",
+                f"retired by {entry['run_stamp']}, not by the numeric cut "
+                f"({', '.join(NUMERIC_CUT_STAMPS)}): D58 takes back only the numeric cut's "
+                "retirements",
+            )
         elif reason_now.startswith(DATE_RETIRED_PREFIX):
             decided = _date_decision(site, entry)
         else:

@@ -89,6 +89,8 @@ from served_image.state import (  # noqa: E402 - the lane's one write-once rule
 from vlm_pilot.common import extract_json  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
+    D50_DISPUTED_SITES,
+    NON_SITE_TYPES,
     NOT_A_SITE_PREFIX,
     SCOPE,
     SCOPE_REVIEW_PREMISE_SQL,
@@ -131,19 +133,6 @@ TEST_ID = "E3/scope-review"
 _FAMILY_OF_STAMP = {
     stamp: OH.ANSWER_FAMILIES[model_id] for model_id, stamp in OH.ANSWER_MODELS.items()
 }
-
-#: Site types that do not by themselves say "human-made" (each a canonical type).
-NON_SITE_TYPES = frozenset(
-    {
-        "Natural feature",
-        "Geological interest",
-        "Magnetic anomaly",
-        "Underwater structures",
-        "Impact crater",
-        "Elongated skulls",
-        "Unknown",
-    }
-)
 
 #: Wikidata classes of natural features, each label read with `wbgetentities` on 2026-09-26.
 NATURAL_CLASSES: Mapping[str, str] = {
@@ -268,10 +257,11 @@ def p31_items(entity: Mapping[str, Any]) -> list[str]:
 
 
 def candidates(export: Export, harvest: Harvest) -> list[Candidate]:
-    """Every shown site with at least one signal, in id order, each with all of its signals."""
+    """Every shown site with at least one signal, in id order, each with all of its signals. A D50
+    site is asked nothing: D50 shows it as disputed, whatever it is (`lane.D50_NOT_RETIRED`)."""
     out: list[Candidate] = []
     for site in export.sites:
-        if site["scope_status"] == RETIRED:
+        if site["scope_status"] == RETIRED or str(site["id"]) in D50_DISPUTED_SITES:
             continue
         sid = str(site["id"])
         if sid not in harvest.qids:
@@ -357,7 +347,8 @@ def reasks(
 ) -> list[Candidate]:
     """What round N asks again, in site order, each with its reason: a latest answer that is an
     uncounted `not_a_site` (at most `MAX_ASKS` asks at the entry's current premise), or a counted
-    `not_a_site` about an entry that has moved since. A retired site is asked nothing."""
+    `not_a_site` about an entry that has moved since. A retired site and a D50 site are asked
+    nothing."""
     by_id = export.by_id()
     out: list[Candidate] = []
     for sid, rows in sorted(history.items()):
@@ -367,7 +358,7 @@ def reasks(
         site = by_id.get(sid)
         if site is None:
             raise ScopeReviewError(f"{sid} was answered but is not in the export")
-        if site["scope_status"] == RETIRED:
+        if site["scope_status"] == RETIRED or sid in D50_DISPUTED_SITES:
             continue
         if latest["counted"]:
             if site["premise"] == latest["premise"]:
@@ -773,6 +764,16 @@ def build_plan(
             raise ScopeReviewError(f"{sid} is decided but not in the export")
         if site["scope_status"] == RETIRED:
             skipped.append(_skip(site, "already-retired", "retired since the question was asked"))
+            continue
+        if sid in D50_DISPUTED_SITES:
+            skipped.append(
+                _skip(
+                    site,
+                    "d50-disputed",
+                    "D50 (owner, 2026-10-19) shows it as a disputed site: the scope review's "
+                    "answer does not retire it again",
+                )
+            )
             continue
         if site["premise"] != row["premise"]:
             skipped.append(

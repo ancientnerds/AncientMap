@@ -35,10 +35,12 @@ from mechanical.lane import (
     _CURATED_ROWS,
     _NAME_KEY_DIFFERS,
     _STATUS_WITHOUT_REASON,
-    D50_DISPUTED_SITES,
+    D50_NOT_RETIRED,
+    D50_REASON_PREFIX,
     LOCK_TIMEOUT,
     NAME_CELLS,
     NAME_FIX_PREMISE_SQL,
+    NON_SITE_TYPES,
     NOT_A_SITE_PREFIX,
     SCOPE_REVIEW_PREMISE_SQL,
     STATEMENT_TIMEOUT,
@@ -48,6 +50,8 @@ from mechanical.lane import (
     Lane,
     Residual,
     SiteInvariant,
+    _window_date_sql,
+    d50_site_sql,
     in_medieval_old_world_sql,
     journal_readback,
     label_borderline_sql,
@@ -112,6 +116,7 @@ def scope_window_lane(wave: str) -> Lane:
             Column("scope_status", "text", allowed_new_values=(RETIRED, IN_SCOPE), fills_null=True),
             Column("scope_reason", "text", fills_null=True),
         ),
+        site_invariants=(D50_NOT_RETIRED,),
     )
 
 
@@ -266,18 +271,71 @@ def spoken_readback(lane: Lane) -> str:
 #: mystery site shown as disputed.
 D58_REASON_PREFIX = "D58 label rule (owner, 2026-10-24): "
 D58_MUSEUM_REASON_PREFIX = "D58 label rule (owner, 2026-10-24), museum rule: "
-D50_REASON_PREFIX = "D50 disputed site (owner, 2026-10-19): "
+#: The retirements "under the numeric cut" (D58): the stamps that retired a site by E3's 500 AD for
+#: the rest of the world - scope-e4 alone (read on production 2026-10-24: the only stamps that ever
+#: wrote `scope_status = retired` are scope-e4, chiapa-hide, scope-review and dup-retire). A D20
+#: scope-window wave writes the same `E3: period_start` reason for an OUT_OF_WINDOW verdict, but it
+#: judges the source's date under the label window: its retirement is not the numeric cut's, and
+#: the un-retire never takes it back.
+NUMERIC_CUT_STAMPS = ("2026-09-23_mechanical-scope-e4",)
 #: What an un-retirement rests on, as the database prints it: the entry's name, type, point,
-#: country and dates (`SCOPE_REVIEW_PREMISE_SQL`'s, which the label rule reads) and the md5 of its
-#: description - a D50 site is shown only with the dispute text the plan checked, and a text
-#: rewritten between plan and apply is refused by guard 5.
+#: country and dates (`SCOPE_REVIEW_PREMISE_SQL`'s, which the label rule reads), the md5 of its
+#: description and the md5 of its card text - a D50 site is shown only with the dispute text and
+#: the card the plan checked, and a text rewritten between plan and apply is refused by guard 5.
 SCOPE_UNRETIRE_PREMISE_SQL = (
-    SCOPE_REVIEW_PREMISE_SQL.removesuffix(")") + ", md5(coalesce(u.description, '')))"
+    SCOPE_REVIEW_PREMISE_SQL.removesuffix(")")
+    + ", md5(coalesce(u.description, '')), md5(coalesce((SELECT cs.card_description FROM "
+    "card_stats cs WHERE cs.site_id = u.id), '')))"
 )
 
 
-def _d50_ids_sql() -> str:
-    return ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
+def latest_retirement_stamp_sql(alias: str = "u") -> str:
+    """SQL: the run stamp of the latest journal row that wrote `scope_status = retired` for the
+    site (NULL when none did)."""
+    return (
+        "(SELECT l.run_stamp FROM remediation_change_log l WHERE l.table_name = 'unified_sites' "
+        f"AND l.column_name = 'scope_status' AND l.row_pk = CAST({alias}.id AS text) "
+        "AND l.new_value = 'retired' ORDER BY l.id DESC LIMIT 1)"
+    )
+
+
+def numeric_cut_sql(alias: str = "u") -> str:
+    """SQL: the site's latest retirement was written under one of `NUMERIC_CUT_STAMPS`."""
+    stamps = ", ".join(sql_literal(stamp) for stamp in NUMERIC_CUT_STAMPS)
+    return f"coalesce({latest_retirement_stamp_sql(alias)} IN ({stamps}), false)"
+
+
+def viking_subject_sql(alias: str = "u") -> str:
+    """SQL: the site holds a Wikidata item of `dates.VIKING_SUBJECT_QIDS`."""
+    from pipeline.normalizers.dates import VIKING_SUBJECT_QIDS
+
+    qids = ", ".join(sql_literal(qid) for qid in sorted(VIKING_SUBJECT_QIDS))
+    return (
+        f"EXISTS (SELECT 1 FROM site_external_ids e WHERE e.site_id = {alias}.id "
+        f"AND e.kind = 'wikidata_qid' AND e.value IN ({qids}))"
+    )
+
+
+def card_cleared_sql(alias: str = "u") -> str:
+    """SQL: the site's card asserts nothing the card lane has not judged against the dispute text
+    (D50: "no card or page asserts the claim") - it has no card text, or the latest journal row
+    that wrote its `card_stats.card_description` comes after the latest journal row that wrote the
+    description it holds now."""
+    a = alias
+    card = (
+        "(SELECT max(c.id) FROM remediation_change_log c WHERE c.table_name = 'card_stats' "
+        f"AND c.column_name = 'card_description' AND c.row_pk = CAST({a}.id AS text))"
+    )
+    text = (
+        "(SELECT max(d.id) FROM remediation_change_log d WHERE d.table_name = 'unified_sites' "
+        f"AND d.column_name = 'description' AND d.row_pk = CAST({a}.id AS text) "
+        f"AND d.new_value = {a}.description)"
+    )
+    no_card = (
+        f"NOT EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = {a}.id "
+        "AND cs.card_description IS NOT NULL)"
+    )
+    return f"({no_card} OR coalesce({card} > {text}, false))"
 
 
 def dispute_enriched_sql(alias: str = "u") -> str:
@@ -307,23 +365,30 @@ def unretire_violation_sql() -> str:
     planned site carries one of the three reasons, and what that reason says holds in the same
     transaction -
 
-    * `D58_REASON_PREFIX`: a site no D50 site, inside the label window and not label-borderline;
-    * `D58_MUSEUM_REASON_PREFIX`: a Museum whose country is not of the medieval Old World, no
-      D50 site;
-    * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment."""
-    d50 = f"CAST(u.id AS text) IN ({_d50_ids_sql()})"
+    * `D58_REASON_PREFIX`: no D50 site, retired by the numeric cut (`numeric_cut_sql`), placed and
+      dated, inside the label window, not label-borderline, no Viking subject and of no type that
+      asks the not-a-site question first (`NON_SITE_TYPES`);
+    * `D58_MUSEUM_REASON_PREFIX`: no D50 site, retired by the numeric cut, a placed Museum whose
+      country is not of the medieval Old World;
+    * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment and whose card
+      was written after it (`card_cleared_sql`)."""
+    d50 = d50_site_sql("u")
+    non_site = ", ".join(sql_literal(kind) for kind in sorted(NON_SITE_TYPES))
     date_kept = (
         f"(u.scope_reason LIKE {sql_literal(D58_REASON_PREFIX + '%')} AND NOT {d50} "
-        f"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')})"
+        f"AND {numeric_cut_sql('u')} AND u.lon IS NOT NULL "
+        f"AND {_window_date_sql('u.')} IS NOT NULL "
+        f"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')} "
+        f"AND NOT {viking_subject_sql('u')} AND coalesce(u.site_type, '') NOT IN ({non_site}))"
     )
     museum_kept = (
         f"(u.scope_reason LIKE {sql_literal(D58_MUSEUM_REASON_PREFIX + '%')} AND NOT {d50} "
-        f"AND u.site_type = 'Museum' AND u.country IS NOT NULL "
-        f"AND NOT {in_medieval_old_world_sql('u.')})"
+        f"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' AND u.country IS NOT NULL "
+        f"AND u.lon IS NOT NULL AND NOT {in_medieval_old_world_sql('u.')})"
     )
     disputed = (
         f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "
-        f"AND {dispute_enriched_sql('u')})"
+        f"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})"
     )
     return f"NOT ({date_kept} OR {museum_kept} OR {disputed})"
 
@@ -379,7 +444,7 @@ def scope_unretire_readback(lane: Lane) -> str:
     population, borderline ones apart), the D50 sites shown and those shown without their dispute
     text (0, always), and the statuses the run wrote."""
     stamp = sql_literal(lane.run_stamp)
-    d50 = f"CAST(u.id AS text) IN ({_d50_ids_sql()})"
+    d50 = d50_site_sql("u")
     return journal_readback(
         lane,
         [
@@ -405,6 +470,10 @@ def scope_unretire_readback(lane: Lane) -> str:
             (
                 "curated D50 sites shown without a dispute-enriched description",
                 _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {dispute_enriched_sql('u')}",
+            ),
+            (
+                "curated D50 sites shown with a card not written after their dispute text",
+                _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {card_cleared_sql('u')}",
             ),
             _STATUS_WITHOUT_REASON,
             (

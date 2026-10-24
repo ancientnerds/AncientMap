@@ -1117,6 +1117,34 @@ D50_DISPUTED_SITES: Mapping[str, str] = {
     "8df8659c-49be-4a66-b25a-ecbf96541515": "Bosnian Pyramid of Love",
     "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded": "Baltic Sea Anomaly",
 }
+#: The reason the un-retire writes for a D50 site (`identity_lanes.scope_unretire_lane`).
+D50_REASON_PREFIX = "D50 disputed site (owner, 2026-10-19): "
+
+
+def d50_site_sql(alias: str = "u") -> str:
+    """SQL: the row is one of `D50_DISPUTED_SITES`."""
+    listed = ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
+    return f"CAST({alias}.id AS text) IN ({listed})"
+
+
+#: The scope lanes that retire (`scope-review-<wave>`, `scope-window-<wave>`) never retire a D50
+#: site: D50 shows them as disputed, and the question that retired them on 2026-09-30 (natural
+#: formation, no site) would retire them again. The second leg - no site of these lanes leaves with
+#: a D50 reason, which only the un-retire writes - is what `--probe-guards` corrupts: a probe
+#: cannot plant a D50 site into a plan, it can write a D50 reason into the first planned one.
+D50_NOT_RETIRED = SiteInvariant(
+    says="planned site(s) retired although D50 shows them as disputed, or given a D50 reason",
+    predicate=(
+        f"(u.scope_status = 'retired' AND {d50_site_sql('u')}) "
+        f"OR u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')}"
+    ),
+    probe_column="scope_reason",
+    probe_values=(
+        D50_REASON_PREFIX + "probe one",
+        D50_REASON_PREFIX + "probe two",
+        D50_REASON_PREFIX + "probe three",
+    ),
+)
 
 #: The D58 window's residual: what the scope-window and scope-unretire lanes read back.
 UNDECIDED_OUTSIDE_LABEL_WINDOW = Residual(
@@ -1865,6 +1893,18 @@ _UNDECIDED_OUT_OF_WINDOW_O7 = Residual(
 )
 #: The reason prefix of the lane's retirements, which the read-back counts.
 NOT_A_SITE_PREFIX = "E3: not an archaeological site"
+#: Site types that do not by themselves say "human-made" (each a canonical type).
+NON_SITE_TYPES = frozenset(
+    {
+        "Natural feature",
+        "Geological interest",
+        "Magnetic anomaly",
+        "Underwater structures",
+        "Impact crater",
+        "Elongated skulls",
+        "Unknown",
+    }
+)
 SCOPE_REVIEW_PREMISE_SQL = (
     "concat_ws(' | ', u.name, coalesce(u.site_type, 'NULL'), u.lat::text, u.lon::text, "
     "coalesce(u.country, 'NULL'), coalesce(u.period_start::text, 'NULL'), "
@@ -1898,6 +1938,7 @@ def scope_review_lane(wave: str) -> Lane:
             Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),
             Column("scope_reason", "text", fills_null=True),
         ),
+        site_invariants=(D50_NOT_RETIRED,),
     )
 
 

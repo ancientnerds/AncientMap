@@ -61,6 +61,7 @@ from mechanical.identity_lanes import (  # noqa: E402
     scope_window_lane,
 )
 from mechanical.lane import (  # noqa: E402
+    D50_DISPUTED_SITES,
     NOT_A_SITE_PREFIX,
     SCOPE_REVIEW_PREMISE_SQL,
     Lane,
@@ -302,18 +303,19 @@ QUESTIONS = {
     MEDIEVAL_SUBJECT: (
         "Is it true that this site's subject is of the medieval Old World - a Byzantine site of the "
         "empire's rule there, a Crusader site or a Norse site - and not of a culture the map keeps "
-        "(Umayyad, Abbasid, Fatimid, Ayyubid, Mamluk, Armenian, Georgian, Thule, Inuit)? A site "
-        "older than 500 AD that Byzantines or Crusaders only reused stays."
+        "(Umayyad, Abbasid, Fatimid, Ayyubid, Mamluk, Seljuk, Artuqid, Ottoman, Armenian, Georgian, "
+        "Thule, Inuit)? A site older than 500 AD that Byzantines or Crusaders only reused stays."
     ),
 }
 
 #: The label note of a borderline entry (D58), and the verdict line it unlocks.
 LABEL_NOTE = """THE LABEL (owner decision D58): this entry lies in {country} and is dated between 500 and \
 1500 AD, where Byzantium, the Crusader states or the Norse once ruled. The window keeps it unless \
-its SUBJECT is of the medieval Old World: a Byzantine site of the empire's rule there (the Levant \
-and Egypt until 636-641, Byzantine Africa until 698), a Crusader site (1099-1291) or a Norse site \
-(Greenland 985-1450). An Umayyad, Abbasid, Fatimid, Ayyubid, Mamluk, Armenian, Georgian, Thule or \
-Inuit site stays (PERIOD_WRONG with its sourced start, which may be the stored one).
+its SUBJECT is of the medieval Old World: a Byzantine site of the empire's rule there (Anatolia and \
+Thrace until 1453 where the empire still held them, the Levant and Egypt until 636-641, Byzantine \
+Africa until 698), a Crusader site (1099-1291) or a Norse site (Greenland 985-1450). An Umayyad, \
+Abbasid, Fatimid, Ayyubid, Mamluk, Seljuk, Danishmendid, Artuqid, Ottoman, Armenian, Georgian, \
+Thule or Inuit site stays (PERIOD_WRONG with its sourced start, which may be the stored one).
 """
 MEDIEVAL_NOTE = (
     'the entry\'s subject is of the medieval Old World (see THE LABEL): "kind" is byzantine, '
@@ -322,7 +324,7 @@ MEDIEVAL_NOTE = (
 CUTOFF_NOTES = {
     AMERICAS: "Americas and Oceania: 1500 AD",
     OCEANIA: "Americas and Oceania: 1500 AD",
-    MEDIEVAL_OLD_WORLD: "the medieval Old World - Europe and Byzantium (Anatolia, Cyprus): 500 AD",
+    MEDIEVAL_OLD_WORLD: "the medieval Old World - Europe and Byzantium (Cyprus): 500 AD",
     UNPLACED_OLD_WORLD: (
         "an Old World entry whose country is not stored: 500 AD, as for Europe - only a stored "
         "country outside Europe and Byzantium keeps an entry through 1500 AD"
@@ -810,6 +812,14 @@ def build(
             continue
         if now["scope_status"] == RETIRED:
             skip(sid, "already-retired", "retired since the question was asked")
+            continue
+        if sid in D50_DISPUTED_SITES:
+            skip(
+                sid,
+                "d50-disputed",
+                "D50 (owner, 2026-10-19) shows it as a disputed site: the scope window does not "
+                "decide it (`lane.D50_NOT_RETIRED`)",
+            )
             continue
         if verdict == PERIOD_WRONG and data["period_start"] != ctx["period_start"]:
             plan.period_wrong.append(

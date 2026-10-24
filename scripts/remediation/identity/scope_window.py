@@ -15,7 +15,9 @@ and `label_borderline_sql` as `label_borderline`), never re-typed here. The popu
 * `hadrians_wall_path` - a footpath opened in 2003, never decided.
 
 A museum among them (22: 15 already `in_scope`, 7 undecided) is flagged `museum_question`: scope
-rule (d) asks whether its exhibits are ancient, a different question from the period's.
+rule (d) asks whether its exhibits are ancient, a different question from the period's. A D50 site
+(`mechanical.lane.D50_DISPUTED_SITES`, shown again as disputed by the un-retire) is never part of
+the population: D50 decided its scope, and the lane's invariant refuses retiring it.
 
 Each site carries its **period provenance** from the change journal: the last write of
 `period_start`, `period_end` and `period_name` (stamp, family, confidence, old and new value, the
@@ -46,6 +48,7 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
         sys.path.insert(0, _root)
 
 import journal_chain  # noqa: E402
+from mechanical.lane import D50_DISPUTED_SITES  # noqa: E402
 
 from identity import common, export  # noqa: E402
 
@@ -118,7 +121,7 @@ def build(exported: export.Export) -> tuple[list[dict[str, Any]], dict[str, Any]
     counts: Counter[str] = Counter()
     for row in exported.shown:
         found = groups_of(row)
-        if not found:
+        if not found or row["id"] in D50_DISPUTED_SITES:
             continue
         written = provenance(journal.get(row["id"], []))
         start = written.get("period_start")

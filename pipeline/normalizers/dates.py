@@ -3,7 +3,7 @@ Date parsing and normalization utilities.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 # Global date cutoffs - defines the project scope: Ancient History.
@@ -242,11 +242,12 @@ LABEL_CUTOFFS: Mapping[str, int] = {
 #:   listed and its Asian part taken out by `NON_EUROPEAN_PARTS` (east of the Urals, 60 E) -, the
 #:   four nations the curated rows name instead of the United Kingdom, Kosovo, and the sea names
 #:   the curated rows carry for a point off a European coast ("Baltic Sea");
-#: * **Byzantium**: Turkiye (Anatolia and Thrace, the empire's heartland from 500 to 1453; the
-#:   Seljuk and Ottoman sites of the same centuries count with it - the rule asks the region, not
-#:   the dynasty) and Cyprus (Byzantine 395-1191). The empire's other lands of 500-1500 - the
-#:   Levant, Egypt and Byzantine Africa until the Arab conquests of 636-698, and the Crusader states
-#:   of 1099-1291 there - are `LABEL_BORDERLINE_COUNTRIES`: there the subject decides, not the place;
+#: * **Byzantium**: Cyprus (Byzantine 395-1191, then the Crusader kingdom of the Lusignans and
+#:   Venice: all of it the medieval Old World). Turkiye - Anatolia and Thrace, the empire's
+#:   heartland, but from 1071 also Seljuk, Armenian (Ani), Artuqid and from 1299 Ottoman land - is
+#:   a `LABEL_BORDERLINE_COUNTRIES` country like the empire's other lands of 500-1500 (the Levant,
+#:   Egypt and Byzantine Africa until the Arab conquests of 636-698, the Crusader states of
+#:   1099-1291): there the subject decides, not the place;
 #: * **the Vikings**: Scandinavia, Iceland and the British Isles are Europe already; Norse Greenland
 #:   is a borderline country, and L'Anse aux Meadows is named by its item (`VIKING_SUBJECT_QIDS`).
 #:
@@ -265,7 +266,7 @@ EUROPE_ISO_CODES = frozenset(
         "at", "be", "fr", "de", "li", "lu", "mc", "nl", "ch",
     }
 )  # fmt: skip
-BYZANTIUM_ISO_CODES = frozenset({"tr", "cy"})
+BYZANTIUM_ISO_CODES = frozenset({"cy"})
 MEDIEVAL_OLD_WORLD_COUNTRIES = (
     EUROPE_ISO_CODES
     | BYZANTIUM_ISO_CODES
@@ -290,7 +291,7 @@ MEDIEVAL_OLD_WORLD_COUNTRIES = (
             # the seas a curated point off a European coast names
             "baltic sea", "north sea",
             # Byzantium
-            "türkiye", "turkiye", "turkey", "cyprus", "northern cyprus",
+            "cyprus", "northern cyprus",
         }
     )
 )  # fmt: skip
@@ -324,6 +325,9 @@ NON_EUROPEAN_PARTS: Mapping[str, tuple[tuple[float, float, float, float], ...]] 
 #: keeps them through 1500 (they are not Europe), but a site there may be of the medieval Old World
 #: by its subject, and a scope verdict asks it (`label_borderline`):
 #:
+#: * Anatolia and Thrace (Turkiye): Byzantine through 1453 in the west, but from 1071 Seljuk,
+#:   Danishmendid, Artuqid and Armenian land in the east and from 1299 Ottoman; Hagia Sophia and
+#:   the Byzantine castles are out, Ani, the Seljuk caravanserais and the Artuqid bridges stay;
 #: * the Levant (Syria, Lebanon, Israel, Palestine, Jordan): Byzantine until 636-640, the Crusader
 #:   states of 1099-1291; the Umayyad, Abbasid, Fatimid, Ayyubid and Mamluk sites stay;
 #: * Egypt and Byzantine Africa (Libya, Tunisia, Algeria): Byzantine until 641 and 698;
@@ -333,16 +337,27 @@ NON_EUROPEAN_PARTS: Mapping[str, tuple[tuple[float, float, float, float], ...]] 
 LABEL_BORDERLINE_COUNTRIES = frozenset(
     {
         "syria", "lebanon", "israel", "palestine", "state of palestine", "west bank", "gaza",
-        "jordan", "egypt", "libya", "tunisia", "algeria", "georgia", "armenia", "azerbaijan",
-        "greenland",
-        "sy", "lb", "il", "ps", "jo", "eg", "ly", "tn", "dz", "ge", "am", "az", "gl",
+        "jordan", "egypt", "libya", "tunisia", "algeria", "georgia", "georgia (country)",
+        "armenia", "azerbaijan",
+        "greenland", "türkiye", "turkiye", "turkey",
+        "sy", "lb", "il", "ps", "jo", "eg", "ly", "tn", "dz", "ge", "am", "az", "gl", "tr",
     }
 )  # fmt: skip
 
 #: Sites the label puts out by their subject wherever they lie: the Viking settlement of
 #: L'Anse aux Meadows in Newfoundland (D58: "L'Anse aux Meadows stays out (Viking subject)"), by
-#: its Wikidata item (read in `site_proposals` on 2026-10-24: Q189113).
+#: its Wikidata item (read in `site_proposals` on 2026-10-24: Q189113). Every path that carries a
+#: Wikidata item asks it through `label_scope`: the loader, Lyra's promotion, the Prospector, the
+#: proposal approval and the un-retire.
 VIKING_SUBJECT_QIDS: Mapping[str, str] = {"Q189113": "L'Anse aux Meadows"}
+
+#: The three answers of `label_scope`.
+LABEL_IN_SCOPE = "in_scope"
+LABEL_OUT_OF_SCOPE = "out_of_scope"
+#: The label decides and no verdict was asked: a path that cannot ask one holds the record (the
+#: loader skips it, Lyra leaves it to the founder, the Prospector files it for review under this
+#: `scope_verdict`) instead of admitting a Byzantine, Crusader or Norse subject by default.
+LABEL_QUESTION = "label_borderline"
 
 
 def in_medieval_old_world(country: str | None, lat: float | None, lon: float | None) -> bool:
@@ -459,7 +474,9 @@ def passes_date_cutoff(record: Mapping[str, Any]) -> bool:
     - Records without a longitude: INCLUDED
 
     A record of a `LABEL_BORDERLINE_COUNTRIES` country passes; whether its subject is Byzantine,
-    Crusader or Norse is a scope verdict's question (`label_borderline`), not this check's.
+    Crusader or Norse is a scope verdict's question (`label_borderline`), not this check's. A path
+    that admits a record without asking one asks `label_scope`, which holds such a record and
+    puts a Viking subject out by its Wikidata item.
 
     Args:
         record: Site record dict with period_start, period_end, lat, lon and country fields
@@ -476,6 +493,30 @@ def passes_date_cutoff(record: Mapping[str, Any]) -> bool:
         return True  # No location = include
 
     return date <= LABEL_CUTOFFS[region]
+
+
+def viking_subjects(qids: Iterable[str | None]) -> list[str]:
+    """The `VIKING_SUBJECT_QIDS` among a record's Wikidata items, sorted (empty for none)."""
+    return sorted({qid for qid in qids if qid} & VIKING_SUBJECT_QIDS.keys())
+
+
+def label_scope(record: Mapping[str, Any], qids: Iterable[str | None] = ()) -> str:
+    """The label rule's answer for a path that admits a record without a scope verdict (D58):
+
+    * `LABEL_OUT_OF_SCOPE` - the record's Wikidata item is a Viking subject (`viking_subjects`),
+      or its date is past its region's cutoff (`passes_date_cutoff`);
+    * `LABEL_QUESTION` - the label decides it (`label_borderline`: a borderline country, dated
+      500-1500), and only a verdict on its subject may admit it;
+    * `LABEL_IN_SCOPE` - everything else.
+
+    `qids` are the record's Wikidata items as the path carries them (None and '' are no item)."""
+    if viking_subjects(qids):
+        return LABEL_OUT_OF_SCOPE
+    if not passes_date_cutoff(record):
+        return LABEL_OUT_OF_SCOPE
+    if label_borderline(record):
+        return LABEL_QUESTION
+    return LABEL_IN_SCOPE
 
 
 def passes_e3_cutoff(record: Mapping[str, Any]) -> bool:

@@ -33,6 +33,7 @@ from phase4 import wc4  # noqa: E402
 from pipeline.normalizers import dates as D  # noqa: E402
 
 WAVE = "2026-10-24"
+SCOPE_E4 = "2026-09-23_mechanical-scope-e4"
 PRAMBANAN = "21bd525e-fe10-40dd-96be-32d3c8d36d26"
 CHROBRY = "a26993c6-b562-4c28-a584-8de2c9312dad"
 NIHA = "a451f6be-a506-41f6-9bf7-85d8c7c7ac8e"
@@ -109,8 +110,10 @@ def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
     )
     db.execute(
         "CREATE TABLE remediation_change_log (id INT, table_name TEXT, column_name TEXT, "
-        "row_pk TEXT, new_value TEXT, evidence TEXT)"
+        "row_pk TEXT, new_value TEXT, evidence TEXT, run_stamp TEXT)"
     )
+    db.execute("CREATE TABLE card_stats (site_id TEXT, card_description TEXT)")
+    db.execute("CREATE TABLE site_external_ids (site_id TEXT, kind TEXT, value TEXT)")
     for r in rows:
         db.execute(
             "INSERT INTO unified_sites VALUES (:id, 'ancient_nerds', :name, :site_type, :country, "
@@ -159,7 +162,8 @@ class TestTheLabelWindowInSql:
         by = {(r["country"], r["lat"], r["lon"], r["period_start"]): r["id"] for r in records}
         assert got[by[("Poland", 51.56, 15.52, 975)]] == 1
         assert got[by[("Cambodia", 13.45, 103.86, 975)]] == 0
-        assert got[by[("Türkiye", 37.18, 40.95, 975)]] == 1  # SQLite's lower agrees on this one
+        assert got[by[("Türkiye", 37.18, 40.95, 975)]] == 0  # borderline: the window keeps it
+        assert got[by[("Cyprus", 35.1, 33.4, 975)]] == 1  # Byzantium
         assert got[by[("Russia", 43.07, 132.68, 975)]] == 0
         assert got[by[(None, 51.0, 15.0, 975)]] == 1  # no country: the Old World's 500 AD
         assert got[by[(None, 20.0, -100.0, 975)]] == 0  # the Americas need no country
@@ -171,6 +175,9 @@ class TestTheLabelWindowInSql:
         want = {r["id"]: int(D.label_borderline(r)) for r in records}
         assert {k: bool(v) for k, v in got.items()} == {k: bool(v) for k, v in want.items()}
         assert sum(want.values()) > 0
+        by = {(r["country"], r["lat"], r["lon"], r["period_start"]): r["id"] for r in records}
+        assert got[by[("Türkiye", 37.18, 40.95, 975)]] == 1  # SQLite's lower agrees on this one
+        assert got[by[("TR", 39.0, 35.0, 975)]] == 1
 
     def test_in_medieval_old_world_sql_is_the_python_rule(self) -> None:
         records = self.records()
@@ -186,7 +193,8 @@ class TestTheLabelWindowInSql:
         assert f"THEN {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} " in sql
         assert f"ELSE {D.LABEL_CUTOFF_REST_OF_WORLD} END" in sql
         assert f"WHEN country IS NULL THEN {D.LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} " in sql
-        assert "'türkiye'" in sql and "'baltic sea'" in sql
+        assert "'cyprus'" in sql and "'baltic sea'" in sql and "'türkiye'" not in sql
+        assert "'türkiye'" in L.label_borderline_sql()
         assert L.in_oceania_sql("u.") in L.outside_label_window("u.")
         assert L.outside_e3_window() != sql, "the delivered lanes keep the E3 text"
 
@@ -224,7 +232,11 @@ class TestTheLane:
         status = self.lane.cell("scope_status")
         assert status.allowed_new_values == ("in_scope",) and not status.fills_null
         assert not self.lane.cell("scope_reason").fills_null
-        assert self.lane.premise_sql.endswith(", md5(coalesce(u.description, '')))")
+        assert ", md5(coalesce(u.description, '')), " in self.lane.premise_sql
+        assert self.lane.premise_sql.endswith(
+            "md5(coalesce((SELECT cs.card_description FROM card_stats cs WHERE cs.site_id = u.id), "
+            "'')))"
+        )
         assert self.lane.premise_sql.startswith(L.SCOPE_REVIEW_PREMISE_SQL.removesuffix(")"))
         assert self.lane.post_commit_residual is L.UNDECIDED_OUTSIDE_LABEL_WINDOW
 
@@ -272,6 +284,7 @@ class TestTheLane:
             "curated rows retired for their date that are D58 borderline",
             "curated D50 sites shown",
             "curated D50 sites shown without a dispute-enriched description",
+            "curated D50 sites shown with a card not written after their dispute text",
             "curated rows outside the D58 label window with no scope decision",
             "journal rows for this run that write a status other than in_scope",
             "curated rows with scope_status retired",
@@ -297,12 +310,37 @@ def _evidence(*, decision: str = wc4.EVIDENCE_DECISION_ENRICH, dispute: Any = "b
 class TestTheInvariantInSql:
     """`unretire_violation_sql` over the written site: TRUE refuses the whole wave."""
 
-    def violators(self, rows: list[dict[str, Any]], journal: list[tuple]) -> set[str]:
+    def violators(
+        self,
+        rows: list[dict[str, Any]],
+        journal: list[tuple],
+        *,
+        stamp: str = SCOPE_E4,
+        cards: tuple[tuple[str, str], ...] = (),
+        card_rows: tuple[tuple[int, str], ...] = (),
+        qids: tuple[tuple[str, str], ...] = (),
+    ) -> set[str]:
+        """The violators among `rows`, each retired by one journal row under `stamp` (ids below
+        every other row), with the description rows `journal` (id, site, text, evidence), the card
+        texts `cards`, the card journal rows `card_rows` and the Wikidata items `qids`."""
         db = _sites_db(rows)
         db.executemany(
-            "INSERT INTO remediation_change_log VALUES (?, 'unified_sites', 'description', ?, ?, ?)",
+            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value, "
+            "run_stamp) VALUES (?, 'unified_sites', 'scope_status', ?, 'retired', ?)",
+            [(-1 - n, r["id"], stamp) for n, r in enumerate(rows)],
+        )
+        db.executemany(
+            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value, "
+            "evidence) VALUES (?, 'unified_sites', 'description', ?, ?, ?)",
             journal,
         )
+        db.executemany("INSERT INTO card_stats VALUES (?, ?)", cards)
+        db.executemany(
+            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value) "
+            "VALUES (?, 'card_stats', 'card_description', ?, 'a card')",
+            card_rows,
+        )
+        db.executemany("INSERT INTO site_external_ids VALUES (?, 'wikidata_qid', ?)", qids)
         sql = f"SELECT u.id FROM unified_sites u WHERE {IL.unretire_violation_sql()}"
         return {row[0] for row in db.execute(sql)}
 
@@ -323,6 +361,27 @@ class TestTheInvariantInSql:
         ]
         assert self.violators(rows, []) == {CHROBRY, OSAKA, NIHA, RICHAT, DUPLICATE, NORSE}
 
+    def test_a_label_un_retirement_rests_on_the_numeric_cut_s_retirement(self) -> None:
+        """A D20 scope-window wave writes the same reason under the label window: its retirement
+        is not taken back, whatever the stored date says."""
+        rows = [self.site(PRAMBANAN, IL.D58_REASON_PREFIX + "x")]
+        assert self.violators(rows, []) == set()
+        assert self.violators(rows, [], stamp="2026-10-30_mechanical-scope-window") == {PRAMBANAN}
+
+    def test_a_label_un_retirement_needs_a_placed_dated_site_that_is_no_viking_or_non_site(
+        self,
+    ) -> None:
+        d58 = IL.D58_REASON_PREFIX + "x"
+        rows = [
+            self.site(PRAMBANAN, d58),
+            self.site(CHROBRY, d58, period_start=None),
+            self.site(OSAKA, d58, lon=None),
+            self.site(NIHA, d58, site_type="Natural feature"),
+            self.site(NORSE, d58, country="Canada", lat=51.6, lon=-55.53, period_start=1000),
+        ]
+        got = self.violators(rows, [], qids=((NORSE, "Q189113"), (PRAMBANAN, "Q1")))
+        assert got == {CHROBRY, OSAKA, NIHA, NORSE}
+
     def test_a_museum_un_retirement_needs_a_museum_outside_the_medieval_old_world(self) -> None:
         museum = IL.D58_MUSEUM_REASON_PREFIX + "its exhibits ..."
         rows = [
@@ -340,6 +399,10 @@ class TestTheInvariantInSql:
             self.site(NORSE, museum, site_type="Museum", country=None),
         ]
         assert self.violators(rows, []) == {GROSS_RADEN, OTHER_MUSEUM, NORSE}
+        khushuu = [rows[0]]
+        assert self.violators(khushuu, [], stamp="2026-10-30_mechanical-scope-window") == {KHUSHUU}
+        unplaced = [self.site(KHUSHUU, museum, site_type="Museum", country="Mongolia", lon=None)]
+        assert self.violators(unplaced, []) == {KHUSHUU}
 
     def test_a_d50_site_passes_only_with_its_dispute_text(self) -> None:
         d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
@@ -362,6 +425,18 @@ class TestTheInvariantInSql:
         d58_on_d50 = [self.site(YONAGUNI, IL.D58_REASON_PREFIX + "x", country="Japan")]
         assert self.violators(d58_on_d50, []) == {YONAGUNI}
 
+    def test_a_d50_site_passes_only_once_its_card_was_written_after_its_dispute_text(self) -> None:
+        d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
+        text = "A text with both positions."
+        rows = [self.site(YONAGUNI, d50, description=text, country="Japan")]
+        good = [(500, YONAGUNI, text, _evidence())]
+        card = ((YONAGUNI, "Still fiercely contested: natural geology or submerged ruins?"),)
+        assert self.violators(rows, good) == set(), "no card: nothing asserts the claim"
+        assert self.violators(rows, good, cards=card) == {YONAGUNI}, "no journalled card"
+        assert self.violators(rows, good, cards=card, card_rows=((400, YONAGUNI),)) == {YONAGUNI}
+        assert self.violators(rows, good, cards=card, card_rows=((600, YONAGUNI),)) == set()
+        assert self.violators(rows, good, cards=((YONAGUNI, None),)) == set(), "a NULL card"
+
     def test_the_d50_readback_counts_a_shown_site_without_its_text(self) -> None:
         rows = [self.site(YONAGUNI, "x", description="t", country="Japan")]
         db = _sites_db(rows)
@@ -371,7 +446,8 @@ class TestTheInvariantInSql:
         )
         assert db.execute(sql).fetchone() == (1,)
         db.execute(
-            "INSERT INTO remediation_change_log VALUES (1, 'unified_sites', 'description', ?, 't', ?)",
+            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value, "
+            "evidence) VALUES (1, 'unified_sites', 'description', ?, 't', ?)",
             (YONAGUNI, _evidence()),
         )
         assert db.execute(sql).fetchone() == (0,)
@@ -384,7 +460,7 @@ def site_row(sid: str, **over: Any) -> dict[str, Any]:
         "lat": -7.75, "lon": 110.49, "period_start": 850, "period_end": None,
         "scope_status": "retired",
         "scope_reason": "E3: period_start 850 is 350 years past the rest of world cutoff of 500 AD",
-        "qids": [], "premise": f"premise-{sid[:8]}",
+        "qids": [], "has_card": False, "card_journal_id": None, "premise": f"premise-{sid[:8]}",
     }  # fmt: skip
     row.update(over)
     return row
@@ -458,7 +534,14 @@ class TestThePlanner:
             ({"country": "Japan", "lat": 34.7, "lon": 135.5, "period_start": 1583},
              "outside-label-window"),
             ({"country": "Türkiye", "lat": 37.18, "lon": 40.95, "period_start": 750},
+             "label-borderline"),  # Dara: Byzantine or not is a verdict's question
+            ({"country": "Cyprus", "lat": 35.1, "lon": 33.4, "period_start": 750},
              "outside-label-window"),
+            ({"country": "Russia", "lat": 43.07, "lon": 132.68, "period_start": 698,
+              "site_type": "Natural feature"}, "not-a-site-question-first"),  # Mount Livadiyskaya
+            ({"scope_reason": "E3: period_start 1700 is 1200 years past the rest of world cutoff"},
+             "retired-year-outside-label-window"),
+            ({"scope_reason": "E3: period_start is past the cutoff"}, "retired-year-unread"),
             ({"country": "Lebanon", "lat": 33.58, "lon": 35.61, "period_start": 975},
              "label-borderline"),
             ({"country": "Canada", "lat": 51.6, "lon": -55.53, "period_start": 1000,
@@ -473,6 +556,31 @@ class TestThePlanner:
     ) -> None:
         plan = build(export([site_row(CHROBRY, **over)], [journal(CHROBRY, 1)]))
         assert plan.changes == () and skipped(plan) == {CHROBRY: reason}
+
+    def test_only_the_numeric_cut_s_retirement_is_taken_back(self) -> None:
+        """D58 takes back "the sites retired under the numeric cut": a D20 scope-window wave's
+        OUT_OF_WINDOW writes the same `E3: period_start N` reason under the label window, from the
+        source's date - the stored one may lie inside the window. It stays retired."""
+        d20 = journal(PRAMBANAN, 9, stamp="2026-10-30_mechanical-scope-window", old="in_scope")
+        stored_400 = site_row(
+            PRAMBANAN, period_start=400, scope_reason="E3: period_start 1200 is past the cutoff; q"
+        )
+        assert skipped(build(export([stored_400], [journal(PRAMBANAN, 1), d20]))) == {
+            PRAMBANAN: "not-the-numeric-cut"
+        }
+        museum = site_row(
+            KHUSHUU, site_type="Museum", country="Mongolia", lat=47.57, lon=102.87,
+            scope_reason="E3 museum rule (plan section 8.2): (Gokturk Orkhon stelae, 8th century).",
+        )  # fmt: skip
+        d20_museum = journal(KHUSHUU, 9, stamp="2026-10-30_mechanical-scope-window")
+        assert skipped(build(export([museum], [d20_museum]))) == {KHUSHUU: "not-the-numeric-cut"}
+        assert IL.NUMERIC_CUT_STAMPS == ("2026-09-23_mechanical-scope-e4",)
+
+    def test_the_year_the_retirement_named_is_read_from_its_reason(self) -> None:
+        assert U.retired_year("E3: period_start 850 is 350 years past the cutoff") == 850
+        assert U.retired_year("E3: period_start -200 is past") == -200
+        assert U.retired_year("E3: period_start 1200 is past the cutoff; q") == 1200
+        assert U.retired_year("E3 museum rule: x") is None
 
     def test_only_a_journalled_retirement_is_taken_back(self) -> None:
         plan = build(export([site_row(PRAMBANAN)], []))
@@ -529,6 +637,10 @@ class TestThePlanner:
         assert skipped(build(export([retyped], [journal(KHUSHUU, 1)]))) == {
             KHUSHUU: "museum-type-moved"
         }
+        no_point = {**museum, "lon": None}
+        assert skipped(build(export([no_point], [journal(KHUSHUU, 1)]))) == {
+            KHUSHUU: "label-rule-cannot-tell"
+        }
 
     def test_a_d50_site_waits_for_its_dispute_text(self) -> None:
         yonaguni = site_row(YONAGUNI, name="Yonaguni Monument", country="Japan", lat=24.4,
@@ -566,6 +678,28 @@ class TestThePlanner:
         assert plan.counters["d50_disputed"] == 1
         latest_bad = [dispute_row(n=500), dispute_row(n=600, dispute=None)]
         assert build(export([yonaguni], rows, latest_bad)).changes == (), "the latest row decides"
+
+    def test_a_d50_site_waits_until_its_card_was_written_after_its_dispute_text(self) -> None:
+        """D50: "no card or page asserts the claim" - the card lane (D21) rewrites the card in the
+        knowledge of the dispute text before the site is shown."""
+        rows = [journal(YONAGUNI, 129629, stamp="2026-09-30_mechanical-scope-review")]
+
+        def yonaguni(**card: Any) -> dict[str, Any]:
+            return site_row(YONAGUNI, name="Yonaguni Monument", country="Japan", lat=24.4,
+                            lon=123.0, period_start=None, scope_reason=D50_REASON_NOW,
+                            **card)  # fmt: skip
+
+        for card, cleared in (
+            ({"has_card": True, "card_journal_id": None}, False),
+            ({"has_card": True, "card_journal_id": 450}, False),
+            ({"has_card": True, "card_journal_id": 600}, True),
+            ({"has_card": False, "card_journal_id": None}, True),
+        ):
+            plan = build(export([yonaguni(**card)], rows, [dispute_row(n=500)]))
+            assert bool(plan.changes) is cleared, card
+            if not cleared:
+                assert skipped(plan) == {YONAGUNI: "d50-card-not-cleared"}
+                assert "the card lane (D21) rewrites the card first" in plan.skipped[0].note
 
     def test_a_d50_site_retired_for_another_reason_is_not_its_lane_s(self) -> None:
         richat = site_row(RICHAT, scope_reason="E3: period_start 1200 is past")
@@ -656,6 +790,7 @@ class TestTheExport:
         assert "u.scope_status = 'retired'" in U.EXPORT_SITES_SQL
         assert f"{IL.SCOPE_UNRETIRE_PREMISE_SQL} AS premise" in U.EXPORT_SITES_SQL
         assert "e.kind = 'wikidata_qid'" in U.EXPORT_SITES_SQL
+        assert "AS has_card" in U.EXPORT_SITES_SQL and "AS card_journal_id" in U.EXPORT_SITES_SQL
         assert "l.column_name = 'scope_status'" in U.EXPORT_JOURNAL_SQL
         assert "l.new_value = u.description" in U.EXPORT_DISPUTE_SQL
         for sid in L.D50_DISPUTED_SITES:

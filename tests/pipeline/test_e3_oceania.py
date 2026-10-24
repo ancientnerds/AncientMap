@@ -187,8 +187,9 @@ class TestTheCutoff:
         assert not D.passes_date_cutoff(record)
 
     def test_the_loader_uses_the_one_rule(self) -> None:
-        """The loader kept a private copy of the pre-O7 rule until 2026-09-26; it imports it now."""
+        """The loader kept a private copy of the pre-O7 rule until 2026-09-26; it imports the rule
+        now - since D58 its whole form for a path without a verdict, `label_scope`."""
         from pipeline import unified_loader
 
-        assert unified_loader.passes_date_cutoff is D.passes_date_cutoff
+        assert unified_loader.label_scope is D.label_scope
         assert not hasattr(unified_loader, "DATE_CUTOFF_AMERICAS")

@@ -25,7 +25,7 @@ from pipeline.lyra.prospector.corpus import StoryUnit, story_text
 from pipeline.lyra.prospector.mentions import Mention
 from pipeline.lyra.prospector.pipeline import EvidenceRef, Prefill
 from pipeline.lyra.prospector.resolve import Resolution
-from pipeline.normalizers.dates import passes_date_cutoff
+from pipeline.normalizers.dates import label_scope
 from pipeline.utils.text import clean_llm_name, normalize_name
 
 logger = logging.getLogger(__name__)
@@ -126,14 +126,15 @@ def prefill_for(unit: RadarUnit) -> Prefill:
             description=unit.description,
             thumbnail_url=unit.thumbnail_url,
             wikipedia_url=unit.wikipedia_url,
-            in_scope=passes_date_cutoff(
+            scope=label_scope(
                 {
                     "period_start": unit.period_start,
                     "period_end": unit.period_end,
                     "lat": unit.lat,
                     "lon": unit.lon,
                     "country": unit.country,
-                }
+                },
+                (unit.wikidata_id,),
             ),
             note="coordinates and metadata from the radar's own enrichment",
         )

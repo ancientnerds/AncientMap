@@ -22,6 +22,8 @@ from identity import common  # noqa: E402
 from identity import rounds as R  # noqa: E402
 from identity import scope_judge as SJ  # noqa: E402
 from mechanical import apply as A  # noqa: E402
+from mechanical import identity_lanes as IL  # noqa: E402
+from mechanical import lane as L  # noqa: E402
 from mechanical import plan as MP  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
@@ -138,7 +140,7 @@ class TestTheContext:
     @pytest.mark.parametrize(
         ("lon", "country", "region", "cutoff"),
         [(-70.0, "Peru", "Americas", 1500), (143.0, "Australia", "Oceania", 1500), (71.2, "Pakistan", "rest of world", 1500),
-         (-1.5, "England", "medieval Old World", 500), (35.6, "Lebanon", "rest of world", 1500), (40.9, "Türkiye", "medieval Old World", 500)],
+         (-1.5, "England", "medieval Old World", 500), (35.6, "Lebanon", "rest of world", 1500), (40.9, "Türkiye", "rest of world", 1500), (33.4, "Cyprus", "medieval Old World", 500)],
     )  # fmt: skip
     def test_the_cutoff_follows_the_dates_module_s_region_rule(
         self, lon: float, country: str, region: str, cutoff: int
@@ -186,7 +188,7 @@ class TestTheQuestion:
     def test_a_european_entry_has_the_500_cutoff_and_a_borderline_one_the_label(self) -> None:
         europe = SJ.render_web(context(country="England", lon=-1.5, lat=52.6))
         assert "The map covers the medieval Old World through 500 AD" in europe
-        assert "Europe and Byzantium (Anatolia, Cyprus): 500 AD" in europe
+        assert "Europe and Byzantium (Cyprus): 500 AD" in europe
         niha = context(
             country="Lebanon", lon=35.6, lat=33.6, period_start=975, date_used=975,
             groups=["label_borderline"],
@@ -194,6 +196,7 @@ class TestTheQuestion:
         text = SJ.render_web(niha)
         assert "THE LABEL (owner decision D58): this entry lies in Lebanon" in text
         assert "a Crusader site (1099-1291)" in text and "Mamluk" in text
+        assert "Anatolia and Thrace until 1453" in text and "Seljuk" in text and "Artuqid" in text
         assert "it lies in Lebanon and is dated 975: the label, not the region" in text
         assert "MEDIEVAL_SUBJECT the entry's subject is of the medieval Old World" in text
         assert "pending or label-borderline - already right" in text
@@ -665,6 +668,24 @@ class TestThePlan:
         live = live_row(scope_status="retired")
         plan = build({FORT: decision_for("OUT_OF_WINDOW")}, {FORT: live}, asked)
         assert plan.changes == [] and plan.skipped[0]["reason"] == "already-retired"
+
+    def test_a_d50_site_is_never_decided_here(self) -> None:
+        """A question asked of a D50 site before it was shown as disputed writes nothing."""
+        richat = "84b456ff-0b44-4d75-92a4-5cbe22026b95"
+        asked = {richat: context(richat, scope_status="in_scope")}
+        live = {richat: live_row(richat, scope_status="in_scope")}
+        for verdict in ("NOT_A_SITE", "OUT_OF_WINDOW", "PERIOD_WRONG"):
+            plan = SJ.build(
+                {richat: decision_for(verdict, richat)},
+                {richat: confirm(richat)},
+                asked,
+                live,
+                "2026-10-12",
+            )
+            assert plan.changes == [] and plan.skipped[0]["reason"] == "d50-disputed", verdict
+
+    def test_the_lane_refuses_retiring_a_d50_site(self) -> None:
+        assert IL.scope_window_lane("2026-10-12").site_invariants == (L.D50_NOT_RETIRED,)
 
     def test_a_retirement_without_a_confirmation_is_refused(self) -> None:
         with pytest.raises(MP.PlanError, match="only after a CONFIRM"):

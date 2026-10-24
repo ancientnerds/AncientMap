@@ -114,7 +114,19 @@ class TestRadarBacklog:
 
     def test_medieval_contribution_is_out_of_scope_but_still_resolved(self):
         pre = prefill_for(radar_unit(lat=50.9, lon=6.95, period_start=1248))
-        assert pre.resolution.in_scope is False
+        assert pre.resolution.scope == "out_of_scope"
+
+    def test_a_viking_item_is_out_of_scope_wherever_it_lies(self):
+        pre = prefill_for(
+            radar_unit(
+                lat=51.6, lon=-55.53, country="Canada", period_start=1000, wikidata_id="Q189113"
+            )
+        )
+        assert pre.resolution.scope == "out_of_scope"
+
+    def test_a_borderline_contribution_is_filed_for_the_founder_s_label_question(self):
+        pre = prefill_for(radar_unit(lat=34.76, lon=36.29, country="Syria", period_start=1142))
+        assert pre.resolution.scope == "label_borderline"
 
     def test_evidence_is_the_headline_with_the_name_located(self):
         u = radar_unit(items=[unit(7, "New dates for the Ho-Bar Site\nsummary\nfact")])

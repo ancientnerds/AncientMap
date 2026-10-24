@@ -794,10 +794,11 @@ CASES: list[Case] = [
         "test_the_footpath_must_be_exactly_one_site_with_the_pinned_name",
         T_SCOPE,
     ),
-    guard(
+    swap(
         "population only",
         SCOPE,
-        "        if not found:",
+        '        if not found or row["id"] in D50_DISPUTED_SITES:',
+        '        if row["id"] in D50_DISPUTED_SITES:',
         "test_a_site_inside_the_window_is_not_in_the_population",
         T_SCOPE,
     ),

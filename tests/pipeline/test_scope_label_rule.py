@@ -2,11 +2,13 @@
 """The owner's label rule (decision D58, 2026-10-24): only the medieval Old World is out after 500 AD.
 
 "Only the medieval Old World of Europe, Byzantium and the Vikings is out; non-European sites of
-500-1500 stay in; L'Anse aux Meadows stays out (Viking subject)." `passes_date_cutoff` is that rule
-now - the one the loader, the prospector and Lyra's promotion gate share, and the one the remediation's
-scope lanes render as SQL from the same lists (`tests/remediation/test_scope_label_window.py`). The
-numeric rule it replaced keeps its own name (`passes_e3_cutoff`, `tests/pipeline/test_e3_oceania.py`).
-The points below are production's curated rows where one exists (read-only, 2026-10-24).
+500-1500 stay in; L'Anse aux Meadows stays out (Viking subject)." `passes_date_cutoff` is the region
+half of that rule, and the one the remediation's scope lanes render as SQL from the same lists
+(`tests/remediation/test_scope_unretire.py`); `label_scope` is the whole rule for a path that asks no
+verdict - the loader, the Prospector and Lyra's promotion gate - which holds a borderline record and
+puts a Viking subject out by its item. The numeric rule it replaced keeps its own name
+(`passes_e3_cutoff`, `tests/pipeline/test_e3_oceania.py`). The points below are production's curated
+rows where one exists (read-only, 2026-10-24).
 """
 
 from __future__ import annotations
@@ -34,11 +36,9 @@ class TestTheRegion:
             ("Portugal", 37.76, -25.23),  # the Azores: Portugal's, inside the window's east edge
             ("Russia", 58.72, 57.64),  # Kamennyy Gorod, west of the Urals
             ("Ukraine", 45.35, 36.60),  # Yenikale, Crimea
-            ("Türkiye", 37.18, 40.95),  # Dara: Byzantium's frontier fortress
-            ("Turkey", 41.0, 28.98),  # Constantinople
-            ("Cyprus", 35.1, 33.4),
+            ("Cyprus", 35.1, 33.4),  # Byzantium, then the Lusignans' Crusader kingdom
+            ("CY", 35.1, 33.4),  # the ISO codes geonames and dare store
             ("Baltic Sea", 61.38, 18.45),  # the curated row of the Baltic Sea Anomaly
-            ("TR", 39.0, 35.0),  # the ISO codes geonames and dare store
             ("gb", 51.5, -0.12),
             ("Bavaria, Germany", 48.1, 11.6),  # "Region, Country": the last part decides
             ("Spain", 40.4, -3.7),
@@ -63,6 +63,9 @@ class TestTheRegion:
             ("Iraq", 33.09, 44.58, D.REST_OF_WORLD),  # Taq Kasra: Sasanian, never Byzantine
             ("Kazakhstan", 43.3, 68.3, D.REST_OF_WORLD),  # Central Asia in M49
             ("Lebanon", 33.58, 35.61, D.REST_OF_WORLD),  # borderline, but not Europe
+            ("Türkiye", 37.18, 40.95, D.REST_OF_WORLD),  # Dara: borderline, the subject decides
+            ("Turkey", 41.0, 28.98, D.REST_OF_WORLD),  # Constantinople: borderline as well
+            ("TR", 40.5, 43.57, D.REST_OF_WORLD),  # Ani
             ("Russia", 43.07, 132.68, D.REST_OF_WORLD),  # Mount Livadiyskaya: east of the Urals
             ("Russia", 66.0, -172.0, D.REST_OF_WORLD),  # Chukotka beyond the antimeridian
             ("RU", 52.67, 88.53, D.REST_OF_WORLD),
@@ -108,10 +111,8 @@ class TestTheRegion:
             *D.LABEL_BORDERLINE_COUNTRIES,
         ):
             assert name == D.country_key(name) and name and "," not in name
-        assert {n for n in D.MEDIEVAL_OLD_WORLD_COUNTRIES if not n.isascii()} == {
-            "türkiye",
-            "åland islands",
-        }
+        assert {n for n in D.MEDIEVAL_OLD_WORLD_COUNTRIES if not n.isascii()} == {"åland islands"}
+        assert {n for n in D.LABEL_BORDERLINE_COUNTRIES if not n.isascii()} == {"türkiye"}
 
     def test_the_lists_do_not_overlap(self) -> None:
         """A borderline country is neither Oceania's nor the medieval Old World's (so the window
@@ -146,6 +147,17 @@ class TestTheRegion:
         )
         assert missing == []
 
+    def test_every_name_the_lookup_files_under_a_borderline_code_is_borderline(self) -> None:
+        from pipeline.utils.country_lookup import NAME_TO_ISO
+
+        codes = {c for c in D.LABEL_BORDERLINE_COUNTRIES if len(c) == 2}
+        missing = sorted(
+            name
+            for name, iso in NAME_TO_ISO.items()
+            if iso.lower() in codes and name not in D.LABEL_BORDERLINE_COUNTRIES
+        )
+        assert missing == []
+
 
 class TestTheCutoff:
     def test_the_cutoffs(self) -> None:
@@ -168,7 +180,8 @@ class TestTheCutoff:
             (row("Pakistan", 31.62, 74.30, 1627), False),  # the Tomb of Jahangir stays out
             (row("Poland", 51.56, 15.52, 1000), False),  # Chrobry: Europe
             (row("Poland", 51.56, 15.52, 500), True),
-            (row("Türkiye", 37.18, 40.95, 750), False),  # Dara: Byzantium
+            (row("Türkiye", 37.18, 40.95, 750), True),  # Dara: borderline, the window keeps it
+            (row("Türkiye", 37.18, 40.95, 1600), False),  # past 1500
             (row("Cyprus", 35.1, 33.4, 600), False),
             (row("Russia", 58.72, 57.64, 1000), False),  # European Russia
             (row("Russia", 43.07, 132.68, 698), True),  # Asian Russia
@@ -206,7 +219,8 @@ class TestTheCutoff:
         from pipeline.lyra.prospector import extract_radar, resolve
 
         for module in (unified_loader, site_identifier, extract_radar, resolve):
-            assert module.passes_date_cutoff is D.passes_date_cutoff
+            assert module.label_scope is D.label_scope
+            assert not hasattr(module, "passes_date_cutoff"), module.__name__
 
 
 class TestTheBorderline:
@@ -223,7 +237,11 @@ class TestTheBorderline:
             (row("Egypt", 30.04, 31.26, 1600), False),  # past 1500: the window decides
             (row("Lebanon", 33.58, 35.61, 500), False),  # 500 itself is in every window
             (row("Iraq", 33.09, 44.58, 600), False),  # never Byzantine
-            (row("Türkiye", 37.18, 40.95, 750), False),  # Byzantium: the window decides
+            (row("Türkiye", 37.18, 40.95, 750), True),  # Dara: Byzantine
+            (row("Turkey", 41.0, 28.98, 537), True),  # Hagia Sophia: Byzantine
+            (row("TR", 40.5, 43.57, 1001), True),  # Ani: Armenian - the subject decides
+            (row("Türkiye", 37.18, 40.95, 400), False),  # before 500
+            (row("Cyprus", 35.1, 33.4, 600), False),  # the region decides: out
             (row("Lebanon", 33.58, 35.61, None), False),
             (row("Lebanon", None, None, 975), False),
         ],
@@ -231,8 +249,41 @@ class TestTheBorderline:
     def test_label_borderline(self, record: dict, borderline: bool) -> None:
         assert D.label_borderline(record) is borderline
 
+
+class TestTheLabelScope:
+    """`label_scope`: the whole rule for a path that admits a record without a verdict."""
+
+    L_ANSE = row("Canada", 51.60, -55.53, 1000)
+
     def test_l_anse_aux_meadows_is_out_by_its_subject(self) -> None:
         """D58: the Americas' window keeps a Newfoundland site of 1000 AD; the Viking settlement is
-        out by its item, which an insert or scope lane asks before it keeps a site."""
+        out by its item."""
         assert D.VIKING_SUBJECT_QIDS == {"Q189113": "L'Anse aux Meadows"}
-        assert D.passes_date_cutoff(row("Canada", 51.60, -55.53, 1000))
+        assert D.passes_date_cutoff(self.L_ANSE)
+        assert D.label_scope(self.L_ANSE, ("Q189113",)) == D.LABEL_OUT_OF_SCOPE
+        assert D.label_scope(self.L_ANSE, (None, "Q1", "Q189113")) == D.LABEL_OUT_OF_SCOPE
+        undated = row(None, None, None, None)
+        assert D.label_scope(undated, ("Q189113",)) == D.LABEL_OUT_OF_SCOPE
+        assert D.label_scope(self.L_ANSE, ("Q1",)) == D.LABEL_IN_SCOPE
+        assert D.label_scope(self.L_ANSE) == D.LABEL_IN_SCOPE
+
+    @pytest.mark.parametrize(
+        ("record", "answer"),
+        [
+            (row("Indonesia", -7.75, 110.49, 850), D.LABEL_IN_SCOPE),  # Prambanan
+            (row("Poland", 51.56, 15.52, 1000), D.LABEL_OUT_OF_SCOPE),  # Chrobry: Europe
+            (row("Japan", 34.69, 135.53, 1583), D.LABEL_OUT_OF_SCOPE),  # Osaka Castle
+            (row("Syria", 34.76, 36.29, 1142), D.LABEL_QUESTION),  # Krak des Chevaliers' date
+            (row("Greenland", 61.16, -45.43, 1300), D.LABEL_QUESTION),  # Hvalsey: Norse
+            (row("Türkiye", 37.18, 40.95, 750), D.LABEL_QUESTION),  # Dara
+            (row("Syria", 34.76, 36.29, 300), D.LABEL_IN_SCOPE),  # before 500: no question
+            (row("Syria", 34.76, 36.29, 1600), D.LABEL_OUT_OF_SCOPE),
+            (row("Poland", 51.0, 15.0, None), D.LABEL_IN_SCOPE),  # no date: included
+        ],
+    )
+    def test_label_scope(self, record: dict, answer: str) -> None:
+        assert D.label_scope(record) == answer
+
+    def test_viking_subjects(self) -> None:
+        assert D.viking_subjects(["Q189113", None, "", "Q189113", "Q5"]) == ["Q189113"]
+        assert D.viking_subjects([]) == []

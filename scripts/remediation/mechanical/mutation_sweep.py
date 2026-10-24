@@ -6030,8 +6030,9 @@ WD2_CASES: list[Case] = [
     Case(
         "wd2 scope: a retired site is never asked",
         SCOPE_REVIEW,
-        '        if site["scope_status"] == RETIRED:\n            continue\n        sid = str(site["id"])',
-        '        if False:\n            continue\n        sid = str(site["id"])',
+        '        if site["scope_status"] == RETIRED or str(site["id"]) in D50_DISPUTED_SITES:\n'
+        '            continue\n        sid = str(site["id"])',
+        '        if str(site["id"]) in D50_DISPUTED_SITES:\n            continue\n        sid = str(site["id"])',
         "test_a_retired_site_is_never_asked",
         SCOPE_REVIEW_TESTS,
     ),
@@ -6175,8 +6176,9 @@ WD2_CASES: list[Case] = [
     Case(
         "wd2 scope: a retired site is not asked again",
         SCOPE_REVIEW,
-        '        if site["scope_status"] == RETIRED:\n            continue\n        if latest["counted"]:',
-        '        if False:\n            continue\n        if latest["counted"]:',
+        '        if site["scope_status"] == RETIRED or sid in D50_DISPUTED_SITES:\n'
+        '            continue\n        if latest["counted"]:',
+        '        if sid in D50_DISPUTED_SITES:\n            continue\n        if latest["counted"]:',
         "test_a_retired_site_is_not_asked_again",
         SCOPE_REVIEW_TESTS,
     ),
@@ -12496,11 +12498,25 @@ UNRETIRE_DATE_SQL = "test_a_label_un_retirement_inside_the_window_passes_and_eve
 UNRETIRE_MUSEUM_SQL = "test_a_museum_un_retirement_needs_a_museum_outside_the_medieval_old_world"
 UNRETIRE_JOURNAL = "test_only_a_journalled_retirement_is_taken_back"
 UNRETIRE_WAVES = "test_a_wave_writes_its_files_and_is_never_replaced_or_planned_twice"
-_DATE_KEPT = (
-    "        f\"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')})\"\n"
+UNRETIRE_PLACED_SQL = (
+    "test_a_label_un_retirement_needs_a_placed_dated_site_that_is_no_viking_or_non_site"
 )
-_MUSEUM_KEPT = "        f\"AND u.site_type = 'Museum' AND u.country IS NOT NULL \"\n"
-_MUSEUM_OUTSIDE = "        f\"AND NOT {in_medieval_old_world_sql('u.')})\"\n"
+UNRETIRE_CARD_SQL = "test_a_d50_site_passes_only_once_its_card_was_written_after_its_dispute_text"
+UNRETIRE_D50_CARD = "test_a_d50_site_waits_until_its_card_was_written_after_its_dispute_text"
+#: The doors the label rule guards where no verdict is asked (D58, review of 2026-10-24).
+LOADER_SCOPE = REPO / "pipeline/unified_loader.py"
+LOADER_SCOPE_TESTS = "tests/pipeline/test_loader_scope_rule.py"
+LOADER_SCOPE_TEST = "test_the_loader_keeps_only_what_the_label_rule_admits_without_a_verdict"
+SITE_IDENTIFIER = REPO / "pipeline/lyra/site_identifier.py"
+PROMOTE_TESTS = "tests/pipeline/test_radar_auto_promote.py"
+PROSPECTOR = REPO / "pipeline/lyra/prospector"
+PROSPECTOR_TESTS = "tests/pipeline/test_prospector_scope_rule.py"
+_DATE_KEPT = (
+    "        f\"AND NOT {outside_label_window('u.')} AND NOT {label_borderline_sql('u.')} \"\n"
+)
+_NOT_VIKING_NOT_NON_SITE = "        f\"AND NOT {viking_subject_sql('u')} AND coalesce(u.site_type, '') NOT IN ({non_site}))\"\n"
+_MUSEUM_KEPT = "        f\"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' AND u.country IS NOT NULL \"\n"
+_MUSEUM_OUTSIDE = "        f\"AND u.lon IS NOT NULL AND NOT {in_medieval_old_world_sql('u.')})\"\n"
 
 D58_CASES: list[Case] = [
     # -- the rule
@@ -12521,10 +12537,10 @@ D58_CASES: list[Case] = [
         LABEL_TESTS,
     ),
     Case(
-        "d58 rule: Byzantium is Turkiye",
+        "d58 rule: Byzantium is Cyprus",
         LABEL_RULE,
-        '            "türkiye", "turkiye", "turkey", "cyprus", "northern cyprus",\n',
         '            "cyprus", "northern cyprus",\n',
+        "",
         "test_the_medieval_old_world",
         LABEL_TESTS,
     ),
@@ -12627,7 +12643,7 @@ D58_CASES: list[Case] = [
         "d58 lane: an un-retirement stays inside the window",
         IDENTITY_LANES,
         _DATE_KEPT,
-        "        f\"AND NOT {label_borderline_sql('u.')})\"\n",
+        "        f\"AND NOT {label_borderline_sql('u.')} \"\n",
         UNRETIRE_DATE_SQL,
         UNRETIRE_TESTS,
     ),
@@ -12635,7 +12651,7 @@ D58_CASES: list[Case] = [
         "d58 lane: a borderline un-retirement is refused",
         IDENTITY_LANES,
         _DATE_KEPT,
-        "        f\"AND NOT {outside_label_window('u.')})\"\n",
+        "        f\"AND NOT {outside_label_window('u.')} \"\n",
         UNRETIRE_DATE_SQL,
         UNRETIRE_TESTS,
     ),
@@ -12643,7 +12659,7 @@ D58_CASES: list[Case] = [
         "d58 lane: a museum un-retirement needs a museum",
         IDENTITY_LANES,
         _MUSEUM_KEPT,
-        '        "AND u.country IS NOT NULL "\n',
+        "        f\"AND {numeric_cut_sql('u')} AND u.country IS NOT NULL \"\n",
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
@@ -12651,7 +12667,7 @@ D58_CASES: list[Case] = [
         "d58 lane: a museum un-retirement lies outside Europe",
         IDENTITY_LANES,
         _MUSEUM_OUTSIDE,
-        '        ")"\n',
+        '        "AND u.lon IS NOT NULL)"\n',
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
@@ -12659,15 +12675,15 @@ D58_CASES: list[Case] = [
         "d58 lane: a museum un-retirement needs its country",
         IDENTITY_LANES,
         _MUSEUM_KEPT,
-        "        \"AND u.site_type = 'Museum' \"\n",
+        "        f\"AND {numeric_cut_sql('u')} AND u.site_type = 'Museum' \"\n",
         UNRETIRE_MUSEUM_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
         "d50 lane: a D50 site needs its dispute text",
         IDENTITY_LANES,
-        "        f\"AND {dispute_enriched_sql('u')})\"\n",
-        '        ")"\n',
+        "        f\"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})\"\n",
+        "        f\"AND {card_cleared_sql('u')})\"\n",
         UNRETIRE_D50_SQL,
         UNRETIRE_TESTS,
     ),
@@ -12722,8 +12738,9 @@ D58_CASES: list[Case] = [
     Case(
         "d58 lane: the premise holds the description",
         IDENTITY_LANES,
-        '    SCOPE_REVIEW_PREMISE_SQL.removesuffix(")") + ", md5(coalesce(u.description, \'\')))"\n',
-        "    SCOPE_REVIEW_PREMISE_SQL\n",
+        "    + \", md5(coalesce(u.description, '')), md5(coalesce((SELECT cs.card_description FROM \"\n"
+        "    \"card_stats cs WHERE cs.site_id = u.id), '')))\"\n",
+        '    + ")"\n',
         "test_its_identity_cells_and_premise",
         UNRETIRE_TESTS,
     ),
@@ -12920,6 +12937,335 @@ D58_CASES: list[Case] = [
         UNRETIRE,
         "    if not plan.changes:",
         "test_a_wave_with_nothing_to_write_is_refused_and_says_why",
+        UNRETIRE_TESTS,
+    ),
+    # -- the review of 2026-10-24 (D58 at every door, D50 kept, the numeric cut)
+    Case(
+        "d58 rule: Anatolia is borderline",
+        LABEL_RULE,
+        '        "greenland", "türkiye", "turkiye", "turkey",\n',
+        '        "greenland",\n',
+        "test_label_borderline",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: label_scope puts a Viking subject out",
+        LABEL_RULE,
+        "    if viking_subjects(qids):",
+        "test_l_anse_aux_meadows_is_out_by_its_subject",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: label_scope applies the window",
+        LABEL_RULE,
+        "    if not passes_date_cutoff(record):",
+        "test_label_scope",
+        LABEL_TESTS,
+    ),
+    guard(
+        "d58 rule: label_scope holds a borderline record",
+        LABEL_RULE,
+        "    if label_borderline(record):",
+        "test_label_scope",
+        LABEL_TESTS,
+    ),
+    Case(
+        "d58 loader: only in_scope is loaded",
+        LOADER_SCOPE,
+        "                if scope != LABEL_IN_SCOPE:",
+        "                if scope not in (LABEL_IN_SCOPE, LABEL_QUESTION):",
+        LOADER_SCOPE_TEST,
+        LOADER_SCOPE_TESTS,
+    ),
+    Case(
+        "d58 loader: the record's items are asked",
+        LOADER_SCOPE,
+        "                scope = label_scope(record, record_qids(record))",
+        "                scope = label_scope(record)",
+        LOADER_SCOPE_TEST,
+        LOADER_SCOPE_TESTS,
+    ),
+    guard(
+        "d58 lyra: a borderline record waits for the founder",
+        SITE_IDENTIFIER,
+        "    if scope == LABEL_QUESTION:",
+        "test_a_crusader_castle_s_date_in_syria_waits_for_the_founder",
+        PROMOTE_TESTS,
+    ),
+    Case(
+        "d58 lyra: the contribution's item is asked",
+        SITE_IDENTIFIER,
+        "    scope = label_scope(record, (contribution.wikidata_id,))",
+        "    scope = label_scope(record)",
+        "test_l_anse_aux_meadows_is_never_promoted",
+        PROMOTE_TESTS,
+    ),
+    Case(
+        "d58 prospector: the resolved item is asked",
+        PROSPECTOR / "resolve.py",
+        "        (res.qid,),\n",
+        "        (),\n",
+        "test_l_anse_aux_meadows_is_out_of_scope_by_its_item",
+        PROSPECTOR_TESTS,
+    ),
+    Case(
+        "d58 prospector: the radar's item is asked",
+        PROSPECTOR / "extract_radar.py",
+        "                (unit.wikidata_id,),\n",
+        "                (),\n",
+        "test_a_viking_item_is_out_of_scope_wherever_it_lies",
+        "tests/pipeline/test_prospector_increment2.py",
+    ),
+    Case(
+        "d58 prospector: a borderline verdict is filed as it is",
+        PROSPECTOR / "propose.py",
+        '        "scope_verdict": LABEL_IN_SCOPE if res is None else res.scope,',
+        '        "scope_verdict": LABEL_IN_SCOPE if res is None or res.scope != LABEL_OUT_OF_SCOPE '
+        "else res.scope,",
+        "test_a_borderline_record_is_filed_for_the_founder_s_label_question",
+        PROSPECTOR_TESTS,
+    ),
+    Case(
+        "d58 prospector: only out_of_scope is the status",
+        PROSPECTOR / "propose.py",
+        '    if res is not None and res.verdict == "resolved" and res.scope == LABEL_OUT_OF_SCOPE:',
+        '    if res is not None and res.verdict == "resolved" and res.scope != LABEL_IN_SCOPE:',
+        "test_a_borderline_record_is_filed_for_the_founder_s_label_question",
+        PROSPECTOR_TESTS,
+    ),
+    guard(
+        "d58 api: a Viking subject is never approved",
+        REPO / "api/routes/proposals.py",
+        "    if vikings:",
+        "test_a_viking_subject_is_refused_before_anything_is_written",
+        PROSPECTOR_TESTS,
+    ),
+    # -- D50 kept by the lanes that retire
+    Case(
+        "d50 scope: a shown D50 site is no candidate",
+        SCOPE_REVIEW,
+        '        if site["scope_status"] == RETIRED or str(site["id"]) in D50_DISPUTED_SITES:\n',
+        '        if site["scope_status"] == RETIRED:\n',
+        "test_a_shown_d50_site_is_no_candidate",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "d50 scope: a shown D50 site is never asked again",
+        SCOPE_REVIEW,
+        '        if site["scope_status"] == RETIRED or sid in D50_DISPUTED_SITES:\n',
+        '        if site["scope_status"] == RETIRED:\n',
+        "test_a_shown_d50_site_is_never_asked_again",
+        SCOPE_REVIEW_TESTS,
+    ),
+    guard(
+        "d50 scope: an old answer retires no D50 site",
+        SCOPE_REVIEW,
+        "        if sid in D50_DISPUTED_SITES:",
+        "test_its_old_counted_answer_retires_nothing",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "d50 lane: the scope review keeps D50 sites",
+        LANE,
+        "        site_invariants=(D50_NOT_RETIRED,),\n",
+        "",
+        "test_the_lane_s_invariant_refuses_retiring_one",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "d50 lane: a retired D50 site breaks the invariant",
+        LANE,
+        "        f\"(u.scope_status = 'retired' AND {d50_site_sql('u')}) \"\n",
+        '        "(1 = 0) "\n',
+        "test_the_lane_s_invariant_refuses_retiring_one",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "d50 lane: a D50 reason breaks the invariant",
+        LANE,
+        "        f\"OR u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')}\"\n",
+        '        "OR 1 = 0"\n',
+        "test_the_lane_s_invariant_refuses_retiring_one",
+        SCOPE_REVIEW_TESTS,
+    ),
+    Case(
+        "d50 lane: the scope window keeps D50 sites",
+        IDENTITY_LANES,
+        "        site_invariants=(D50_NOT_RETIRED,),\n",
+        "",
+        "test_the_lane_refuses_retiring_a_d50_site",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+    guard(
+        "d50 window: a D50 site is never decided",
+        REPO / "scripts/remediation/identity/scope_judge.py",
+        "        if sid in D50_DISPUTED_SITES:",
+        "test_a_d50_site_is_never_decided_here",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+    Case(
+        "d50 window: a D50 site is never asked",
+        REPO / "scripts/remediation/identity/scope_window.py",
+        '        if not found or row["id"] in D50_DISPUTED_SITES:',
+        "        if not found:",
+        "test_a_d50_site_is_never_in_the_population",
+        "tests/remediation/test_identity_scope_parents.py",
+    ),
+    # -- the un-retire's invariant: the numeric cut, a placed and dated site, no Viking, no non-site
+    Case(
+        "d58 lane: an un-retirement rests on the numeric cut",
+        IDENTITY_LANES,
+        "        f\"AND {numeric_cut_sql('u')} AND u.lon IS NOT NULL \"\n",
+        '        "AND u.lon IS NOT NULL "\n',
+        "test_a_label_un_retirement_rests_on_the_numeric_cut_s_retirement",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: an un-retirement has a point",
+        IDENTITY_LANES,
+        "        f\"AND {numeric_cut_sql('u')} AND u.lon IS NOT NULL \"\n",
+        "        f\"AND {numeric_cut_sql('u')} \"\n",
+        UNRETIRE_PLACED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: an un-retirement has a date",
+        IDENTITY_LANES,
+        "        f\"AND {_window_date_sql('u.')} IS NOT NULL \"\n",
+        "",
+        UNRETIRE_PLACED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: an un-retirement is no Viking subject",
+        IDENTITY_LANES,
+        _NOT_VIKING_NOT_NON_SITE,
+        "        f\"AND coalesce(u.site_type, '') NOT IN ({non_site}))\"\n",
+        UNRETIRE_PLACED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: an un-retirement is no non-site type",
+        IDENTITY_LANES,
+        _NOT_VIKING_NOT_NON_SITE,
+        "        f\"AND NOT {viking_subject_sql('u')})\"\n",
+        UNRETIRE_PLACED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: a museum un-retirement rests on the numeric cut",
+        IDENTITY_LANES,
+        _MUSEUM_KEPT,
+        "        f\"AND u.site_type = 'Museum' AND u.country IS NOT NULL \"\n",
+        UNRETIRE_MUSEUM_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 lane: a museum un-retirement has a point",
+        IDENTITY_LANES,
+        _MUSEUM_OUTSIDE,
+        "        f\"AND NOT {in_medieval_old_world_sql('u.')})\"\n",
+        UNRETIRE_MUSEUM_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 lane: a D50 site's card was written after its text",
+        IDENTITY_LANES,
+        "        f\"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})\"\n",
+        "        f\"AND {dispute_enriched_sql('u')})\"\n",
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: a card before the text does not clear",
+        IDENTITY_LANES,
+        '    return f"({no_card} OR coalesce({card} > {text}, false))"',
+        '    return f"({no_card} OR coalesce({card} IS NOT NULL, false))"',
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: no card clears",
+        IDENTITY_LANES,
+        '    return f"({no_card} OR coalesce({card} > {text}, false))"',
+        '    return f"(coalesce({card} > {text}, false))"',
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 lane: the premise holds the card",
+        IDENTITY_LANES,
+        "    + \", md5(coalesce(u.description, '')), md5(coalesce((SELECT cs.card_description FROM \"\n"
+        "    \"card_stats cs WHERE cs.site_id = u.id), '')))\"\n",
+        "    + \", md5(coalesce(u.description, '')))\"\n",
+        "test_its_identity_cells_and_premise",
+        UNRETIRE_TESTS,
+    ),
+    # -- the un-retire's planner
+    Case(
+        "d58 plan: only the numeric cut is taken back",
+        UNRETIRE,
+        '        elif entry["run_stamp"] not in NUMERIC_CUT_STAMPS:',
+        "        elif False:",
+        "test_only_the_numeric_cut_s_retirement_is_taken_back",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a non-site type asks its question first",
+        UNRETIRE,
+        '    if site["site_type"] in NON_SITE_TYPES:',
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a reason without a year stays",
+        UNRETIRE,
+        "    if year is None:",
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: the year the retirement named is in the window",
+        UNRETIRE,
+        '    if not passes_date_cutoff({**site, "period_start": year, "period_end": None}):',
+        UNRETIRE_STAYS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d58 plan: a negative year is a year",
+        UNRETIRE,
+        '_RETIRED_YEAR = re.compile(r"^E3: period_start (-?\\d+) ")',
+        '_RETIRED_YEAR = re.compile(r"^E3: period_start (\\d+) ")',
+        "test_the_year_the_retirement_named_is_read_from_its_reason",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d58 plan: a museum must be placed",
+        UNRETIRE,
+        "    if region is None:",
+        UNRETIRE_MUSEUM,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: the card must be cleared",
+        UNRETIRE,
+        "    if card is not None:",
+        UNRETIRE_D50_CARD,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: no card clears",
+        UNRETIRE,
+        '    if not site["has_card"]:',
+        UNRETIRE_D50_CARD,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a card before the text does not clear",
+        UNRETIRE,
+        "    if card is not None and int(card) > written_id:",
+        "    if card is not None:",
+        UNRETIRE_D50_CARD,
         UNRETIRE_TESTS,
     ),
 ]
