@@ -160,7 +160,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <p>This map focuses on <strong>ancient and classical history</strong>. To maintain this focus, we apply regional date cutoffs:</p>
     <ul>
       <li><strong>Europe and Cyprus:</strong> Sites dated up to <strong>500 AD</strong> (end of Classical Antiquity)</li>
-      <li><strong>Asia, Africa and the Near East:</strong> Sites dated up to <strong>1500 AD</strong> (e.g. Angkor, Lalibela, Great Zimbabwe); in Anatolia, the Levant, Egypt, North Africa, the Caucasus and Greenland a site of 500-1500 AD stays unless it is Byzantine, Crusader or Norse</li>
+      <li><strong>Asia, Africa and the Near East:</strong> Sites dated up to <strong>1500 AD</strong> (e.g. Angkor, Lalibela, Great Zimbabwe); in Anatolia, the Levant, Egypt, Byzantine North Africa (Libya, Tunisia, Algeria), the Caucasus and Greenland a site of 500-1500 AD stays unless it is Byzantine, Crusader or Norse</li>
       <li><strong>Americas:</strong> Sites dated up to <strong>1500 AD</strong> (Pre-Columbian era)</li>
       <li><strong>Oceania:</strong> Sites dated up to <strong>1500 AD</strong> (before European contact)</li>
       <li><strong>Sites without dates:</strong> Included (we don't exclude based on missing data)</li>
