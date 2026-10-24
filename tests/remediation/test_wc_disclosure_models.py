@@ -57,7 +57,10 @@ def _disclosures(outcome: WC4.WcOutcome) -> set[str]:
     ("writer", "verifier", "expected"),
     [
         (OH.SONNET_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM_CLAUDE),
-        (OH.HAIKU_MODEL, OH.SONNET_MODEL, M.AI_SYSTEM_CLAUDE_HAIKU),
+        # owner decision D56: exactly the models that answered - no Opus where none did
+        (OH.HAIKU_MODEL, OH.SONNET_MODEL, M.AI_SYSTEM_CLAUDE_SONNET_HAIKU),
+        (OH.OPUS_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM_CLAUDE_OPUS),
+        (OH.SONNET_MODEL, OH.SONNET_MODEL, M.AI_SYSTEM_CLAUDE_SONNET),
         # a MiniMax answer is no longer imported (2026-10-09, `cli._require_role`): the rows MiniMax
         # answered were written before, and `disclosure_of` below still reads their stamps
     ],

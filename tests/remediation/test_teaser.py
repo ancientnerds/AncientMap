@@ -713,9 +713,10 @@ class TestTheRun:
             assert CP.describes(provenance, T.GOOD[row["site_id"]])
             assert provenance["desc_sha256"] == T.sha(T.DESCRIPTIONS[row["site_id"]])
             assert provenance["check"]["by"].startswith("teaser-check-")
-            # `outcome_rows` derives the disclosure from the models that answered (owner decision
-            # D6, 2026-10-08): every answer here was Opus's, so Haiku is not named
-            assert provenance["ai_system"] == M.AI_SYSTEM_CLAUDE
+            # `outcome_rows` derives the disclosure from the models that answered (owner decisions
+            # D6, 2026-10-08, and D56, 2026-10-24): every answer here was Opus's, so it names Opus
+            # alone - neither Sonnet nor Haiku
+            assert provenance["ai_system"] == M.AI_SYSTEM_CLAUDE_OPUS
             assert provenance["verify"] == {
                 "verdict": "VERIFIED",
                 "stage": "verify",

@@ -289,6 +289,22 @@ def test_the_disclosure_of_two_writes_names_every_model_that_took_part() -> None
         WC4.union_ai_system(M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM_CLAUDE_HAIKU)
         == M.AI_SYSTEM_CLAUDE_HAIKU
     )
+    # D56: the union names exactly the models of both writes - no Sonnet where none answered
+    assert WC4.union_ai_system(M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE_OPUS) == M.AI_SYSTEM_CLAUDE_OPUS
+    assert (
+        WC4.union_ai_system(M.AI_SYSTEM_CLAUDE_OPUS, M.AI_SYSTEM_CLAUDE_OPUS)
+        == M.AI_SYSTEM_CLAUDE_OPUS
+    )
+    assert (
+        WC4.union_ai_system(M.AI_SYSTEM_CLAUDE_SONNET, M.AI_SYSTEM_CLAUDE_SONNET)
+        == M.AI_SYSTEM_CLAUDE_SONNET
+    )
+    assert WC4.union_ai_system(M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE_SONNET) == M.AI_SYSTEM_CLAUDE
+    assert (
+        WC4.union_ai_system(M.AI_SYSTEM_CLAUDE_OPUS_HAIKU, M.AI_SYSTEM_CLAUDE_SONNET)
+        == M.AI_SYSTEM_CLAUDE_HAIKU
+    )
+    assert WC4.union_ai_system(M.AI_SYSTEM, M.AI_SYSTEM_CLAUDE_HAIKU_ONLY) == M.AI_SYSTEM
     with pytest.raises(WC4.WcError, match="no disclosure"):
         WC4.union_ai_system("someone", M.AI_SYSTEM_CLAUDE)
 

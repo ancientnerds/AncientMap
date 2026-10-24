@@ -1943,18 +1943,15 @@ def enrichment_record(
 
 
 def union_ai_system(old: str, new: str) -> str:
-    """The disclosure of a text two writes made: the combined `AI_SYSTEM` when MiniMax took part in
-    either (the text then rests on a MiniMax judgement), the Haiku-naming one when Haiku did, else
-    `AI_SYSTEM_CLAUDE` (Opus and Sonnet)."""
+    """The disclosure of a text two writes made: the one `model4.ai_system_for` derives from every
+    model either disclosure names (`model4.DISCLOSED_STAMPS`, owner decision D56) - the combined
+    `AI_SYSTEM` when MiniMax took part in either (the text then rests on a MiniMax judgement), else
+    the string that names exactly the Claude models of both writes."""
     named = {old, new}
     unknown = named - M.AI_SYSTEMS
     if unknown:
         raise WcError(f"{sorted(unknown)!r} is no disclosure of model4.AI_SYSTEMS")
-    if M.AI_SYSTEM in named:
-        return M.AI_SYSTEM
-    if M.AI_SYSTEM_CLAUDE_HAIKU in named:
-        return M.AI_SYSTEM_CLAUDE_HAIKU
-    return M.AI_SYSTEM_CLAUDE
+    return M.ai_system_for(M.DISCLOSED_STAMPS[old] | M.DISCLOSED_STAMPS[new])
 
 
 def added_sentences(

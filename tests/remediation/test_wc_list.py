@@ -255,7 +255,7 @@ def test_a_phase4_text_keeps_its_kept_sentences_and_its_provenance_filtered_to_t
     old = M.Provenance.from_dict(WX.p4_site_raw()[M.PROVENANCE_KEY])
     new = M.Provenance.from_dict(outcome.raw_data[M.PROVENANCE_KEY])
     assert new == dataclasses.replace(
-        old, ai_system=M.AI_SYSTEM_CLAUDE, sentences=(old.sentences[0], old.sentences[2]),
+        old, ai_system=M.AI_SYSTEM_CLAUDE_OPUS, sentences=(old.sentences[0], old.sentences[2]),
         card=None,
         desc_sha256=M.text_sha256(outcome.description),
     )  # fmt: skip
