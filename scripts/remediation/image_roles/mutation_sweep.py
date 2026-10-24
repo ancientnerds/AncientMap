@@ -1,4 +1,5 @@
-"""Mutation sweep for the image lanes' new guards (D15, D17, D18 of 2026-10-08).
+"""Mutation sweep for the image lanes' new guards (D15, D17, D18 of 2026-10-08; D48, D49, D59 and
+the close-out gaps of 2026-10-24).
 
 The machinery is `mechanical/mutation_sweep.py`'s (a case counts as FIRED only when its needle occurs
 exactly once, the mutant compiles, the named test passed on the unmutated file and is reported
@@ -55,6 +56,9 @@ IDENTITY = ROLES_DIR / "identity.py"
 FLOW = ROLES_DIR / "flow.py"
 WIKI = ROLES_DIR / "wiki_cache.py"
 CALIBRATE = ROLES_DIR / "calibrate.py"
+D59_PY = ROLES_DIR / "d59.py"
+HERO_MOVES = SERVED / "hero_moves.py"
+REPICTURE = CS_DIR / "repicture.py"
 
 T_SERVED_RECHECK = "tests/remediation/test_served_image_recheck.py"
 T_ROUTES = "tests/remediation/test_candidate_routes.py"
@@ -69,6 +73,10 @@ T_INSERT = "tests/remediation/test_import_hero_insert.py"
 T_CREDIT = "tests/remediation/test_credit_refusals.py"
 T_ATTRIB = "tests/remediation/test_gallery_attribution.py"
 T_JUDGE = "tests/remediation/test_candidate_judge.py"
+T_HM = "tests/remediation/test_hero_moves.py"
+T_D59 = "tests/remediation/test_d59_thumbnails.py"
+T_REPIC = "tests/remediation/test_repicture.py"
+T_BIND = "tests/remediation/test_image_recheck_binding.py"
 
 #: The D18 cases live with the other WD2 cases (`mechanical/mutation_sweep.py`, label `wd2 d18:`): one
 #: definition, run by `mutation_sweep.py wd2` and by this module's `wd2 d18` filter alike.
@@ -549,8 +557,8 @@ D17_CASES: list[Case] = [
     c(
         "d17: a target's picture must exist",
         POOL,
-        '        if not path.is_file():\n            raise PoolError(f"{site_id}: the picture of target',
-        '        if False:\n            raise PoolError(f"{site_id}: the picture of target',
+        '        if not path.is_file():\n            raise PoolError(\n                f"{site_id}: the picture of target',
+        '        if False:\n            raise PoolError(\n                f"{site_id}: the picture of target',
         "test_a_target_whose_picture_is_gone_is_refused_by_name",
         T_ROUTES,
     ),
@@ -1217,7 +1225,7 @@ CAL_CASES: list[Case] = [
     g(
         "cal: a prefilter case is answered",
         CALIBRATE,
-        "    if missing:",
+        '    if missing:\n        raise CalibrationError(f"{len(missing)} prefilter case(s)',
         "test_a_case_nobody_answered_is_an_error",
         T_CAL,
     ),
@@ -1566,16 +1574,16 @@ FIX_CASES: list[Case] = [
     c(
         "fix: a retired pool site is left out of the gold",
         CALIBRATE,
-        "            and key[0] in state.sites\n",
-        "",
+        "        if key in candidates and key[0] in shown:",
+        "        if key in candidates:",
         "test_every_group_is_chosen_by_its_own_rule",
         T_CAL,
     ),
     c(
         "fix: an adjudicated case reads its site from the read",
         CALIBRATE,
-        '            _site_context(state.sites[item["site_id"]], context, lead),',
-        '            {"site_id": item["site_id"], "name": "n", "country": None, "site_type": None, "lat": 0.0, "lon": 0.0, "description": None, "wikipedia_lead": None},',
+        "            _site_context(state.sites[site_id], context, lead),",
+        '            {"site_id": site_id, "name": "n", "country": None, "site_type": None, "lat": 0.0, "lon": 0.0, "description": None, "wikipedia_lead": None},',
         "test_every_group_is_chosen_by_its_own_rule",
         T_CAL,
     ),
@@ -1604,7 +1612,192 @@ FIX_CASES: list[Case] = [
     ),
 ]
 
-CASES: list[Case] = [*D18_CASES, *D15_CASES, *D17_CASES, *CACHE_CASES, *CAL_CASES, *FIX_CASES]
+
+#: The close-out of 2026-10-24: D48/D49 (`served_image/hero_moves.py`), D59 (`image_roles/d59.py`, the
+#: claims wording, the INSERT plan's lift, the research population), gap 1 (`candidate_search/
+#: repicture.py`, the calibration's draw) and gap 3 (the re-check's role).
+CLOSEOUT_CASES: list[Case] = [
+    # ------------------------------------------------------------- served_image/hero_moves.py
+    g("d48: a row without a Claude check never qualifies", HERO_MOVES,
+      "    if check is None:\n        return UNCHECKED",
+      "test_an_unchecked_row_never_qualifies", T_HM),
+    g("d48: only a depicts qualifies", HERO_MOVES,
+      "    if check.verdict != CJ.DEPICTS:\n        return f\"judged",
+      "test_a_row_judged_other_than_depicts_does_not_qualify", T_HM),
+    g("d48: the check judged this very file", HERO_MOVES,
+      "    if ST.file_of_row(row) != check.file:",
+      "test_a_check_of_another_file_does_not_speak_for_the_row", T_HM),
+    g("d48: the floor", HERO_MOVES,
+      "    if below(row, FLOOR):\n        return BELOW_FLOOR",
+      "test_a_row_below_the_floor_does_not_qualify", T_HM),
+    g("d48: a strip is replaced by a larger row", HERO_MOVES,
+      "        if width * height <= hero_w * hero_h:",
+      "test_a_strip_is_replaced_only_by_a_larger_row", T_HM),
+    g("d49: the new hero carries its credit", HERO_MOVES,
+      "    if missing:\n        return f\"{CREDIT}",
+      "test_a_row_without_its_credit_does_not_qualify", T_HM),
+    g("d48: an other_site hero is the D15 re-check's", HERO_MOVES,
+      "    if hero_check is not None and hero_check.verdict == RC.OTHER_SITE:",
+      "test_a_hero_judged_other_site_is_deferred_to_the_d15_recheck", T_HM),
+    c("d48: a MiniMax stamp is no check", HERO_MOVES,
+      '        checks = [r for r in _jsonl(run / "CHECK.jsonl") if r.get("model") in stamps]',
+      '        checks = _jsonl(run / "CHECK.jsonl")',
+      "test_a_minimax_stamp_is_no_check", T_HM),
+    g("d48: a check-run pick is confirmed by the re-check", HERO_MOVES,
+      "            if key not in confirmed:",
+      "test_a_check_run_pick_nobody_confirmed_is_refused", T_HM),
+    g("d48: a check-run target is a Claude judgement", HERO_MOVES,
+      "        if unjudged:\n            raise HeroMovesError(",
+      "test_a_minimax_target_without_a_recheck_is_refused", T_HM),
+    g("d48: a vetoed row is never chosen", HERO_MOVES,
+      '        if reason is None and int(row["id"]) in vetoes:',
+      "test_a_vetoed_row_is_never_chosen", T_HM),
+    g("d48: a veto names its reason and reviewer", HERO_MOVES,
+      "        if not reason or not by:",
+      "test_a_veto_without_a_reviewer_or_of_a_foreign_row_is_refused", T_HM),
+    g("d48: a veto names a row of its site", HERO_MOVES,
+      '        if not any(int(r["id"]) == image_id for r in read.rows.get(sid, ())):',
+      "test_a_veto_without_a_reviewer_or_of_a_foreign_row_is_refused", T_HM),
+    g("d48: one live hero", HERO_MOVES,
+      "    if len(heroes) > 1:",
+      "test_two_live_heroes_are_refused", T_HM),
+    g("d48: a verdict belongs to its site", HERO_MOVES,
+      "    if check is not None and check.site_id != sid:",
+      "test_a_verdict_recorded_for_another_site_is_refused", T_HM),
+    g("d48: a delivered plan is never replaced", HERO_MOVES,
+      "    if (out / EXPECTED).exists():\n        raise HeroMovesError",
+      "test_a_delivered_plan_is_never_replaced", T_HM),
+    c("d48: the replacement stage's pick ranks first", HERO_MOVES,
+      "        1 if check.picked else 0,", "        0,",
+      "test_the_replacement_stages_pick_beats_a_larger_row", T_HM),
+    c("d48: a confirmed check-run pick ranks first", HERO_MOVES,
+      "        1 if check.confirmed else 0,", "        0,",
+      "test_a_confirmed_check_run_pick_beats_every_served_verdict", T_HM),
+    c("d48: an empty thumbnail keeps its exact old value", HERO_MOVES,
+      '    old = site.get("thumbnail_url")\n    if old == new:',
+      '    old = site.get("thumbnail_url") or None\n    if old == new:',
+      "test_an_empty_thumbnail_keeps_its_exact_old_value", T_HM),
+    g("d48: a judged row is not asked again", HERO_MOVES,
+      "            if row_check(row, served, {}) is not None:",
+      "test_check_pictures_offers_only_the_rows_nobody_judged", T_HM),
+    # --------------------------------------------------------------- D59: the INSERT plan's lift
+    g("d59: the claimed thumbnail is still the one served", INSERT,
+      "    if thumb != claimed:",
+      "test_d59_never_lifts_it_once_the_thumbnail_moved", T_D59),
+    g("d59: a Commons thumbnail is credited with that same file", INSERT,
+      "        if original_url is not None and ST.file_of_url(original_url) != ST.file_of_url(thumb):",
+      "test_d59_never_lifts_it_for_another_file", T_D59),
+    c("d59: only a hotlink is covered", INSERT,
+      "    if PP.is_third_party_thumbnail(thumb):\n        return None\n",
+      "    if True:\n        return None\n",
+      "test_d59_covers_no_local_thumbnail", T_D59),
+    c("d59: without the marker the 2026-10-05 rule stands", INSERT,
+      "        elif not rows and _shows_a_picture_of_its_own(site):",
+      "        elif False:",
+      "test_without_d59_a_thumbnail_only_site_keeps_the_2026_10_05_rule", T_D59),
+    # ------------------------------------------------------------------ D59: the claims, the population
+    g("d59: a Commons thumbnail site claims no other file", JUDGE,
+      "        if thumbnail is not None and wording is None:",
+      "test_a_commons_thumbnail_site_never_claims_another_file", T_D59),
+    g("d59: the wording holds only for the thumbnail's file", JUDGE,
+      "        if ST.file_of_url(thumbnail) != ST.canonical_file(commons_file):",
+      "test_a_commons_thumbnail_site_never_claims_another_file", T_D59),
+    c("d59: the third-party hotlinks join the research", POPULATION,
+      "        thumbnail = f\"(coalesce(u.thumbnail_url, '') = '' OR {third_party_thumbnail_sql()})\"",
+      "        thumbnail = \"coalesce(u.thumbnail_url, '') = ''\"",
+      "test_the_research_population_takes_the_third_party_hotlinks", T_D59),
+    c("d59: a Commons thumbnail lies under /wikipedia/commons/", POPULATION,
+      '    return len(parts) > 4 and parts[2] in COMMONS_HOSTS and parts[3:5] == ["wikipedia", "commons"]',
+      "    return len(parts) > 4 and parts[2] in COMMONS_HOSTS",
+      "test_a_thumbnail_is_commons_third_party_or_neither", T_D59),
+    # ------------------------------------------------------------- D59: candidates and the NULL plan
+    g("d59: Commons holds the file", D59_PY,
+      "        if entry.get(\"status\") != CM.OK:",
+      "test_every_refusal_is_named", T_D59),
+    g("d59: a renamed file is not the same file", D59_PY,
+      '        if entry.get("title") != file:',
+      "test_every_refusal_is_named", T_D59),
+    g("d59: a still picture only", D59_PY,
+      "        if shown is None:",
+      "test_every_refusal_is_named", T_D59),
+    g("d59: no second copy of an excluded row's file", D59_PY,
+      '        if file in (site.get("held_files") or ()):',
+      "test_every_refusal_is_named", T_D59),
+    g("d59: the floor", D59_PY,
+      "        if width < floor[0] or height < floor[1]:",
+      "test_every_refusal_is_named", T_D59),
+    g("d59: only a hotlinked Commons file is a candidate", D59_PY,
+      "        if not PP.is_commons_thumbnail(thumb):",
+      "test_a_site_that_is_no_commons_hotlink_is_refused", T_D59),
+    g("d59: a candidate run is written once", D59_PY,
+      "    if (run / MARKER).exists() or (run / CS.CANDIDATES).exists():",
+      "test_the_candidate_run_is_written_once", T_D59),
+    g("d59: the research has written its targets", D59_PY,
+      "    if not (run / CJ.TARGETS).is_file():",
+      "test_an_unfinished_research_empties_nothing", T_D59),
+    c("d59: every candidate has its prefilter answer", D59_PY,
+      "        elif file not in prefiltered:\n            raise",
+      "        elif False:\n            raise",
+      "test_an_unfinished_research_empties_nothing", T_D59),
+    c("d59: every survivor has its depicts verdict", D59_PY,
+      "        elif file not in verdicts:\n            raise",
+      "        elif False:\n            raise",
+      "test_a_survivor_without_a_depicts_verdict_empties_nothing", T_D59),
+    g("d59: a site with a target waits for its INSERT wave", D59_PY,
+      "        if outcome == TARGET:",
+      "test_a_site_with_a_target_waits_for_the_insert_wave", T_D59),
+    g("d59: only a third-party thumbnail is emptied", D59_PY,
+      "        if not PP.is_third_party_thumbnail(thumb):",
+      "test_the_null_plan_refuses_a_thumbnail_that_is_no_third_party_hotlink", T_D59),
+    g("d59: only a researched site is emptied", D59_PY,
+      "        if research is None:",
+      "test_the_null_plan_refuses_a_site_no_research_holds", T_D59),
+    # ------------------------------------------------------------------- gap 1: the re-download
+    g("gap1: a Commons host over https", REPICTURE,
+      '    if parts.scheme != "https" or (parts.hostname or "") not in HOSTS:',
+      "test_only_a_commons_rendering_of_the_lanes_width_is_fetched", T_REPIC),
+    g("gap1: the lane's width", REPICTURE,
+      '    if "/thumb/" in parts.path and f"/{CM.RENDER_WIDTH}px-" not in parts.path:',
+      "test_only_a_commons_rendering_of_the_lanes_width_is_fetched", T_REPIC),
+    g("gap1: a still-picture Content-Type", REPICTURE,
+      "    if content_type is not None and mime not in RENDER_MIMES:",
+      "test_a_rendering_that_is_not_the_lanes_is_refused", T_REPIC),
+    g("gap1: no wider than the lane's width", REPICTURE,
+      "    if width > CM.RENDER_WIDTH:",
+      "test_a_rendering_that_is_not_the_lanes_is_refused", T_REPIC),
+    g("gap1: a picture on disk is not fetched again", REPICTURE,
+      "    if path.is_file():\n        facts, why = _accepted(path.read_bytes(), None)",
+      "test_a_picture_on_disk_is_checked_and_never_fetched_again", T_REPIC),
+    g("gap1: a broken picture on disk is refused", REPICTURE,
+      "        if facts is None:\n            return _line(site_id, candidate, path, REFUSED, reason=f\"on disk",
+      "test_a_broken_picture_on_disk_is_refused_by_name", T_REPIC),
+    c("gap1: the run fails while a picture is not on disk", REPICTURE,
+      '        "ok": not off,', '        "ok": True,',
+      "test_a_gone_address_is_recorded_and_the_run_fails", T_REPIC),
+    g("gap1: a credit site is a target of the old run", REPICTURE,
+      "    if absent:\n        raise RepictureError(",
+      "test_the_credit_need_is_the_targets_of_the_named_sites", T_REPIC),
+    g("gap1: a drawn pool picture must be on disk", CALIBRATE,
+      "    if missing:\n        raise CalibrationError(\n            f\"{len(missing)} of the",
+      "test_a_pool_picture_missing_from_disk_stops_the_gold_by_name", T_CAL),
+    # ---------------------------------------------------------------- gap 3: the re-check's role
+    c("gap3: the served-image recheck is the adversarial role's", V_PY,
+      'RECHECK_ROLE = "adversarial"', 'RECHECK_ROLE = "pilot_judge"',
+      "test_every_image_hero_recheck_is_the_shared_adversarial_role", T_BIND),
+    g("gap3: a moved role voids the image seal", CALIBRATE,
+      '        if RO.role_sha256(name) != entry["role_sha256"]:',
+      "test_a_move_of_the_shared_role_voids_the_image_seal", T_BIND),
+]  # fmt: skip
+
+CASES: list[Case] = [
+    *D18_CASES,
+    *D15_CASES,
+    *D17_CASES,
+    *CACHE_CASES,
+    *CAL_CASES,
+    *FIX_CASES,
+    *CLOSEOUT_CASES,
+]
 
 
 if __name__ == "__main__":
