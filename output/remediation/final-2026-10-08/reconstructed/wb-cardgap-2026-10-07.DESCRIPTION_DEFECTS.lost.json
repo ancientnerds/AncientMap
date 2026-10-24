@@ -1,0 +1,57 @@
+{
+ "kind": "lost-description-defects",
+ "v": 1,
+ "run": "wb-cardgap-2026-10-07",
+ "file": "output/remediation/teaser/runs/wb-cardgap-2026-10-07/DESCRIPTION_DEFECTS.jsonl",
+ "where": ".claude/worktrees/db-finish/output/remediation/teaser/runs/wb-cardgap-2026-10-07/DESCRIPTION_DEFECTS.jsonl",
+ "lines": 9,
+ "rebuilt": false,
+ "why_not_rebuilt": "A DESCRIPTION_DEFECTS line carries the contradicted sentence (number and text), the claim, the URL and verbatim quote of the contradicting page, whether the machine found the quote, the verifier and the desc_sha256 of the text it was found on. None of that survives: the run directory lived only in the worktree .claude/worktrees/db-finish (removed between 2026-10-09 and 2026-10-17; no copy in the main checkout, the worktrees, C:/tmp, C:/PythonProjects/Backup or the VPS evidence, scout of 2026-10-24); the production journal of the run's card steps (wb-teaser-prov-s032..s034, wb-teaser-card-s032..s034) carries the cards' evidence and no description defect (read-only check of 2026-10-24); the AUDIT_LOG entry of 2026-10-07 names the claims in prose only. A rebuilt line would invent its URL and quote, so the lines are recorded as lost and the card lane finds them again.",
+ "sites": [
+  {
+   "site_id": "301aec5d-a2ce-42e2-9a76-41c781cd9ace",
+   "name": "Wamanmarka, Chumbivilcas",
+   "identified_by": "SENTENCE_CHECK.md 15.5 names 'Wamanmarka' among the five new sites; AUDIT_LOG 2026-10-07: its etymology ('population of eagles' against 'falcon, village'). Of the two curated Wamanmarka sites this is the one the gap run (sites without a card) asked: Wamanmarka, Lima (00c2b26f-d007-4c02-a5da-403f14f8daa5) carried a card of wb-ws-2026-09-27-05 before it, read-only 2026-10-24"
+  },
+  {
+   "site_id": "3a75476c-410d-4a37-9858-b0733fc6965d",
+   "name": "Tanqa Tanqa",
+   "identified_by": "SENTENCE_CHECK.md 15.5; AUDIT_LOG 2026-10-07: four figures (3,974 m against 3,973; ~30 ha between 20 and 50; 'circular houses' where the sources say oval, square and rectangular; AD 1000-1450 against 1200-1500)"
+  },
+  {
+   "site_id": "6dc58d5f-9c58-42da-831d-af82d9c07c94",
+   "name": "Lakhan-Jo-Daro",
+   "identified_by": "SENTENCE_CHECK.md 15.5 (written while the file existed); the AUDIT_LOG prose does not name its claim"
+  },
+  {
+   "site_id": "3efdc2f9-61ef-40b9-8d93-0f61668d8418",
+   "name": "Wain's Hill",
+   "identified_by": "SENTENCE_CHECK.md 15.5; AUDIT_LOG 2026-10-07: univallate against bivallate"
+  },
+  {
+   "site_id": "5e77ac5e-8cf2-4c79-b074-e1c61f33c8a7",
+   "name": "Cave of Niaux",
+   "identified_by": "SENTENCE_CHECK.md 15.5; AUDIT_LOG 2026-10-07: 14 km of passages is the Niaux-Lombrives plus the unconnected Sabart, the cave itself is 4,000 m"
+  }
+ ],
+ "mentioned": [
+  {
+   "site_id": "8c84668c-5362-4b99-84a1-470534b0f02a",
+   "name": "Roman Ruins of T\u00e9bessa",
+   "note": "AUDIT_LOG 2026-10-07 lists 'Tebessa (305 against 304)' among the topics of the 9 lines; SENTENCE_CHECK.md 15.5 counts five NEW sites without it and decides 304/305 in the adversarial check. Whether a lost line named it cannot be settled: not counted in the population, re-found by the card lane if it stands."
+  },
+  {
+   "site_id": "57ded976-9874-4832-8716-2b54c1fee102",
+   "name": "Table des Marchand",
+   "note": "AUDIT_LOG 2026-10-07: 'the Table des Marchand article title missing its final s' - a title note of the card run, not shown to be a contradicted description sentence; not counted in the population."
+  }
+ ],
+ "re_find": "The card lane's next verify of these sites (a re-card in wave A, D53 judge) writes new DESCRIPTION_DEFECTS lines for what still stands; the next defect-population run counts them then. Until then defect-population lists them as lost (no claim to put before an agent).",
+ "recorded_at": "2026-10-24",
+ "recorded_by": "Claude Opus 5.5 (Claude Code, close-out builder closeout/desc-blockers)",
+ "sources": [
+  "docs/procedures/SENTENCE_CHECK.md section 15.5 (as of run/2026-10-09-db-final 0283c0d)",
+  "output/remediation/AUDIT_LOG.md, entry 2026-10-07 'lane WB run wb-cardgap-2026-10-07 written (steps 32-34)'",
+  "production unified_sites / card_stats / remediation_change_log, read-only SELECTs of 2026-10-24"
+ ]
+}

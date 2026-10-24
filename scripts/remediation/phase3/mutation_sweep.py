@@ -23925,6 +23925,7 @@ WCR_CAL = "scripts/remediation/wc/calibration.py"
 WCR_ROLES_TEST = "tests/remediation/test_wc_roles.py"
 WCR_VOID_TEST = "tests/remediation/test_wc_void.py"
 WCR_REPAIRS_TEST = "tests/remediation/test_wc_repairs.py"
+WCR_POPULATION_TEST = "tests/remediation/test_wc_desc_population.py"
 WCR_CAL_TEST = "tests/remediation/test_wc_calibration.py"
 WCR_MINIMAX_CHECK = "test_a_minimax_check_answer_is_never_imported"
 WCR_MINIMAX_VERIFY = (
@@ -24249,6 +24250,71 @@ WCR_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        return default  # mutant\n",
         WCR_REPAIRS_TEST,
         "test_a_run_is_read_against_the_tree_it_was_recorded_in",
+    ),
+    # -- the losses of 2026-10-24: a closed batch's texts, the defect population
+    (
+        "wc minimax: a closed batch's texts are not touched",
+        WCR_CLI,
+        "            touched.setdefault(site_id, set()).add(lost_run)\n",
+        "            pass  # mutant\n",
+        WCR_POPULATION_TEST,
+        "test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list",
+    ),
+    (
+        "wc minimax: a record of another kind is read as closed",
+        WCR_CLI,
+        '    if record.get("kind") != CLOSED_BATCH_KIND or record.get("reconstructed") is not True:\n',
+        "    if False:  # mutant\n",
+        WCR_POPULATION_TEST,
+        "test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list",
+    ),
+    (
+        "wc minimax: a Claude text of a closed batch is listed",
+        WCR_CLI,
+        '    return {site["site_id"]: site["run"] for site in record["site_list"] if site["minimax"]}\n',
+        '    return {site["site_id"]: site["run"] for site in record["site_list"]}  # mutant\n',
+        WCR_POPULATION_TEST,
+        "test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list",
+    ),
+    (
+        "wc defects population: a site an earlier run asks counts as new",
+        WCR_CLI,
+        '        state = f"asked:{earlier[site_id]}" if site_id in earlier else "new"\n',
+        '        state = "new"  # mutant\n',
+        WCR_POPULATION_TEST,
+        "test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost",
+    ),
+    (
+        "wc defects population: a lost site is put on the list to ask",
+        WCR_CLI,
+        '    new = [site_id for site_id, state in states.items() if state["state"] == "new"]\n',
+        "    new = list(states)  # mutant\n",
+        WCR_POPULATION_TEST,
+        "test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost",
+    ),
+    (
+        "wc defects population: a lost site is not counted",
+        WCR_CLI,
+        '            lost_sites.setdefault(site["site_id"], {**site, "record": _shown(path)})\n',
+        "            pass  # mutant\n",
+        WCR_POPULATION_TEST,
+        "test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost",
+    ),
+    (
+        "wc defects population: a lost record that rebuilt lines is read",
+        WCR_CLI,
+        '    if record["kind"] != LOST_DEFECTS_KIND or record["v"] != 1 or record["rebuilt"] is not False:\n',
+        '    if record["kind"] != LOST_DEFECTS_KIND or record["v"] != 1:  # mutant\n',
+        WCR_POPULATION_TEST,
+        "test_a_lost_record_that_is_not_one_stops_the_population",
+    ),
+    (
+        "wc defects population: a line on a changed text stands",
+        WCR_CLI,
+        '            elif row["description_sha256"] != line["desc_sha256"]:\n',
+        "            elif False:  # mutant\n",
+        WCR_POPULATION_TEST,
+        "test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost",
     ),
     # ── verify-void ────────────────────────────────────────────────────────────────────────────
     (
