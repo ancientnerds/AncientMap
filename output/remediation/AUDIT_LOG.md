@@ -14330,3 +14330,12 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   The run hit the first account's weekly limit (39 agents) and was resumed from its run id after the account switch.
   Not done by design: the 14 duplicate-log findings (owner 2026-10-20), badges (no decision), the quantum GIF/PNG hero
   re-encode (needs patch-images with an upload).
+- **D58 un-retire wave 2026-10-24** (lane `scope-unretire-2026-10-24`): 9 sites back in scope (Prambanan Temple, Preah
+  Palilay, Bhagwan Bharat's Statue, Great Kyz Kala, Buddhist Rock Carving in Manglawar, Kameishi, Gondrani (Shehr-e-Roghan),
+  Sakafune-ishi Ruins, Khushuu Tsaidam Museum); 18 cells (scope_status + scope_reason), probe-guards each refused, APPLY OK
+  read back, rehearse-rollback clean; journal recount 18 rows (ids 355415-355432) at 9 sites; all 9 SSR pages 200.
+  Retired 104 -> 95. Skipped: 6 D50 sites (wait for their dispute text), 4 label-borderline (stay retired), 41 outside
+  the label window, 21 not date retirements, 2 museum exhibits, 1 site question first. X13: Islamic/Byzantine Europe stays
+  out. Then `rebuild_static` (268 s), freshness 0 differing sites, IndexNow `--lastmod-since 2026-10-24` 162 URLs
+  accepted, Qdrant `sites` 9/9 indexed. Not done (owner): rejecting the founder-review proposal of L'Anse aux Meadows
+  (01e29c6e-...) needs a founder token - in the owner list.
