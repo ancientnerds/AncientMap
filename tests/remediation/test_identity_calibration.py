@@ -845,6 +845,26 @@ class TestTheGoldBrief:
             run, stage, "r1", "r1-b01", stage_run=out, handoff=copy
         )
 
+    @pytest.mark.parametrize("judge", [dup_judge, parent_judge], ids=["dup", "parent"])
+    def test_the_cli_briefs_a_gold_round_before_the_run_s_stage_inputs_exist(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], judge: Any
+    ) -> None:
+        # the run holds no clusters, no DUP_DECISIONS, no export: a brief reads the round only
+        if judge is dup_judge:
+            _, out, _ = gold_dir_with(tmp_path)
+        else:
+            rows = [site(id=A, name="Abu Simbel"), site(id=B, name="Abu Simbel Small Temple")]
+            cases = [C.Case("par-pos-1", "positive", A, B, None, "t")]
+            out = C.cal_dir(tmp_path / "run", "parent")
+            out.mkdir(parents=True)
+            common.write_jsonl(out / rounds.CASES_FILE, C._case_rows(cases))
+            C.export_parent_gold(out, C.parent_context(facts_of(rows), cases, None), cases,
+                                 tmp_path / "gold")  # fmt: skip
+        argv = ["--root", str(tmp_path / "root"), "brief", "--stage", judge.STAGE_VERDICT,
+                "--round", "r1", "--batch-id", "r1-b01", "--stage-run", str(out)]  # fmt: skip
+        assert judge.main(argv) == 0
+        assert "--role pilot_judge" in capsys.readouterr().out
+
 
 class TestTheCalibrationShapeCheck:
     def test_an_answer_in_shape_passes_and_a_broken_one_names_its_problem(

@@ -1028,6 +1028,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = ap.parse_args(argv)
     run = common.run_dir(args.root)
     try:
+        if args.command == "brief":
+            # a brief reads only the round record: no context, so a calibration's gold round is
+            # briefed before the run's stage inputs exist
+            print(
+                brief(
+                    run,
+                    args.stage,
+                    args.round,
+                    args.batch_id,
+                    stage_run=args.stage_run,
+                    check=not args.no_check,
+                    handoff=args.handoff,
+                    role=args.role,
+                )
+            )
+            return 0
         ctx = load_context(run, root=args.root)
         if args.command == "export":
             if args.stage == STAGE_VERDICT:
@@ -1056,19 +1072,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ),  # fmt: skip
                     indent=1,
                     sort_keys=True,
-                )
-            )
-        elif args.command == "brief":
-            print(
-                brief(
-                    run,
-                    args.stage,
-                    args.round,
-                    args.batch_id,
-                    stage_run=args.stage_run,
-                    check=not args.no_check,
-                    handoff=args.handoff,
-                    role=args.role,
                 )
             )
         elif args.command == "check-answer":
