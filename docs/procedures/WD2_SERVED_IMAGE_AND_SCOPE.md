@@ -1124,6 +1124,171 @@ $PY $IH/run.py insert-accept --run-dir $R
 (`pipeline/utils/public_sites.py`), so the globe shows the previous picture until the next export
 run; the page and the hub read the database at once and already show the new one.
 
+### 3.8 The close-out of 2026-10-24: D48, D49, D59, the lost pool pictures, the re-check's role
+
+Measured read-only on production on 2026-10-24 (scratch runs under `C:/tmp/closeout/images/`,
+nothing written to production).
+
+#### 3.8.1 D48/D49 - the hero moves (`served_image/hero_moves.py`, lane `hero-moves`)
+
+One planner for both decisions, because both are the same write: the hero flag moves from one live
+row of a site to another and the globe's `thumbnail_url` follows it (rules `d48-hero`/`d48-align`,
+`d49-hero`/`d49-align`). A site is planned for `unflagged` (live rows, no hero flag), `strip` (the
+hero is below 800x300), `hotlink` (live rows, but a remote or empty `thumbnail_url`) or `no_author`
+(the hero's licence asks for an author, `licenses.credit_columns`, and it has none). **The new hero
+is always a qualifying row**: live, judged `depicts` by a Claude check of that very file (a served-
+image run's `CHECK.jsonl`/`REPLACE.jsonl`, or an image-roles check run's confirmed `TARGETS.jsonl`
+pick), at least 800x300, with every credit column its licence demands, and - for a strip - larger
+than the hero. A hero the latest Claude check called `other_site` is not planned (`DEFERRED_D15.jsonl`:
+the D15 re-check decides it first). Ranking: a confirmed check-run pick, then the served-image
+replacement stage's own `pick`, then the depicts quality, then the pixels, then `sort_order`/id.
+
+| problem (2026-10-24) | sites | planned | owner list | deferred to D15 |
+|---|---:|---:|---:|---:|
+| unflagged | 20 | 20 flagged | 0 | 0 |
+| strip | 19 | 2 moved | 17 | 0 |
+| hotlink (sites with live rows) | 0 | - | - | - |
+| no_author | 50 | 36 moved | 11 | 3 |
+
+58 sites, 134 journal rows, one chunk. `check-pictures` offers the 149 live rows of 17 unsettled sites
+that no Claude check ever judged (Bilbao 18, Qorikancha 19, Gyeongju 19, ...) to the image roles; their
+confirmed picks feed a second plan through `--check-run`. `SMALL_HEROES.jsonl` reproduces D48's 433:
+a hero below 1600x900 at a site that holds another live row of at least 1600x900 - owner list only.
+A served-check `depicts` includes a find from the site and a drawing of it, so a planned hero can be
+a picture of an object (`PLANNED.jsonl` names old and new hero and what the check said); a reviewer
+refuses a pick with `--veto` (`site_id`, `image_id`, `reason`, `by`) and the plan is made again in a
+new run directory.
+
+Order: after the D15 chunk was accepted and, for D49, after the D18 author backfill (A5 may give a
+hero its author); always from a fresh read, with every served-image run as a verdict run, oldest
+first (a later verdict on an image replaces an earlier one).
+
+```bash
+PY=./.venv/Scripts/python.exe
+HM=scripts/remediation/served_image/hero_moves.py
+CW=scripts/remediation/gallery_audit/chunk_writer.py
+R=output/remediation/served_image/hero-moves-<date>             # the date names the journal stamp
+S1=output/remediation/served_image/served-image-2026-09-30
+S2=output/remediation/served_image/served-image-<date>-os47       # the D15 run, once accepted
+$PY $HM read --run-dir $R                                         # production, read-only, once
+# optional: the rows nobody judged, through the image roles (C = a candidate run directory)
+$PY $HM check-pictures --run-dir $R --verdicts-run $S1 $S2 --check-run $C
+#   then image_roles/run.py prefilter-export / depicts-export / recheck-export (+ brief,
+#   check-answer, import per stage) and write-targets on $C - section 3.7.3 and run.py's docstring
+$PY $HM plan --run-dir $R --verdicts-run $S1 $S2 [--check-run $C] [--veto V]
+for step in --check --rehearse --apply --readback --rehearse-rollback; do
+    $PY $CW $R/chunks/chunk-001 $step                             # one at a time
+done
+$PY $HM accept --run-dir $R --chunk $R/chunks/chunk-001            # read-only, 0 deviations
+```
+
+#### 3.8.2 D59 - the shown sites whose only picture is a hotlinked thumbnail (`image_roles/d59.py`)
+
+140 sites on 2026-10-24: 131 hotlinked Commons files (119 originals on upload.wikimedia.org, 12
+thumb.wikimedia.org renderings) and 9 third-party hotlinks; none has a live row.
+
+* **The 9 third-party hotlinks** are part of the D17 population now (`population_sql`, kind
+  `research`: 952 + 9 = 961 sites). A confirmed Commons picture goes in through the INSERT wave, which
+  replaces the thumbnail; for the rest `null-plan` sets `thumbnail_url` to NULL (lane `d59-thumb`,
+  rule `d59-thumb-null`), each with the research's measured outcome, and only once the research is
+  finished (`TARGETS.jsonl` written, every candidate prefiltered, every survivor judged). A site with
+  a target is listed in `PENDING_INSERT.jsonl` and never emptied.
+* **The 131 Commons hotlinks** get a credited row of the same file: `d59.py candidates` writes a
+  candidate run whose one candidate per site is the thumbnail's own file (rendering, MIME and size from
+  Commons). Measured: 88 candidates; **43 refused as below the owner floor 800x300** (Geograph uploads
+  are 640 px wide) - they keep their uncredited hotlink unless the floor is lowered for this run (an
+  owner question: the page already shows those pictures). Then the image roles' chain - prefilter,
+  the Sonnet depicts check, the adversarial re-check, `write-targets` - and the INSERT lane.
+  `insert-claims` words a claim as a D59 first row and marks it (`decision: D59`, the claimed
+  `thumbnail_url`); `insert-plan` lifts the 2026-10-05 thumbnail-only rule only for such a claim, only
+  while the read still shows that thumbnail, and only for that very Commons file
+  (`d59_thumbnail_moved`, `d59_not_the_thumbnail_file`, `d59_not_a_hotlink` otherwise).
+
+```bash
+PY=./.venv/Scripts/python.exe
+D59=scripts/remediation/image_roles/d59.py
+RUN=scripts/remediation/image_roles/run.py
+C=output/remediation/candidate_search/candidates-<date>-d59
+I=output/remediation/import_hero/insert-<date>-d59
+$PY $D59 candidates --run-dir $C                                  # production read-only + Commons
+$PY $RUN pictures --run-dir $C                                    # never `search` on this run
+#   prefilter-export, depicts-export, recheck-export rounds and write-targets on $C (run.py)
+$PY scripts/remediation/candidate_search/judge_run.py insert-claims --run-dir $C --insert-run $I
+$PY scripts/remediation/import_hero/run.py read --run-dir $I
+$PY scripts/remediation/import_hero/run.py fetch --run-dir $I --root $OFFSITE --target insert --min-width 800 --min-height 300
+$PY scripts/remediation/import_hero/run.py insert-plan --run-dir $I
+#   insert_writer.py's five steps per chunk, then insert-accept (section 3.7, "The INSERT waves")
+# the third-party ones, after the D17 research run(s) wrote their targets and their INSERT waves ran:
+N=output/remediation/d59/d59-thumb-<date>
+$PY $D59 null-read --run-dir $N
+$PY $D59 null-plan --run-dir $N --research-run <the D17 candidate run(s)>
+#   chunk_writer.py's five steps on $N/chunks/chunk-001, then:
+$PY $D59 null-accept --run-dir $N --chunk $N/chunks/chunk-001
+```
+
+#### 3.8.3 Gap 1 - the lost MiniMax-pool renderings (`candidate_search/repicture.py`)
+
+The 5,756 renderings of `candidates-2026-10-06/pictures` are gone (0 files on 2026-10-24; the worktree
+that held them was removed). `repicture.py` fetches exactly the pictures a step needs again, into the
+names `pool.picture_path` reads, through the lane's Commons transport (project User-Agent, one request
+a second per host; a 429 or 5xx stops the run, a gone address is recorded), and accepts only a Commons
+rendering of the lane's 1280 px width with a still-picture `Content-Type` that Pillow decodes. The
+manifest `REPICTURE_<need>.jsonl` in the old run names every needed picture (`fetched`, `present`,
+`gone`, `refused`); the command exits 1 while one is not on disk. Measured needs (dry runs):
+`recheck` 224, `credit` 33, `calibration` 150 (one live test fetched the 33 credit pictures into a
+scratch copy in 59 s, all accepted); `pool` 3,810 (optional: the D17 search re-finds those sites).
+The calibration's adjudication sample is drawn without looking at the disk
+(`calibrate.adjudication_sample`), and `gold` refuses while a drawn picture is missing.
+
+```bash
+OLD=output/remediation/candidate_search/candidates-2026-10-06
+RP=scripts/remediation/candidate_search/repicture.py
+$PY $RP --old-run $OLD --need recheck --run-dir <D17 run C> --served-run <served-image run with a fresh READ.json>
+$PY $RP --old-run $OLD --need credit --sites <credit_refusals out>/CREDIT_SITES_CLAUDE.txt
+$PY $RP --old-run $OLD --need calibration --calibration-dir <sealed D> --read <fresh READ.json>
+#   each takes --dry-run to count what is missing without fetching
+```
+
+#### 3.8.4 Gap 3 - the re-check's role and the image calibration
+
+Every image hero re-check (D15's `served_image/vision.RECHECK_ROLE`, D17 C3 `hero_recheck.SPEC`, the
+D10 re-check of the MiniMax picks) binds to the shared role `adversarial`, registered to Sonnet 5.5
+high since D36. Under D45/D51 it stays there for the image lane and is calibrated in `image-roles-v1`;
+only a failure moves it up one tier (a registry edit, which voids the seal: seal a new directory).
+The failed tier move of `teaser-2026-10-10` (agreement 0.7907) is the card lane's: that lane gets a
+role of its own (`card_adversarial`), and adding it leaves the image seal standing, because the seal
+binds each image role's own registry entry (`role_sha256`), not the registry file
+(`tests/remediation/test_image_recheck_binding.py`). A probe seal into a scratch directory on
+2026-10-24 succeeded (`adversarial` = Sonnet high, `role_sha256 b4d1c5aa...`). The lane exports do not
+check the calibration verdict themselves: the order seal, gold, answers, `evaluate` before the first
+lane answer is the runbook's.
+
+```bash
+CAL=scripts/remediation/image_roles/calibrate.py
+D=output/remediation/calibration/image-roles-v1
+$PY $CAL seal --dir $D                                            # before any case is chosen
+$PY $RP --old-run $OLD --need calibration --calibration-dir $D --read <fresh READ.json>
+$PY $CAL gold --dir $D --read <fresh READ.json> \
+    --c1-dir output/remediation/gallery_audit/calibration-2026-09-25-opus \
+    --labels tests/remediation/fixtures/gallery_labels_652.jsonl \
+    --import-geojson <the 2025 import geojson> \
+    --served-run output/remediation/served_image/served-image-2026-09-30 \
+    --pool-run $OLD --population <D17 run>/POPULATION.jsonl \
+    --identity-gold <5 known wrong + 20 known good links> \
+    --wiki-cache output/remediation/final-2026-10-08/wiki_cache \
+    --exclude-heroes <os47 run>/OTHER_SITE_HEROES.jsonl \
+    --insert-root output/remediation/import_hero
+for role in image_prefilter image_depicts pilot_judge adversarial web_verifier; do
+    $PY $CAL export --dir $D --role $role --handoff output/remediation/handoff/image-cal-$role
+done
+#   the agents answer (run.py brief / check-answer / import --run-dir $D with the role's stage:
+#   image-prefilter, image-depicts-calibration, image-adjudicate, image-recheck, identity-verify);
+#   the pilot judge's adjudication before the depicts and adversarial evaluation
+for role in image_prefilter image_depicts adversarial web_verifier; do
+    $PY $CAL evaluate --dir $D --role $role                       # exit 1 = failed, tier move named
+done
+```
+
 ---
 
 ## 4. Tests and the mutation sweep
@@ -1153,6 +1318,15 @@ run; the page and the hub read the database at once and already show the new one
 * `tests/remediation/test_mechanical.py` - the scope-review wave runs through every generic lane
   test (`ALL_LANES`: apply, commit states, read-back, probes, identity) with a fabricated plan.
 * `tests/pipeline/test_e3_oceania.py`, `tests/remediation/test_mechanical_scope.py` - section 1.
+* `tests/remediation/test_hero_moves.py` - D48/D49: the four problems, what qualifies a hero, the
+  ranking, the D15 deferral, vetoes, the check population, the chunk, the small heroes, the acceptance.
+* `tests/remediation/test_d59_thumbnails.py` - D59: both populations, the one candidate and its
+  refusals, the claims' wording and marker, the INSERT plan's lift, the NULL plan and its waits.
+* `tests/remediation/test_repicture.py` - gap 1: the needs, the fetch's acceptance, the manifest, the
+  draw that does not look at the disk.
+* `tests/remediation/test_image_recheck_binding.py` - gap 3: the re-check's role and the seal.
+* `scripts/remediation/image_roles/mutation_sweep.py` - the image lanes' sweep; the close-out added
+  52 cases (`CLOSEOUT_CASES`, labels `img d48`, `img d49`, `img d59`, `img gap1`, `img gap3`).
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
