@@ -13,8 +13,10 @@ of any gate.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -112,15 +114,51 @@ class TestTheVerdict:
         assert S.outcomes(stdout) == {"test_mirror": ["FAILED", "PASSED"]}
 
 
+@cache
+def _statement_spans(path: Path) -> tuple[tuple[int, int], ...]:
+    """The 1-based line span of every top-level statement of `path`, decorators included."""
+    tree = ast.parse(S.read(path), filename=str(path))
+    return tuple(
+        (
+            min([node.lineno, *(d.lineno for d in getattr(node, "decorator_list", []))]),
+            node.end_lineno,
+        )
+        for node in tree.body
+    )
+
+
+def _touched_statements(case: S.Case, mutant: str) -> str:
+    """The lines of `mutant` that hold the top-level statements the case's needle touches."""
+    text = S.read(case.path)
+    eol = S.line_ending(text)
+    old, new = case.old.replace("\n", eol), case.new.replace("\n", eol)
+    first = text.count("\n", 0, text.index(old)) + 1
+    last = first + old.count("\n")
+    touched = [span for span in _statement_spans(case.path) if span[0] <= last and span[1] >= first]
+    low = min([first, *(span[0] for span in touched)])
+    high = max([last, *(span[1] for span in touched)]) + new.count("\n") - old.count("\n")
+    return "".join(mutant.splitlines(keepends=True)[low - 1 : high])
+
+
 class TestTheRealCases:
     """Static checks of every case the sweep would run, cheap enough for every test run."""
 
     def test_every_needle_occurs_exactly_once_and_every_mutant_compiles(self) -> None:
-        # one parse per mutant: `compiles` is `ast.parse`. A second parse doubled the time - 87 s
-        # of the gate's 90 s timeout at 1,030 cases (measured 2026-09-26, wip/wb2)
+        # `S.mutate` on the whole file refuses a needle that is not unique (string work only). The
+        # parse is the cost: one whole-file `ast.parse` per mutant took 87 s of the gate's 90 s at
+        # 1,030 cases (2026-09-26) and 105 s at 2,070 under load (2026-10-24). Each file is parsed
+        # once; a mutant is parsed as the top-level statements its needle touches - for `ast.parse`
+        # the same verdict, since a syntax error lies inside the statement that holds it.
         for case in S.CASES:
             mutant = S.mutate(S.read(case.path), case.old, case.new)
-            assert S.compiles(mutant, case.path), case.label
+            assert S.compiles(_touched_statements(case, mutant), case.path), case.label
+
+    def test_a_broken_mutant_fails_the_statement_check_too(self) -> None:
+        case = next(c for c in S.CASES if c.path.name == "apply.py")
+        broken = S.Case(case.label, case.path, case.old, case.old + " (", case.test, case.testfile)
+        mutant = S.mutate(S.read(broken.path), broken.old, broken.new)
+        assert not S.compiles(mutant, broken.path)
+        assert not S.compiles(_touched_statements(broken, mutant), broken.path)
 
     def test_every_named_test_exists_in_its_file(self) -> None:
         for case in S.CASES:
