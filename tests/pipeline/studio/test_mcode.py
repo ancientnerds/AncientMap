@@ -1,7 +1,7 @@
 """The `mcode exec` runner: the real model stamp, the 429, the weekly quota, the git guard.
 
 Owner decision 2026-10-03: the studio's judgements run on MiniMax Code (`mcode`, model
-`MiniMax-M3.1-Flash-Preview`). These tests drive `mcode.exec` with a fake `subprocess.run`,
+`MiniMax-M3.1-Flash`). These tests drive `mcode.exec` with a fake `subprocess.run`,
 so they need no MiniMax account and no network.
 """
 
@@ -28,7 +28,7 @@ OK = {
     "sessionId": "mvs_b_2",
     "status": "succeeded",
     "output": "I read the file.",
-    "model": {"providerId": "minimax", "modelId": "MiniMax-M3.1-Flash-Preview"},
+    "model": {"providerId": "minimax", "modelId": "MiniMax-M3.1-Flash"},
     "usage": {"inputTokens": 21001, "outputTokens": 12, "totalTokens": 21013},
     "durationMs": 3189,
 }
@@ -134,7 +134,7 @@ def test_the_run_calls_mcode_with_the_owner_model_effort_and_json_output(tmp_pat
     assert argv[1:4] == ["exec", "--cwd", str(tmp_path)]
     assert (
         "--model" in argv
-        and argv[argv.index("--model") + 1] == "minimax/MiniMax-M3.1-Flash-Preview"
+        and argv[argv.index("--model") + 1] == "minimax/MiniMax-M3.1-Flash"
     )
     assert argv[argv.index("--effort") + 1] == "max"  # owner decision O23
     assert argv[argv.index("--permission") + 1] == "full"

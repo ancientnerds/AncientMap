@@ -1,7 +1,7 @@
 import { Flag } from './Flag'
 import { fmtInt } from './format'
 import { HowCounted, Panel, Status } from './Panel'
-import type { LiveData, LiveVisitor } from './types'
+import type { LiveData, LiveVisitor, SessionClass } from './types'
 import type { Loaded } from './useStats'
 
 /** The dashboard is served from its own host while the pages it names live on the main one,
@@ -33,6 +33,22 @@ export function secondsSince(iso: string, now = Date.now()): number {
   return Math.max(0, Math.round((now - Date.parse(iso)) / 1000))
 }
 
+/** The row's word for what the visitor is (pipeline/visitor_class.py). */
+const CLASS_WORDS: Record<SessionClass, string> = {
+  human: 'human',
+  human_ai: 'human, from an AI answer',
+  scraper_js: 'JS scraper',
+  undecided: 'just arrived',
+  unclear: 'unclear',
+}
+
+/** The class word of a row: null is a session newer than the server's
+ *  thirty-day fold, absent is an API older than this bundle (no word). */
+export function classWord(v: LiveVisitor): string | undefined {
+  if (v.class === undefined) return undefined
+  return v.class === null ? 'not classed yet' : CLASS_WORDS[v.class]
+}
+
 function Row({ v }: { v: LiveVisitor }) {
   return (
     <li className="dash-live-row">
@@ -40,7 +56,7 @@ function Row({ v }: { v: LiveVisitor }) {
       <span className="dash-flag">
         <Flag country={v.country} />
       </span>
-      <span className="dash-live-who">{[v.browser, v.device].filter(Boolean).join(' · ')}</span>
+      <span className="dash-live-who">{[v.browser, v.device, classWord(v)].filter(Boolean).join(' · ')}</span>
       <span className="dash-live-here">{fmtSpan(v.here)}</span>
       <span className="dash-live-page">
         <a href={pageUrl(v.path)} target="_blank" rel="noopener noreferrer">
@@ -88,7 +104,10 @@ export function LiveNow({ state }: { state: Loaded<LiveData> }) {
             screenshot this panel into a public channel.
           </p>
           <HowCounted>
-            The Now tile above counts five minutes, so this list is the longer window. A visitor who fired only a
+            The Now tile above counts the people of the last five minutes; this list is the longer window and keeps
+            everyone, bots included, each row naming what it is - human, from an AI answer, JS scraper, just arrived
+            or unclear, by the rules of Who is visiting? (a session newer than the server's last fold of the month,
+            at most 90 seconds old, is not classed yet). A visitor who fired only a
             Core Web Vital has no page to name and no row — ten of sixty-nine sessions in a day
             (2026-09-19). The headline is the page's own title and links to that page on the main
             site, so it is in the visitor's language, not ours. This is the one panel on the page that can point at a single person: at one visitor it

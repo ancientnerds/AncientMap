@@ -105,6 +105,15 @@ ignore_imports = [
     # The host's load samples Lyra writes for the dashboard's server panel;
     # stdlib only, under pipeline/ because Lyra writes them (2026-10-10).
     "api.** -> pipeline.server_load",
+    # nginx's crawler log; moved from api/services/ so the request log shares
+    # its BOTS table and range checks (2026-10-22).
+    "api.** -> pipeline.crawler_log",
+    # nginx's request log for the dashboard's "Who is visiting?" panel; with
+    # visitor_class, the one definition of every visitor class, which the
+    # Lyra digest uses too (2026-10-22). log_files and asn are reached only
+    # through these modules, so they need no line (an unmatched one fails).
+    "api.** -> pipeline.request_log",
+    "api.** -> pipeline.visitor_class",
 ]
 
 # =============================================================================

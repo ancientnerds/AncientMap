@@ -34,6 +34,7 @@ import { useRoute } from '../seo/RouteContext'
 import type { LyraContextType } from '../types/ai'
 import type { SiteRoute } from '../types/anRoute'
 import { getCountryFlatFlagUrl } from '../utils/countryFlags'
+import { HERO_SIZES, heroSrcSet } from '../utils/heroSrcSet'
 import { apiDetailToSiteData } from '../utils/siteApi'
 
 import '../styles/story-page.css'
@@ -54,6 +55,7 @@ function SiteRecord({ site }: { site: SiteRoute }) {
   const altNames = site.alt_names.filter(n => n && n !== site.name).slice(0, 12)
   const image = site.image
   const credit = image ? [image.author, image.license].filter(Boolean).join(' · ') : ''
+  const srcSet = image ? heroSrcSet(image) : undefined
 
   return (
     <main className="story-main site-record">
@@ -75,9 +77,13 @@ function SiteRecord({ site }: { site: SiteRoute }) {
               Das ist korrekt: Attributnamen sind in text/html
               case-insensitiv, Chrome liest es (live geprüft 12.09.2026).
               Nicht in fetchpriority ändern — dann beschwert sich TypeScript,
-              und gewonnen wäre nichts. */}
+              und gewonnen wäre nichts.
+
+              srcSet: the 800 px copy for phones, the original otherwise
+              (utils/heroSrcSet.ts, owner decision 2026-10-20). */}
           <img
             src={image.url}
+            {...(srcSet ? { srcSet, sizes: HERO_SIZES } : {})}
             alt={site.name}
             fetchPriority="high"
             {...(image.width && image.height
@@ -166,6 +172,20 @@ function SiteRelatedContent({ site }: { site: SiteRoute }) {
         <p>
           Part of <a href={site.parent.path}>{site.parent.name}</a>
         </p>
+      )}
+      {/* Owner decision 2026-10-20 (SEO evaluation 2026-10-19, A2): 0 of 298 site
+          pages linked a paper. The links are reviewed rows (migration 0031). */}
+      {site.papers && site.papers.length > 0 && (
+        <section className="story-related">
+          <h2>Research on this site</h2>
+          <ul>
+            {site.papers.map(p => (
+              <li key={p.slug}>
+                <a href={`/research/${p.slug}`}>{p.title}</a>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {site.news.length > 0 && (
         <section className="story-related">
@@ -276,6 +296,7 @@ export default function SitePage() {
             country: site.country,
             description: site.description ?? undefined,
             thumbnailUrl: site.image?.url,
+            thumbnailSrcSet: site.image ? heroSrcSet(site.image) : undefined,
             sourceUrl: site.source_url ?? undefined,
             bestWikiUrl: site.best_wiki_url ?? undefined,
             sourceLanguage: site.source_language ?? undefined,

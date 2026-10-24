@@ -38,6 +38,24 @@
     <meta name="twitter:description" content="Explore 1.7M+ archaeological sites on a 3D globe. Historical empires, AI news, research tools." />
     <meta name="twitter:image" content="https://ancientnerds.com/landing/og-image.png" />
 
+    <!-- Structured Data - WebSite: the site's name for Google's site-name display; the
+         homepage carried only WebApplication, Organization and Dataset (SEO evaluation
+         2026-10-19, tech-14). No SearchAction: Google retired the sitelinks search box in
+         November 2024, and /search.html reads no query parameter a target URL could fill. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Ancient Nerds",
+      "url": "https://ancientnerds.com/",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Ancient Nerds",
+        "url": "https://ancientnerds.com"
+      }
+    }
+    </script>
+
     <!-- Structured Data - WebApplication -->
     <script type="application/ld+json">
     {
@@ -162,6 +180,11 @@
       </div>
     </noscript>
 
+    <!-- The page's main content, hero to final call to action, for crawlers and screen
+         readers: the homepage had no main landmark (SEO evaluation 2026-10-19, tech-10). An
+         unstyled block wrapper: no rule in landing.css or the critical CSS above selects
+         `main` or a direct child of body, so the layout stays exactly as it was. -->
+    <main>
     <!-- ═══════════ HERO ═══════════ -->
     <section class="hero">
       <div class="hero-bg" id="heroBg">
@@ -470,6 +493,8 @@
         <a href="/globe.html" class="cta-primary">LAUNCH THE GLOBE</a>
       </div>
     </section>
+
+    </main>
 
     <!-- ═══════════ FOOTER ═══════════ -->
     <footer class="landing-footer">

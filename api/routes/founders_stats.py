@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The founders dashboard's data: nineteen endpoints under /api/stats, all
+"""The founders dashboard's data: twenty endpoints under /api/stats, all
 behind the ``an_stats`` cookie (stats_access.require_stats_session). Umami rows
 come from pipeline.umami_db, the member counts from pipeline.members_stats,
-nginx's referral log from pipeline.referral_log, Google's view of us (Search
-Console, CrUX) and nginx's crawler log from api/services, and every
-founder-level shaping from pipeline.stats_analysis.
+nginx's referral, crawler and request logs from pipeline.referral_log,
+pipeline.crawler_log and pipeline.request_log, Google's view of us (Search
+Console, CrUX) from api/services, every visitor class from
+pipeline.visitor_class, and every founder-level shaping from
+pipeline.stats_analysis.
 
 ``fetch`` is imported as a module attribute on purpose: the tests replace
 ``fr.fetch`` and never touch a database.
@@ -13,6 +15,7 @@ founder-level shaping from pipeline.stats_analysis.
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
@@ -21,9 +24,10 @@ from sqlalchemy.orm import Session
 
 from api.cache import cached
 from api.routes.stats_access import require_stats_session
-from api.services import crawler_log, crux, jwt_auth, search_console
-from pipeline import members_stats, referral_log, server_load
+from api.services import crux, jwt_auth, search_console
+from pipeline import crawler_log, members_stats, referral_log, request_log, server_load
 from pipeline import stats_analysis as fs
+from pipeline import visitor_class as vc
 from pipeline.database import NewsChannel, NewsVideo, get_db
 from pipeline.umami_db import (
     CLUSTER_MIN_IDS,
@@ -55,11 +59,17 @@ ALL_DAYS_MAX = 3650
 
 #: "Live" on the pulse tile: sessions with an event in the last five minutes.
 LIVE_WINDOW = timedelta(minutes=5)
+#: Who the Now tile counts: the humans, and the arrivals no rule has decided
+#: yet - a visitor who arrived thirty seconds ago has one page view and no act
+#: to their name. A session a machine rule marked is left out (owner,
+#: 2026-10-22) and counted beside it as `bots`.
+LIVE_CLASSES = frozenset({*vc.HUMAN_CLASSES, "undecided"})
 #: The live panel's own window, and how far back it looks for the last visitor
 #: when nobody is here. Measured 2026-09-19: a thirty-minute window was empty
 #: in 20 % of all minutes and the longest gap between two events was 117
-#: minutes, so a 24-hour lookback always names somebody.
-HERE_WINDOW = timedelta(minutes=30)
+#: minutes, so a 24-hour lookback always names somebody. It is the window in
+#: which a new arrival counts as undecided, so it is that one object.
+HERE_WINDOW = vc.UNDECIDED_WINDOW
 LIVE_LOOKBACK = timedelta(hours=24)
 #: Rows the live panel prints. At one visitor an hour this is never reached;
 #: it exists so a burst cannot make the panel the tallest thing on the phone.
@@ -83,6 +93,13 @@ COUNTRY_TTL = 90
 #: How long the growth line is reused. A day's point only grows during that
 #: day, so five minutes is fresh enough, and the panel asks at that cadence.
 DAILY_TTL = 300
+#: How long /visitors is reused: the dashboard asks every five minutes, and
+#: the requests part re-reads its log only when a file of it changed.
+VISITORS_TTL = 300
+#: The bursts /visitors lists: those that ended in the last BURST_DAYS, at
+#: most BURST_LIST of them, newest first.
+BURST_DAYS = 7
+BURST_LIST = 10
 #: Search Console's newest final day is two to three days old and moves once
 #: a day, so an hour is fresh; the first call after it costs six API requests.
 SEARCH_TTL = 3600
@@ -121,9 +138,10 @@ async def overview(
     }
 
 
-@cached("stats:countries", ttl=COUNTRY_TTL)
-async def _country_windows() -> dict[str, Any]:
-    """The four flag tiles from one thirty-day fold.
+@cached("stats:month", ttl=COUNTRY_TTL)
+async def _month_fold() -> dict[str, Any]:
+    """The four flag tiles and the live list's visitor classes from one
+    thirty-day fold.
 
     Cached rather than recomputed per request: this is the only query on the
     page that reaches back a month. The cache is api/cache.py's - Redis when
@@ -131,9 +149,11 @@ async def _country_windows() -> dict[str, Any]:
     per-process dict when it is not, and then they do not. No argument, so the
     key is the prefix and no founder's session ever reaches it.
 
-    Note the 30-day fold costs the same 10-13 ms as the 7-day one today
-    (measured 2026-09-19: 794 rows either way) - the tracker has two days of
-    history. The cache is here for October, not for now.
+    The month is also the lookback the machine rules need: a burst, a day's
+    volume and a lockstep crawl are judged against every start of the
+    fingerprint in it, so a session that is live now is classed against its
+    whole history and not against the last five minutes. `live_classes` maps
+    every session seen in the last LIVE_LOOKBACK to its class, for /live.
     """
     now = datetime.now(UTC)
     rows = fetch(SQL_SESSION_EVENTS, now - timedelta(days=COMPARE_DAYS), now)
@@ -156,21 +176,38 @@ async def _country_windows() -> dict[str, Any]:
         cut = now - timedelta(days=days)
         return {"now": humans(cut, now), "before": humans(start, cut)}
 
-    def block(since: datetime | None, human_only: bool = True) -> dict[str, Any]:
-        rows = fs.countries(sessions, since=since, human_only=human_only)
-        everyone = fs.countries(sessions, since=since, human_only=False)
+    def block(since: datetime | None, classes: frozenset[str] = vc.HUMAN_CLASSES) -> dict[str, Any]:
+        rows = fs.countries(sessions, now=now, since=since, classes=classes)
+        everyone = fs.countries(sessions, now=now, since=since, classes=None)
         return {
             "sessions": sum(r["sessions"] for r in rows),
             "all": sum(r["sessions"] for r in everyone),
             "countries": rows,
         }
 
+    def bots(since: datetime) -> dict[str, Any]:
+        """The JS scrapers beside the Now tile's people, with the country most
+        of them came from ("??" where Umami could not place them)."""
+        rows = fs.countries(sessions, now=now, since=since, classes={"scraper_js"})
+        return {
+            "sessions": sum(r["sessions"] for r in rows),
+            "country": rows[0]["country"] if rows else None,
+        }
+
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    live = now - LIVE_LOOKBACK
     return {
-        "now": block(now - LIVE_WINDOW, human_only=False),
-        "today": block(midnight),
-        "d7": {**block(now - timedelta(days=7)), "change": change(7)},
-        "d30": {**block(None), "change": change(COUNTRY_DAYS)},
+        "countries": {
+            "now": {**block(now - LIVE_WINDOW, LIVE_CLASSES), "bots": bots(now - LIVE_WINDOW)},
+            "today": block(midnight),
+            "d7": {**block(now - timedelta(days=7)), "change": change(7)},
+            "d30": {**block(None), "change": change(COUNTRY_DAYS)},
+        },
+        "live_classes": {
+            str(s.id): vc.session_class(s, now)[0]
+            for s in sessions
+            if s.last_seen is not None and s.last_seen >= live
+        },
     }
 
 
@@ -178,8 +215,9 @@ async def _country_windows() -> dict[str, Any]:
 async def visitor_countries(
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
-    """Who is here — sessions per country for now, today, 7 and 30 days."""
-    return await _country_windows()
+    """Who is here — sessions per country for now, today, 7 and 30 days; on
+    the Now tile the people, with the JS scrapers counted beside them."""
+    return (await _month_fold())["countries"]
 
 
 @cached("stats:daily", ttl=DAILY_TTL)
@@ -267,6 +305,104 @@ async def crawlers(
     return {"report": crawler_log.crawler_report(fetches, ranges, since), "log_reason": None}
 
 
+def _daily_classes(
+    rows: list[dict[str, Any]], sessions: list[fs.Session], now: datetime
+) -> list[dict[str, Any]]:
+    """Sessions per UTC day and class, oldest first, folded a day at a time
+    as stats_analysis.daily_visitors does (fs.sessions_per_day)."""
+    per_day = fs.sessions_per_day(rows, sessions)
+    out = []
+    for day in sorted(per_day):
+        counts = Counter(vc.session_class(s, now)[0] for s in per_day[day])
+        out.append({"day": day.isoformat(), **{c: counts[c] for c in vc.SESSION_CLASSES}})
+    return out
+
+
+def _ssr_pageviews(rows: list[dict[str, Any]], since: datetime) -> int:
+    """Umami's side of beacon_check: page views from `since` on, on the paths
+    the server renders, without the arrivals from a search engine - the same
+    paths and the same cut request_log applies to its browser_js pages, so the
+    two are counted alike and set side by side, never joined."""
+    return sum(
+        1
+        for r in rows
+        if r["event_type"] == 1
+        and r["created_at"] >= since
+        and request_log.ssr_page(r["url_path"] or "/")
+        and not request_log.from_search(r["referrer_domain"] or "", f"GET {r['url_path']}")
+    )
+
+
+@cached("stats:visitors", ttl=VISITORS_TTL)
+async def _visitors(days: int) -> dict[str, Any]:
+    """Both halves of "Who is visiting?": Umami's sessions by class over the
+    window, and nginx's request log by class over its own REQUEST_DAYS.
+
+    The requests part runs off the event loop: a first read parses up to a
+    week of log lines and loads the ASN table (about a second). Without
+    requests.log (every dev box, and the VPS before the deploy that adds the
+    log) it is null and `log_reason` says why; the operators' ranges are then
+    not fetched at all, as in /crawlers.
+    """
+    now = datetime.now(UTC)
+    since = now - timedelta(days=days)
+    report = None
+    if request_log.LOG_PATH.exists():
+        ranges = await crawler_log.published_ranges()
+        report = await asyncio.to_thread(request_log.report, ranges, now)
+    asn_reason = await asyncio.to_thread(request_log.asn_reason)
+    # One fetch for both halves: back to the request log's first line when
+    # that lies before the window, for the beacon check's Umami count.
+    covered = (
+        datetime.fromisoformat(report["covered_from"])
+        if report is not None and report["covered_from"] is not None
+        else now
+    )
+    rows = fetch(SQL_SESSION_EVENTS, min(since, covered), now)
+    window = [r for r in rows if r["created_at"] >= since]
+    sessions = fs.sessions_from_rows(window)
+    recent = now - timedelta(days=BURST_DAYS)
+    bursts = [
+        {**b, "start": b["start"].isoformat(), "end": b["end"].isoformat()}
+        for b in vc.bursts(sessions)
+        if b["end"] >= recent
+    ]
+    if report is not None:
+        report = {
+            **report,
+            "beacon_check": {
+                **report["beacon_check"],
+                "umami_pageviews": _ssr_pageviews(rows, covered),
+            },
+        }
+    return {
+        "days": days,
+        # The panel prints these; one definition, in visitor_class.
+        "labels": vc.LABELS,
+        "sessions": vc.session_counts(sessions, now),
+        "daily": _daily_classes(window, sessions, now),
+        "bursts": bursts[:BURST_LIST],
+        "requests": {
+            "report": report,
+            "log_reason": None if report is not None else request_log.unavailable_reason(),
+            "asn_reason": asn_reason,
+        },
+    }
+
+
+@router.get("/visitors")
+async def visitors(
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """Who is visiting: the sessions that ran our JavaScript by class (human,
+    from an AI answer, JS scraper, undecided, unclear) with the rule behind
+    each, the recent bursts, and every page request nginx logged by what sent
+    it (pipeline/visitor_class.py has every rule). The two are never joined
+    per visitor."""
+    return await _visitors(days)
+
+
 @router.get("/map")
 async def visitor_map(
     days: int = Query(1, ge=1, le=ALL_DAYS_MAX),
@@ -339,7 +475,7 @@ async def problems(
         "problems": fs.problems(
             sessions,
             not_found=fetch(SQL_NOT_FOUND, since, until),
-            vitals=fetch(SQL_VITALS, since, until),
+            vitals=fetch(SQL_VITALS, since, until, sessions=fs.human_ids(sessions)),
             errors=fetch(SQL_ERRORS, since, until),
             searches=[r for r in fetch(SQL_CONTENT, since, until) if r["event_name"] == "search"],
             webgl=fetch(SQL_WEBGL_LOST, since, until),
@@ -428,24 +564,34 @@ async def live(
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """Who is here now and what they have open, and who was here last when
-    nobody is. Fixed windows: the page's range switch does not touch this."""
+    nobody is. Fixed windows: the page's range switch does not touch this.
+
+    Bots stay in the list, each row labelled with its visitor class from the
+    thirty-day fold /countries shares (owner, 2026-10-22). That fold is up to
+    COUNTRY_TTL old, so a session that arrived after it has no class yet:
+    `class` is null for it, not a guess."""
     now = datetime.now(UTC)
     rows = fetch(SQL_LIVE, now - LIVE_LOOKBACK, now)
     here = [r for r in rows if r["last_seen"] >= now - HERE_WINDOW]
+    classes = (await _month_fold())["live_classes"]
+
+    def row(r: dict[str, Any]) -> dict[str, Any]:
+        return {**fs.live_row(r, now), "class": classes.get(str(r["session"]))}
+
     return {
         "window_minutes": int(HERE_WINDOW.total_seconds() // 60),
         "lookback_hours": int(LIVE_LOOKBACK.total_seconds() // 3600),
         "total": len(here),
         "shown": min(len(here), LIVE_LIMIT),
-        "visitors": [fs.live_row(r, now) for r in here[:LIVE_LIMIT]],
-        "last": fs.live_row(rows[0], now) if rows and not here else None,
+        "visitors": [row(r) for r in here[:LIVE_LIMIT]],
+        "last": row(rows[0]) if rows and not here else None,
     }
 
 
-#: When a click out to YouTube started to mean one (deploy 2556cc4, UTC):
-#: before it, a click on a story's video poster - played in place - was
-#: counted as an outbound click as well.
-OUTBOUND_FIX = datetime(2026, 10, 9, 6, 42, tzinfo=UTC)
+#: When a click out to YouTube started to mean one (deploy 2556cc4, the same
+#: deploy as the scroll capture): before it, a click on a story's video
+#: poster - played in place - was counted as an outbound click as well.
+OUTBOUND_FIX = fs.CAPTURE_FIX
 
 
 @router.get("/creators")

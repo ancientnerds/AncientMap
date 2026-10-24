@@ -10,6 +10,7 @@ des Coverage-Blocks, die auf dem Status beruht und nicht auf dem User-Agent.
 
 from __future__ import annotations
 
+import gzip
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -339,15 +340,75 @@ def test_read_visits_returns_none_when_the_log_is_missing(monkeypatch, tmp_path)
     assert "/app/logs:ro" in rl.unavailable_reason()
 
 
-def test_read_visits_reads_only_the_tail(monkeypatch, tmp_path):
+def test_read_visits_reads_the_whole_log(monkeypatch, tmp_path):
+    # Bis 19.10. las er nur das letzte MiB: 5,3 von 32 Tagen Log.
     log = tmp_path / "referrals.log"
     lines = [_line("https://example.org/", f"GET /page-{i}") for i in range(40)]
     log.write_text("\n".join(lines) + "\n", encoding="utf-8")
     monkeypatch.setattr(rl, "LOG_PATH", log)
-    monkeypatch.setattr(rl, "MAX_TAIL_BYTES", 400)
     visits = rl.read_visits()
-    # Die halbe erste Zeile am Sprungpunkt darf nicht knallen und nicht zählen.
-    assert visits is not None and 0 < len(visits) < 40
+    assert visits is not None and len(visits) == 40
+
+
+def test_read_visits_parses_only_what_was_appended(monkeypatch, tmp_path):
+    log = tmp_path / "referrals.log"
+    log.write_text(_line("https://example.org/", "GET /a") + "\n", encoding="utf-8")
+    monkeypatch.setattr(rl, "LOG_PATH", log)
+    monkeypatch.setattr(rl, "CACHE_MIN_SECONDS", 0.0)
+    parsed: list[int] = []
+    real = rl.parse_lines
+    monkeypatch.setattr(rl, "parse_lines", lambda lines: parsed.append(len(lines)) or real(lines))
+    assert len(rl.read_visits() or []) == 1
+    # Eine Zeile, die nginx noch schreibt, wartet auf den naechsten Lauf.
+    half = _line("https://chatgpt.com/", "GET /b")
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(half[:20])
+    assert len(rl.read_visits() or []) == 1
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(half[20:] + "\n")
+    visits = rl.read_visits() or []
+    assert [v.host for v in visits] == ["example.org", "chatgpt.com"]
+    assert parsed == [1, 0, 1]
+
+
+def test_read_visits_reads_the_family_again_after_a_rotation(monkeypatch, tmp_path):
+    # Bis 22.10. begann er nach einer Rotation leer. Seitdem rotiert logrotate
+    # täglich (dateext), und die Historie liegt in den rotierten Dateien.
+    log = tmp_path / "referrals.log"
+    two = [_line("https://example.org/", "GET /a"), _line("https://example.org/", "GET /b")]
+    log.write_text("\n".join(two) + "\n", encoding="utf-8")
+    monkeypatch.setattr(rl, "LOG_PATH", log)
+    monkeypatch.setattr(rl, "CACHE_MIN_SECONDS", 0.0)
+    assert len(rl.read_visits() or []) == 2
+    log.rename(tmp_path / "referrals.log-20261022")
+    log.write_text(_line("https://chatgpt.com/", "GET /c") + "\n", encoding="utf-8")
+    hosts = [v.host for v in rl.read_visits() or []]
+    assert hosts == ["example.org", "example.org", "chatgpt.com"]
+
+
+def test_read_visits_reads_gzipped_days_oldest_first(monkeypatch, tmp_path):
+    log = tmp_path / "referrals.log"
+    (tmp_path / "referrals.log-20261020.gz").write_bytes(
+        gzip.compress((_line("https://bing.com/", "GET /a") + "\n").encode())
+    )
+    (tmp_path / "referrals.log-20261021").write_text(
+        _line("https://duckduckgo.com/", "GET /b") + "\n", encoding="utf-8"
+    )
+    log.write_text(_line("https://chatgpt.com/", "GET /c") + "\n", encoding="utf-8")
+    monkeypatch.setattr(rl, "LOG_PATH", log)
+    hosts = [v.host for v in rl.read_visits() or []]
+    assert hosts == ["bing.com", "duckduckgo.com", "chatgpt.com"]
+
+
+def test_read_visits_starts_over_on_a_truncated_log_without_rotated_days(monkeypatch, tmp_path):
+    log = tmp_path / "referrals.log"
+    two = [_line("https://example.org/", "GET /a"), _line("https://example.org/", "GET /b")]
+    log.write_text("\n".join(two) + "\n", encoding="utf-8")
+    monkeypatch.setattr(rl, "LOG_PATH", log)
+    monkeypatch.setattr(rl, "CACHE_MIN_SECONDS", 0.0)
+    assert len(rl.read_visits() or []) == 2
+    log.write_text(_line("https://chatgpt.com/", "GET /c") + "\n", encoding="utf-8")
+    assert [v.host for v in rl.read_visits() or []] == ["chatgpt.com"]
 
 
 def test_read_visits_does_not_reparse_within_the_minimum(monkeypatch, tmp_path):

@@ -128,6 +128,9 @@ services:
     volumes:
       - ./public/data:/app/public/data
       - ./logs:/app/logs:ro
+      # iptoasn.com's IP-to-ASN table (pipeline/asn.py), downloaded by the
+      # deploy (ci.yml, "Refreshing the ASN database"); gitignored.
+      - ./asn:/app/asn:ro
       # SEO routes serve the real built app shell (pipeline/app_shell.py).
       # Mount the PARENT of dist/, not dist/ itself: the deploy swaps builds
       # in with `mv dist dist-old && mv dist-new dist`, which replaces the

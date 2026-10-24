@@ -236,3 +236,24 @@ def test_research_and_articles_parts_link_hub_and_detail_pages():
     articles = _locs(asyncio.run(sm.sitemap_articles(db=_orm_db(ARTICLES))))
     assert articles[0] == "https://ancientnerds.com/articles/"
     assert "https://ancientnerds.com/articles/week-31-hoards-harbours" in articles
+
+
+def test_canonicalised_shells_point_at_their_hub_and_leave_the_sitemap():
+    """Owner decision 2026-10-20 (SEO evaluation 2026-10-19, tech-6): news.html,
+    articles.html and library.html name their server-rendered hub as canonical and are
+    not in sitemap-static.xml - a sitemap URL with a foreign canonical is a conflicting
+    signal. No 301: the shells stay usable."""
+    from pathlib import Path
+
+    static_locs = _locs(asyncio.run(sm.sitemap_static()))
+    shell_dir = Path(__file__).resolve().parents[2] / "ancient-nerds-map"
+    for shell, hub in sm.CANONICALISED_SHELLS.items():
+        assert f"https://ancientnerds.com{shell}" not in static_locs
+        html = (shell_dir / shell.lstrip("/")).read_text(encoding="utf-8")
+        canonicals = re.findall(r'<link rel="canonical" href="([^"]+)"', html)
+        assert canonicals == [f"https://ancientnerds.com{hub}"], shell
+    # The hubs themselves stay listed, each in its own part.
+    parts = _all_part_responses()
+    assert "https://ancientnerds.com/news-archive/" in _locs(parts["stories"])
+    assert "https://ancientnerds.com/articles/" in _locs(parts["articles"])
+    assert "https://ancientnerds.com/research/" in _locs(parts["research"])

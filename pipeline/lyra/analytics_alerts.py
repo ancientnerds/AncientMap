@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pipeline.lyra.orchestrator import _load_step_state, _save_step_state
-from pipeline.stats_analysis import problems, sessions_from_rows
+from pipeline.stats_analysis import human_ids, problems, sessions_from_rows
 from pipeline.umami_db import (
     SQL_CONTENT,
     SQL_ERRORS,
@@ -236,10 +236,11 @@ def weekly_digest(now: datetime | None = None) -> int:
         feedback = fetch(SQL_FEEDBACK, week_start, now)
         # The same inputs the dashboard's Problems panel uses, so digest and
         # panel never tell two truths.
+        sessions = sessions_from_rows(fetch(SQL_SESSION_EVENTS, week_start, now))
         ranked = problems(
-            sessions_from_rows(fetch(SQL_SESSION_EVENTS, week_start, now)),
+            sessions,
             not_found=fetch(SQL_NOT_FOUND, week_start, now),
-            vitals=fetch(SQL_VITALS, week_start, now),
+            vitals=fetch(SQL_VITALS, week_start, now, sessions=human_ids(sessions)),
             errors=fetch(SQL_ERRORS, week_start, now),
             searches=[r for r in content if r["event_name"] == "search"],
             webgl=fetch(SQL_WEBGL_LOST, week_start, now),

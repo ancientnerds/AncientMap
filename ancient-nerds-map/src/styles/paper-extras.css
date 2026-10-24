@@ -63,14 +63,16 @@
   text-decoration: none;
 }
 
-/* — Corrections log (PaperCorrections) — */
-.theo-paper-corrections {
+/* — Corrections log (PaperCorrections) and the paper's sites (PaperSites) — */
+.theo-paper-corrections,
+.theo-paper-sites {
   margin: 32px 0 0;
   padding-top: 16px;
   border-top: 1px solid var(--border-default);
 }
 
-.theo-paper-corrections h2 {
+.theo-paper-corrections h2,
+.theo-paper-sites h2 {
   font-family: var(--font-heading);
   font-size: 18px;
   letter-spacing: 1px;
@@ -78,12 +80,14 @@
   margin: 0 0 8px;
 }
 
-.theo-paper-corrections ol {
+.theo-paper-corrections ol,
+.theo-paper-sites ul {
   margin: 0;
   padding-left: 20px;
 }
 
-.theo-paper-corrections li {
+.theo-paper-corrections li,
+.theo-paper-sites li {
   margin: 6px 0;
   font-size: 14px;
   line-height: 1.6;
@@ -93,6 +97,15 @@
 .theo-paper-corrections time {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.theo-paper-sites a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+
+.theo-paper-sites a:hover {
+  text-decoration: underline;
 }
 
 .theo-paper-correction-link {

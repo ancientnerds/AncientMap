@@ -98,6 +98,8 @@ export interface StoryRoute {
   web_sources: { url?: string | null; title?: string | null; snippet?: string | null }[] | null
   timestamp_seconds: number | null
   speculative_tag: string | null
+  /** kind is why the story was picked: site | place | country | topic |
+   *  category (api/services/story_related.py, 2026-10-20). */
   related: { slug: string; headline: string; kind: string }[]
 }
 
@@ -159,6 +161,8 @@ export interface SiteRoute {
   alt_names: string[]
   /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {
+    /** Percent-encoded site path (encode_path in sites_html.py): used verbatim in <img src>,
+     *  og:image and the ImageObject, never encoded a second time. */
     url: string
     author: string | null
     license: string | null
@@ -169,8 +173,15 @@ export interface SiteRoute {
     /** Pixelmasse für `<img width height>` — ohne sie springt das Layout. */
     width: number | null
     height: number | null
+    /** The hero's 800 px copy for phones (pipeline/wiki_thumbs.py), for the srcset; null
+     *  when the original is not wider than 800 px (utils/heroSrcSet.ts). */
+    url_800: string | null
   } | null
   news: { slug: string; headline: string }[]
+  /** The public Theo papers that treat the site, newest first: reviewed links
+   *  (migration 0031), shown as "Research on this site". Present only when the site has
+   *  one (api/routes/sites_html.py), like the parts of a ResearchRoute. */
+  papers?: { slug: string; title: string }[]
   links: { title: string | null; url: string; content_type: string | null }[]
   parent: { name: string; path: string } | null
   siblings: { name: string; path: string }[]
@@ -195,6 +206,8 @@ export interface CountrySite {
   site_type: string | null
   period_name: string | null
   period_start: number | null
+  /** The local hero thumbnail as a percent-encoded path (encode_path), else the row's
+   *  thumbnail_url (an encoded Wikimedia URL): printed verbatim in <img src> and og:image. */
   thumbnail_url: string | null
 }
 
@@ -278,6 +291,11 @@ export interface ResearchRoute {
   videos?: ResearchVideo[]
   corrections?: ResearchCorrection[]
   writer?: ResearchWriter
+  /**
+   * The curated sites the paper treats, in name order, with their page paths (reviewed
+   * links, migration 0031). Present only when the paper has one, like the parts above.
+   */
+  sites?: { name: string; path: string }[]
 }
 
 /**

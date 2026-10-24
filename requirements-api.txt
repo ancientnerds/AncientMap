@@ -32,7 +32,18 @@ langchain>=0.3
 langchain-core>=0.3
 langchain-openai>=0.3
 qdrant-client>=1.7.0
-fastembed>=0.4.0
+# fastembed (BM25 sparse vectors, api/services/lyra_embeddings.py) caps
+# pillow<13 even in 0.9.0, and Pillow 12.x carries the fixable CRITICAL CVEs
+# of 2026-10-22 that block the container scan. The Dockerfile installs
+# fastembed==0.9.0 with --no-deps on top; these are its runtime deps
+# (measured 2026-10-22: BM25 embeds fine on Pillow 13.0.0).
+huggingface-hub<2.0,>=0.20
+loguru<0.8.0,>=0.7.2
+mmh3<6.0.0,>=4.1.0
+onnxruntime!=1.20.0,!=1.24.0,!=1.24.1,>=1.17.0
+py-rust-stemmers<0.2.0,>=0.1.0
+tokenizers<1.0,>=0.15
+tqdm<5.0,>=4.66
 voyageai>=0.3
 openai>=1.30.0
 # Capped below 1.0: the 1.0.0 SDK removed temperature/top_p/top_k from
@@ -44,7 +55,7 @@ openai>=1.30.0
 anthropic>=0.50.0,<1.0.0
 
 # --- Image processing ---
-Pillow>=10.0.0
+Pillow>=13.0.0
 
 
 # --- Content rendering ---
@@ -52,7 +63,7 @@ markdown>=3.5.0
 markdown-it-py>=3.0.0
 nh3>=0.3.0  # allowlist HTML sanitizer for LLM-derived markdown (audit 2026-08-05)
 youtube-transcript-api>=1.0.0
-pypdf==6.19.0  # archive completion: text of cited PDF sources (pipeline/lyra/archive_completion.py)
+pypdf==6.21.2  # archive completion: text of cited PDF sources (pipeline/lyra/archive_completion.py)
 
 # --- Auth ---
 PyJWT>=2.8.0

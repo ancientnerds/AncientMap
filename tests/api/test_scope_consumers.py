@@ -80,7 +80,8 @@ def test_site_stats_counts_no_retired_site():
         patch.object(site_stats, "get_session", return_value=db),
     ):
         site_stats.get_site_stats()
-    assert len(db.statements()) == 3
+    # By source and curated countries; the total is the by-source sum (2026-10-20).
+    assert len(db.statements()) == 2
     for sql in db.statements():
         assert SHOWN in sql, sql
 

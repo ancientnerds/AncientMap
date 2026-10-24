@@ -163,7 +163,7 @@ The skill `.claude/skills/theo-write/SKILL.md` runs these steps. Workspace:
   embed is sent only while `DISCORD_WEBHOOK_URL` is set, and it is unset (owner decision 5), so the
   outcome's `side_effects.notify` reads `{"discord": false}` normally.
 - A first publish sets `published_by = 'Theo'` and `result_json.writer` to the studio's `WRITER`
-  record (`pipeline/studio/paper/bundle.py`): since 2026-10-03 `{model: "MiniMax-M3.1-Flash-Preview",
+  record (`pipeline/studio/paper/bundle.py`): since 2026-10-03 `{model: "MiniMax-M3.1-Flash",
   tool: "mcode", research_model: "MiniMax-M3", published: "automatic", human_review: false}`, which
   names the model that actually wrote it (owner rule: a stamp is never a guess). Papers published
   before that keep their stored `writer` (`claude-opus-5-5`).

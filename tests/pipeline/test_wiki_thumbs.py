@@ -91,3 +91,38 @@ def test_an_unreadable_image_is_named_and_the_run_goes_on(tmp_path):
     assert result.written == 1
     assert result.unreadable == (str(broken),)
     assert not (thumbs / "dddddddd" / "broken.webp").exists()
+
+
+def test_the_hero_tree_gets_its_800_px_copy_and_a_narrower_image_none(tmp_path):
+    """Owner 2026-10-20: the page hero gets an 800 px copy for phones. An image of
+    600 px has a gallery thumbnail but no hero copy: nginx answers with the image."""
+    wiki, thumbs = _trees(tmp_path)
+    hero_tree = tmp_path / "wiki-800"
+    _image(wiki / "d953e9b3" / "Göbekli Tepe, Urfa.webp", 1600, 1062)
+    _image(wiki / "d953e9b3" / "mid.webp", 600)
+
+    gallery = wt.sync(wiki, thumbs, workers=1)
+    hero = wt.sync(wiki, hero_tree, workers=1, width=wt.HERO_WIDTH)
+
+    with Image.open(hero_tree / "d953e9b3" / "Göbekli Tepe, Urfa.webp") as im:
+        assert (im.width, im.height) == (wt.HERO_WIDTH, round(1062 * wt.HERO_WIDTH / 1600))
+    assert not (hero_tree / "d953e9b3" / "mid.webp").exists()
+    assert (thumbs / "d953e9b3" / "mid.webp").exists()
+    assert gallery == wt.SyncResult(written=2, unchanged=0, narrow=0, removed=0)
+    assert hero == wt.SyncResult(written=1, unchanged=0, narrow=1, removed=0)
+
+
+def test_main_syncs_the_gallery_and_the_hero_tree(tmp_path, monkeypatch, capsys):
+    wiki, thumbs = _trees(tmp_path)
+    hero_tree = tmp_path / "wiki-800"
+    _image(wiki / "eeeeeeee" / "wide.webp", 1600)
+    monkeypatch.setattr(wt, "WIKI_DIR", wiki)
+    monkeypatch.setattr(wt, "TREES", ((wt.THUMB_WIDTH, thumbs), (wt.HERO_WIDTH, hero_tree)))
+    monkeypatch.setattr("sys.argv", ["wiki_thumbs", "--workers", "1"])
+    wt.main()
+
+    with Image.open(thumbs / "eeeeeeee" / "wide.webp") as im:
+        assert im.width == wt.THUMB_WIDTH
+    with Image.open(hero_tree / "eeeeeeee" / "wide.webp") as im:
+        assert im.width == wt.HERO_WIDTH
+    assert capsys.readouterr().out.count("written=1") == 2

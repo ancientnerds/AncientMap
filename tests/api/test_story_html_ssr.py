@@ -22,6 +22,7 @@ from api.routes.articles_html import (
     story_page,
     story_page_query,
 )
+from pipeline.utils.slugs import story_slug
 
 
 def _orm_db(*, first=None, rows=None, count=0) -> MagicMock:
@@ -31,7 +32,16 @@ def _orm_db(*, first=None, rows=None, count=0) -> MagicMock:
     .all() für Related/Listing, .count() für die Pagination.
     """
     q = MagicMock()
-    for name in ("join", "filter", "options", "order_by", "offset", "limit"):
+    for name in (
+        "join",
+        "outerjoin",
+        "filter",
+        "options",
+        "order_by",
+        "offset",
+        "limit",
+        "with_entities",
+    ):
         getattr(q, name).return_value = q
     q.first.return_value = first
     q.all.return_value = rows or []
@@ -83,6 +93,7 @@ def _item(**overrides) -> SimpleNamespace:
         ],
         "timestamp_seconds": 754,
         "speculative_tag": None,
+        "tags": None,
         "significance": 8,
         "created_at": datetime(2026, 3, 15, 8, 0),
         "video": video,
@@ -93,9 +104,26 @@ def _item(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**row)
 
 
+def _candidate(item: SimpleNamespace) -> tuple:
+    """A row of the related-stories column query (_related_stories)."""
+    site = item.site
+    return (
+        item.id,
+        item.headline,
+        item.tags,
+        item.site_id,
+        item.site_name_extracted,
+        site.name if site else None,
+        site.country if site else None,
+        item.significance,
+        item.created_at,
+        item.news_category,
+    )
+
+
 def test_story_hands_the_full_raw_payload():
     item = _item()
-    related = [_item(id=4600, headline="Trundholm bog survey planned")]
+    related = [_candidate(_item(id=4600, headline="Trundholm bog survey planned"))]
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
         resp = asyncio.run(
@@ -139,6 +167,31 @@ def test_story_hands_the_full_raw_payload():
             "headline": "Trundholm bog survey planned",
             "kind": "site",
         }
+    ]
+
+
+def test_story_without_site_gets_related_stories_by_topic():
+    """The elongated-skull cluster (7364, 6770, 5839) has no site and sits in
+    "general": until 2026-10-20 its block listed the newest "general" stories.
+    The candidate query includes the story itself; the ranking skips it."""
+    base = {"site": None, "site_id": None, "news_category": "general"}
+    item = _item(id=7364, headline="Elongated skulls of Pacific Northwest covered up", **base)
+    cluster = [
+        _item(id=5839, headline="Chinook elongated skulls documented by Lewis and Clark", **base),
+        _item(id=6770, headline="Coffin Rock: 3,000 elongated skull burials destroyed", **base),
+    ]
+    unrelated = [
+        _item(id=100 + i, headline=f"Temple number {i} restored", **base) for i in range(400)
+    ]
+    rows = [_candidate(r) for r in [item, *cluster, *unrelated]]
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(story_page(story_slug(item.headline, 7364), db=_orm_db(first=item, rows=rows)))
+
+    related = render_mock.call_args[0][0]["related"]
+    assert [(r["slug"].rsplit("-", 1)[1], r["kind"]) for r in related] == [
+        ("6770", "topic"),
+        ("5839", "topic"),
     ]
 
 

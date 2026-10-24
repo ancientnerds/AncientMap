@@ -30,7 +30,7 @@ geopandas>=0.14.0           # Geospatial DataFrames
 h3>=3.7.6                   # Uber H3 hexagonal indexing
 pyproj>=3.6.0               # Coordinate transformations
 shapely>=2.0.0              # Geometric operations
-pypdf==6.19.0               # PDF text of cited sources (pipeline/lyra/archive_completion.py)
+pypdf==6.21.2               # PDF text of cited sources (pipeline/lyra/archive_completion.py)
 
 # =============================================================================
 # NAME MATCHING & DEDUPLICATION
@@ -59,7 +59,7 @@ aiofiles>=23.2.0            # Async file operations
 # =============================================================================
 # IMAGE PROCESSING
 # =============================================================================
-Pillow>=10.0.0              # Image manipulation for OG image generation
+Pillow>=13.0.0              # Image manipulation for OG image generation
 
 # =============================================================================
 # UTILITIES

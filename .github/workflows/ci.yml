@@ -418,6 +418,11 @@ jobs:
             chmod -R a+w public/data/library/ 2>/dev/null || true
             echo "==> Restoring snapshots..."
             mkdir -p public/data/snapshots
+            # The ASN database (pipeline/asn.py) is bind-mounted into the api
+            # containers; created here, before any docker compose up, because
+            # dockerd would create a missing mount source as root and the
+            # download step at the end could never write into it.
+            mkdir -p asn
             cp -r /tmp/snapshots_backup/* public/data/snapshots/ 2>/dev/null || true
             rm -rf /tmp/snapshots_backup
             AFTER=$(git rev-parse HEAD)
@@ -455,6 +460,12 @@ jobs:
                 echo "    Nginx reloaded"
               else
                 echo "ERROR: nginx config test failed! Restoring previous config."
+                # sudo may copy only the repo file, so the restore goes through
+                # the checkout: the config of the commit deployed before this one.
+                git show $BEFORE:ancientnerds-nginx-config > ancientnerds-nginx-config
+                sudo /bin/cp /var/www/ancientnerds/ancientnerds-nginx-config /etc/nginx/sites-available/ancientnerds.com
+                sudo /usr/sbin/nginx -t
+                git checkout -- ancientnerds-nginx-config
                 exit 1
               fi
             fi
@@ -679,6 +690,18 @@ jobs:
               nohup ./scripts/follow_logs.sh </dev/null >/dev/null 2>&1 &
               echo $! > logs/.follow_logs.pid
               disown
+            fi
+
+            # IP-to-ASN table of iptoasn.com (public domain) for the visitor
+            # classes (pipeline/asn.py), refreshed at most weekly; the panel
+            # prints its date (asn_as_of). Plain lines on purpose: under set -e
+            # a failed download or a corrupt archive aborts the deploy here,
+            # before the old file is replaced.
+            echo "==> Refreshing the ASN database..."
+            if ! find asn -name ip2asn-v4-u32.tsv.gz -mtime -7 | grep -q .; then
+              curl -sfRL -o asn/ip2asn-v4-u32.tsv.gz.new https://iptoasn.com/data/ip2asn-v4-u32.tsv.gz
+              gzip -t asn/ip2asn-v4-u32.tsv.gz.new
+              mv asn/ip2asn-v4-u32.tsv.gz.new asn/ip2asn-v4-u32.tsv.gz
             fi
             echo "==> Deploy complete!"
             exit 0'

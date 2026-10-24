@@ -64,6 +64,9 @@ def encode_path(path: str) -> str:
 
     Takes an UNENCODED path — passing an already-encoded one would
     double-escape every '%'. In-page href attributes do not need this;
-    browsers encode them, and the readable form is nicer to look at.
+    browsers encode them, and the readable form is nicer to look at. Image
+    paths built from a wiki_images file name do (the SSR site and hub
+    payloads): they also feed og:image and the ImageObject, where a raw space
+    ends the URL, and a raw space in <img src> is invalid HTML (2026-10-19).
     """
     return quote(path)

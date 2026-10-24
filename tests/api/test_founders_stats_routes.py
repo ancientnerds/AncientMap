@@ -20,6 +20,7 @@ from api.routes import founders_stats as fr
 from api.routes import stats_access as sa
 from api.services import jwt_auth
 from pipeline import stats_analysis as fs
+from pipeline import visitor_class as vc
 
 SESSION = {"scope": "stats", "sub": "42", "name": "martin"}
 
@@ -86,7 +87,7 @@ def test_router_is_mounted_under_api_stats():
     # changed between the local and the CI version (a _IncludedRouter wrapper
     # without .path), while the schema is the documented contract either way.
     paths = set(app.openapi()["paths"])
-    for name in ("overview", "countries", "daily", "search", "field-vitals", "crawlers", "server", "creators", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
+    for name in ("overview", "countries", "visitors", "daily", "search", "field-vitals", "crawlers", "server", "creators", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -105,13 +106,21 @@ def test_overview_runs_one_query_and_answers_four_keys(monkeypatch):
     assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=7)
 
 
+def _umami(sid: str, created: datetime) -> dict:
+    """The session columns every SQL_SESSION_EVENTS row carries. A screen of
+    its own per session keeps it out of the machine rules' fingerprint groups
+    (pipeline/visitor_class.py); _arrival() sets a shared one on purpose."""
+    return {"browser": "chrome", "os": "Android", "screen": f"{sid}-screen", "language": "en-US",
+            "session_created": created, "visit_id": f"v-{sid}"}  # fmt: skip
+
+
 def test_overview_counts_and_types_come_from_the_session_rows(monkeypatch):
     t = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     rows = [
-        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "mobile", "data": None},
-        {"session_id": "b", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/globe.html", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "desktop", "data": None},
-        {"session_id": "b", "created_at": t, "event_type": 2, "event_name": "site_open", "url_path": "/globe.html", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "desktop", "data": {"site": "1"}},
-        {"session_id": "c", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/sites/peru/x-1", "referrer_domain": None, "utm_source": "chatgpt.com", "country": "US", "device": "mobile", "data": None},
+        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "mobile", "data": None, **_umami("a", t)},
+        {"session_id": "b", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/globe.html", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "desktop", "data": None, **_umami("b", t)},
+        {"session_id": "b", "created_at": t, "event_type": 2, "event_name": "site_open", "url_path": "/globe.html", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "desktop", "data": {"site": "1"}, **_umami("b", t)},
+        {"session_id": "c", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/sites/peru/x-1", "referrer_domain": None, "utm_source": "chatgpt.com", "country": "US", "device": "mobile", "data": None, **_umami("c", t)},
     ]  # fmt: skip
     fetch = Fetch(**{"ORDER BY e.session_id": rows})
     monkeypatch.setattr(fr, "fetch", fetch)
@@ -125,7 +134,7 @@ def test_overview_counts_and_types_come_from_the_session_rows(monkeypatch):
 def test_daily_fetches_the_whole_history_once_and_ends_with_today(monkeypatch):
     now = datetime.now(UTC)
     rows = [
-        {"session_id": "a", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "mobile", "data": None},
+        {"session_id": "a", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "mobile", "data": None, **_umami("a", now)},
     ]  # fmt: skip
     fetch = Fetch(**{"ORDER BY e.session_id": rows})
     monkeypatch.setattr(fr, "fetch", fetch)
@@ -206,7 +215,7 @@ def test_server_puts_each_day_s_visitors_beside_its_load(monkeypatch):
 
 
 def test_crawlers_say_why_when_the_log_is_missing(monkeypatch):
-    from api.services import crawler_log
+    from pipeline import crawler_log
 
     monkeypatch.setattr(crawler_log, "read_fetches", lambda: None)
     out = asyncio.run(fr.crawlers(days=7, _session=SESSION))
@@ -218,7 +227,7 @@ def test_crawlers_fold_the_window_against_the_published_ranges(monkeypatch):
     import ipaddress
     import json
 
-    from api.services import crawler_log
+    from pipeline import crawler_log
 
     now = datetime.now(UTC)
     lines = [
@@ -251,20 +260,21 @@ def test_countries_still_slice_one_fetch_into_four_windows(monkeypatch):
     common = {"referrer_domain": None, "utm_source": None, "device": "mobile"}  # fmt: skip
     rows = [
         # Still clicking: counts in every window, including "now".
-        {"session_id": "live", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "DE", **common},
-        {"session_id": "live", "created_at": now, "event_type": 2, "event_name": "search", "url_path": "/globe.html", "data": {"q": "x"}, "country": "DE", **common},
-        # Yesterday: in 7 and 30 days, not in today or now.
-        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "US", **common},
-        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "US", **common},
+        {"session_id": "live", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "DE", **common, **_umami("live", now)},
+        {"session_id": "live", "created_at": now, "event_type": 2, "event_name": "search", "url_path": "/globe.html", "data": {"q": "x"}, "country": "DE", **common, **_umami("live", now)},
+        # Yesterday: in 7 and 30 days, not in today or now. Two URLs make a
+        # person only for a session that came from somewhere (Session.human).
+        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "US", **common, "referrer_domain": "www.google.com", **_umami("old", now - timedelta(days=1))},
+        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "US", **common, **_umami("old", now - timedelta(days=1))},
         # Three weeks back: only the 30-day tile.
-        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "PE", **common},
-        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "PE", **common},
+        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "PE", **common, "referrer_domain": "www.google.com", **_umami("ancient", now - timedelta(days=21))},
+        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "PE", **common, **_umami("ancient", now - timedelta(days=21))},
     ]  # fmt: skip
     fetch = Fetch(**{"ORDER BY e.session_id": rows})
     monkeypatch.setattr(fr, "fetch", fetch)
     # The unwrapped helper: /countries is cached for COUNTRY_TTL seconds, and a
     # cache hit from another test would answer before the fetch ever runs.
-    out = asyncio.run(fr._country_windows.__wrapped__())
+    out = asyncio.run(fr._month_fold.__wrapped__())["countries"]
     assert [r["country"] for r in out["now"]["countries"]] == ["DE"]
     assert [r["country"] for r in out["today"]["countries"]] == ["DE"]
     assert [r["country"] for r in out["d7"]["countries"]] == ["DE", "US"]
@@ -279,6 +289,204 @@ def test_countries_still_slice_one_fetch_into_four_windows(monkeypatch):
     for tile, days in (("d7", 7), ("d30", 30)):
         covered = now - timedelta(days=2 * days) >= first_day
         assert (out[tile]["change"] is not None) == covered, tile
+
+
+def _arrival(sid: str, at: datetime, country: str, screen: str) -> list[dict]:
+    """One page view and nothing else, with the columns the machine rules
+    group on (pipeline/visitor_class.py fingerprint) and Umami's session start."""
+    return [
+        {"session_id": sid, "created_at": at, "event_type": 1, "event_name": None, "url_path": "/sites/peru/x-1", "data": None,
+         "country": country, "referrer_domain": None, "utm_source": None, "device": "desktop", "browser": "chrome",
+         "os": "Windows 10", "screen": screen, "language": "en-US", "session_created": at, "visit_id": f"v-{sid}"},
+    ]  # fmt: skip
+
+
+def _burst_rows(now: datetime) -> list[dict]:
+    """Nine one-page sessions of one fingerprint inside two minutes (a burst:
+    BURST_MIN is 8) and one arrival of another fingerprint a minute ago."""
+    rows = [
+        r
+        for i in range(9)
+        for r in _arrival(f"b{i}", now - timedelta(seconds=150 - 10 * i), "SG", "1280x1200")
+    ]
+    return rows + _arrival("new", now - timedelta(minutes=1), "DE", "1920x1080")
+
+
+def test_the_now_tile_counts_people_and_puts_the_scrapers_beside_them(monkeypatch):
+    now = datetime.now(UTC)
+    monkeypatch.setattr(fr, "fetch", Fetch(**{"ORDER BY e.session_id": _burst_rows(now)}))
+    fold = asyncio.run(fr._month_fold.__wrapped__())
+    tile = fold["countries"]["now"]
+    # The arrival has one page view and no act yet: undecided, and counted.
+    assert tile["sessions"] == 1
+    assert [r["country"] for r in tile["countries"]] == ["DE"]
+    assert tile["all"] == 10
+    assert tile["bots"] == {"sessions": 9, "country": "SG"}
+    # The other tiles count humans only: neither the burst nor the arrival.
+    assert fold["countries"]["today"]["sessions"] == 0
+    # /live labels its rows from the same fold.
+    assert fold["live_classes"]["new"] == "undecided"
+    assert {fold["live_classes"][f"b{i}"] for i in range(9)} == {"scraper_js"}
+
+
+def test_the_now_tile_names_no_country_without_a_scraper(monkeypatch):
+    now = datetime.now(UTC)
+    rows = _arrival("new", now - timedelta(minutes=1), "DE", "1920x1080")
+    monkeypatch.setattr(fr, "fetch", Fetch(**{"ORDER BY e.session_id": rows}))
+    tile = asyncio.run(fr._month_fold.__wrapped__())["countries"]["now"]
+    assert tile["bots"] == {"sessions": 0, "country": None}
+
+
+def test_countries_answer_the_four_tiles_of_the_fold(monkeypatch):
+    async def fold():
+        return {"countries": {"now": "N"}, "live_classes": {}}
+
+    monkeypatch.setattr(fr, "_month_fold", fold)
+    assert asyncio.run(fr.visitor_countries(_session=SESSION)) == {"now": "N"}
+
+
+# ---- /visitors ------------------------------------------------------------
+
+
+def _no_request_log(monkeypatch, tmp_path):
+    from pipeline import crawler_log, request_log
+
+    monkeypatch.setattr(request_log, "LOG_PATH", tmp_path / "requests.log")
+
+    async def ranges():
+        raise AssertionError("no log, so no ranges fetch")
+
+    monkeypatch.setattr(crawler_log, "published_ranges", ranges)
+
+
+def test_visitors_answer_every_class_and_say_why_the_request_log_is_missing(monkeypatch, tmp_path):
+    _no_request_log(monkeypatch, tmp_path)
+    now = datetime.now(UTC)
+    fetch = Fetch(**{"ORDER BY e.session_id": _burst_rows(now)})
+    monkeypatch.setattr(fr, "fetch", fetch)
+    out = asyncio.run(fr._visitors.__wrapped__(36))
+    assert set(out) == {"days", "labels", "sessions", "daily", "bursts", "requests"}
+    # Every class and reason the panel can meet has its English label.
+    assert {*vc.SESSION_CLASSES, *vc.SESSION_REASONS, *vc.REQUEST_CLASSES} <= set(out["labels"])
+    assert out["days"] == 36
+    sessions = out["sessions"]
+    assert sessions["total"] == 10
+    assert list(sessions["classes"]) == list(vc.SESSION_CLASSES)
+    assert list(sessions["reasons"]) == list(vc.SESSION_REASONS)
+    assert sessions["classes"]["scraper_js"] == 9 and sessions["classes"]["undecided"] == 1
+    assert sessions["reasons"]["burst"] == 9
+    assert sessions["humans_in_machine_groups"] == 0
+    # One row per UTC day (two when the fixture straddles midnight), every class in it.
+    assert all(set(d) == {"day", *vc.SESSION_CLASSES} for d in out["daily"])
+    assert sum(d["scraper_js"] for d in out["daily"]) == 9
+    assert out["daily"][-1]["day"] == now.date().isoformat()
+    # The burst, as JSON the cache can hold: strings, not datetimes.
+    [burst] = out["bursts"]
+    assert burst["sessions"] == 9 and burst["country"] == "SG" and burst["screen"] == "1280x1200"
+    assert isinstance(burst["start"], str) and burst["start"] <= burst["end"]
+    requests = out["requests"]
+    assert requests["report"] is None
+    assert "requests.log does not exist yet" in requests["log_reason"]
+    assert len(fetch.calls) == 1
+    assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=36)
+
+
+def test_visitors_list_only_the_bursts_of_the_last_week(monkeypatch, tmp_path):
+    _no_request_log(monkeypatch, tmp_path)
+    old = datetime.now(UTC) - timedelta(days=fr.BURST_DAYS + 1)
+    rows = [
+        r
+        for i in range(9)
+        for r in _arrival(f"b{i}", old + timedelta(seconds=i), "SG", "1280x1200")
+    ]
+    monkeypatch.setattr(fr, "fetch", Fetch(**{"ORDER BY e.session_id": rows}))
+    out = asyncio.run(fr._visitors.__wrapped__(30))
+    assert out["sessions"]["reasons"]["burst"] == 9
+    assert out["bursts"] == []
+
+
+def test_visitors_set_umami_beside_the_request_log_from_its_first_line(monkeypatch, tmp_path):
+    import json
+
+    from pipeline import crawler_log, request_log
+
+    now = datetime.now(UTC)
+    first = now - timedelta(days=3)
+    log = tmp_path / "requests.log"
+    line = {"ip": "203.0.113.9", "ref": "", "proto": "HTTP/2.0", "purpose": "", "dest": "document", "dnt": "", "gpc": "", "ua": "Mozilla/5.0 (Windows NT 10.0) Chrome/130"}  # fmt: skip
+    log.write_text(
+        "\n".join(
+            json.dumps({**line, "t": t.isoformat(), "req": req, "status": 200})
+            for t, req in (
+                (first, "GET /sites/peru/x-1"),
+                (first + timedelta(seconds=5), "POST /api/pulse"),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(request_log, "LOG_PATH", log)
+    monkeypatch.setattr(request_log, "_report", None)
+
+    async def ranges():
+        return {}
+
+    monkeypatch.setattr(crawler_log, "published_ranges", ranges)
+    page = {"event_type": 1, "event_name": None, "data": None, "country": "DE", "utm_source": None, "device": "desktop", "browser": "chrome"}  # fmt: skip
+    rows = [
+        # Before the log's first line: on neither side.
+        {**page, "session_id": "a", "created_at": first - timedelta(hours=1), "url_path": "/sites/peru/x-1", "referrer_domain": None},
+        # Counted: a server-rendered path, not from a search engine.
+        {**page, "session_id": "b", "created_at": first + timedelta(seconds=1), "url_path": "/sites/peru/x-1", "referrer_domain": None},
+        # Left out: an arrival from Google, and a page the service worker serves.
+        {**page, "session_id": "c", "created_at": first + timedelta(hours=1), "url_path": "/articles/x", "referrer_domain": "www.google.com"},
+        {**page, "session_id": "d", "created_at": first + timedelta(hours=2), "url_path": "/globe.html", "referrer_domain": None},
+    ]  # fmt: skip
+    fetch = Fetch(**{"ORDER BY e.session_id": rows})
+    monkeypatch.setattr(fr, "fetch", fetch)
+    # A one-day window: the fetch still reaches back to the log's first line.
+    out = asyncio.run(fr._visitors.__wrapped__(1))
+    report = out["requests"]["report"]
+    assert out["requests"]["log_reason"] is None
+    assert report["classes"]["browser_js"]["requests"] == 1
+    assert report["beacon_check"] == {"pages_with_js": 1, "umami_pageviews": 1}
+    assert fetch.calls[0][1] == first
+    # The window's own fold leaves the older rows out.
+    assert out["sessions"]["total"] == 0
+    # The module's cached report is not changed by the API's addition.
+    assert "umami_pageviews" not in request_log._report[2]["beacon_check"]
+
+
+def test_visitors_ask_the_cached_fold_for_their_window(monkeypatch):
+    calls: list[int] = []
+
+    async def fake(days):
+        calls.append(days)
+        return {"days": days}
+
+    monkeypatch.setattr(fr, "_visitors", fake)
+    assert asyncio.run(fr.visitors(days=36, _session=SESSION)) == {"days": 36}
+    assert calls == [36]
+
+
+def test_the_class_unions_of_the_dashboard_are_visitor_class_s():
+    """types.ts spells the classes out as unions; this keeps them equal to the
+    one definition (pipeline/visitor_class.py)."""
+    import re
+    from pathlib import Path
+
+    types = (
+        Path(__file__).resolve().parents[2] / "ancient-nerds-map/src/components/dashboard/types.ts"
+    ).read_text(encoding="utf-8")
+
+    def union(name: str) -> list[str]:
+        body = re.search(rf"export type {name} =([^;]*?)\n\n", types)
+        assert body, name
+        return re.findall(r"'([a-z_]+)'", body.group(1))
+
+    assert union("SessionClass") == list(vc.SESSION_CLASSES)
+    assert union("SessionReason") == list(vc.SESSION_REASONS)
+    assert union("RequestClass") == list(vc.REQUEST_CLASSES)
 
 
 def test_content_splits_the_rows_by_event_and_caps_the_lists(monkeypatch):
@@ -522,7 +730,17 @@ def _live_row(session: str, minutes_ago: int, now: datetime) -> dict:
     }
 
 
+def _live_classes(monkeypatch, classes: dict[str, str]) -> None:
+    """The thirty-day fold /live labels its rows from, without its fetch."""
+
+    async def fold():
+        return {"countries": {}, "live_classes": classes}
+
+    monkeypatch.setattr(fr, "_month_fold", fold)
+
+
 def test_live_splits_the_here_and_now_from_the_last_visitor(monkeypatch):
+    _live_classes(monkeypatch, {})
     now = datetime.now(UTC)
     rows = [_live_row("here", 3, now), _live_row("gone", 9 * 60, now)]
     fetch = Fetch(**{"AS last_seen": rows})
@@ -546,12 +764,32 @@ def test_live_splits_the_here_and_now_from_the_last_visitor(monkeypatch):
 
 
 def test_live_caps_the_list_at_the_limit(monkeypatch):
+    _live_classes(monkeypatch, {})
     now = datetime.now(UTC)
     rows = [_live_row(f"s{i}", i, now) for i in range(8)]
     monkeypatch.setattr(fr, "fetch", Fetch(**{"AS last_seen": rows}))
     out = asyncio.run(fr.live(_session=SESSION))
     assert out["total"] == 8
     assert out["shown"] == fr.LIVE_LIMIT == len(out["visitors"])
+
+
+def test_live_keeps_the_bots_and_labels_every_row_with_its_class(monkeypatch):
+    # Owner, 2026-10-22: the list keeps everyone and says what each one is.
+    # The fold is keyed by the full session id; the row prints it cut short.
+    now = datetime.now(UTC)
+    long_id = "b" * 36
+    _live_classes(monkeypatch, {long_id: "scraper_js", "gone": "human"})
+    rows = [_live_row(long_id, 1, now), _live_row("fresh", 2, now)]
+    monkeypatch.setattr(fr, "fetch", Fetch(**{"AS last_seen": rows}))
+    out = asyncio.run(fr.live(_session=SESSION))
+    assert [(v["session"], v["class"]) for v in out["visitors"]] == [
+        (long_id[: fs.SESSION_ID_CHARS], "scraper_js"),
+        # Arrived after the cached fold: no class yet, and no guess.
+        ("fresh", None),
+    ]
+
+    monkeypatch.setattr(fr, "fetch", Fetch(**{"AS last_seen": [_live_row("gone", 9 * 60, now)]}))
+    assert asyncio.run(fr.live(_session=SESSION))["last"]["class"] == "human"
 
 
 def test_members_hand_the_founder_role_to_the_query(monkeypatch):
@@ -583,8 +821,8 @@ def _human_bounce_rows(t: datetime) -> list[dict]:
     out of the bounce list."""
     common = {"referrer_domain": "google.com", "utm_source": None, "country": "DE", "device": "mobile"}  # fmt: skip
     return [
-        {"session_id": "c", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common},
-        {"session_id": "c", "created_at": t, "event_type": 2, "event_name": "filter_toggle", "url_path": "/news-archive/x-1", "data": {"filter": "type"}, **common},
+        {"session_id": "c", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common, **_umami("c", t)},
+        {"session_id": "c", "created_at": t, "event_type": 2, "event_name": "filter_toggle", "url_path": "/news-archive/x-1", "data": {"filter": "type"}, **common, **_umami("c", t)},
     ]  # fmt: skip
 
 
@@ -592,10 +830,10 @@ def _session_rows(t: datetime) -> list[dict]:
     """Two sessions: one story reader who opened a site, one single-page bounce."""
     common = {"referrer_domain": "google.com", "utm_source": None, "country": "DE", "device": "mobile"}  # fmt: skip
     return [
-        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common},
-        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "site_open", "url_path": "/news-archive/x-1", "data": {"site": "1"}, **common},
-        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/sites/peru/x-1", "data": None, **common},
-        {"session_id": "b", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common},
+        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common, **_umami("a", t)},
+        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "site_open", "url_path": "/news-archive/x-1", "data": {"site": "1"}, **common, **_umami("a", t)},
+        {"session_id": "a", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/sites/peru/x-1", "data": None, **common, **_umami("a", t)},
+        {"session_id": "b", "created_at": t, "event_type": 1, "event_name": None, "url_path": "/news-archive/x-1", "data": None, **common, **_umami("b", t)},
     ]  # fmt: skip
 
 
@@ -603,8 +841,8 @@ def test_journeys_carry_chains_entries_exits_outbound_and_reading_from_one_fetch
     t = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
     common = {"referrer_domain": "google.com", "utm_source": None, "country": "DE", "device": "mobile"}  # fmt: skip
     extra = [
-        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "outbound_click", "url_path": "/sites/peru/x-1", "data": {"host": "youtube.com"}, **common},
-        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "scroll_depth", "url_path": "/sites/peru/x-1", "data": {"page": "site", "depth": "50"}, **common},
+        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "outbound_click", "url_path": "/sites/peru/x-1", "data": {"host": "youtube.com"}, **common, **_umami("a", t)},
+        {"session_id": "a", "created_at": t, "event_type": 2, "event_name": "scroll_depth", "url_path": "/sites/peru/x-1", "data": {"page": "site", "depth": "50"}, **common, **_umami("a", t)},
     ]  # fmt: skip
     fetch = Fetch(**{"ORDER BY e.session_id": _session_rows(t) + extra})
     monkeypatch.setattr(fr, "fetch", fetch)

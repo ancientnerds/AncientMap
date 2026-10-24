@@ -22,7 +22,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install Python dependencies (API-only, not full dev/pipeline requirements)
 COPY requirements-api.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements-api.txt
+    pip install --no-cache-dir -r requirements-api.txt && \
+    pip install --no-cache-dir --no-deps fastembed==0.9.0
 
 # =============================================================================
 # Stage 2: Production

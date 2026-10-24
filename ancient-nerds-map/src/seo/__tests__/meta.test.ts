@@ -24,13 +24,18 @@ import { describe, expect, it } from 'vitest'
 
 import type { PageMeta } from '../meta'
 import {
+  RESEARCH_FEED,
+  SITE_TITLE_MAX,
+  STORIES_FEED,
   articleIndexMeta,
   articleMeta,
   countryMeta,
+  landingMeta,
   renderHead,
   researchIndexMeta,
   researchMeta,
   siteMeta,
+  siteTitle,
   sitesIndexMeta,
   slugify,
   storyArchiveMeta,
@@ -251,11 +256,13 @@ describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notice
     expect(bare.identifier).toBeUndefined()
   })
 
-  it('gives the hero as an ImageObject with its licence and an encoded URL', () => {
+  it('gives the hero as an ImageObject with its licence and the encoded URL, encoded once', () => {
+    // The payload carries the path already encoded (encode_path, sites_html.py, since
+    // 2026-10-20): a second encoding would turn %20 into %2520 and every URL into a 404.
     const meta = siteMeta({
       ...pyrefRoute('site'),
       image: {
-        url: '/data/images/wiki/9c8b7a65/Gobekli Tepe pillar.webp',
+        url: '/data/images/wiki/9c8b7a65/Gobekli%20Tepe%20pillar.webp',
         author: 'A. Fotograf',
         license: 'CC BY-SA 4.0',
         license_url: 'https://creativecommons.org/licenses/by-sa/4.0/',
@@ -377,5 +384,71 @@ describe('researchMeta: Claude-written paper extras (studio spec §2.7)', () => 
     const plain = JSON.parse(researchMeta(FIXTURES.research).schema!)
     expect(plain).not.toHaveProperty('dateModified')
     expect(plain).not.toHaveProperty('video')
+  })
+})
+
+describe('site titles (owner decision 2026-10-20, tech-5)', () => {
+  const site = (name: string, country: string, site_type: string | null) =>
+    siteTitle({ name, country, site_type })
+
+  it('carries the readable label, not the raw taxonomy', () => {
+    expect(site('Troy', 'Türkiye', 'City/town/settlement')).toBe('Troy — Türkiye · Settlement')
+    expect(site('Masada', 'Israel', 'Fortress/citadel')).toBe('Masada — Israel · Fortress')
+    expect(siteMeta({ ...FIXTURES.site, site_type: 'Cave Structures' }).title).toBe(
+      'Göbekli Tepe — Türkiye · Cave site',
+    )
+    expect(site('Nameless', 'Peru', null)).toBe('Nameless — Peru · Archaeological site')
+  })
+
+  it('drops the type where it would run past 60 characters, counted in code points', () => {
+    // 48 + " · Settlement" = 61: the type goes, name and country stay.
+    const name = 'Ancient City of Ninety-Nine Long Names'
+    expect(Array.from(`${name} — Türkiye`).length).toBe(48)
+    expect(site(name, 'Türkiye', 'City/town/settlement')).toBe(`${name} — Türkiye`)
+    // 59 and exactly 60 keep it.
+    const fits = 'Ancient City of Ninety-Nine Long Nam'
+    const full = `${fits} — Türkiye · Settlement`
+    expect(Array.from(full).length).toBe(SITE_TITLE_MAX - 1)
+    expect(site(fits, 'Türkiye', 'City/town/settlement')).toBe(full)
+    expect(site(`${fits}e`, 'Türkiye', 'City/town/settlement')).toBe(`${fits}e — Türkiye · Settlement`)
+  })
+
+  it('the visible type line keeps the raw value: only the title changes', () => {
+    const head = renderHead(siteMeta({ ...FIXTURES.site, site_type: 'Fortress/citadel' }))
+    expect(head).toContain('<title>Göbekli Tepe — Türkiye · Fortress | Ancient Nerds</title>')
+  })
+})
+
+describe('Atom feeds in the head (owner decision 2026-10-20, roadmap W13)', () => {
+  const feedLinks = (head: string) =>
+    head.match(/<link rel="alternate" type="application\/atom\+xml"[^>]*>/g) ?? []
+
+  it('the story archive names the story feed, the research library the paper feed', () => {
+    expect(feedLinks(renderHead(storyArchiveMeta(FIXTURES.storyArchive)))).toEqual([
+      `<link rel="alternate" type="application/atom+xml" title="Ancient Nerds — Archaeology Stories" href="${STORIES_FEED.href}">`,
+    ])
+    expect(feedLinks(renderHead(researchIndexMeta(FIXTURES.researchIndex)))).toEqual([
+      `<link rel="alternate" type="application/atom+xml" title="Ancient Nerds — Research Papers" href="${RESEARCH_FEED.href}">`,
+    ])
+  })
+
+  it('the homepage names both, detail pages none', () => {
+    expect(feedLinks(renderHead(landingMeta(FIXTURES.landing)))).toHaveLength(2)
+    expect(feedLinks(renderHead(storyMeta(FIXTURES.story)))).toEqual([])
+    expect(feedLinks(renderHead(siteMeta(FIXTURES.site)))).toEqual([])
+  })
+
+  it('the feed URLs are the ones nginx proxies', () => {
+    expect(STORIES_FEED.href).toBe('https://ancientnerds.com/feeds/stories.xml')
+    expect(RESEARCH_FEED.href).toBe('https://ancientnerds.com/feeds/research.xml')
+  })
+})
+
+describe('VideoObject uploadDate (tech-3, GSC 2026-10-19)', () => {
+  it('is the full UTC time with its offset, not the bare date', () => {
+    const video = JSON.parse(storyMeta(FIXTURES.story).schema!).isBasedOn
+    expect(video.uploadDate).toBe('2026-03-14T09:30:00+00:00')
+    // datePublished of the story itself stays a date, which Google accepts.
+    expect(JSON.parse(storyMeta(FIXTURES.story).schema!).datePublished).toBe('2026-03-14')
   })
 })

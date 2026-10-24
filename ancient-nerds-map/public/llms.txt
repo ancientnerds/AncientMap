@@ -5,7 +5,7 @@
 > hand across 91 countries, plus AI-written story summaries, weekly journals and
 > open-access research papers.
 
-Operated by Dominiak Consulting. Contact: contact@ancientnerds.com
+Operated by Dominiak Consulting. Contact: ancient.nerds@protonmail.com
 
 ## How to read this site
 
@@ -39,19 +39,27 @@ the research papers over the AI-written narrative text.
 ## Main entry points
 
 - [Sites by country](https://ancientnerds.com/sites/): about 4,900 curated sites, 91 countries
-- [Story Archive](https://ancientnerds.com/news-archive/): over 2,200 archaeology stories
+- [Story Archive](https://ancientnerds.com/news-archive/): over 2,300 archaeology stories
 - [Research Library](https://ancientnerds.com/research/): open-access papers, CC BY 4.0
 - [Weekly Journal](https://ancientnerds.com/articles/): weekly digests
 - [Search](https://ancientnerds.com/search.html): full-text search across all records
 - [3D Globe](https://ancientnerds.com/globe.html): the interactive map
-- [Sitemap](https://ancientnerds.com/sitemap.xml): about 7,300 content URLs
+- [Sitemap](https://ancientnerds.com/sitemap.xml): about 7,400 content URLs
+
+## Feeds
+
+- Stories (Atom): https://ancientnerds.com/feeds/stories.xml
+- Research papers (Atom): https://ancientnerds.com/feeds/research.xml
 
 ## Machine-readable data
 
-- Public API, for example https://ancientnerds.com/api/v1/sites/search,
-  /api/v1/sites/{site_id}, /api/v1/sources and /api/v1/research
-- OpenAPI description: https://ancientnerds.com/api/v1/openapi.json
+- OpenAPI description of the public API: https://ancientnerds.com/api/v1/openapi.json
 - API documentation: https://ancientnerds.com/api.html
+
+The API itself is for applications, not for crawling: robots.txt disallows /api/
+except the OpenAPI description and a few paths the pages fetch while they render,
+and its endpoints are rate-limited. The pages
+listed above carry the same records.
 
 ## Licensing
 

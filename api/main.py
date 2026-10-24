@@ -1,7 +1,7 @@
 """
 FastAPI Backend for Ancient Nerds Map.
 
-High-performance API for serving 750K+ archaeological sites
+High-performance API for serving 1.7M+ archaeological site records
 with spatial clustering and viewport filtering.
 
 Updated: BitNet LLM optimized for faster responses
@@ -44,6 +44,7 @@ from api.routes import (
     auth,
     content,
     contributions,
+    feeds,
     founders_stats,
     goto,
     interactions,
@@ -273,7 +274,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Ancient Nerds Map API",
-    description="High-performance API for 750K+ archaeological sites",
+    description="High-performance API for 1.7M+ archaeological site records",
     version="1.1.0",
     lifespan=lifespan,
 )
@@ -340,6 +341,7 @@ app.include_router(og.router, prefix="/api/og", tags=["og"])
 app.include_router(contributions.router, prefix="/api/contributions", tags=["contributions"])
 app.include_router(lyra.router, prefix="/api/lyra", tags=["lyra"])
 app.include_router(sitemap.router, prefix="/api/sitemap", tags=["sitemap"])
+app.include_router(feeds.router, prefix="/api/feeds", tags=["feeds"])
 app.include_router(streetview.router, prefix="/api/streetview", tags=["streetview"])
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])

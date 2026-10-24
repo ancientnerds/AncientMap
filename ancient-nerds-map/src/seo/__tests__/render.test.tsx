@@ -104,6 +104,16 @@ describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inh
     expect(html).toContain('Obsidian Trade Networks in Neolithic Anatolia')
   })
 
+  it('genau ein <main>, und es umschließt Hero, Titel und Text (tech-10, 2026-10-19)', () => {
+    expect(html.match(/<main[\s>]/g)).toHaveLength(1)
+    const main = html.slice(html.indexOf('<main>'), html.indexOf('</main>'))
+    expect(main).toContain('theo-paper-hero')
+    expect(main).toContain('<h1')
+    expect(main).toContain('<p>body</p>')
+    // Header and AI notice stay outside, as on the story and site pages.
+    expect(main).not.toContain('data-ai-generated="true"')
+  })
+
   it('Art.-50-Hinweis sichtbar UND maschinenlesbar (data-ai-generated)', () => {
     expect(html).toContain('data-ai-generated="true"')
     expect(html).toContain('AI-generated')
@@ -344,6 +354,7 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
         commons_url: null,
         width: null,
         height: null,
+        url_800: null,
       },
     })
     expect(bare).toContain('/data/images/wiki/9c8b7a65/hero.webp')
@@ -365,6 +376,7 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
         commons_url: 'https://commons.wikimedia.org/wiki/File:X.jpg',
         width: 1600,
         height: 900,
+        url_800: null,
       },
     })
     expect(html).toMatch(/<img[^>]*width="1600"[^>]*height="900"/)
@@ -529,9 +541,45 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(uncurated).toContain('/globe.html#focus=1b2c3d4e-0000-4000-8000-000000000000')
   })
 
-  it('kuratierte Site behält den Detaillink und bekommt KEINEN Länder-Chip', () => {
+  // Seit 2026-10-20 auch neben der Detailseite (Owner-Entscheidung; SEO-Audit
+  // 2026-10-19 traffic-14): vorher verlinkte eine Story mit kuratierter Site
+  // den Länder-Hub nie.
+  it('kuratierte Site behält den Detaillink und bekommt den Länder-Chip dazu', () => {
     expect(html).toContain('href="/sites/denmark/trundholm-mose-1b2c3d4e"')
-    expect(html).not.toContain('More sites in')
+    expect(html).toContain('href="/sites/denmark"')
+    expect(html).toContain('More sites in <!-- -->Denmark')
+  })
+
+  it('ohne Land kein Länder-Chip', () => {
+    const noCountry = renderRoute({ ...FIXTURES.story, site_country: '' })
+    expect(noCountry).not.toContain('More sites in')
+  })
+
+  // Bis 2026-10-20 stand das Rohwort IN der h1 ("…anomaliesancient_astronauts",
+  // Story 5380, SEO-Audit 2026-10-19 tech-9).
+  it('Spekulations-Tag: lesbares Badge neben, nicht in der h1', () => {
+    const tagged = renderRoute({ ...FIXTURES.story, speculative_tag: 'ancient_astronauts' })
+    const h1 = tagged.match(/<h1[^>]*>(.*?)<\/h1>/s)?.[1] ?? ''
+    expect(h1).not.toContain('story-badge')
+    expect(h1).not.toContain('Ancient Astronauts')
+    expect(tagged).toContain('<span class="story-badge">Ancient Astronauts</span>')
+    expect(tagged).not.toContain('ancient_astronauts')
+    expect(html).not.toContain('story-badge')
+  })
+
+  it('jeder in der DB vorkommende Tag hat ein Label (SQL 2026-10-20)', () => {
+    for (const [tag, label] of [
+      ['lost_civilization', 'Lost Civilization'],
+      ['conspiracy', 'Conspiracy'],
+      ['supernatural', 'Supernatural'],
+      ['ancient_astronauts', 'Ancient Astronauts'],
+      ['giants', 'Giants'],
+      ['annunaki', 'Annunaki'],
+    ]) {
+      expect(renderRoute({ ...FIXTURES.story, speculative_tag: tag })).toContain(
+        `<span class="story-badge">${label}</span>`,
+      )
+    }
   })
 
   // Seit 2026-08-21 trägt das Payload site_type/period/significance, damit die
@@ -584,6 +632,21 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
   it('Related-Block mit Site-Überschrift und Story-Link', () => {
     expect(html).toContain('More about Trundholm Mose')
     expect(html).toContain('href="/news-archive/trundholm-bog-survey-planned-4600"')
+  })
+
+  it('gemischte Gründe: die Site-Überschrift nur, wenn jede Story die Site teilt', () => {
+    const mixed = renderRoute({
+      ...FIXTURES.story,
+      related: [
+        ...FIXTURES.story.related,
+        { slug: 'chinook-elongated-skulls-5839', headline: 'Chinook elongated skulls', kind: 'topic' },
+      ],
+    })
+    expect(mixed).not.toContain('More about Trundholm Mose')
+    expect(mixed).toContain('Related stories')
+    expect(mixed).toContain('href="/news-archive/chinook-elongated-skulls-5839"')
+    // Vor den Quellen (Owner-Entscheidung 2026-10-09: Related vor Sources).
+    expect(mixed.indexOf('Related stories')).toBeLessThan(mixed.indexOf('>Sources<'))
   })
 
   // Seit 2026-08-21 rendert <Breadcrumbs> Markup UND BreadcrumbList-Schema
@@ -861,5 +924,75 @@ describe('research: Claude-written paper extras (studio spec 2026-09-26 §2.7, �
     ]) {
       expect(plain).not.toContain(marker)
     }
+  })
+})
+
+describe('site <-> paper links (owner decision 2026-10-20, SEO evaluation 2026-10-19 A2)', () => {
+  it('the site page lists the papers that treat it, as links to their pages', () => {
+    const html = renderRoute({
+      ...FIXTURES.site,
+      papers: [
+        { slug: 'induced-emf-in-ancient-megalithic-stone-structures', title: 'Induced EMF in Ancient Megalithic Stone Structures' },
+        { slug: 'geomagnetic-excursions-and-pole-shift-catastrophism', title: 'Geomagnetic Excursions and Pole Shift Catastrophism' },
+      ],
+    })
+    expect(html).toContain('<h2>Research on this site</h2>')
+    expect(html).toContain('href="/research/induced-emf-in-ancient-megalithic-stone-structures"')
+    expect(html).toContain('Geomagnetic Excursions and Pole Shift Catastrophism</a>')
+  })
+
+  it('a site no paper treats shows no research block', () => {
+    expect(renderRoute(FIXTURES.site)).not.toContain('Research on this site')
+  })
+
+  it('the paper page lists its sites, as links to their pages', () => {
+    const html = renderRoute({
+      ...FIXTURES.research,
+      sites: [
+        { name: 'Göbekli Tepe', path: '/sites/türkiye/göbekli-tepe-d953e9b3' },
+        { name: 'Stonehenge', path: '/sites/england/stonehenge-21b2278e' },
+      ],
+    })
+    expect(html).toContain('class="theo-paper-sites"')
+    expect(html).toContain('Sites in this paper')
+    expect(html).toContain('href="/sites/türkiye/göbekli-tepe-d953e9b3"')
+    expect(html).toContain('>Stonehenge</a>')
+    expect(html.match(/<h1/g)).toHaveLength(1)
+  })
+
+  it('a paper without sites renders no sites block', () => {
+    expect(renderRoute(FIXTURES.research)).not.toContain('theo-paper-sites')
+  })
+})
+
+describe('the site hero srcset (owner decision 2026-10-20, SEO audit 2026-10-19 cwv-6)', () => {
+  const image = {
+    // As the payload carries it: percent-encoded once (encode_path, api/routes/sites_html.py).
+    url: '/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp',
+    author: null,
+    license: null,
+    license_url: null,
+    commons_url: null,
+    width: 1600,
+    height: 1062,
+    url_800: '/data/images/wiki-800/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp',
+  }
+
+  it('offers the 800 px copy and the original by its width, the src stays the original', () => {
+    const html = renderRoute({ ...FIXTURES.site, image })
+    const img = html.match(/<img[^>]*fetchPriority="high"[^>]*>/)?.[0] ?? ''
+    expect(img).toContain('src="/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp"')
+    // A space and a comma in a srcset URL would split the candidate: both arrive encoded.
+    expect(img).toContain(
+      'srcSet="/data/images/wiki-800/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp 800w, ' +
+        '/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp 1600w"',
+    )
+    expect(img).toContain('sizes="100vw"')
+  })
+
+  it('a hero without a phone copy keeps the single file', () => {
+    const html = renderRoute({ ...FIXTURES.site, image: { ...image, url_800: null } })
+    expect(html).not.toMatch(/srcSet=/i)
+    expect(html).not.toContain('sizes=')
   })
 })

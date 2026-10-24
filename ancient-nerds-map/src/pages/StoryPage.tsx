@@ -61,7 +61,10 @@ export default function StoryPage() {
           related={
             story.related.length > 0 && (
               <div className="story-related">
-                <h2>{story.related[0].kind === 'site' && story.site_name
+                {/* Since 2026-10-20 one block mixes reasons (site, place,
+                    country, topic): the site heading only when every pick
+                    shares the site. */}
+                <h2>{story.related.every(r => r.kind === 'site') && story.site_name
                   ? `More about ${story.site_name}`
                   : 'Related stories'}</h2>
                 <ul>

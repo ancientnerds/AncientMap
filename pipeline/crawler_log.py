@@ -11,12 +11,18 @@ bind-mounted read-only into the API containers at /app/logs:
 
 A user agent is a claim, not an identity: anyone can send "Googlebot". Where
 the operator publishes its crawler addresses (Google, Bing, OpenAI,
-Perplexity, Apple), a line counts only when its IP is inside one of the
-published ranges; a line outside them is an impostor and is counted apart.
-Anthropic publishes no list, so its bots stay "unverified".
+Perplexity, Apple, Anthropic, Common Crawl, DuckDuckGo, Mistral), a line
+counts only when its IP is inside one of the published ranges; a line
+outside them is an impostor and is counted apart. The others (Amazon
+publishes HTML only, ByteDance, Meta, Yandex, Baidu, Huawei and Mistral's
+training crawler none) stay "unverified".
 
 The log starts with the deploy that added it (2026-10-09): the main access
 log is 0640 www-data:adm and the deploy user cannot read its history.
+logrotate turns it into a family of one file per day, kept 30 days
+(ops/logrotate/ancientnerds); read_fetches reads all of it
+(pipeline/log_files.py). Moved here from api/services/ on 2026-10-22 so the
+request log (pipeline/request_log.py) shares one BOTS table.
 """
 
 from __future__ import annotations
@@ -34,10 +40,9 @@ from typing import Any
 
 import httpx
 
+from pipeline import log_files
+
 LOG_PATH = Path(os.getenv("CRAWLER_LOG_PATH", "/app/logs/crawlers.log"))
-#: How much of the file one parse reads, from the end. Page fetches only, so a
-#: line is ~250 bytes; 32 MiB holds ~130,000 of them.
-MAX_TAIL_BYTES = 32 * 1024 * 1024
 #: How long a parse is reused when the file has not been read for this long.
 CACHE_MIN_SECONDS = 55.0
 #: How long the operators' address lists are reused; they change monthly.
@@ -55,55 +60,87 @@ class Bot:
     kind: str
 
 
-#: User-agent token -> bot. Order matters only where one token contains
-#: another; none of these does. Matched case-insensitively.
+#: User-agent token -> bot. Every key is lower case: bot_of looks the matched
+#: token up lower-cased. Matched case-insensitively, the longest token first
+#: (BOT_RE), so a token that contains another one wins over it.
 BOTS: dict[str, Bot] = {
     "googlebot": Bot("Googlebot", "google", "search"),
     "google-inspectiontool": Bot("Google-InspectionTool", "google", "search"),
     "googleother": Bot("GoogleOther", "google", "other"),
+    "google-agent": Bot("Google-Agent", "google", "ai_user"),
+    "google-gemininotebook": Bot("Google-GeminiNotebook", "google", "ai_user"),
+    "google-cloudvertexbot": Bot("Google-CloudVertexBot", "google", "other"),
     "bingbot": Bot("Bingbot", "bing", "search"),
     "applebot": Bot("Applebot", "apple", "search"),
     "duckduckbot": Bot("DuckDuckBot", "duckduckgo", "search"),
+    "duckassistbot": Bot("DuckAssistBot", "duckduckgo", "ai_search"),
     "yandexbot": Bot("YandexBot", "yandex", "search"),
     "baiduspider": Bot("Baiduspider", "baidu", "search"),
     "petalbot": Bot("PetalBot", "huawei", "search"),
     "chatgpt-user": Bot("ChatGPT-User", "openai", "ai_user"),
     "oai-searchbot": Bot("OAI-SearchBot", "openai", "ai_search"),
     "gptbot": Bot("GPTBot", "openai", "training"),
+    "oai-adsbot": Bot("OAI-AdsBot", "openai", "other"),
     "claude-user": Bot("Claude-User", "anthropic", "ai_user"),
     "claude-searchbot": Bot("Claude-SearchBot", "anthropic", "ai_search"),
     "claudebot": Bot("ClaudeBot", "anthropic", "training"),
     "perplexity-user": Bot("Perplexity-User", "perplexity", "ai_user"),
     "perplexitybot": Bot("PerplexityBot", "perplexity", "ai_search"),
     "mistralai-user": Bot("MistralAI-User", "mistral", "ai_user"),
+    "mistralai-index": Bot("MistralAI-Index", "mistral", "ai_search"),
+    # Its own operator: Mistral publishes no list for it, so it is never
+    # checked against the user and index lists and never called an impostor.
+    "mistralai-training": Bot("MistralAI-Training", "mistral-training", "training"),
     "ccbot": Bot("CCBot", "commoncrawl", "training"),
     "bytespider": Bot("Bytespider", "bytedance", "training"),
     "meta-externalagent": Bot("meta-externalagent", "meta", "training"),
-    "amazonbot": Bot("Amazonbot", "amazon", "other"),
+    "meta-externalfetcher": Bot("meta-externalfetcher", "meta", "ai_user"),
+    "meta-webindexer": Bot("meta-webindexer", "meta", "ai_search"),
+    "facebookexternalhit": Bot("facebookexternalhit", "meta", "other"),
+    # Amazon says what Amazonbot fetches may train its AI models.
+    "amazonbot": Bot("Amazonbot", "amazon", "training"),
+    "amzn-searchbot": Bot("Amzn-SearchBot", "amazon", "search"),
+    "amzn-user": Bot("Amzn-User", "amazon", "ai_user"),
 }
-BOT_RE = re.compile("|".join(re.escape(t) for t in BOTS), re.IGNORECASE)
+BOT_RE = re.compile(
+    "|".join(re.escape(t) for t in sorted(BOTS, key=len, reverse=True)), re.IGNORECASE
+)
 
 #: The operators' published address lists, all in the same JSON shape
 #: ({"prefixes": [{"ipv4Prefix": ...} | {"ipv6Prefix": ...}]}). Each URL
-#: answered 200 on 2026-10-09; Google's moved from /search/apis/ipranges/ to
-#: /crawling/ipranges/ and the old one now redirects.
+#: answered 200 in that shape on 2026-10-22; Google's moved from
+#: /search/apis/ipranges/ to /crawling/ipranges/ on 2026-10-09 and the old one
+#: now redirects, and perplexity.com is now a redirect to perplexity.ai.
+#: Amazon publishes its addresses as an HTML page only, so it has no entry.
 RANGE_URLS: dict[str, list[str]] = {
     "google": [
         "https://developers.google.com/static/crawling/ipranges/common-crawlers.json",
         "https://developers.google.com/static/crawling/ipranges/special-crawlers.json",
         "https://developers.google.com/static/crawling/ipranges/user-triggered-fetchers-google.json",
+        "https://developers.google.com/static/crawling/ipranges/user-triggered-agents.json",
     ],
     "bing": ["https://www.bing.com/toolbox/bingbot.json"],
     "openai": [
         "https://openai.com/gptbot.json",
         "https://openai.com/searchbot.json",
         "https://openai.com/chatgpt-user.json",
+        "https://openai.com/adsbot.json",
     ],
     "perplexity": [
-        "https://www.perplexity.com/perplexitybot.json",
-        "https://www.perplexity.com/perplexity-user.json",
+        "https://www.perplexity.ai/perplexitybot.json",
+        "https://www.perplexity.ai/perplexity-user.json",
     ],
     "apple": ["https://search.developer.apple.com/applebot.json"],
+    "anthropic": ["https://claude.com/crawling/bots.json"],
+    "commoncrawl": ["https://index.commoncrawl.org/ccbot.json"],
+    "duckduckgo": [
+        "https://duckduckgo.com/duckduckbot.json",
+        "https://duckduckgo.com/duckassistbot.json",
+    ],
+    "mistral": [
+        "https://mistral.ai/mistralai-user-ips.json",
+        "https://mistral.ai/mistralai-index-ips.json",
+    ],
 }
 
 Network = ipaddress.IPv4Network | ipaddress.IPv6Network
@@ -124,8 +161,8 @@ def bot_of(ua: str) -> Bot | None:
 
 
 def parse_lines(lines: list[str]) -> list[Fetch]:
-    """Every line naming a known bot. The tail is read from a byte offset, so
-    the first line is regularly half a line and is skipped like broken JSON."""
+    """Every line naming a known bot. A half line (nginx still writing it, or
+    a crash) is skipped like broken JSON."""
     out: list[Fetch] = []
     for raw in lines:
         line = raw.strip()
@@ -151,27 +188,32 @@ def parse_lines(lines: list[str]) -> list[Fetch]:
     return out
 
 
-_parsed: tuple[tuple[int, int], float, list[Fetch]] | None = None
+#: Per file of the family: its identity when parsed and what it held. A
+#: rotated file never changes, so only the live one is ever parsed again.
+_files: dict[Path, tuple[tuple[int, int, int], list[Fetch]]] = {}
+#: The last answer and when it was put together.
+_parsed: tuple[float, list[Fetch]] | None = None
 
 
 def read_fetches() -> list[Fetch] | None:
-    """The log's tail, parsed; None when the file is not there (every dev box,
-    and the VPS before the deploy that adds it)."""
+    """Every fetch of the whole family (log_files.family), oldest first; None
+    when the current file is not there (every dev box, and the VPS before
+    the deploy that added it)."""
     global _parsed
-    try:
-        stat = LOG_PATH.stat()
-    except OSError:
+    if not LOG_PATH.exists():
         return None
-    identity = (stat.st_mtime_ns, stat.st_size)
     now = time.monotonic()
-    if _parsed is not None and (_parsed[0] == identity or now - _parsed[1] < CACHE_MIN_SECONDS):
-        return _parsed[2]
-    with LOG_PATH.open("rb") as fh:
-        if stat.st_size > MAX_TAIL_BYTES:
-            fh.seek(stat.st_size - MAX_TAIL_BYTES)
-        blob = fh.read()
-    fetches = parse_lines(blob.decode("utf-8", "replace").splitlines())
-    _parsed = (identity, now, fetches)
+    if _parsed is not None and now - _parsed[0] < CACHE_MIN_SECONDS:
+        return _parsed[1]
+    paths = log_files.family(LOG_PATH)
+    for gone in set(_files) - set(paths):
+        del _files[gone]
+    for p in paths:
+        identity = log_files.file_identity(p)
+        if p not in _files or _files[p][0] != identity:
+            _files[p] = (identity, parse_lines(log_files.read_file(p)))
+    fetches = [f for p in paths for f in _files[p][1]]
+    _parsed = (now, fetches)
     return fetches
 
 
@@ -210,11 +252,16 @@ async def published_ranges() -> dict[str, list[Network]]:
 def verified(fetch: Fetch, ranges: dict[str, list[Network]]) -> bool | None:
     """True inside the operator's published ranges, False outside them (an
     impostor), None for an operator that publishes none."""
-    networks = ranges.get(fetch.bot.operator)
+    return verified_ip(fetch.bot, fetch.ip, ranges)
+
+
+def verified_ip(bot: Bot, ip: str, ranges: dict[str, list[Network]]) -> bool | None:
+    """verified() for a bot and an address from any log (pipeline/request_log.py)."""
+    networks = ranges.get(bot.operator)
     if networks is None:
         return None
-    ip = ipaddress.ip_address(fetch.ip)
-    return any(ip in net for net in networks if net.version == ip.version)
+    address = ipaddress.ip_address(ip)
+    return any(address in net for net in networks if net.version == address.version)
 
 
 def _status_class(status: int) -> str:

@@ -12,8 +12,9 @@ upstream an_api {
 # www-data:adm and sudo is limited to the three deploy commands). Purpose:
 # see whether AI assistants (chatgpt.com, perplexity.ai, ...) and search
 # engines send people here — the zero-click question of 2026-09-17.
-# No client IP on purpose; logrotate does not touch the path, the volume is
-# a few hundred lines a day. Reader: scripts/referral_report.py.
+# No client IP on purpose. Rotated daily, deleted after 30 days
+# (ops/logrotate/ancientnerds). Readers: pipeline/referral_log.py,
+# scripts/referral_report.py.
 # "purpose" is the Sec-Purpose header: Google Search has Chrome prefetch its
 # top results through Google's Private Prefetch Proxy ("prefetch;anonymous-
 # client-ip") or directly ("prefetch"), with the search page as referer. Such
@@ -67,7 +68,7 @@ map $http_user_agent $is_scraper {
 }
 
 # Which search engines and AI systems fetch our pages (founders dashboard,
-# "Who crawls us?", api/services/crawler_log.py). The main access log is
+# "Who crawls us?", pipeline/crawler_log.py). The main access log is
 # 0640 www-data:adm, so the dashboard cannot read it; this log is the part it
 # needs, in a file the deploy user can read. Page requests only: a bot's
 # asset, data and image fetches would be most of the lines and answer nothing
@@ -79,7 +80,7 @@ log_format crawler escape=json '{"t":"$time_iso8601","ip":"$remote_addr","req":"
 
 map $http_user_agent $crawler_ua {
     default 0;
-    ~*(Googlebot|Google-InspectionTool|GoogleOther|bingbot|Applebot|DuckDuckBot|YandexBot|Baiduspider|PetalBot|ChatGPT-User|OAI-SearchBot|GPTBot|Claude-User|Claude-SearchBot|ClaudeBot|Perplexity-User|PerplexityBot|MistralAI-User|CCBot|Bytespider|meta-externalagent|Amazonbot) 1;
+    ~*(Googlebot|Google-InspectionTool|GoogleOther|Google-Agent|Google-GeminiNotebook|Google-CloudVertexBot|bingbot|Applebot|DuckDuckBot|DuckAssistBot|YandexBot|Baiduspider|PetalBot|ChatGPT-User|OAI-SearchBot|OAI-AdsBot|GPTBot|Claude-User|Claude-SearchBot|ClaudeBot|Perplexity-User|PerplexityBot|MistralAI-User|MistralAI-Index|MistralAI-Training|CCBot|Bytespider|meta-externalagent|meta-externalfetcher|meta-webindexer|facebookexternalhit|Amazonbot|Amzn-SearchBot|Amzn-User) 1;
 }
 
 map $uri $log_crawler {
@@ -100,6 +101,18 @@ server {
     access_log /var/log/nginx/access.log;
     access_log /var/www/ancientnerds/logs/referrals.log referral if=$log_referral;
     access_log /var/www/ancientnerds/logs/crawlers.log crawler if=$log_crawler;
+
+    # HSTS: a browser that has seen it goes to https:// itself, without the
+    # port-80 hop. Measured 2026-10-20 over the access log of 05.-20.10. (TTFB
+    # audit, output/seo-audit-2026-10-19/ttfb.md): 52 of 868 browser requests
+    # for "/" (HTTP/2, no bot UA) came seconds after a 301 over HTTP/1.1 -
+    # http:// links and typed addresses - and that hop costs a visitor a TCP
+    # connection to port 80 and a request round trip before the TLS connection
+    # even starts (~2 RTT; CrUX RTT p75 for "/" is 284 ms). No includeSubDomains:
+    # this file does not govern every subdomain. nginx hands a server-level
+    # add_header only to locations without an add_header of their own, which
+    # includes `location = /`; the browser keeps the policy from any response.
+    add_header Strict-Transport-Security "max-age=31536000" always;
 
     # /etc/nginx/nginx.conf has `gzip on` but its gzip_types line is commented
     # out, so the default applied — text/html only. Result: 27 asset requests
@@ -342,6 +355,19 @@ server {
         rewrite ^/data/images/wiki-thumbs/(.*)$ /data/images/wiki/$1 last;
     }
 
+    # The site page's hero on a phone (srcset, pipeline/wiki_thumbs.py): an 800 px
+    # copy under the same <id8>/<filename>, built and answered like the gallery
+    # tree above. The 1600 px hero was shown 412 px wide, 534-557 KiB of it wasted
+    # (SEO audit 2026-10-19, cwv-6); owner decision 2026-10-20.
+    location ^~ /data/images/wiki-800/ {
+        root /var/www/ancientnerds/public;
+        try_files $uri @wiki_image_800;
+        add_header Cache-Control "public, max-age=86400";
+    }
+    location @wiki_image_800 {
+        rewrite ^/data/images/wiki-800/(.*)$ /data/images/wiki/$1 last;
+    }
+
     # Wiki images — served by API container (files are inside Docker)
     location /data/images/wiki/ {
         proxy_pass http://an_api/data/images/wiki/;
@@ -400,6 +426,16 @@ server {
     # above never matches .xml paths.
     location ~ ^/sitemap-(static|sites|countries|stories|research|articles|legacy)\.xml$ {
         proxy_pass http://an_api/api/sitemap$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Atom feeds of the stories and the papers (api/routes/feeds.py, 2026-10-20):
+    # /feeds/stories.xml -> /api/feeds/stories.xml. Without this block the path
+    # fell through to `location /` and answered the 404 shell. The API sets
+    # Cache-Control and application/atom+xml.
+    location ~ ^/feeds/(stories|research)\.xml$ {
+        proxy_pass http://an_api/api$request_uri;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

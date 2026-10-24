@@ -73,6 +73,8 @@ def _paper_row(**overrides) -> SimpleNamespace:
         "videos": None,
         "corrections": None,
         "writer": None,
+        # _PAPER_SITES_COLUMN: json NULL for a paper no site is linked to (migration 0031).
+        "paper_sites": None,
     }
     row.update(overrides)
     return SimpleNamespace(**row)
@@ -184,6 +186,42 @@ def test_research_paper_links_the_references():
     body = render_mock.call_args[0][0]["body_html"]
     assert '<a href="https://example.org/paper"' in body
     assert '<a href="https://doi.org/10.1234/abcd"' in body
+
+
+def _rendered_references(references: str) -> str:
+    report = "## Findings\n\nObsidian moved far.\n\n## References\n\n" + references
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            research_paper_page(
+                "obsidian-trade-networks-anatolia",
+                db=FakeDb([_paper_row(published_report=report)]),
+            )
+        )
+    return render_mock.call_args[0][0]["body_html"]
+
+
+def test_reference_url_keeps_its_balanced_parentheses():
+    """the-watched-pot-and-the-willing-mind [15]/[16] linked to
+    .../Observer_effect_ and left "(physics)" as text (2026-10-20): the bare-URL
+    pattern stopped at "(". A ")" that closes a "(" of the URL belongs to it;
+    the " (accessed ...)" after the space does not."""
+    body = _rendered_references(
+        "[15] Observer effect (physics) — https://en.wikipedia.org/wiki/Observer_effect_(physics)"
+        " (accessed 2026-10-06) [Reputable]\n"
+        "[16] Observer (quantum physics) — https://en.wikipedia.org/wiki/Observer_(quantum_physics)"
+        " (accessed 2026-10-06) [Reputable]"
+    )
+    assert '<a href="https://en.wikipedia.org/wiki/Observer_effect_(physics)"' in body
+    assert '<a href="https://en.wikipedia.org/wiki/Observer_(quantum_physics)"' in body
+    assert "(physics)</a> (accessed 2026-10-06)" in body
+    assert "(quantum_physics)</a> (accessed 2026-10-06)" in body
+
+
+def test_reference_url_leaves_an_unbalanced_paren_and_full_stop_outside():
+    body = _rendered_references("[1] Roe, R. (2021). Exchange spheres (see https://example.com/a).")
+    assert '<a href="https://example.com/a"' in body
+    assert "https://example.com/a</a>)." in body
 
 
 def test_unknown_paper_is_a_404_without_touching_the_renderer():
@@ -355,3 +393,44 @@ def test_fetch_paper_selects_the_extras_columns():
     sql = db.statement_with("WHERE r.slug = :slug")
     for key in ("evidence", "videos", "corrections", "writer"):
         assert f"r.result_json::jsonb->'{key}' AS {key}" in sql
+
+
+def test_the_sites_a_paper_treats_join_the_payload_as_page_links():
+    """Owner decision 2026-10-20 (SEO evaluation 2026-10-19, A2): the paper page links its
+    sites. The reviewed links arrive as one json array in the paper's statement, and each
+    becomes the site's canonical page path."""
+    route = _route_for(
+        _paper_row(
+            paper_sites=[
+                {
+                    "id": "d953e9b3-de33-4c7d-9357-bbc5d94d2a16",
+                    "name": "Göbekli Tepe",
+                    "country": "Türkiye",
+                },
+                {
+                    "id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+                    "name": "Stonehenge",
+                    "country": "England",
+                },
+            ]
+        )
+    )
+    assert route["sites"] == [
+        {"name": "Göbekli Tepe", "path": "/sites/türkiye/göbekli-tepe-d953e9b3"},
+        {"name": "Stonehenge", "path": "/sites/england/stonehenge-21b2278e"},
+    ]
+    assert set(route) == OLD_KEYS | {"sites"}
+
+
+def test_a_paper_without_sites_gets_no_sites_key():
+    assert "sites" not in _route_for(_paper_row(paper_sites=None))
+
+
+def test_fetch_paper_reads_only_curated_sites_of_the_reviewed_links():
+    db = RecordingSession({"WHERE r.slug = :slug": [_paper_row()]})
+    fetch_paper("obsidian-trade-networks-anatolia", db)
+    sql = " ".join(db.statement_with("WHERE r.slug = :slug").split())
+    assert "FROM research_paper_sites ps JOIN unified_sites u ON u.id = ps.site_id" in sql
+    assert "u.source_id = 'ancient_nerds'" in sql
+    assert "u.scope_status IS DISTINCT FROM 'retired'" in sql
+    assert ") AS paper_sites" in sql
