@@ -32,7 +32,9 @@ order, is `docs/procedures/SENTENCE_CHECK.md`.
     $C export --wn        ...                            # lane WN: write the missing descriptions
     $C export --enrich --sites F [--disputes D] ...      # lane E: append sourced sentences
 
-**The population** (`population`): every curated site of the read that is not retired, carries a
+**The population** (`population`): every curated site of the read that is not retired (a retired
+D50 site counts as shown here: D50 shows it again once lane E wrote its dispute text, so WC, the
+repair passes and lane E ask it - `hidden`), carries a
 description, and whose text is not Phase 4's and not one lane WC checked before - the 2026-03 AI
 texts (lane L's marking, or `march-unmarked`: lane L's rule claims the text and no marking is stored)
 and the `unclaimed` old texts no marking claims (HUMAN_ONLY D7; they are checked alike and still
@@ -159,6 +161,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 import opus_handoff as OH  # noqa: E402 - the one contract every model answer goes through
 import roles as RO  # noqa: E402 - the roles that answer (owner decision D6, 2026-10-08)
 import run_files as RF  # noqa: E402 - the shared clock and JSON writers
+from mechanical.lane import D50_DISPUTED_SITES  # noqa: E402 - D50's retired sites
 from opus_audit import quotes as Q  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - the read-only psql seam
 from phase3.run import read_jsonl  # noqa: E402
@@ -254,6 +257,13 @@ class WcRunError(ValueError):
     """The run directory, a round or an answer is not what the lane needs: the command stops."""
 
 
+def hidden(row: Mapping[str, Any]) -> bool:
+    """Whether a row of the read is out of every lane's population: retired, and not one of the
+    D50 sites (owner, 2026-10-19), whose description lane E writes before the scope lane shows
+    them again (`mechanical.lane.D50_DISPUTED_SITES`, `mechanical/scope_unretire.py`)."""
+    return row["scope_status"] == "retired" and row["id"] not in D50_DISPUTED_SITES
+
+
 # ------------------------------------------------------------------------------------ files
 # The clock and the writers are the shared ones (`run_files`); a path is shown relative to the
 # repository where it lies inside it, and a file's sha256 is that of its bytes as they are.
@@ -342,7 +352,7 @@ def _classify(
     earlier: set[str],
     kind: str = KIND_WC,
 ) -> tuple[str | None, str | None, tuple[str, ...]]:
-    if row["scope_status"] == "retired":
+    if hidden(row):
         return "retired", None, ()
     if kind == KIND_ENRICH:
         return E.classify(site, excluded=excluded, earlier=earlier)
@@ -2587,7 +2597,7 @@ def _standing_defects(
                 skipped["unproven"] += 1
             elif row is None:
                 skipped["not-a-curated-row"] += 1
-            elif row["scope_status"] == "retired":
+            elif hidden(row):
                 skipped["retired"] += 1
             elif row["description_sha256"] != line["desc_sha256"]:
                 skipped["text-changed-since"] += 1
@@ -2800,7 +2810,7 @@ def cmd_defect_kept_sites(run: Path, sources: Sequence[Path], out: Path) -> dict
             row = rows.get(site_id)
             if row is None:
                 skipped["not-a-curated-row"] += 1
-            elif row["scope_status"] == "retired":
+            elif hidden(row):
                 skipped["retired"] += 1
             elif wc4.is_empty(row["description"]):
                 skipped["no-description"] += 1
@@ -3056,7 +3066,7 @@ def cmd_minimax_sites(
         row = rows.get(site_id)
         if row is None:
             reason = "not-a-curated-row"
-        elif row["scope_status"] == "retired":
+        elif hidden(row):
             reason = "retired"
         elif wc4.is_empty(row["description"]):
             reason = "cleared"

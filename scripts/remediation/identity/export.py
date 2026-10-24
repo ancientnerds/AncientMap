@@ -12,8 +12,12 @@ any part whose SQL names a write verb.
 The parts (the kind names the line's meaning):
 
 * `shown`   - the curated sites that are not retired (4,900 on 2026-10-08), with the facts every
-              module needs, and `outside_window`: the E3 window rule of the scope lane
-              (`mechanical.lane.outside_e3_window`), built from the project's own constants;
+              module needs, `outside_window`: the owner's label rule D58 of the scope lane
+              (`mechanical.lane.outside_label_window`), built from the project's own
+              constants, `label_borderline` (`mechanical.lane.label_borderline_sql`: a
+              site dated 500-1500 where the label, not the region, decides) and
+              `label_open_question` (`mechanical.lane.label_open_question_sql`: a site of
+              Islamic Europe dated 500-1500, held by the owner's open question);
 * `ext_ids` - every `site_external_ids` row of those sites (a site can hold more than one item);
 * `names`   - the English alias rows and the label row of `unified_site_names`;
 * `pairs`   - two shown sites of one country within 300 m whose normalised names have a trigram
@@ -39,7 +43,11 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from mechanical.lane import outside_e3_window  # noqa: E402
+from mechanical.lane import (  # noqa: E402
+    label_borderline_sql,
+    label_open_question_sql,
+    outside_label_window,
+)
 from mechanical.plan import (  # noqa: E402
     parse_tagged_export,
     tagged_export_script,
@@ -56,9 +64,11 @@ KINDS = ("shown", "ext_ids", "names", "pairs", "losers", "period_journal")
 HADRIANS_WALL_PATH_PREFIX = "360a4afb"
 
 SHOWN = "u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'"
-#: The sites the period journal is read for: outside the window, pending, and the footpath.
+#: The sites the period journal is read for: outside the window, label-borderline, pending, and
+#: the footpath.
 STUDIED = (
-    f"({outside_e3_window('u.')} OR u.scope_status = 'pending' "
+    f"({outside_label_window('u.')} OR {label_borderline_sql('u.')} "
+    "OR u.scope_status = 'pending' "
     f"OR u.id::text LIKE '{HADRIANS_WALL_PATH_PREFIX}%')"
 )
 
@@ -75,7 +85,9 @@ SELECT u.id::text AS id, u.name, u.country, u.site_type, u.lat, u.lon, u.period_
        (SELECT count(*) FROM unified_site_names n WHERE n.site_id = u.id) AS names_rows,
        EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = u.id
                AND cs.card_description IS NOT NULL) AS has_card,
-       coalesce({outside_e3_window("u.")}, false) AS outside_window
+       coalesce({outside_label_window("u.")}, false) AS outside_window,
+       coalesce({label_borderline_sql("u.")}, false) AS label_borderline,
+       coalesce({label_open_question_sql("u.")}, false) AS label_open_question
   FROM unified_sites u
  WHERE {SHOWN}
  ORDER BY u.id"""

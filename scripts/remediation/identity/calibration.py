@@ -65,7 +65,7 @@ from identity import common, export, funnel, names_judge, retarget, scope_judge 
 from identity import rounds as R  # noqa: E402
 from identity.prompts import cache_entries, wiki_cache_dir  # noqa: E402
 from identity.scope_window import ORIGIN_IMPORT  # noqa: E402
-from pipeline.normalizers.dates import E3_CUTOFFS, e3_region  # noqa: E402
+from pipeline.normalizers.dates import label_borderline, passes_date_cutoff  # noqa: E402
 
 POOL_FILE = "POOL.json"
 DEFAULT_SEED = 20261009
@@ -235,10 +235,13 @@ def select_scope(
         site = snapshot.get(sid)
         if site is None or site["lon"] is None:
             return None
-        date = site["period_end"] or site["period_start"]
-        region = e3_region(site)
-        outside = date is not None and region is not None and date > E3_CUTOFFS[region]
-        group = "outside_window" if outside else "calibration"
+        # the window is the label rule D58 (`dates.passes_date_cutoff`)
+        if not passes_date_cutoff(site):
+            group = "outside_window"
+        elif label_borderline(site):
+            group = "label_borderline"
+        else:
+            group = "calibration"
         record = snapshot_record(site, group)
         ctx = scope_judge.site_context(
             record, ext.get(sid, {}), cache.get(sid, []), exported.exported_at

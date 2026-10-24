@@ -39,6 +39,7 @@ from api.services.jwt_auth import require_founder
 from api.services.site_promotion import insert_promoted_site
 from pipeline.database import DiscordUser, get_db
 from pipeline.lyra.site_key import site_key_sql
+from pipeline.normalizers.dates import VIKING_SUBJECT_QIDS, viking_subjects
 from pipeline.utils.text import categorize_period
 
 logger = logging.getLogger(__name__)
@@ -241,6 +242,18 @@ def approve_proposal(
     become unified_site_names rows of type 'alias'."""
     row = _load(db, proposal_id)
     _require_open(row)
+    vikings = viking_subjects((row.wikidata_qid,))
+    if vikings:
+        # D58 (owner, 2026-10-24): "L'Anse aux Meadows stays out (Viking subject)"
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Out of scope by the label rule D58: a Viking subject ("
+                + ", ".join(f"{q} {VIKING_SUBJECT_QIDS[q]}" for q in vikings)
+                + ")",
+                "out_of_scope": vikings,
+            },
+        )
     item = dict(row._mapping)
     override_dict = overrides.model_dump(exclude_none=True) if overrides else {}
     effective = _apply_overrides(item, override_dict)

@@ -64,7 +64,7 @@ Production was read read-only on 2026-10-08.
   - Te Pito Kura probably duplicates Te Pito O Te Henua (4ccebe8e), which belongs to D14.
 - **Disputed sites:**
   - Description text and enwiki category signals found Pantelleria Vecchia Bank (daa1ea4b, L-only, mass-04), Te Pito O Te Henua (already shows both views), America's Stonehenge, Gunung Padang, Dighton Rock, Sakdrisi, Kuhikugu, Vottovaara, Sacsayhuamán, Carn Menyn, Beglik Tash.
-  - **Baltic Sea Anomaly is retired** (E3 natural formation). So are the 3 Bosnian pyramids, Yonaguni and Richat. D21 as worded conflicts with D20 here (see section 6).
+  - **Baltic Sea Anomaly is retired** (E3 natural formation). So are the 3 Bosnian pyramids, Yonaguni and Richat. D21 as worded conflicts with D20 here (see section 6). **D50 (owner, 2026-10-19) decided it:** the six return as disputed sites - the dispute screen and lane E ask them although retired (`wc/disputes.py screened`, `wc/cli.py hidden`), and `scope-unretire-<wave>` shows them only once their description is a lane-E dispute enrichment.
 - **Open-question wording:** explicit wording appears in 2–5 % of texts (L 2.5 %, W 5.0 %). In a sample of 80 W/S pool sites, 24 (30 %) had a regex-level hedge sentence in the live Wikipedia article that is not in the description. That is an upper bound; many are false positives.
 
 ## 3. Steps per decision

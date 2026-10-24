@@ -1131,7 +1131,11 @@ sourced sentences by the WN mechanics - never padding; **D4** each Shorts-pool s
 with a verbatim quote, added to the description so the page pays the hook off; **D21** a disputed site's description
 names both positions with sources, and its card asserts neither. Orchestrator decisions (`MASTER_PLAN.md`): **X1** the
 sentences appended to a Phase-4 (W/S) text need a provenance that can say so - a new lane `E`; **X2** D21 applies to
-shown sites, the retirements (Baltic Sea Anomaly, Yonaguni, the Bosnian pyramids, Richat) stand. Models are D6's:
+shown sites, the retirements (Baltic Sea Anomaly, Yonaguni, the Bosnian pyramids, Richat) stand - **superseded by
+D50 (owner, 2026-10-19)**: the six (`mechanical.lane.D50_DISPUTED_SITES`) return as disputed sites, so the
+dispute screen, the repair passes and lane E ask them although retired (`disputes.screened`, `cli.hidden`), and
+the scope lane shows them again only once their description is a lane-E dispute enrichment
+(`WD2_SERVED_IMAGE_AND_SCOPE.md` 2.2). Models are D6's:
 the writer runs as the role `enrich_writer` (Sonnet 5.5, high), the verifier as `web_verifier` (Sonnet 5.5, high),
 the pilot's judge as `pilot_judge` (Opus 5.5, xhigh), the dispute's adjudicator as `adversarial` (Opus 5.5, high).
 The writer rode on `field_researcher` (D6's web research role) until 2026-10-09, when that role moved to Opus after

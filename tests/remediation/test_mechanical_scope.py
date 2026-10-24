@@ -637,7 +637,7 @@ class TestTheExport:
 
 class TestTheWindowPredicate:
     def test_the_residual_is_the_project_s_own_rule_negated(self) -> None:
-        """`passes_date_cutoff` includes a row without a date or a longitude; the SQL must too, or
+        """`passes_e3_cutoff` includes a row without a date or a longitude; the SQL must too, or
         the read-back would count the 15 undated rows as outside the window."""
         from pipeline.normalizers import dates
 
@@ -653,10 +653,10 @@ class TestTheWindowPredicate:
     def test_the_o7_window_is_passes_date_cutoff_negated_in_a_real_sql_engine(self) -> None:
         """O7 (2026-09-26): Oceania through 1500 AD. The SQL is rendered from the same lists as the
         Python rule; evaluated in SQLite over every kind of row the rule distinguishes, it must
-        answer exactly `not passes_date_cutoff` - a list or a box rendered wrong answers wrong."""
+        answer exactly `not passes_e3_cutoff` - a list or a box rendered wrong answers wrong."""
         import sqlite3
 
-        from pipeline.normalizers.dates import OCEANIA_PARTS, passes_date_cutoff
+        from pipeline.normalizers.dates import OCEANIA_PARTS, passes_e3_cutoff
 
         rows = [
             ("Australia", -37.21, 144.81),
@@ -707,7 +707,7 @@ class TestTheWindowPredicate:
         sql = f"SELECT country, lat, lon, period_start, {L.outside_e3_window()} FROM s"
         got = {(c, la, lo, y): bool(out) for c, la, lo, y, out in db.execute(sql)}
         want = {
-            (r["country"], r["lat"], r["lon"], r["period_start"]): not passes_date_cutoff(r)
+            (r["country"], r["lat"], r["lon"], r["period_start"]): not passes_e3_cutoff(r)
             for r in records
         }
         assert got == want

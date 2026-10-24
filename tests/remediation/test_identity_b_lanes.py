@@ -190,13 +190,17 @@ class TestTheScopeWindowLane:
         for metric in (
             "curated rows retired for their date",
             "curated rows retired as no archaeological site",
-            "curated rows outside the E3 window (O7) with no scope decision",
+            "curated rows retired as a medieval Old World subject",
+            "curated rows outside the D58 label window with no scope decision",
             "curated rows with scope_status in_scope",
             "journal rows for this run that write a status outside retired and in_scope",
             "curated rows with a scope_status but no scope_reason",
         ):
             assert metric in text, metric
         assert "LIKE 'E3: period_start%'" in text
+        assert "LIKE 'D58: a medieval Old World subject%'" in text
+        assert self.lane.post_commit_residual is L.UNDECIDED_OUTSIDE_LABEL_WINDOW
+        assert self.lane.rehearsal_residual is L.UNDECIDED_OUTSIDE_LABEL_WINDOW
 
 
 class TestTheNameLanes:

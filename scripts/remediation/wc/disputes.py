@@ -1,9 +1,13 @@
-"""Lane E's dispute screen (owner decision D21 of 2026-10-08, orchestrator decision X2).
+"""Lane E's dispute screen (owner decisions D21 of 2026-10-08 and D50 of 2026-10-19).
 
 D21: a disputed site's description names both positions with sources, and the card asserts neither.
-X2: it applies to shown sites (the retired ones - the Baltic Sea Anomaly, Yonaguni, the Bosnian
-pyramids, Richat - stay retired). The screen is four steps, each a command; the model makes every
-judgement, code screens, validates, fetches and checks:
+D50 (superseding the orchestrator's X2, which had kept the retired ones out): the retired mystery
+sites - the Baltic Sea Anomaly, Yonaguni, the three Bosnian pyramids, Richat
+(`mechanical.lane.D50_DISPUTED_SITES`) - return as disputed sites, so the screen asks them although
+they are retired; the scope lane shows them again only once lane E wrote their dispute text
+(`mechanical/scope_unretire.py`). Every other retired site stays out of the screen. The screen is
+four steps, each a command; the model makes every judgement, code screens, validates, fetches and
+checks:
 
     candidates        a shown site is a candidate when its description, its English Wikipedia text
                       (the shared cache), its Wikipedia categories (`fetch-categories`) or its site
@@ -36,8 +40,8 @@ judgement, code screens, validates, fetches and checks:
     $D outputs --run-dir R                                # DISPUTES.jsonl, DISPUTE_DEFECTS.jsonl, SUMMARY.json
 
 The screen is calibrated before its first answer (`recall`): it must flag at least 90 % of the known
-positives of `KNOWN_POSITIVES` (the shown ones of the descriptions map plus the retired E3 sites,
-by name) and the candidate count is reported with the share of random negatives it flags.
+positives of `KNOWN_POSITIVES` (the shown ones of the descriptions map plus the six D50 sites, by
+name) and the candidate count is reported with the share of random negatives it flags.
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 import run_files as RF  # noqa: E402
 from acceptance.answers import AnswerError, load_object  # noqa: E402
+from mechanical.lane import D50_DISPUTED_SITES  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from phase3.run import read_jsonl  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
@@ -142,8 +147,8 @@ SITE_TYPE_PATTERNS: Mapping[str, str] = {
     "natural": r"^Natural feature$",
 }
 
-#: The known positives of the descriptions map (2026-10-08), by name, for `recall`. The first nine
-#: are shown sites; the retired E3 sites are never candidates and are listed for the record only.
+#: The known positives of the descriptions map (2026-10-08), by name, for `recall`: the shown sites,
+#: then the six retired D50 sites, which the screen asks since D50 (`D50_DISPUTED_SITES`).
 KNOWN_POSITIVES = (
     "Pantelleria Vecchia Bank Megalith",
     "Te Pito O Te Henua",
@@ -156,8 +161,8 @@ KNOWN_POSITIVES = (
     "Sacsayhuamán",
     "Carn Menyn",
     "Beglik Tash",
+    *sorted(D50_DISPUTED_SITES.values()),
 )
-KNOWN_RETIRED = ("Baltic Sea Anomaly", "Yonaguni Monument", "Richat Structure")
 MIN_RECALL = 0.9
 
 
@@ -166,6 +171,11 @@ class DisputeError(ValueError):
 
 
 # ------------------------------------------------------------------------------ the screen
+def screened(row: Mapping[str, Any]) -> bool:
+    """Whether the screen reads a site of the read: every shown one, and the retired D50 sites."""
+    return row["scope_status"] != "retired" or row["id"] in D50_DISPUTED_SITES
+
+
 def candidate_reasons(
     row: Mapping[str, Any], *, wikipedia: str | None, categories: Sequence[str], wiki_min_hits: int
 ) -> dict[str, list[str]]:
@@ -217,9 +227,9 @@ def wikipedia_texts(cache: Path) -> dict[str, str]:
 def cmd_candidates(
     run: Path, *, wiki_cache: Path | None, wiki_min_hits: int = WIKI_MIN_HITS
 ) -> dict[str, Any]:
-    """`CANDIDATES.jsonl`: every shown curated site of the read (not retired, with a description
-    that splits into sentences) that carries a dispute signal. Reads `CATEGORIES.json` when
-    `fetch-categories` made it."""
+    """`CANDIDATES.jsonl`: every curated site of the read the screen reads (`screened`: not
+    retired, or a D50 site), with a description that splits into sentences, that carries a
+    dispute signal. Reads `CATEGORIES.json` when `fetch-categories` made it."""
     rows = read_jsonl(run / cli.ROWS_FILE)
     categories_path = run / CATEGORIES_FILE
     categories: dict[str, list[str]] = (
@@ -230,7 +240,7 @@ def cmd_candidates(
     listed: Counter[str] = Counter()
     signals: Counter[str] = Counter()
     for row in sorted(rows, key=lambda r: r["id"]):
-        if row["scope_status"] == "retired":
+        if not screened(row):
             listed["retired"] += 1
             continue
         if wc4.is_empty(row["description"]):
@@ -342,13 +352,9 @@ def fetch_categories(
 def cmd_fetch_categories(
     run: Path, *, get: Callable[[dict[str, Any]], Mapping[str, Any]]
 ) -> dict[str, Any]:
-    """`CATEGORIES.json`: the categories of every shown curated site that has an English Wikipedia
-    title (the read's `enwiki_title`)."""
-    rows = [
-        r
-        for r in read_jsonl(run / cli.ROWS_FILE)
-        if r["scope_status"] != "retired" and r["enwiki_title"]
-    ]
+    """`CATEGORIES.json`: the categories of every curated site the screen reads (`screened`) that
+    has an English Wikipedia title (the read's `enwiki_title`)."""
+    rows = [r for r in read_jsonl(run / cli.ROWS_FILE) if screened(r) and r["enwiki_title"]]
     found = fetch_categories({r["id"]: r["enwiki_title"] for r in rows}, get=get)
     RF.write_json(run / CATEGORIES_FILE, found)
     return {"sites": len(found), "with_categories": sum(bool(v) for v in found.values())}

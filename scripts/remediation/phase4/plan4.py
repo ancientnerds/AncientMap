@@ -54,8 +54,12 @@ Derived here, from data and not from the B block's temp files (`SiteFlag`):
 
 * `shared-qid` / `shared-title` - a QID or title more than one curated site stores (GROUP BY ...
   HAVING count > 1);
-* `scope-pending` - outside `pipeline.normalizers.dates.passes_date_cutoff`, or undated (no
-  `period_start` and no `period_end`): S1 holds these, because E4 hides them;
+* `scope-pending` - not `in_scope` under the label rule D58 (`pipeline.normalizers.dates.
+  label_scope` over the row and its item: past its region's cutoff, a Viking subject, or a
+  label-borderline or open-question row that only a scope verdict may admit), or undated (no
+  `period_start` and no `period_end`): S1 holds these, because E4 hides them. (Until 2026-10-24
+  this was the numeric rule E3's `passes_date_cutoff`; a replay on an old snapshot holds the
+  borderline rows of 500-1500 too, and no longer holds the rest of the world's sites of 500-1500.)
 * `duplicate-pair` - two sites sharing an item whose stored names are both labels or aliases of it
   (folded: accents, case and punctuation), within 2 km. Listed for the B duplicate lane and written
   like any other site;
@@ -103,7 +107,7 @@ from phase4 import scope4 as S  # noqa: E402
 from phase4 import sources_stage as S1  # noqa: E402
 from phase4 import subject_gate as SG  # noqa: E402
 from phase4 import write4 as W4  # noqa: E402 - the write batch's plan file and chunk folders
-from pipeline.normalizers.dates import passes_date_cutoff  # noqa: E402
+from pipeline.normalizers.dates import LABEL_IN_SCOPE, label_scope  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
@@ -291,7 +295,7 @@ def _shared(rows: Sequence[Mapping[str, Any]], key: str) -> frozenset[str]:
 
 def _scope_pending(row: Mapping[str, Any]) -> bool:
     undated = row["period_start"] is None and row["period_end"] is None
-    return undated or not passes_date_cutoff(dict(row))
+    return undated or label_scope(dict(row), (row["wikidata_qid"],)) != LABEL_IN_SCOPE
 
 
 def duplicate_pairs(

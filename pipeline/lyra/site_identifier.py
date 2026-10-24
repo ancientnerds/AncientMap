@@ -37,7 +37,7 @@ from pipeline.lyra.config import (
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.lyra.site_matcher import _match_site_ids, fill_contrib_from_site
 from pipeline.lyra.site_researcher import research_site
-from pipeline.normalizers.dates import passes_date_cutoff
+from pipeline.normalizers.dates import LABEL_OUT_OF_SCOPE, LABEL_QUESTION, label_scope
 from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.country_lookup import lookup_country, normalize_country
 from pipeline.utils.http import fetch_with_retry
@@ -2338,8 +2338,16 @@ def _maybe_promote(
         "lon": contribution.lon,
         "country": contribution.country,
     }
-    if not passes_date_cutoff(record):
-        logger.info(f"Skipping promotion for '{contribution.name}' — outside date cutoff")
+    scope = label_scope(record, (contribution.wikidata_id,))
+    if scope == LABEL_OUT_OF_SCOPE:
+        logger.info(f"Skipping promotion for '{contribution.name}' — outside the scope rule (D58)")
+        return
+    if scope == LABEL_QUESTION:
+        logger.info(
+            f"  [{contribution.name}] Skipping auto-promotion — {contribution.country}, dated "
+            "500-1500 AD: the label decides (a Byzantine, Crusader or Norse subject is out), "
+            "founder review required"
+        )
         return
 
     # Audit-style quality checks before promotion

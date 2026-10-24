@@ -1,4 +1,4 @@
-"""Lane E's dispute screen (owner decision D21 of 2026-10-08, orchestrator decision X2,
+"""Lane E's dispute screen (owner decisions D21 of 2026-10-08 and D50 of 2026-10-19,
 `scripts/remediation/wc/disputes.py`): the candidates in code, the categories, the research and the
 adjudication with their roles and quote checks, and the two outputs - the briefs an enrichment appends
 both positions from and the defect lines a `wc-list` pass reads as a reported claim. Nothing here calls a
@@ -167,14 +167,36 @@ def test_the_screen_is_measured_against_the_known_positives(tmp_path: Path) -> N
     run = _run(tmp_path, rows)
     D.cmd_candidates(run, wiki_cache=None)
     assert D.cmd_recall(run) == {
-        "known": 11, "flagged": 11, "recall": 1.0, "missed": [], "passed": True,
+        "known": 17, "flagged": 17, "recall": 1.0, "missed": [], "passed": True,
     }  # fmt: skip
     plain = [{**r, "description": "A plain site in Malta with four buildings."} for r in rows[:3]]
     run2 = _run(tmp_path / "b", [*plain, *rows[3:]])
     D.cmd_candidates(run2, wiki_cache=None)
     result = D.cmd_recall(run2)
-    assert result["flagged"] == 8 and result["passed"] is False and len(result["missed"]) == 3
-    assert D.KNOWN_RETIRED and all(name not in D.KNOWN_POSITIVES for name in D.KNOWN_RETIRED)
+    assert result["flagged"] == 14 and result["passed"] is False and len(result["missed"]) == 3
+
+
+def test_the_d50_sites_are_known_positives_and_screened_although_retired(
+    tmp_path: Path,
+) -> None:
+    """D50 (owner, 2026-10-19) supersedes X2: the six retired mystery sites return as disputed
+    sites, so the screen asks them; every other retired site stays out."""
+    from mechanical.lane import D50_DISPUTED_SITES
+
+    assert set(D50_DISPUTED_SITES.values()) <= set(D.KNOWN_POSITIVES)
+    assert len(D50_DISPUTED_SITES) == 6
+    (yonaguni,) = [sid for sid, name in D50_DISPUTED_SITES.items() if name == "Yonaguni Monument"]
+    rows = [
+        _row(yonaguni, "A so-called monument, a natural formation.", scope_status="retired"),
+        _row(FX.SITE_C, "A site that a file calls disputed.", scope_status="retired"),
+    ]
+    run = _run(tmp_path, rows)
+    summary = D.cmd_candidates(run, wiki_cache=None)
+    assert summary["candidates"] == 1 and summary["listed"] == {"retired": 1}
+    assert [c["site_id"] for c in read_jsonl(run / D.CANDIDATES_FILE)] == [yonaguni]
+    assert D.screened({"id": yonaguni, "scope_status": "retired"})
+    assert not D.screened({"id": FX.SITE_C, "scope_status": "retired"})
+    assert D.screened({"id": FX.SITE_C, "scope_status": None})
 
 
 # ------------------------------------------------------------------------------ the categories
@@ -255,17 +277,26 @@ def test_fifty_titles_go_to_one_query_and_a_missing_article_is_an_error() -> Non
 
 
 def test_the_categories_file_covers_the_shown_sites_with_a_wikipedia_title(tmp_path: Path) -> None:
+    from mechanical.lane import D50_DISPUTED_SITES
+
+    richat = next(s for s, n in D50_DISPUTED_SITES.items() if n == "Richat Structure")
     rows = [
         _row(FX.SITE_A, "A.", name="A"),
         {**_row(FX.SITE_B, "B."), "enwiki_title": None},
         {**_row(FX.SITE_C, "C.", scope_status="retired")},
+        {**_row(richat, "R.", scope_status="retired"), "enwiki_title": "Richat Structure"},
     ]
     run = _run(tmp_path, rows)
     get, calls = _api({"Tarxien Temples": ["Category:Rock formations of Wales"]})
     summary = D.cmd_fetch_categories(run, get=get)
-    assert summary == {"sites": 1, "with_categories": 1}
+    assert summary == {"sites": 2, "with_categories": 1}, "a D50 site is read, SITE_C not"
+    assert {t for c in calls for t in c["titles"].split("|")} == {
+        "Tarxien Temples",
+        "Richat Structure",
+    }
     assert json.loads((run / D.CATEGORIES_FILE).read_text(encoding="utf-8")) == {
-        FX.SITE_A: ["Category:Rock formations of Wales"]
+        FX.SITE_A: ["Category:Rock formations of Wales"],
+        richat: [],
     }
 
 

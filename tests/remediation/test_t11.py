@@ -372,8 +372,9 @@ class TestT11ScopeWindow:
     def test_the_verdict_agrees_with_the_projects_own_scope_function(
         self, t11: Any, world: Any
     ) -> None:
-        """Where the two can be compared, `passes_date_cutoff()` and T11 must not disagree."""
-        from pipeline.normalizers.dates import passes_date_cutoff
+        """Where the two can be compared, the E3 rule (`passes_e3_cutoff()`, which was
+        `passes_date_cutoff()` until D58) and T11 must not disagree."""
+        from pipeline.normalizers.dates import passes_e3_cutoff as passes_date_cutoff
 
         sites = [
             _site("a", lat=40.0, lon=-4.0, period_start=500),
@@ -391,7 +392,7 @@ class TestT11ScopeWindow:
         """O7 (owner, 2026-09-26): "Ozeanien wie Amerika". An Oceania row dated 1200 AD passes
         whether the longitude window holds it or not; 1501 AD is past the cutoff and the note
         names the region."""
-        from pipeline.normalizers.dates import passes_date_cutoff
+        from pipeline.normalizers.dates import passes_e3_cutoff as passes_date_cutoff
 
         sites = [
             {**_site("syd", lat=-33.87, lon=151.21, period_start=1200), "country": "Australia"},
@@ -459,7 +460,7 @@ class TestT11Contract:
             DATE_CUTOFF_OCEANIA,
             DATE_CUTOFF_REST_OF_WORLD,
             e3_region,
-            passes_date_cutoff,
+            passes_e3_cutoff,
         )
 
         rule = t11._scope_rule()
@@ -470,7 +471,7 @@ class TestT11Contract:
         assert rule.cutoffs[rule.americas] == DATE_CUTOFF_AMERICAS == 1500
         assert rule.cutoffs[rule.oceania] == DATE_CUTOFF_OCEANIA == 1500
         assert rule.cutoffs[rule.rest_of_world] == DATE_CUTOFF_REST_OF_WORLD == 500
-        assert rule.passes is passes_date_cutoff
+        assert rule.passes is passes_e3_cutoff
         assert rule.region_of is e3_region
 
     def test_the_region_rule_is_the_projects_own(self, t11: Any) -> None:

@@ -26,6 +26,7 @@ from sqlalchemy import text as sql
 from pipeline.lyra.prospector.dedup import Verdict, gate_country
 from pipeline.lyra.prospector.resolve import Resolution
 from pipeline.lyra.site_key import site_key_sql
+from pipeline.normalizers.dates import LABEL_IN_SCOPE, LABEL_OUT_OF_SCOPE
 from pipeline.utils.text import categorize_period, clean_description
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ def derive_status(place_class: str, res: Resolution | None, verdict: Verdict | N
         return "not_a_place"
     if res is not None and res.verdict in {"not_a_place", "area_not_point", "region", "off_earth"}:
         return "not_a_place"
-    if res is not None and res.verdict == "resolved" and not res.in_scope:
+    if res is not None and res.verdict == "resolved" and res.scope == LABEL_OUT_OF_SCOPE:
         return "out_of_scope"
     if verdict is None:
         return "new"
@@ -147,7 +148,7 @@ def upsert_proposal(
         "dedup_trace": json.dumps(
             verdict.trace if verdict else [], ensure_ascii=False, default=str
         ),
-        "scope_verdict": "in_scope" if (res is None or res.in_scope) else "out_of_scope",
+        "scope_verdict": LABEL_IN_SCOPE if res is None else res.scope,
         "resolution_note": res.note if res else None,
         "resolution_path": res.path if res else None,
         "an_site_id": verdict.an_site_id if verdict else None,

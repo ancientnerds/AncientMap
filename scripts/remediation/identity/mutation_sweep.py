@@ -794,10 +794,11 @@ CASES: list[Case] = [
         "test_the_footpath_must_be_exactly_one_site_with_the_pinned_name",
         T_SCOPE,
     ),
-    guard(
+    swap(
         "population only",
         SCOPE,
-        "        if not found:",
+        '        if not found or row["id"] in D50_DISPUTED_SITES:',
+        '        if row["id"] in D50_DISPUTED_SITES:',
         "test_a_site_inside_the_window_is_not_in_the_population",
         T_SCOPE,
     ),
@@ -893,6 +894,30 @@ CASES: list[Case] = [
         '"parent_is_child": parent_id in parents_of,',
         '"parent_is_child": False,',
         "test_a_chain_is_flagged_and_a_child_with_two_parents_is_flagged",
+        T_SCOPE,
+    ),
+    # ------------------------------------------------------------------- D58, the label rule
+    swap(
+        "d58 export: the shown part carries the borderline flag",
+        EXPORT,
+        '       coalesce({label_borderline_sql("u.")}, false) AS label_borderline\n',
+        "       false AS label_borderline\n",
+        "test_the_window_in_the_shown_part_is_the_scope_lanes_own_rule",
+        T_EXPORT,
+    ),
+    swap(
+        "d58 export: the window is the label rule",
+        EXPORT,
+        '       coalesce({outside_label_window("u.")}, false) AS outside_window,\n',
+        "       false AS outside_window,\n",
+        "test_the_window_in_the_shown_part_is_the_scope_lanes_own_rule",
+        T_EXPORT,
+    ),
+    guard(
+        "d58 scope: a borderline site is asked",
+        SCOPE,
+        '    if row["label_borderline"]:',
+        "test_a_label_borderline_site_is_asked_although_the_window_keeps_it",
         T_SCOPE,
     ),
 ]

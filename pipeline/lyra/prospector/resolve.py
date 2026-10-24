@@ -18,7 +18,8 @@ Rejection filters, each from a field the API actually returns:
   P625 precision >= 0.1 degrees   -> area_not_point (Texas: precision 1)
   P31 in the admin/region denylist -> region
   coordinates on another globe     -> off_earth
-  passes_date_cutoff() False       -> out_of_scope (project scope rule)
+  label_scope() out_of_scope       -> out_of_scope (project scope rule D58, a Viking item too)
+  label_scope() label_borderline   -> kept for review, scope_verdict label_borderline
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ from pipeline.lyra.site_identifier import (
 )
 from pipeline.lyra.site_matcher import _is_same_name
 from pipeline.lyra.site_researcher import _search_wikidata
-from pipeline.normalizers.dates import passes_date_cutoff
+from pipeline.normalizers.dates import LABEL_IN_SCOPE, label_scope
 from pipeline.utils.country_lookup import lookup_country
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,9 @@ class Resolution:
     thumbnail_url: str | None = None
     wikipedia_url: str | None = None
     instance_of: list[str] = field(default_factory=list)
-    in_scope: bool = True
+    #: `dates.label_scope`'s answer: in_scope, out_of_scope or label_borderline (the founder
+    #: decides the subject).
+    scope: str = LABEL_IN_SCOPE
     note: str | None = None
     # True only when the entity APIs returned nothing for an id we hold — the
     # signal that Wikidata is degraded. A same-name rejection or a missing
@@ -281,13 +284,14 @@ def _confirm_and_enrich(res: Resolution) -> None:
         summary = _fetch_wikipedia_summary(res.canonical_title)
         res.description = summary.get("description")
         res.thumbnail_url = res.thumbnail_url or summary.get("thumbnail_url")
-    res.in_scope = passes_date_cutoff(
+    res.scope = label_scope(
         {
             "period_start": res.period_start,
             "period_end": res.period_end,
             "lat": res.lat,
             "lon": res.lon,
             "country": res.country,
-        }
+        },
+        (res.qid,),
     )
     res.verdict = "resolved"

@@ -1,17 +1,28 @@
-"""D20: the sites the E3 window may not cover - the population, with where each period came from.
+"""D20: the sites the scope window may not cover - the population, with where each period came from.
 
-The scope rule E3 (`pipeline/normalizers/dates.py`): a site is in scope when the date of its last
-period is not past its region's cutoff (500 AD, 1500 AD for the Americas and Oceania). The window is
-tested in SQL by `mechanical.lane.outside_e3_window` (`export.SHOWN_SQL` carries it as
-`outside_window`), never re-typed here. The population:
+The scope rule is the owner's label rule D58 (2026-10-24, `pipeline/normalizers/dates.py`): a site
+is in scope when the date of its last period is not past its region's cutoff - 500 AD for the
+medieval Old World (Europe and Byzantium), 1500 AD for every other region. The window is tested in
+SQL by `mechanical.lane.outside_label_window` (`export.SHOWN_SQL` carries it as `outside_window`,
+and `label_borderline_sql` as `label_borderline`), never re-typed here. The population:
 
-* `outside_window`   - shown sites past the cutoff (127 on 2026-10-08: 110 undecided, 15 museums
-                       already `in_scope`, 2 pending);
+* `outside_window`   - shown sites past the cutoff (127 on 2026-10-08 under the numeric rule E3:
+                       110 undecided, 15 museums already `in_scope`, 2 pending);
+* `label_borderline` - shown sites dated 500-1500 in the Levant, Egypt, Byzantine Africa, the
+                       Caucasus or Greenland, where the label decides (a Byzantine, Crusader or
+                       Norse subject is out);
 * `pending`          - the five sites a scope review left `pending`, in the window or not;
 * `hadrians_wall_path` - a footpath opened in 2003, never decided.
 
+A site of Islamic Europe dated 500-1500 (Spain, Portugal, Malta, Sicily: the export's
+`label_open_question`, `mechanical.lane.label_open_question_sql`) is held out of the population and
+counted `held_label_open_question`: whether al-Andalus and the Emirate of Sicily stay is an open
+owner question (WD2 section 1b), and the window would retire them by their region alone.
+
 A museum among them (22: 15 already `in_scope`, 7 undecided) is flagged `museum_question`: scope
-rule (d) asks whether its exhibits are ancient, a different question from the period's.
+rule (d) asks whether its exhibits are ancient, a different question from the period's. A D50 site
+(`mechanical.lane.D50_DISPUTED_SITES`, shown again as disputed by the un-retire) is never part of
+the population: D50 decided its scope, and the lane's invariant refuses retiring it.
 
 Each site carries its **period provenance** from the change journal: the last write of
 `period_start`, `period_end` and `period_name` (stamp, family, confidence, old and new value, the
@@ -42,6 +53,7 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
         sys.path.insert(0, _root)
 
 import journal_chain  # noqa: E402
+from mechanical.lane import D50_DISPUTED_SITES  # noqa: E402
 
 from identity import common, export  # noqa: E402
 
@@ -73,6 +85,8 @@ def groups_of(row: Mapping[str, Any]) -> list[str]:
     found: list[str] = []
     if row["outside_window"]:
         found.append("outside_window")
+    if row["label_borderline"]:
+        found.append("label_borderline")
     if row["scope_status"] == "pending":
         found.append("pending")
     if row["id"].startswith(export.HADRIANS_WALL_PATH_PREFIX):
@@ -112,7 +126,10 @@ def build(exported: export.Export) -> tuple[list[dict[str, Any]], dict[str, Any]
     counts: Counter[str] = Counter()
     for row in exported.shown:
         found = groups_of(row)
-        if not found:
+        if not found or row["id"] in D50_DISPUTED_SITES:
+            continue
+        if row["label_open_question"]:
+            counts["held_label_open_question"] += 1
             continue
         written = provenance(journal.get(row["id"], []))
         start = written.get("period_start")

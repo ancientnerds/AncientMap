@@ -38,7 +38,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
 from pipeline.database import SourceMeta, UnifiedSite, get_session
-from pipeline.normalizers.dates import parse_year, passes_date_cutoff
+from pipeline.normalizers.dates import LABEL_IN_SCOPE, LABEL_QUESTION, label_scope, parse_year
 from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils import (
     get_centroid as _get_centroid,
@@ -545,6 +545,14 @@ def enrich_country(record: dict) -> dict:
     return record
 
 
+def record_qids(record: dict) -> list[str]:
+    """The Wikidata items a parsed record carries in `raw_data`: `wikidata_id` (the Wikidata
+    source) and `wikidata` (OpenStreetMap's tag, ToposText's field) - what `label_scope` reads for
+    a Viking subject."""
+    raw = record.get("raw_data") or {}
+    return [str(raw[key]) for key in ("wikidata_id", "wikidata") if raw.get(key)]
+
+
 class UnifiedLoader:
     """Loads all raw data sources into the unified_sites table."""
 
@@ -791,6 +799,7 @@ class UnifiedLoader:
         total = 0
         enriched_count = 0
         filtered_by_date = 0
+        held_by_label = 0
 
         for record in parser(data_file, source_id, config):
             if record:
@@ -805,11 +814,17 @@ class UnifiedLoader:
                     if record.get("country") and record.get("country") != original_country:
                         enriched_count += 1
 
-                # GLOBAL DATE CUTOFF - Applied to ALL sources (E3 with O7,
-                # pipeline/normalizers/dates.py): Americas and Oceania <= 1500 AD,
-                # the rest of the world <= 500 AD
-                if not passes_date_cutoff(record):
-                    filtered_by_date += 1
+                # GLOBAL SCOPE RULE - Applied to ALL sources (the label rule D58,
+                # pipeline/normalizers/dates.py): the medieval Old World (Europe,
+                # Byzantium) <= 500 AD, every other region <= 1500 AD, a Viking
+                # subject out. A record the label decides (a borderline country,
+                # dated 500-1500) is held: the loader asks no verdict on its subject.
+                scope = label_scope(record, record_qids(record))
+                if scope != LABEL_IN_SCOPE:
+                    if scope == LABEL_QUESTION:
+                        held_by_label += 1
+                    else:
+                        filtered_by_date += 1
                     continue  # Skip this record entirely
 
                 batch.append(record)
@@ -830,8 +845,13 @@ class UnifiedLoader:
 
         if filtered_by_date > 0:
             logger.info(
-                f"  Filtered {filtered_by_date:,} records by date cutoff "
-                "(>1500 AD Americas and Oceania, >500 AD elsewhere)"
+                f"  Filtered {filtered_by_date:,} records by the scope rule "
+                "(>500 AD in Europe and Byzantium, >1500 AD elsewhere, Viking subjects)"
+            )
+        if held_by_label > 0:
+            logger.info(
+                f"  Held {held_by_label:,} records the label decides "
+                "(a borderline country, dated 500-1500 AD: no verdict on the subject)"
             )
 
         session.commit()

@@ -969,7 +969,10 @@ def in_oceania_sql(prefix: str = "") -> str:
 
 
 def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
-    """SQL: the row's date lies past the E3 cutoff of its region - `passes_date_cutoff()` negated.
+    """SQL: the row's date lies past the E3 cutoff of its region - `passes_e3_cutoff()` negated.
+
+    The rule the delivered scope lanes ran with; the rule in force is the label rule D58
+    (`outside_label_window`).
 
     Built from the project's own rule and constants (`pipeline/normalizers/dates.py`), never
     re-typed: the date is `period_end or period_start` (Python's `or`, so a 0 `period_end` falls
@@ -1002,6 +1005,193 @@ def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
         f"THEN {DATE_CUTOFF_AMERICAS} ELSE {DATE_CUTOFF_REST_OF_WORLD} END)"
     )
     return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
+
+
+def _boxes_sql(
+    prefix: str, parts: Mapping[str, tuple[tuple[float, float, float, float], ...]]
+) -> str:
+    """SQL: the row names a state of `parts` and its point lies in one of that state's boxes
+    (edges included) - the box half of `in_oceania` and `in_medieval_old_world`."""
+    p = prefix
+    country = country_key_sql(p)
+    return " OR ".join(
+        f"({country} = {sql_literal(state)} AND {p}lon BETWEEN {lon_min} AND {lon_max} "
+        f"AND {p}lat BETWEEN {lat_min} AND {lat_max})"
+        for state, boxes in sorted(parts.items())
+        for lon_min, lat_min, lon_max, lat_max in boxes
+    )
+
+
+def in_medieval_old_world_sql(prefix: str = "") -> str:
+    """SQL: the row lies in the medieval Old World - `pipeline.normalizers.dates.
+    in_medieval_old_world`, rendered from the same lists: its `country_key` is one of
+    `MEDIEVAL_OLD_WORLD_COUNTRIES` and its point lies in no `NON_EUROPEAN_PARTS` box of that state
+    (a row without a point lies in none, so its country decides - `coalesce` makes the unknown box
+    test false, as the Python rule reads it)."""
+    from pipeline.normalizers.dates import MEDIEVAL_OLD_WORLD_COUNTRIES, NON_EUROPEAN_PARTS
+
+    listed = ", ".join(sql_literal(name) for name in sorted(MEDIEVAL_OLD_WORLD_COUNTRIES))
+    return (
+        f"({country_key_sql(prefix)} IN ({listed}) "
+        f"AND NOT coalesce(({_boxes_sql(prefix, NON_EUROPEAN_PARTS)}), false))"
+    )
+
+
+def in_rest_of_world_sql(prefix: str = "") -> str:
+    """SQL: the row's country is positively of the rest of the world - `pipeline.normalizers.
+    dates.in_rest_of_world`, rendered from the same lists: its `country_key` is one of
+    `REST_OF_WORLD_COUNTRIES`, or its point lies in a `NON_EUROPEAN_PARTS` box of the medieval
+    Old World state it names (`coalesce`: a row without a point lies in no box)."""
+    from pipeline.normalizers.dates import NON_EUROPEAN_PARTS, REST_OF_WORLD_COUNTRIES
+
+    listed = ", ".join(sql_literal(name) for name in sorted(REST_OF_WORLD_COUNTRIES))
+    return (
+        f"({country_key_sql(prefix)} IN ({listed}) "
+        f"OR coalesce(({_boxes_sql(prefix, NON_EUROPEAN_PARTS)}), false))"
+    )
+
+
+def _window_date_sql(prefix: str) -> str:
+    """SQL: `dates.window_date` - `period_end` unless it is NULL or 0, else `period_start`."""
+    p = prefix
+    return (
+        f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
+        f"ELSE {p}period_start END)"
+    )
+
+
+def label_cutoff_sql(prefix: str = "") -> str:
+    """SQL: the cutoff of the row's region under the label rule D58 (`dates.scope_region`,
+    `dates.LABEL_CUTOFFS`) - Oceania, the Americas' longitude window, the rest of the world by a
+    recognised country (`in_rest_of_world_sql`), else 500 AD: the medieval Old World and the
+    unplaced Old World (no country, or one no list recognises) share the `ELSE`, as they share
+    the cutoff (the SQLite equivalence test holds the two renderings equal row for row)."""
+    from pipeline.normalizers.dates import (
+        AMERICAS,
+        AMERICAS_LON_MAX,
+        AMERICAS_LON_MIN,
+        LABEL_CUTOFFS,
+        MEDIEVAL_OLD_WORLD,
+        OCEANIA,
+        REST_OF_WORLD,
+    )
+
+    p = prefix
+    return (
+        f"(CASE WHEN {in_oceania_sql(p)} THEN {LABEL_CUTOFFS[OCEANIA]} "
+        f"WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
+        f"THEN {LABEL_CUTOFFS[AMERICAS]} "
+        f"WHEN {in_rest_of_world_sql(p)} THEN {LABEL_CUTOFFS[REST_OF_WORLD]} "
+        f"ELSE {LABEL_CUTOFFS[MEDIEVAL_OLD_WORLD]} END)"
+    )
+
+
+def outside_label_window(prefix: str = "") -> str:
+    """SQL: the row's date lies past the cutoff of its region under the owner's label rule (D58,
+    2026-10-24) - `passes_date_cutoff()` negated, rendered from the same lists and constants
+    (`pipeline/normalizers/dates.py`), never re-typed. A row without a date or a longitude is
+    never outside: the function includes it. `prefix` qualifies the columns (`u.`)."""
+    p = prefix
+    return (
+        f"({p}lon IS NOT NULL AND coalesce({_window_date_sql(p)} > {label_cutoff_sql(p)}, false))"
+    )
+
+
+def label_borderline_sql(prefix: str = "") -> str:
+    """SQL: `dates.label_borderline` - the row has a point, is dated after 500 AD and through 1500
+    AD, and its country is one of `LABEL_BORDERLINE_COUNTRIES` (none of which is Oceania's or the
+    medieval Old World's): the label, not the region, decides it."""
+    from pipeline.normalizers.dates import (
+        LABEL_BORDERLINE_COUNTRIES,
+        LABEL_CUTOFF_MEDIEVAL_OLD_WORLD,
+        LABEL_CUTOFF_REST_OF_WORLD,
+    )
+
+    p = prefix
+    date = _window_date_sql(p)
+    listed = ", ".join(sql_literal(name) for name in sorted(LABEL_BORDERLINE_COUNTRIES))
+    return (
+        f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "
+        f"AND {date} <= {LABEL_CUTOFF_REST_OF_WORLD} AND {country_key_sql(p)} IN ({listed}))"
+    )
+
+
+def label_open_question_sql(prefix: str = "") -> str:
+    """SQL: `dates.label_open_question` - the owner's open question on Islamic Europe holds the
+    row: it has a point, is dated after 500 AD and through 1500 AD, lies in the medieval Old World
+    (outside the Americas' window: no Oceania state is one of these) and names Spain, Portugal or
+    Malta (`ISLAMIC_EUROPE_COUNTRIES`) or lies on Sicily (`ISLAMIC_EUROPE_PARTS`)."""
+    from pipeline.normalizers.dates import (
+        AMERICAS_LON_MAX,
+        AMERICAS_LON_MIN,
+        ISLAMIC_EUROPE_COUNTRIES,
+        ISLAMIC_EUROPE_PARTS,
+        LABEL_CUTOFF_MEDIEVAL_OLD_WORLD,
+        LABEL_CUTOFF_REST_OF_WORLD,
+    )
+
+    p = prefix
+    date = _window_date_sql(p)
+    listed = ", ".join(sql_literal(name) for name in sorted(ISLAMIC_EUROPE_COUNTRIES))
+    return (
+        f"({p}lon IS NOT NULL AND {date} > {LABEL_CUTOFF_MEDIEVAL_OLD_WORLD} "
+        f"AND {date} <= {LABEL_CUTOFF_REST_OF_WORLD} "
+        f"AND NOT ({p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX}) "
+        f"AND {in_medieval_old_world_sql(p)} "
+        f"AND ({country_key_sql(p)} IN ({listed}) "
+        f"OR coalesce(({_boxes_sql(p, ISLAMIC_EUROPE_PARTS)}), false)))"
+    )
+
+
+#: D50 (owner, 2026-10-19): the retired "mystery" sites "all return as disputed sites ... each
+#: description states the scholarly position and the claim, both sourced; no card or page asserts
+#: the claim". The six the scope review retired as natural formations on 2026-09-30
+#: (`2026-09-30_mechanical-scope-review`, read on production 2026-10-24), by id. The dispute screen
+#: and lane E ask them although they are retired (`wc/disputes.py`, `wc/cli.py`), and the scope
+#: lane shows them again only once their description is a lane-E dispute enrichment
+#: (`identity_lanes.scope_unretire_lane`).
+D50_DISPUTED_SITES: Mapping[str, str] = {
+    "01296632-a2a1-4610-a4a9-d0c3be77b788": "Yonaguni Monument",
+    "0fd636ac-1a80-4a77-b9d0-a065ae811656": "Bosnian Pyramid of the Moon",
+    "3c466fde-b751-4065-8de2-bd5c9280afe5": "Bosnian Pyramid of the Sun",
+    "84b456ff-0b44-4d75-92a4-5cbe22026b95": "Richat Structure",
+    "8df8659c-49be-4a66-b25a-ecbf96541515": "Bosnian Pyramid of Love",
+    "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded": "Baltic Sea Anomaly",
+}
+#: The reason the un-retire writes for a D50 site (`identity_lanes.scope_unretire_lane`).
+D50_REASON_PREFIX = "D50 disputed site (owner, 2026-10-19): "
+
+
+def d50_site_sql(alias: str = "u") -> str:
+    """SQL: the row is one of `D50_DISPUTED_SITES`."""
+    listed = ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
+    return f"CAST({alias}.id AS text) IN ({listed})"
+
+
+#: The scope lanes that retire (`scope-review-<wave>`, `scope-window-<wave>`) never retire a D50
+#: site: D50 shows them as disputed, and the question that retired them on 2026-09-30 (natural
+#: formation, no site) would retire them again. The second leg - no site of these lanes leaves with
+#: a D50 reason, which only the un-retire writes - is what `--probe-guards` corrupts: a probe
+#: cannot plant a D50 site into a plan, it can write a D50 reason into the first planned one.
+D50_NOT_RETIRED = SiteInvariant(
+    says="planned site(s) retired although D50 shows them as disputed, or given a D50 reason",
+    predicate=(
+        f"(u.scope_status = 'retired' AND {d50_site_sql('u')}) "
+        f"OR u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')}"
+    ),
+    probe_column="scope_reason",
+    probe_values=(
+        D50_REASON_PREFIX + "probe one",
+        D50_REASON_PREFIX + "probe two",
+        D50_REASON_PREFIX + "probe three",
+    ),
+)
+
+#: The D58 window's residual: what the scope-window and scope-unretire lanes read back.
+UNDECIDED_OUTSIDE_LABEL_WINDOW = Residual(
+    "curated rows outside the D58 label window with no scope decision",
+    f"{outside_label_window()} AND scope_status IS NULL",
+)
 
 
 _UNDECIDED_OUT_OF_WINDOW = Residual(
@@ -1744,6 +1934,18 @@ _UNDECIDED_OUT_OF_WINDOW_O7 = Residual(
 )
 #: The reason prefix of the lane's retirements, which the read-back counts.
 NOT_A_SITE_PREFIX = "E3: not an archaeological site"
+#: Site types that do not by themselves say "human-made" (each a canonical type).
+NON_SITE_TYPES = frozenset(
+    {
+        "Natural feature",
+        "Geological interest",
+        "Magnetic anomaly",
+        "Underwater structures",
+        "Impact crater",
+        "Elongated skulls",
+        "Unknown",
+    }
+)
 SCOPE_REVIEW_PREMISE_SQL = (
     "concat_ws(' | ', u.name, coalesce(u.site_type, 'NULL'), u.lat::text, u.lon::text, "
     "coalesce(u.country, 'NULL'), coalesce(u.period_start::text, 'NULL'), "
@@ -1777,6 +1979,7 @@ def scope_review_lane(wave: str) -> Lane:
             Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),
             Column("scope_reason", "text", fills_null=True),
         ),
+        site_invariants=(D50_NOT_RETIRED,),
     )
 
 
@@ -2838,7 +3041,7 @@ CARD_EXACT_LANE = re.compile(r"^card-exact-s(\d{3})\Z")
 #: The identity package's wave lanes (`mechanical/identity_lanes.py`, owner decisions D13, D20, D23 of
 #: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`.
 IDENTITY_WAVE_LANE = re.compile(
-    r"^(?:scope-window|name-clean|retarget-name|spoken)-\d{4}-\d{2}-\d{2}[a-z]?\Z"
+    r"^(?:scope-window|scope-unretire|name-clean|retarget-name|spoken)-\d{4}-\d{2}-\d{2}[a-z]?\Z"
 )
 
 

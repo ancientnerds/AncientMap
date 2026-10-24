@@ -1737,6 +1737,55 @@ CASES: list[Case] = [
         "test_a_retarget_the_pool_does_not_support_fails_the_calibration_whatever_the_agreement",
         T_CALIBRATION,
     ),
+    # ------------------------------------------------------------------- D58, the label rule
+    Case(
+        "d58 scope_judge: a medieval subject only for a borderline entry",
+        SCOPE_JUDGE,
+        '        if not ctx["label_borderline"]:\n            raise AnswerError(\n',
+        "        if False:\n            raise AnswerError(\n",
+        "test_every_rule_an_answer_can_break_on_its_own",
+        T_SCOPE,
+    ),
+    Case(
+        "d58 scope_judge: the medieval kinds",
+        SCOPE_JUDGE,
+        "        if kind not in MEDIEVAL_KINDS:\n",
+        "        if False:\n",
+        "test_a_medieval_subject_names_one_of_its_kinds",
+        T_SCOPE,
+    ),
+    Case(
+        "d58 scope_judge: a medieval subject is re-checked",
+        SCOPE_JUDGE,
+        "RETIRING = (OUT_OF_WINDOW, NOT_A_SITE, MEDIEVAL_SUBJECT)\n",
+        "RETIRING = (OUT_OF_WINDOW, NOT_A_SITE)\n",
+        "test_it_asks_every_decided_retirement_and_nothing_else",
+        T_SCOPE,
+    ),
+    Case(
+        "d58 scope_judge: a borderline entry gets the label note",
+        SCOPE_JUDGE,
+        '        label=LABEL_NOTE.format(country=ctx["country"]) if ctx["label_borderline"] else "",\n',
+        '        label="",\n',
+        "test_a_european_entry_has_the_500_cutoff_and_a_borderline_one_the_label",
+        T_SCOPE,
+    ),
+    Case(
+        "d58 scope_judge: the cutoff is the label rule's",
+        SCOPE_JUDGE,
+        "    return region, LABEL_CUTOFFS[region]\n",
+        "    return region, 500\n",
+        "test_the_cutoff_follows_the_dates_module_s_region_rule",
+        T_SCOPE,
+    ),
+    Case(
+        "d58 scope_judge: a medieval subject retires with the label reason",
+        SCOPE_JUDGE,
+        "        return f\"{LABEL_RETIRED_PREFIX} ({data['kind']}): {data['why']}; {quote}\"\n",
+        "        return f\"{NOT_A_SITE_PREFIX} ({data['kind']}): {data['why']}\"\n",
+        "test_a_medieval_subject_is_retired_with_the_label_s_reason_after_a_confirm",
+        T_SCOPE,
+    ),
 ]
 
 

@@ -9,6 +9,7 @@ kept them. Site ids and names are production's where the case was read there (20
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -28,8 +29,12 @@ from opus_audit import quotes as Q  # noqa: E402
 from phase3.run import read_jsonl  # noqa: E402
 from served_image.precheck import load_harvest  # noqa: E402
 
-BALTIC = "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded"  # Baltic Sea Anomaly, Underwater structures
-BOSNIA = "3c466fde-b751-4065-8de2-bd5c9280afe5"  # Bosnian Pyramid of the Sun, pending
+#: The round-0 fixture's natural formations, named after the two the 2026-09-30 round retired;
+#: their ids are their own, because the real ones are D50 sites since 2026-10-19
+#: (`lane.D50_DISPUTED_SITES`, never asked again - `TestTheD50Sites`).
+BALTIC = "c8d2c13e-0000-4000-8000-000000000001"  # like the Baltic Sea Anomaly
+BOSNIA = "3c466fde-0000-4000-8000-000000000002"  # like the Bosnian Pyramid of the Sun, pending
+RICHAT = "84b456ff-0b44-4d75-92a4-5cbe22026b95"  # a D50 site: the Richat Structure
 KHORTYTSIA = "e2030e0e-b33e-410c-b8df-8ccd76b8af03"  # an island: Wikidata P31 island
 NOITEM = "0b8f2a44-2c1e-4d7a-9a51-6c1f0e8d9a10"  # no Wikidata item
 STONEHENGE = "1d6f2d2a-8f4e-4b1c-9d0a-3e7f5a2b6c11"  # no signal
@@ -264,6 +269,106 @@ def move_baltic(review: dict[str, Path]) -> dict[str, Any]:
     rows[0]["premise"] = premise(rows[0])
     write_export(review["out"], rows, at="t1")
     return rows[0]
+
+
+# ------------------------------------------------------------------------------ D50
+class TestTheD50Sites:
+    """D50 (owner, 2026-10-19): the six retired mystery sites return as disputed sites. Once the
+    un-retire shows one again, the scope review never asks it, never re-asks it and never retires
+    it on the answer that retired it on 2026-09-30 - and its lane's invariant refuses it."""
+
+    def shown_richat(self) -> dict:
+        return site(
+            RICHAT,
+            "Richat Structure",
+            "Natural feature",
+            status="in_scope",
+            reason="D50 disputed site (owner, 2026-10-19): shown as disputed",
+            country="Mauritania",
+            lat=21.12,
+            lon=-11.4,
+            start=None,
+        )
+
+    def test_the_fixture_is_none_of_them(self) -> None:
+        assert not {s["id"] for s in sites()} & set(L.D50_DISPUTED_SITES)
+        assert RICHAT in L.D50_DISPUTED_SITES
+
+    def test_a_shown_d50_site_is_no_candidate(self, review) -> None:
+        write_export(review["out"], [*sites(), self.shown_richat()], at="t1")
+        export = R.read_export(R.export_path(review["out"]))
+        asked = {c.site_id for c in R.candidates(export, load_harvest(review["harvest"]))}
+        assert RICHAT not in asked and BALTIC in asked
+
+    def answer(self, *, counted: bool, premise_now: bool) -> dict:
+        richat = self.shown_richat()
+        return {
+            "site_id": RICHAT,
+            "decision": R.NOT_A_SITE,
+            "counted": counted,
+            "premise": richat["premise"] if premise_now else "an older entry",
+            "kind": "natural_formation",
+            "reason": "A geological dome.",
+            "quotes": [],
+            "model": OH.OPUS_MODEL,
+            "answered_by": "r0-001",
+        }
+
+    def test_a_shown_d50_site_is_never_asked_again(self, review) -> None:
+        write_export(review["out"], [*sites(), self.shown_richat()], at="t1")
+        export = R.read_export(R.export_path(review["out"]))
+        harvest = load_harvest(review["harvest"])
+        for counted, premise_now in ((True, False), (False, True)):
+            history = {RICHAT: [self.answer(counted=counted, premise_now=premise_now)]}
+            assert R.reasks(export, history, harvest) == []
+
+    def test_its_old_counted_answer_retires_nothing(self, review) -> None:
+        write_export(review["out"], [*sites(), self.shown_richat()], at="t1")
+        export = R.read_export(R.export_path(review["out"]))
+        decided = {RICHAT: self.answer(counted=True, premise_now=True)}
+        plan = R.build_plan(export, decided, built_at="x", lane=L.scope_review_lane(WAVE))
+        assert not [c for c in plan.changes if c.site_id == RICHAT]
+        assert {v.site_id: v.reason for v in plan.skipped}[RICHAT] == "d50-disputed"
+
+    def test_the_lane_s_invariant_refuses_retiring_one(self) -> None:
+        lane = L.scope_review_lane(WAVE)
+        assert lane.site_invariants == (L.D50_NOT_RETIRED,)
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE unified_sites (id TEXT, scope_status TEXT, scope_reason TEXT)")
+        db.executemany(
+            "INSERT INTO unified_sites VALUES (?, ?, ?)",
+            [
+                (RICHAT, "retired", L.NOT_A_SITE_PREFIX + " (natural_formation): a dome"),
+                (BALTIC, "retired", L.NOT_A_SITE_PREFIX + " (natural_formation): a deposit"),
+                (BOSNIA, "in_scope", L.D50_REASON_PREFIX + "probe one"),
+                (NOITEM, "in_scope", "E3 with O7: inside the window"),
+                ("00000000-0000-4000-8000-00000000000a", "in_scope", L.NOT_A_SITE_PREFIX),
+            ],
+        )
+        sql = f"SELECT u.id FROM unified_sites u WHERE {L.D50_NOT_RETIRED.predicate}"
+        assert {row[0] for row in db.execute(sql)} == {RICHAT, BOSNIA}
+
+    def test_the_invariant_is_probed_on_any_plan(self) -> None:
+        lane = L.scope_review_lane(WAVE)
+        base = {
+            "site_id": BALTIC,
+            "site_name": "x",
+            "rule": "e3-not-a-site",
+            "condition": "x",
+            "reason": "scope-review: x",
+            "evidence": ({"source": "test", "quote": "x"},),
+            "premise": "p",
+        }
+        records = [
+            A.ChangeRecord(**base, old_value=None, new_value="retired", column="scope_status"),
+            A.ChangeRecord(
+                **base, old_value=None, new_value=L.NOT_A_SITE_PREFIX + " x", column="scope_reason"
+            ),
+        ]
+        foreign = {"id": "11111111-1111-1111-1111-111111111111", "name": "x", "premise": "p"}
+        probes = {c[0]: c for c in A.probe_cases(records, lane, foreign)}
+        assert "invariant-scope_reason" in probes
+        assert A.unprobed_invariants(records, lane) == []
 
 
 # ------------------------------------------------------------------------------ the funnel

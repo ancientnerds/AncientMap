@@ -20,6 +20,8 @@ applies to every record at load time. It reads `period_end or period_start`, dec
 from `AMERICAS_LON_MIN <= lon <= AMERICAS_LON_MAX` (-170..-30) and tests `date <= cutoff`.
 This module imports that function and its four constants; it does not re-type them, and `run()`
 calls the function on every site it decides and raises if the arithmetic ever disagrees with it.
+Since the owner's label rule (D58, 2026-10-24) `passes_date_cutoff()` is that rule; this census
+measures E3 and imports the E3 rule under its own name, `passes_e3_cutoff()`.
 
 Plan §8.1's SQL, run over the frozen snapshot, gives **69** sites strictly past the cutoff.
 Gate S12 reports **84** failures. Both numbers are right, and the difference is not a boundary
@@ -221,7 +223,7 @@ def _scope_rule() -> _ScopeRule:
         OCEANIA,
         REST_OF_WORLD,
         e3_region,
-        passes_date_cutoff,
+        passes_e3_cutoff,
     )
 
     return _ScopeRule(
@@ -229,7 +231,7 @@ def _scope_rule() -> _ScopeRule:
         americas_lon_max=float(AMERICAS_LON_MAX),
         cutoffs=dict(E3_CUTOFFS),
         region_of=e3_region,
-        passes=passes_date_cutoff,
+        passes=passes_e3_cutoff,
         americas=AMERICAS,
         oceania=OCEANIA,
         rest_of_world=REST_OF_WORLD,
@@ -303,7 +305,7 @@ def _is_museum(site: dict[str, Any]) -> bool:
 def _scope_evidence(date: int, lon: float, region: str, cutoff: int) -> Evidence:
     rule = _scope_rule()
     return Evidence(
-        source="pipeline/normalizers/dates.py (passes_date_cutoff, e3_region)",
+        source="pipeline/normalizers/dates.py (passes_e3_cutoff, e3_region)",
         quote=f"region = Oceania by country (O7), else Americas if {rule.americas_lon_min:g} <= "
         f"lon <= {rule.americas_lon_max:g}, else rest of world; "
         f"cutoff = {cutoff} ({region}); return date <= cutoff   "
@@ -450,13 +452,13 @@ def _undecidable_date(site: dict[str, Any], sid: str, date: Any) -> Finding:
         Confidence.UNVERIFIABLE,
         f"{reason}, so the E3 window cannot be tested - and the bucket is the only dating value "
         "this row carries. The project's own scope function includes a record without a date "
-        '("No date = include (conservative)", passes_date_cutoff in '
+        '("No date = include (conservative)", passes_e3_cutoff in '
         "pipeline/normalizers/dates.py), which is right for a loader and wrong for a "
         "census: reporting this site as `pass` would certify it clean on a comparison that "
         "never happened. It needs a date from a source, or an explicit scope decision",
         [
             Evidence(
-                source="pipeline/normalizers/dates.py (passes_date_cutoff)",
+                source="pipeline/normalizers/dates.py (passes_e3_cutoff)",
                 quote='date = record.get("period_end") or record.get("period_start"); '
                 "if date is None: return True  # No date = include (conservative)",
             ),
@@ -481,7 +483,7 @@ def _undecidable_location(site: dict[str, Any], sid: str) -> Finding:
         "never happened",
         [
             Evidence(
-                source="pipeline/normalizers/dates.py (passes_date_cutoff)",
+                source="pipeline/normalizers/dates.py (passes_e3_cutoff)",
                 quote="region = e3_region(record); if region is None: return True  "
                 "# No location = include",
             ),
@@ -557,7 +559,7 @@ def run(ctx: Context) -> list[Finding]:
         if rule.passes(site) != in_window:
             raise AssertionError(
                 f"{TEST_ID}: {sid} (period_start={date}, lon={lon}) -> in_window={in_window}, "
-                f"but passes_date_cutoff() says {rule.passes(site)}: the census and the project "
+                f"but passes_e3_cutoff() says {rule.passes(site)}: the census and the project "
                 "disagree about the scope rule itself"
             )
 
