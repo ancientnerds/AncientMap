@@ -12477,6 +12477,329 @@ WD5R_CASES: list[Case] = [
 ]
 CASES += WD5R_CASES
 
+# ----------------------------------------------- D57 (2026-10-24): the insert lane's guards
+INSERT_SITE = REPO / "scripts/remediation/insert_site"
+INSERT_CANDIDATES = INSERT_SITE / "candidates.py"
+INSERT_RESEARCH = INSERT_SITE / "research.py"
+INSERT_PLAN = INSERT_SITE / "plan.py"
+INSERT_WRITER = INSERT_SITE / "writer.py"
+INSERT_TESTS = "tests/remediation/test_insert_site.py"
+
+INSERT_SITE_CASES: list[Case] = [
+    # the candidate list
+    guard(
+        "insert-site: the list is the 38 in-rows",
+        INSERT_CANDIDATES,
+        "    if len(chosen) != EXPECTED_IN_ROWS:",
+        "test_a_csv_with_another_count_is_not_the_list",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a candidate needs a point",
+        INSERT_CANDIDATES,
+        '        if line["p625"] is None:',
+        "test_what_does_not_resolve_says_why",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: a pinned exclusion is excluded",
+        INSERT_CANDIDATES,
+        "        elif qid in excluded:",
+        "        elif False:",
+        "test_a_pinned_exclusion_is_resolved_and_excluded",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a curated item is curated already",
+        INSERT_CANDIDATES,
+        '        if line["status"] == CANDIDATE and held:',
+        "test_a_curated_item_or_article_makes_the_candidate_curated_already",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a parent pin names one site",
+        INSERT_CANDIDATES,
+        "            if len(found) != 1:",
+        "test_a_parent_pin_must_name_one_curated_site",
+        INSERT_TESTS,
+    ),
+    # the research answer
+    guard(
+        "insert-site: a name carries no D23 defect",
+        INSERT_RESEARCH,
+        "    if defects:",
+        "test_a_name_with_a_comma_qualifier_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a quote holds the name",
+        INSERT_RESEARCH,
+        "    if not any(_names(q, value) for _, q in answer.quotes):",
+        "test_a_name_no_quote_holds_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the UK by its parts",
+        INSERT_RESEARCH,
+        "    if value == UNITED_KINGDOM:",
+        "test_a_country_the_lane_cannot_take_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a census-clean country",
+        INSERT_RESEARCH,
+        "    if not _country_is_canonical(value):",
+        "test_a_country_the_lane_cannot_take_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a quote names the country",
+        INSERT_RESEARCH,
+        "    if not any(_names(q, form) for _, q in answer.quotes for form in forms):",
+        "test_a_country_the_lane_cannot_take_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: two to eight sources",
+        INSERT_RESEARCH,
+        "    if not MIN_SOURCES <= len(quotes) <= MAX_SOURCES:",
+        "test_the_description_sources_are_bounded_and_never_our_own_site",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: no source of our own",
+        INSERT_RESEARCH,
+        "    if families & RULE.forbidden_families:",
+        "test_the_description_sources_are_bounded_and_never_our_own_site",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the role answers",
+        INSERT_RESEARCH,
+        "                if problem is not None:",
+        "test_an_answer_without_the_role_is_refused",
+        INSERT_TESTS,
+    ),
+    # the plan
+    guard(
+        "insert-site: plan waits for the re-asks",
+        INSERT_PLAN,
+        "    if waiting:",
+        "test_the_plan_waits_for_the_reasks",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a step is planned once",
+        INSERT_PLAN,
+        "    if (target / PLAN_FILE).exists():",
+        "test_a_step_is_planned_once",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: plan refuses a curated item",
+        INSERT_PLAN,
+        "        if ids.get(qid):",
+        "test_a_curated_item_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a taken id plans again",
+        INSERT_PLAN,
+        "        if taken.get(qid):",
+        "test_a_taken_id_means_plan_again",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the country holds the point",
+        INSERT_PLAN,
+        '        if not verdict["agrees"]:',
+        "test_a_point_outside_its_country_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a name twin nearby",
+        INSERT_PLAN,
+        "        if near:",
+        "test_a_name_twin_nearby_is_refused_and_a_far_one_is_not",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the scope refusal is applied",
+        INSERT_PLAN,
+        "        if out_of_scope is not None:",
+        "test_a_dated_site_out_of_scope_is_refused",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: D58 nothing after 1500",
+        INSERT_PLAN,
+        "    if period_start > LAST_YEAR:",
+        "test_the_scope_rule_d58",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: D58 medieval Europe",
+        INSERT_PLAN,
+        '        if iso is not None and _continents().get(iso) == "Europe":',
+        "test_the_scope_rule_d58",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a retired parent",
+        INSERT_PLAN,
+        '    if row["scope_status"] == RETIRED:',
+        "test_a_pinned_parent_must_hold_the_d25_invariants",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a parent at depth one",
+        INSERT_PLAN,
+        '    if row["parent_site_id"] is not None:',
+        "test_a_pinned_parent_must_hold_the_d25_invariants",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a parent in reach",
+        INSERT_PLAN,
+        '    if row["country"] != country or metres > PARENT_METRES:',
+        "test_a_pinned_parent_must_hold_the_d25_invariants",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a promoted proposal",
+        INSERT_PLAN,
+        '        if p["status"] in C.CLOSED_PROPOSALS:',
+        "test_a_proposal_the_lane_cannot_close_refuses_the_site",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a radar contribution",
+        INSERT_PLAN,
+        '        if p["contribution_id"] is not None:',
+        "test_a_proposal_the_lane_cannot_close_refuses_the_site",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: one alias per key",
+        INSERT_PLAN,
+        "                if key not in seen:",
+        "                if True:",
+        "test_a_proposal_name_with_the_labels_key_adds_no_alias",
+        INSERT_TESTS,
+    ),
+    # the writer
+    guard(
+        "insert-site: a refusal text fits its literal",
+        INSERT_WRITER,
+        "    if not _SAYS.match(says):",
+        "test_a_refusal_text_that_would_break_its_literal_is_refused",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: guard 2 compares the record",
+        INSERT_WRITER,
+        "u.source_record_id = p.source_record_id",
+        "u.source_record_id = u.source_record_id",
+        "test_each_guard_reads_what_it_names",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: guard 3 compares the item",
+        INSERT_WRITER,
+        "AND e.value = p.qid)",
+        "AND e.value = e.value)",
+        "test_each_guard_reads_what_it_names",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the journal is counted per site",
+        INSERT_WRITER,
+        "WHERE COALESCE(l.n, 0) <> p.journal_rows",
+        "WHERE COALESCE(l.n, 0) < p.journal_rows",
+        "test_each_invariant_reads_what_it_names",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the undo retires from in_scope",
+        INSERT_WRITER,
+        "{in_scope}, {retired}, {test}, {st}, r.change_key || ':undo:scope_status',",
+        "{retired}, {retired}, {test}, {st}, r.change_key || ':undo:scope_status',",
+        "test_the_undo_moves_in_scope_to_retired_and_nothing_else",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the lint refuses a DELETE",
+        INSERT_WRITER,
+        "        if forbidden in code:",
+        "test_the_lint_refuses_another_shape",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: an apply creates a row",
+        INSERT_WRITER,
+        '    if kind == "apply" and not inserting:',
+        "test_the_lint_refuses_another_shape",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the undo first",
+        INSERT_WRITER,
+        "    if not rollback.is_file():",
+        "test_emit_needs_the_undo_first",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: only the rendered statement",
+        INSERT_WRITER,
+        "        if text != render(step):",
+        "test_an_edited_statement_is_never_sent",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: never apply twice",
+        INSERT_WRITER,
+        "    if already:",
+        "test_a_stamp_that_journals_already_is_never_applied_again",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: the undo rehearses on the landed rows",
+        INSERT_WRITER,
+        "    if journal_count(step.run_stamp) != sum(i.journal_rows for i in step.inserts):",
+        "test_the_undo_is_rehearsed_only_on_the_landed_write",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: an empty journal after exit 3",
+        INSERT_WRITER,
+        "    if count == 0 and session_ended:",
+        "test_a_stopped_script_with_an_empty_journal_did_not_commit",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a differing column deviates",
+        INSERT_WRITER,
+        "            if got_text != want:",
+        "test_a_differing_column_is_a_deviation",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a missing journal row deviates",
+        INSERT_WRITER,
+        "        if len(logged) != i.journal_rows:",
+        "test_a_missing_journal_row_is_a_deviation",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: accepted once",
+        INSERT_WRITER,
+        "    if accepted.exists():",
+        "test_accept_records_once_and_lists_the_sites",
+        INSERT_TESTS,
+    ),
+]
+CASES += INSERT_SITE_CASES
+
 
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
