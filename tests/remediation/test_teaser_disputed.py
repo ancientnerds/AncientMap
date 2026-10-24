@@ -91,6 +91,12 @@ class TestTheContradictionRule:
     def test_the_card_lane_briefs_carry_it(self) -> None:
         assert WR.CONTRADICTION_RULE in R._WEB_NOTE
 
+    def test_every_role_of_the_re_check_reads_the_verifier_rule(self) -> None:
+        """The card lane's own roles of contract recheck-v1, `card_adversarial` included, are
+        classified as roles that confirm or reject."""
+        for role in R.RECHECK_SPEC.roles.values():
+            assert WR.rule_for_role(role) == WR.VERIFIER_RULE, role
+
 
 # ------------------------------------------------------------------------------ the answer shape
 class TestTheDisputedVerdict:

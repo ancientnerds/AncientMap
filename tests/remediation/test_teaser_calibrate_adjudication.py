@@ -474,13 +474,13 @@ class TestTheAdjudicatedAdversary:
 
         answer_role(
             run_dir,
-            "adversarial",
+            "card_adversarial",
             {
                 "adversarial_contradicted": fail_all,
                 "adversarial_clean": checker_text(verdict),
             },
         )
-        return K.evaluate(run_dir, "adversarial")["sets"]
+        return K.evaluate(run_dir, "card_adversarial")["sets"]
 
     def test_a_clean_card_failed_is_wrong(self, tmp_path: Path) -> None:
         sets = self.adversary(tmp_path, K.CLEAN, "FAIL")
@@ -555,10 +555,10 @@ class TestTheDisputeList:
 
         answer_role(
             run_dir,
-            "adversarial",
+            "card_adversarial",
             {"adversarial_contradicted": cites, "adversarial_clean": cites},
         )
-        listed = K.dispute_list(run_dir, "adversarial")
+        listed = K.dispute_list(run_dir, "card_adversarial")
         assert len(listed) == 2
         assert listed[0]["sources_cited"] == [PAGE]
         assert listed[0]["unsupported_claims"] == ["x"]
@@ -607,7 +607,7 @@ class TestTheDisputeList:
     def test_a_role_never_exported_is_refused(self, tmp_path: Path) -> None:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, draw(tmp_path)))
         with pytest.raises(K.CalibrationError, match="was never exported"):
-            K.dispute_list(run_dir, "adversarial")
+            K.dispute_list(run_dir, "card_adversarial")
 
 
 def test_check_json_is_the_shorts_shape() -> None:

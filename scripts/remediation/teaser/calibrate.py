@@ -51,7 +51,7 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
     $T release --run-dir $D --role hook_rater --decided-by TEXT --reason TEXT --evidence FILE ... \\
         [--owner-decision D36]
     $T standing --run-dir $D --role hook_rater
-    $T dispute-list --run-dir $D --role card_web_verifier|adversarial
+    $T dispute-list --run-dir $D --role card_web_verifier|card_adversarial
 
 **A candidate trial** (`seal --candidate-role R --candidate-model M`, owner decision D36's Haiku
 trial of the fact checker) calibrates role R with model M in this directory WITHOUT changing the
@@ -68,6 +68,12 @@ hair-split (either verdict accepted, not scored) or wrong (dropped, reported); e
 contradiction; the adversarial reviewer may pass or fail it) or contradicted (the gold is wrong). The seal binds the
 file by its sha256. A seeded defect of a subtle kind (`shorts_v1.SUBTLE_KINDS`) is caught only when the checker
 names its claim (`names_the_claim`).
+
+**The adversarial reviewer** of the card lane is `card_adversarial` (Opus, 2026-10-24): the shared
+`adversarial` failed these cases on Sonnet (teaser-2026-10-10, tier move to Opus) and stays on Sonnet
+for the other lanes, so the card context moved to a role of its own (`roles.SETTLED_TIER_MOVES`).
+Its 50 cases (`adversarial_contradicted`, `adversarial_clean`) are drawn as before; a calibration
+sealed before the change names `adversarial` and does not stand for `card_adversarial`.
 
 `BASE.jsonl` is one JSON object per line: `site_id, name, country, description, alt_names,
 pool_images, image_titles, card, anchors` and `"sample": true` on the eleven cards of the design's
@@ -220,7 +226,7 @@ THRESHOLDS: dict[str, Any] = {
             }
         },
         "card_writer": {"sets": {"writer_pilot": {"sites": 40, "clean_first_min": 0.80}}},
-        "adversarial": {
+        "card_adversarial": {
             "sets": {
                 "adversarial_contradicted": {"cases": 25},
                 "adversarial_clean": {"cases": 25},
@@ -241,8 +247,8 @@ SET_ROLE: dict[str, str] = {
     "verifier_verified": "card_web_verifier",
     "hook_pairs": "hook_rater",
     HOOK_REFERENCE: "pilot_judge",
-    "adversarial_contradicted": "adversarial",
-    "adversarial_clean": "adversarial",
+    "adversarial_contradicted": "card_adversarial",
+    "adversarial_clean": "card_adversarial",
 }
 WEB_SETS = frozenset(
     {"verifier_contradicted", "verifier_verified", "adversarial_contradicted", "adversarial_clean"}
@@ -860,7 +866,7 @@ def build_jobs(
                 _case(set_name, number, "rate", row, card=C.final_card(row["card"]), grade=grade)
             )
 
-    adv = roles["adversarial"]["sets"]
+    adv = roles["card_adversarial"]["sets"]
     jobs += [
         _adversarial_job("adversarial_contradicted", n, i, withhold=True)
         for n, i in enumerate(
@@ -1840,7 +1846,7 @@ ROLE_SETS = {
     ),
     "card_web_verifier": ("verifier_contradicted", "verifier_verified"),
     "hook_rater": ("hook_pairs", HOOK_REFERENCE),
-    "adversarial": ("adversarial_contradicted", "adversarial_clean"),
+    "card_adversarial": ("adversarial_contradicted", "adversarial_clean"),
 }
 
 
@@ -2153,14 +2159,14 @@ _URL = re.compile(r"https?://[^\s)\]\"'<>]+")
 
 
 def dispute_list(run_dir: Path, role: str) -> list[dict[str, Any]]:
-    """Read-only: the recorded VERIFIED cards a finished calibration's `role` (`card_web_verifier` or
-    `adversarial`) contradicted or failed, with the sources it cited, for the orchestrator to label
-    (`ADJUDICATION.json`, `verified_cards`: clean, disputed, contradicted). Nothing is judged here
+    """Read-only: the recorded VERIFIED cards a finished calibration's `role` (`card_web_verifier`
+    or `card_adversarial`) contradicted or failed, with the sources it cited, for the orchestrator to
+    label (`ADJUDICATION.json`, `verified_cards`: clean, disputed, contradicted). Nothing is judged here
     and nothing is fetched: the quotes are checked against the pages the evaluation kept, and the
     answers are read as recorded (the seal's integrity only - a calibration sealed with an older
     checkout of the prompts can be listed from a newer one). One entry per card, each with a
     `label_template` to complete."""
-    if role not in ("card_web_verifier", "adversarial"):
+    if role not in ("card_web_verifier", "card_adversarial"):
         raise CalibrationError(
             f"{role}: only the web verifier and the adversarial reviewer are listed"
         )
@@ -2269,7 +2275,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     jobs.add_argument("--export", required=True, type=Path)
     jobs.add_argument("--base-cards", required=True, type=Path)
     sub.choices["dispute-list"].add_argument(
-        "--role", required=True, choices=["card_web_verifier", "adversarial"]
+        "--role", required=True, choices=["card_web_verifier", "card_adversarial"]
     )
     seal_cli = sub.choices["seal"]
     seal_cli.add_argument(

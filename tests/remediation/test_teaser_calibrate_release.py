@@ -11,6 +11,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -164,8 +165,8 @@ def test_a_verdict_of_another_role_than_the_file_names_is_not_released(tmp_path:
     run_dir = sealed_dir(tmp_path)
     path = verdict_file(run_dir)
     body = json.loads(path.read_text(encoding="utf-8"))
-    path.write_text(json.dumps({**body, "role": "adversarial"}), encoding="utf-8")
-    with pytest.raises(K.CalibrationError, match="adversarial"):
+    path.write_text(json.dumps({**body, "role": "card_adversarial"}), encoding="utf-8")
+    with pytest.raises(K.CalibrationError, match="card_adversarial"):
         release(run_dir, tmp_path)
 
 
@@ -229,7 +230,7 @@ def test_a_failed_verdict_with_a_tier_move_does_not_stand(tmp_path: Path) -> Non
 def test_a_role_without_a_verdict_does_not_stand(tmp_path: Path) -> None:
     run_dir = sealed_dir(tmp_path)
     with pytest.raises(K.CalibrationError, match="no verdict"):
-        K.standing(run_dir, "adversarial")
+        K.standing(run_dir, "card_adversarial")
 
 
 def test_a_role_edited_after_the_seal_does_not_stand(
@@ -386,16 +387,43 @@ def test_the_cli_refuses_a_standing_that_does_not_exist(
 
 
 # ------------------------------------------------------------------ the release under an owner decision
-#: Owner decision D36 moved `adversarial` to Sonnet: a verdict that failed on Sonnet with a tier
-#: move to Opus (teaser-2026-10-09b) is released under it. The test directory is not one of the
-#: calibrations the real move rests on, so the move is applied for it here.
+#: An owner decision that kept a role on Sonnet (D36) releases a verdict that failed on Sonnet with a
+#: tier move to Opus. No role of the card calibration is on Sonnet any more (the writer and the hook
+#: rater moved to Opus, the checkers and `card_adversarial` were added on Opus), so the release is
+#: tested on a registry patched before the seal: `card_adversarial` kept on Sonnet by an owner move
+#: of D36 that rests on the test directory (or on `evidence`).
+KEPT = "card_adversarial"
+
+
+def keep_on_sonnet(
+    monkeypatch: pytest.MonkeyPatch, evidence: tuple[str, ...] = ("teaser-test",)
+) -> None:
+    entry = RO.ROLES[KEPT]
+    roles = {
+        **RO.ROLES,
+        KEPT: RO.Role(KEPT, "claude-sonnet-5-5", entry.effort, entry.calibration_set),
+    }
+    move = {
+        "kind": RO.OWNER_KIND,
+        "role": KEPT,
+        "from": "claude-opus-5-5",
+        "to": "claude-sonnet-5-5",
+        "effort": entry.effort,
+        "decision": "D36",
+        "reason": "a test",
+        "evidence": evidence,
+    }
+    monkeypatch.setattr(RO, "ROLES", MappingProxyType(roles))
+    monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, move))
+    RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
+
+
 @pytest.fixture
 def d36_move_for_the_test_directory(monkeypatch: pytest.MonkeyPatch) -> None:
-    move = {**RO._d36_move("adversarial", "high", "a test"), "evidence": ("teaser-test",)}
-    monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, move))
+    keep_on_sonnet(monkeypatch)
 
 
-def moved_verdict(run_dir: Path, role: str = "adversarial", **over: Any) -> Path:
+def moved_verdict(run_dir: Path, role: str = KEPT, **over: Any) -> Path:
     over.setdefault("tier_move", {**A_MOVE, "role": role})
     over.setdefault("held", None)
     return verdict_file(run_dir, role, **over)
@@ -403,7 +431,7 @@ def moved_verdict(run_dir: Path, role: str = "adversarial", **over: Any) -> Path
 
 def owner_release(run_dir: Path, tmp_path: Path, **over: Any) -> dict[str, Any]:
     over.setdefault("owner_decision", "D36")
-    return release(run_dir, tmp_path, "adversarial", **over)
+    return release(run_dir, tmp_path, KEPT, **over)
 
 
 @pytest.mark.usefixtures("d36_move_for_the_test_directory")
@@ -413,8 +441,8 @@ def test_an_owner_decision_releases_a_verdict_with_a_tier_move(tmp_path: Path) -
 
     record = owner_release(run_dir, tmp_path)
 
-    assert record["owner_decision"] == "D36" and record["role"] == "adversarial"
-    stored = run_dir / K.RELEASE_FILE.format(role="adversarial")
+    assert record["owner_decision"] == "D36" and record["role"] == KEPT
+    stored = run_dir / K.RELEASE_FILE.format(role=KEPT)
     assert json.loads(stored.read_text(encoding="utf-8")) == record
 
 
@@ -431,8 +459,8 @@ def test_standing_says_released_under_the_owner_decision(tmp_path: Path) -> None
     moved_verdict(run_dir)
     owner_release(run_dir, tmp_path)
 
-    assert K.standing(run_dir, "adversarial") == {
-        "role": "adversarial",
+    assert K.standing(run_dir, KEPT) == {
+        "role": KEPT,
         "calibration_id": run_dir.name,
         "standing": "released (owner decision D36)",
         "owner_decision": "D36",
@@ -440,34 +468,38 @@ def test_standing_says_released_under_the_owner_decision(tmp_path: Path) -> None
     }
 
 
+@pytest.mark.usefixtures("d36_move_for_the_test_directory")
 def test_a_verdict_with_a_tier_move_is_not_released_without_a_decision(tmp_path: Path) -> None:
     run_dir = sealed_dir(tmp_path)
     moved_verdict(run_dir)
     with pytest.raises(K.CalibrationError, match="tier move"):
-        release(run_dir, tmp_path, "adversarial")
+        release(run_dir, tmp_path, KEPT)
 
 
 @pytest.mark.usefixtures("d36_move_for_the_test_directory")
 def test_an_owner_decision_releases_only_a_verdict_with_a_tier_move(tmp_path: Path) -> None:
     run_dir = sealed_dir(tmp_path)
-    verdict_file(run_dir, "adversarial")  # held, no tier move
+    verdict_file(run_dir, KEPT)  # held, no tier move
     with pytest.raises(K.CalibrationError, match="carries no tier move"):
         owner_release(run_dir, tmp_path)
     run_dir_two = sealed_dir(tmp_path / "two")
-    verdict_file(run_dir_two, "adversarial", passed=True, held=None)
+    verdict_file(run_dir_two, KEPT, passed=True, held=None)
     with pytest.raises(K.CalibrationError, match="passed"):
         owner_release(run_dir_two, tmp_path)
 
 
-def test_an_owner_decision_the_registry_does_not_hold_releases_nothing(tmp_path: Path) -> None:
-    """The real D36 moves rest on the 2026-10-09 calibrations, not on this directory."""
+def test_an_owner_decision_the_registry_does_not_hold_releases_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An owner move that rests on other calibrations than this directory releases nothing here."""
+    keep_on_sonnet(monkeypatch, evidence=("teaser-2026-10-09b",))
     run_dir = sealed_dir(tmp_path)
     moved_verdict(run_dir)
     with pytest.raises(K.CalibrationError, match="does not rest on teaser-test"):
         owner_release(run_dir, tmp_path)
     with pytest.raises(K.CalibrationError, match="names decision D37"):
         owner_release(run_dir, tmp_path, owner_decision="D37")
-    assert not (run_dir / K.RELEASE_FILE.format(role="adversarial")).exists()
+    assert not (run_dir / K.RELEASE_FILE.format(role=KEPT)).exists()
 
 
 @pytest.mark.usefixtures("d36_move_for_the_test_directory")
@@ -484,34 +516,34 @@ def test_an_owner_decision_releases_only_the_model_the_owner_kept(tmp_path: Path
 def test_a_forged_owner_release_is_checked_again_when_the_verdict_stands(tmp_path: Path) -> None:
     run_dir = sealed_dir(tmp_path)
     moved_verdict(run_dir)
-    forged_release(run_dir, tmp_path, "adversarial", owner_decision="D36")
-    assert K.standing(run_dir, "adversarial")["standing"] == "released (owner decision D36)"
+    forged_release(run_dir, tmp_path, KEPT, owner_decision="D36")
+    assert K.standing(run_dir, KEPT)["standing"] == "released (owner decision D36)"
 
-    forged_release(run_dir, tmp_path, "adversarial", owner_decision="D37")
-    with pytest.raises(K.CalibrationError, match="release of adversarial.*names decision D37"):
-        K.standing(run_dir, "adversarial")
+    forged_release(run_dir, tmp_path, KEPT, owner_decision="D37")
+    with pytest.raises(K.CalibrationError, match="release of card_adversarial.*names decision D37"):
+        K.standing(run_dir, KEPT)
 
 
+@pytest.mark.usefixtures("d36_move_for_the_test_directory")
 def test_a_release_without_a_decision_beside_a_tier_move_does_not_stand(tmp_path: Path) -> None:
     run_dir = sealed_dir(tmp_path)
     moved_verdict(run_dir)
-    forged_release(run_dir, tmp_path, "adversarial")
+    forged_release(run_dir, tmp_path, KEPT)
     with pytest.raises(K.CalibrationError, match="no passing verdict and no release"):
-        K.standing(run_dir, "adversarial")
+        K.standing(run_dir, KEPT)
 
 
 def test_the_cli_releases_under_an_owner_decision(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    move = {**RO._d36_move("adversarial", "high", "a test"), "evidence": ("teaser-test",)}
-    monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, move))
+    keep_on_sonnet(monkeypatch)
     run_dir = sealed_dir(tmp_path)
     moved_verdict(run_dir)
     proof = evidence(tmp_path)
     code = K.main(
-        ["release", "--run-dir", str(run_dir), "--role", "adversarial", "--decided-by", "me",
+        ["release", "--run-dir", str(run_dir), "--role", KEPT, "--decided-by", "me",
          "--reason", "no gain on Opus", "--evidence", str(proof), "--owner-decision", "D36"]
     )  # fmt: skip
     assert code == 0 and json.loads(capsys.readouterr().out)["owner_decision"] == "D36"
-    assert K.main(["standing", "--run-dir", str(run_dir), "--role", "adversarial"]) == 0
+    assert K.main(["standing", "--run-dir", str(run_dir), "--role", KEPT]) == 0
     assert "released (owner decision D36)" in capsys.readouterr().out

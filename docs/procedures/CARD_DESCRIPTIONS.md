@@ -981,18 +981,24 @@ mechanical problem is not rated; a round with no clean variant fails with the pr
 
 | role | stages | model, effort |
 | --- | --- | --- |
-| `card_writer` | write, rewrite1, rewrite2, rewrite-v | Sonnet 5.5 high |
-| `hook_rater` | rate, rate1, rate2 | Sonnet 5.5 medium |
+| `card_writer` | write, rewrite1, rewrite2, rewrite-v | Opus 5.5 high |
+| `hook_rater` | rate, rate1, rate2 | Opus 5.5 medium |
 | `card_fact_checker` | check, check1, check2, check-v | Opus 5.5 high |
 | `card_web_verifier` | verify, verify2 | Opus 5.5 high |
 | `pilot_judge` | judge | Opus 5.5 xhigh |
-| `adversarial` | adversarial (re-check run only) | Sonnet 5.5 high |
+| `card_adversarial` | adversarial (re-check run only) | Opus 5.5 high |
 
-The models are those of `roles.ROLES` on 2026-10-17: owner decision D36 put the writer, the rater
-and the adversarial reviewer on Sonnet; D40, scoped to this lane by D45, gave the card lane checkers
-of its own on Opus (`card_fact_checker`, `card_web_verifier`). The shared `fact_checker` (lane WC) and
-`web_verifier` (identity, lane E, image identity) stay on Sonnet. A calibration sealed before
-2026-10-17 names the shared roles and does not stand for the card checkers.
+The models are those of `roles.ROLES` on 2026-10-24. Owner decision D36 had put the writer, the rater
+and the adversarial reviewer on Sonnet; the hook rater moved up to Opus after it failed
+teaser-2026-10-10, and D46 (2026-10-19) moved the writer back to Opus. D40, scoped to this lane by
+D45, gave the card lane checkers of its own on Opus (`card_fact_checker`, `card_web_verifier`), and on
+2026-10-24 the re-check's adversarial stage got one too (`card_adversarial`): the shared `adversarial`
+failed the card calibration on Sonnet (teaser-2026-10-10, 0.7907 of 0.9, tier move to Opus), and that
+move is recorded as settled by the new role (`roles.SETTLED_TIER_MOVES`; `run.py escalate` refuses it)
+instead of moving the shared role. The shared `fact_checker` (lane WC), `web_verifier` (identity,
+lane E, image identity) and `adversarial` (lane WD5, identity, the image lanes; it passed adv-truth-002
+on Sonnet) stay on Sonnet. A calibration sealed before 2026-10-17 names the shared checkers, one sealed
+before 2026-10-24 the shared `adversarial`: neither stands for the card roles.
 
 The run records the registry's models in `RUN.json["roles"]` at its start. The import refuses an
 answer whose `answered_by` is not `<role>:<agent>` of the stage's role, or whose stamp is not that
@@ -1050,9 +1056,12 @@ current. The Shorts description's AI note is built from the card's `ai_system`
 
 `run.py seed-live --run R --provenance-run wb-cardgap-2026-10-07` records every live card of that run
 as the seeded `write` stage of a `recheck-v1` run (`model` = MiniMax's stamp: the gap run's every
-answer was MiniMax's). `check` (Sonnet, the v1 checker prompt), `verify` (Sonnet, the v1 judge prompt)
-and `adversarial` (Opus; it may check the web; the checker's claim map and the verifier's evidence are
-in its prompt) follow. A card that passes all three is `confirmed` and stands; any failure clears it
+answer was MiniMax's). `check` (`card_fact_checker`, Opus 5.5 high, the v1 checker prompt; one canary
+per batch), `verify` (`card_web_verifier`, Opus 5.5 high, the v1 judge prompt) and `adversarial`
+(`card_adversarial`, Opus 5.5 high; it may check the web; the checker's claim map and the verifier's
+evidence are in its prompt) follow - the card lane's own roles (9.2), never the shared Sonnet ones; the
+run records them in `RUN.json["roles"]` at `seed-live`, and the import refuses an answer of any other
+role or stamp. A card that passes all three is `confirmed` and stands; any failure clears it
 (`card-clear-recheck-<reason>`: `check-failed`, `contradicted`, `unproven`, `adversarial-failed`,
 `mechanical`) through the journal, and the replacement comes with shorts-v1. The seeded card keeps the
 web facts of its provenance (`web_facts`, as v1's `check-v` shows them): the check, the verification
@@ -1060,6 +1069,30 @@ prompt's card and the adversary see them, and the mechanical check counts their 
 names the card it judged (`seeded_card_sha256`) and the run that wrote it (`seeded_run`; `null` for a
 card of a site without a description): the planner refuses (`card-changed`) to clear a live card that
 is another one, a newer shorts-v1 card included.
+
+**Before the adversarial stage** `card_adversarial` needs a passing (or released) calibration of its
+own on the 50 card cases (9.6) in a directory sealed after 2026-10-24; the check and verify stages rest
+on the standing verdicts of `card_fact_checker` (teaser-2026-10-18) and `card_web_verifier`
+(teaser-2026-10-20). A failing `card_adversarial` has no tier above Opus: its verdict is held, and
+the orchestrator either releases it (`calibrate.py release`, D8, as for the other card checkers) or
+leaves the stage unasked.
+
+```bash
+PY=./.venv/Scripts/python.exe   K="$PY scripts/remediation/teaser/calibrate.py"
+C=output/remediation/calibration   R=output/remediation/teaser/runs   D=$C/teaser-2026-10-24
+RUNS="$R/wb-ws-2026-09-27-01 $R/wb-ws-2026-09-27-02 $R/wb-ws-2026-09-27-03 $R/wb-ws-2026-09-27-04 $R/wb-ws-2026-09-27-05 $R/wb-ws-2026-09-27-06 $R/wb-pilot-2026-09-26c"
+$K seal --run-dir $D --adjudication $C/teaser-gold/ADJUDICATION.json
+$K jobs --run-dir $D --runs $RUNS --export $R/wb-ws-2026-09-27-01/EXPORT.jsonl \
+    --base-cards $C/teaser-base-2026-10-10/BASE.jsonl
+$K export --run-dir $D --role card_adversarial --handoff output/remediation/handoff/cal-teaser-2026-10-24-card_adversarial
+$K agents --run-dir $D --role card_adversarial     # 50 cases, 7 web batches of 8, at most 3 at once
+#   one fresh Opus 5.5 high agent per job; each runs the job's brief and records with
+#   opus_handoff.py answer --role card_adversarial --model claude-opus-5-5
+$PY scripts/remediation/opus_handoff.py validate --dir output/remediation/handoff/cal-teaser-2026-10-24-card_adversarial
+$K evaluate --run-dir $D --role card_adversarial   # VERDICT-card_adversarial.json, written once
+$K standing --run-dir $D --role card_adversarial   # what the re-check asks before the stage
+$K dispute-list --run-dir $D --role card_adversarial   # read-only: the clean cards it failed
+```
 
 ### 9.6 Calibration (D6; `teaser/calibrate.py`)
 
@@ -1086,7 +1119,7 @@ pilot_judge`), paired by site.
 | | 20 recorded VERIFIED cards | at most 2 falsely CONTRADICTED, claim coverage 80 %, 90 % agreement on the covered claims, 0 false sources (a **fabricated** quote - not on the page even loosely - or a refused page; a quote the machine did not find but the page holds up to typography is reported as `not_found_by_machine`) |
 | `hook_rater` | 11 sample openers against 13 live place-word openers | every strong rated above every weak; within one of the `pilot_judge`'s ratings on 80 % |
 | `card_writer` | the 40-site pilot | 80 % of first answers mechanically clean |
-| `adversarial` | 25 recorded contradictions (the web finding withheld from the evidence) and 25 clean cards | 90 % |
+| `card_adversarial` | 25 recorded contradictions (the web finding withheld from the evidence) and 25 clean cards (a card the adjudication labels disputed accepts either verdict and is not scored; one it labels contradicted should FAIL) | 90 % |
 
 **The repair of 2026-10-09** (Opus diagnosis of `teaser-2026-10-09`: the web verifier failed by brief and
 measure, not by model). What changed, and why each part is tested (`test_teaser_calibrate_repair.py`,

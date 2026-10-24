@@ -102,9 +102,11 @@ through the same files and the same import (`Spec`, `SPECS`):
   stamp is not that role's model. Every check batch carries one seeded-defect canary
   (`shorts_v1.canary_card`); a batch whose checker passes it is void (`void-batch`).
 * **recheck-v1** (owner decision D10): the Claude re-check of the cards another model wrote
-  (`seed-live` records the live cards as the `write` stage): `check`, `verify`, `adversarial`. A card
-  that passes all three is `confirmed` and stands; any failure clears it (`recheck-<reason>`, a
-  journalled `card-clear-recheck-<reason>`).
+  (`seed-live` records the live cards as the `write` stage): `check`, `verify`, `adversarial`, in the
+  card lane's own roles (`card_fact_checker`, `card_web_verifier`, `card_adversarial`, all Opus: D45;
+  the shared `adversarial` of the other lanes failed the card calibration). A card that passes all
+  three is `confirmed` and stands; any failure clears it (`recheck-<reason>`, a journalled
+  `card-clear-recheck-<reason>`).
 
 ## The run's files (`output/remediation/teaser/runs/<run>/`, gitignored: they hold description text)
 
@@ -386,7 +388,7 @@ RECHECK_SPEC = Spec(
         {
             "check": "card_fact_checker",
             FIRST_VERIFY: "card_web_verifier",
-            ADVERSARIAL: "adversarial",
+            ADVERSARIAL: "card_adversarial",
         }
     ),
     canary=("check",),
@@ -3105,7 +3107,8 @@ def escalate_role(run: Path, role: str, verdict_file: Path) -> dict[str, Any]:
     """Move one role of a run up one tier after its calibration failed (owner decision D6): the
     verdict (`calibrate_claude.py verdict` or `teaser/calibrate.py evaluate`) names the tier move;
     it is written into `RUN.json["roles"]` and `["escalations"]`. Refused for a verdict of another
-    role or one that did not fail, for a move other than one tier up, while `roles.ROLES` still
+    role or one that did not fail, for a move `roles.SETTLED_TIER_MOVES` settled otherwise (another
+    role took the context over), for a move other than one tier up, while `roles.ROLES` still
     names the old model (the recorder `opus_handoff.py answer --role R --model M` checks the
     registry: commit the `ROLES` edit first - `roles.py` - then escalate the runs that have not
     begun the role), and once a stage of the role was exported - its answers were given by the
@@ -3116,6 +3119,13 @@ def escalate_role(run: Path, role: str, verdict_file: Path) -> dict[str, Any]:
     if verdict.get("role") != role or verdict.get("passed") is not False or move is None:
         raise RunError(
             f"{verdict_file} is not a failed calibration of role {role} with a tier move"
+        )
+    settled = RO.settled_tier_move(role, move["calibration_id"])
+    if settled is not None:
+        raise RunError(
+            f"the tier move of role {role} in {move['calibration_id']} is settled under "
+            f"{settled['decision']}: role {settled['settled_by']} took the context over "
+            "(`roles.SETTLED_TIER_MOVES`) - it is not applied"
         )
     recorded = run_roles(run)
     if role not in recorded:
