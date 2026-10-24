@@ -43,11 +43,19 @@ for _path in (_ROOT, _ROOT / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
+from candidate_search import population as PP  # noqa: E402
+
 CANDIDATES = "CANDIDATES.jsonl"
 VERDICTS = "VERDICTS.jsonl"
 PICTURES = "pictures"
 REFUSED = "CANDIDATE_VERDICT_REFUSALS.jsonl"
 TARGETS = "TARGETS.jsonl"
+#: The population files of a run, the merged one first (`image_roles/flow.py` writes
+#: `POPULATION_2.jsonl` once the identity stage ran).
+POPULATION_FILES = ("POPULATION_2.jsonl", PP.POPULATION_FILE)
+#: The owner decision that lifts the thumbnail-only rule of 2026-10-05 for a first row (D59,
+#: 2026-10-24); the INSERT plan reads it back from the refusal (`import_hero/insert.py`).
+D59 = "D59"
 
 #: Candidates per agent. 36 is the number the gallery vision lane packs (`vision.REPLACE_IMAGES_PER_BATCH`):
 #: enough for one site of an ordinary day, small enough that no agent judges hundreds of images.
@@ -250,6 +258,47 @@ def targets_without_claude(
     return unjudged
 
 
+def served_thumbnails(out: Path) -> dict[str, str]:
+    """`{site id: thumbnail_url}` of the population sites that serve a hotlinked thumbnail, from the
+    run's own population (`POPULATION_2.jsonl`, else `POPULATION.jsonl`). A run without a
+    population file is a candidate run of 2026-10-06, whose population was "no row and no
+    thumbnail" by construction: it names none."""
+    for name in POPULATION_FILES:
+        path = out / name
+        if path.is_file():
+            return {
+                str(r["site_id"]): str(r["thumbnail_url"])
+                for r in _read_jsonl(path)
+                if r.get("thumbnail_url")
+            }
+    return {}
+
+
+def d59_wording(thumbnail: str, commons_file: str) -> tuple[str, str] | None:
+    """`(source, evidence_source)` of a D59 first row, or None when the claim is not one D59 allows:
+    a Commons thumbnail is credited with a row of **that same file**, a third-party thumbnail is
+    replaced by a checked Commons picture."""
+    if PP.is_commons_thumbnail(thumbnail):
+        if ST.file_of_url(thumbnail) != ST.canonical_file(commons_file):
+            return None
+        return (
+            "the site served only a hotlinked thumbnail of this Commons file, with no stored "
+            f"credit; a Claude check judged the file {DEPICTS!r}, so it becomes a credited gallery "
+            "row and the thumbnail its local copy (owner decision D59, 2026-10-24)",
+            "the D59 depicts check of the site's own thumbnail (image_roles VERDICTS.jsonl, "
+            "confirmed by the re-check)",
+        )
+    if PP.is_third_party_thumbnail(thumbnail):
+        return (
+            "the site served only a third-party hotlinked thumbnail; a Claude-checked Commons "
+            f"picture judged {DEPICTS!r}, with its credit, replaces it (owner decision D59, "
+            "2026-10-24)",
+            "the D17 research's confirmed verdict (image_roles VERDICTS.jsonl, confirmed by the "
+            "re-check)",
+        )
+    return None
+
+
 def insert_claims(
     out: Path,
     insert_run: Path,
@@ -294,6 +343,7 @@ def insert_claims(
             "roles (`image_roles/run.py pool`) and pass the re-check's run with --recheck-run"
         )
     candidates = {str(site["site_id"]): site for site in _read_jsonl(out / CANDIDATES)}
+    thumbnails = served_thumbnails(out)
     claims_path = insert_run / "IMPORT_CLAIMS.json"
     refusals_path = insert_run / "IMPORT_HERO_REFUSALS.jsonl"
     claims = json.loads(claims_path.read_text(encoding="utf-8")) if claims_path.is_file() else {}
@@ -336,6 +386,20 @@ def insert_claims(
                 }
             )
             continue
+        thumbnail = thumbnails.get(site_id)
+        wording = None if thumbnail is None else d59_wording(thumbnail, commons_file)
+        if thumbnail is not None and wording is None:
+            out_refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "d59_not_the_thumbnail_file",
+                    "detail": (
+                        f"{site_id}: the site serves the hotlinked Commons file of {thumbnail!r}; "
+                        f"D59 credits that file, and the target is {commons_file!r}"
+                    ),
+                }
+            )
+            continue
         if site_id in claims:
             if str(claims[site_id].get("image") or "") != url:
                 out_refusals.append(
@@ -350,7 +414,26 @@ def insert_claims(
                 )
             continue
         claims[site_id] = {"image": url}
-        if site_id not in refused_sites:
+        if site_id not in refused_sites and wording is not None:
+            assert thumbnail is not None
+            refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "no_target_row",
+                    "detail": (
+                        f"the site served only the hotlinked thumbnail {thumbnail!r}, and a Claude "
+                        f"check confirmed {commons_file!r} as a picture of it"
+                    ),
+                    "source": wording[0],
+                    "evidence_source": wording[1],
+                    # The INSERT plan lifts the thumbnail-only rule of 2026-10-05 for this site only
+                    # while the read still shows exactly this thumbnail.
+                    "decision": D59,
+                    "thumbnail_url": thumbnail,
+                }
+            )
+            refused_sites.add(site_id)
+        elif site_id not in refused_sites:
             refusals.append(
                 {
                     "site_id": site_id,
