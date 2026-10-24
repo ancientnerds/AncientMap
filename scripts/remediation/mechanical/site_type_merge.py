@@ -37,6 +37,18 @@ alias the plan read, guard 4 the map's targets. A type write changes every `myst
 types and voids every earlier card_stats wave's `ROLLBACK.sql`: run the lane after the last wd5 wave
 and before the final card_stats wave (`FIELDS_WD5.md` section 13).
 
+## The P31 table moves after the data (`table`)
+
+`fields/p31_site_types.json` lists the types each Wikidata class is consistent with, and
+`fields/classify.py` holds a stored type that no listed class names as an identity doubt or a
+site_type CONFLICT. So the table keeps every alias while any curated row still holds one: a table
+without them would flag the unmerged rows of every classify run before the merge, and a table tied
+to an undecided map is wrong when the decision drops a pair. Once the map is decided and the last
+wave accepted, `table --write` replaces each alias by its target in the table (refused while the map
+is undecided or a curated row still holds an alias, read-only from production) and prints the new
+sha256; that file and `classify.TABLE_SHA256` are committed together, before the next field wave
+(plans/fields.md item 8: otherwise a later wave proposes the old names again).
+
     M=scripts/remediation/mechanical
     $M/site_type_merge.py report                    (read-only: the map and its counts)
     $M/site_type_merge.py wave   --wave W           (read-only; WAVE.json: the alias rows, steps of 100)
@@ -44,12 +56,15 @@ and before the final card_stats wave (`FIELDS_WD5.md` section 13).
     $M/apply.py --lane site-type-merge-W-sNNN --emit | --rehearse | --probe-guards | --apply | --verify
     $M/apply.py --lane site-type-merge-W-sNNN --rehearse-rollback
     $M/site_type_merge.py accept --wave W --step N  (read-only; 0 deviations)
+    $M/site_type_merge.py table [--write]           (read-only production read; after the last
+                                                     accept: the P31 table without the aliases)
 """
 
 from __future__ import annotations
 
 import argparse
 import functools
+import hashlib
 import importlib.util
 import json
 import sys
@@ -65,6 +80,8 @@ REPO = _HERE.parents[3]
 for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
+
+from fields import classify as FC  # noqa: E402 - the P31 table and its pin
 
 from mechanical.field_prov import read_production, sha256_file, step_name  # noqa: E402
 from mechanical.lane import (  # noqa: E402
@@ -703,6 +720,77 @@ def accept_step(
     return (0 if not found else 1), found
 
 
+# ------------------------------------------------------------------------------ the P31 table
+#: The sentence of the table's `about` the merge note goes in front of.
+TABLE_PIN_NOTE = "; pinned by fields/classify.py TABLE_SHA256."
+
+
+def merged_table(text: str, merge_map: MergeMap) -> tuple[str, int]:
+    """The P31 table's text with every alias of the map replaced by its target (a type a class
+    then lists twice is kept once, in its first place), and the number of classes changed. Pure.
+    Written the table's own way (`indent=1`, UTF-8 unescaped), so only the moved types differ."""
+    data = json.loads(text)
+    changed = 0
+    for row in data["classes"].values():
+        types: list[str] = []
+        for name in row["types"]:
+            merged = merge_map.merges[name].target if name in merge_map.merges else name
+            if merged not in types:
+                types.append(merged)
+        if types != row["types"]:
+            row["types"] = types
+            changed += 1
+    if not changed:
+        raise PlanError("the table offers no alias of the map: it is merged already")
+    if data["about"].count(TABLE_PIN_NOTE) != 1:
+        raise PlanError(f"the table's about does not end in {TABLE_PIN_NOTE!r}")
+    data["about"] = data["about"].replace(
+        TABLE_PIN_NOTE,
+        f"; without the site_type aliases the merge map (mechanical/site_type_merge.json, sha256 "
+        f"{merge_map.sha256[:16]}) moved into their targets{TABLE_PIN_NOTE}",
+    )
+    return json.dumps(data, indent=1, ensure_ascii=False) + "\n", changed
+
+
+def table(
+    merge_map: MergeMap,
+    *,
+    read: Callable[[str], str] = read_production,
+    path: Path = FC.TABLE,
+    write: bool = False,
+) -> dict[str, Any]:
+    """The P31 table without the aliases, once the merge is in production: refused while the map
+    is undecided or a curated row (shown or retired) still holds an alias. `write` replaces the
+    file (LF); the caller moves `classify.TABLE_SHA256` to the printed sha256 in the same commit."""
+    if merge_map.decision is None:
+        raise PlanError(
+            "the map is undecided: the P31 table moves with the decided merge, after its last "
+            "wave is accepted"
+        )
+    rows, at = parse_tagged_export(
+        read(tagged_export_script([("site", candidates_sql(merge_map))])), ("site",)
+    )
+    if rows["site"]:
+        raise PlanError(
+            f"{len(rows['site'])} curated row(s) still hold an alias (read {at}): the P31 table "
+            "moves after the last merge wave is accepted"
+        )
+    text, changed = merged_table(
+        path.read_bytes().replace(b"\r\n", b"\n").decode("utf-8"), merge_map
+    )
+    FC.parse_table(text)  # the merged table is still a table: canonical types, none twice
+    if write:
+        path.write_text(text, encoding="utf-8", newline="\n")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return {
+        "read_at": at,
+        "classes_changed": changed,
+        "table_sha256": digest,
+        "written": write,
+        "next": f'move fields/classify.py TABLE_SHA256 to "{digest}" in the same commit',
+    }
+
+
 # ------------------------------------------------------------------------------ the CLI
 def _print(payload: Any) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
@@ -716,6 +804,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("report")
+    sub.add_parser("table").add_argument(
+        "--write", action="store_true", help="replace fields/p31_site_types.json"
+    )
     for name in ("wave", "step", "accept"):
         command = sub.add_parser(name)
         command.add_argument(
@@ -728,6 +819,8 @@ def main(argv: list[str] | None = None) -> int:
         merge_map = load_map()
         if args.command == "report":
             _print(report(merge_map))
+        elif args.command == "table":
+            _print(table(merge_map, write=args.write))
         elif args.command == "wave":
             _print(build_wave(args.wave, merge_map=merge_map))
         elif args.command == "step":

@@ -51,6 +51,10 @@ def site(site_id: str = SITE, **over: Any) -> dict[str, Any]:
         "images": 4,
         "hero": dict(HERO),
         "has_qid": True,
+        "card_qid": None,
+        "card_wiki_url": None,
+        "qid": "Q1",
+        "enwiki_title": "Kourion",
     }
     base.update(over)
     return base
@@ -87,6 +91,9 @@ class TestProduction:
             ({"source_url": ""}, "source-url-empty"),
             ({"has_qid": False}, "wikidata-id-none"),
             ({"scope_status": "pending"}, "scope-pending"),
+            ({"card_qid": "Q2"}, "card-id-drift"),
+            ({"card_qid": "Q1", "qid": None}, "card-id-drift"),
+            ({"card_wiki_url": "https://en.wikipedia.org/wiki/Curium"}, "card-id-drift"),
         ],
     )
     def test_each_gap_is_its_own_topic(self, over: dict[str, Any], topic: str) -> None:
@@ -94,6 +101,28 @@ class TestProduction:
         assert topic in topics(rows)
         row = next(r for r in rows if r["topic"] == topic)
         assert row["source"] == "production" and row["decision"] == F.TOPIC_OF[topic].decision
+
+    def test_a_card_holding_its_site_s_ids_has_no_drift(self) -> None:
+        held = site(card_qid="Q1", card_wiki_url="https://en.wikipedia.org/wiki/Kourion")
+        assert F.production_rows([held]) == []
+        spaced = site(enwiki_title="Ancient Kourion",
+                      card_wiki_url="https://en.wikipedia.org/wiki/Ancient_Kourion")  # fmt: skip
+        assert F.production_rows([spaced]) == []
+
+    def test_the_hero_sizes_are_counted_beside_d48(self) -> None:
+        sites = [
+            site(),
+            site(OTHER, hero={**HERO, "width": 800, "height": 600}),
+            site(THIRD, hero={**HERO, "width": 1200, "height": 800}),
+            site("4", hero={**HERO, "width": 640}, scope_status="retired"),
+            site("5", hero={**HERO, "width": None}),
+            site("6", hero=None),
+        ]
+        assert F.hero_sizes(sites) == {
+            "below_1600x900": 2,
+            "at_most_800_wide": 1,
+            "d48_census": 433,
+        }
 
     def test_an_empty_card_is_not_also_an_old_one(self) -> None:
         assert set(topics(F.production_rows([site(card_description="", card_contract="")]))) == {
@@ -196,15 +225,27 @@ class TestTheLaneLists:
     def test_an_owner_list_no_source_covers_is_named(self, tmp_path: Path) -> None:
         for rel in (
             "fields/wd3/OWNER_LIST.jsonl",  # rebuilt from the run
+            "fields/wd3/OWNER_LIST.md",  # its rendering
             "fields/wd5/adv/OWNER.jsonl",  # in the run's rows
             "fields/wd5/cache/x/OWNER.jsonl",  # a cache, never a list
             F.LANE_LISTS[0].path,  # registered
+            F.LANE_LISTS[0].path.removesuffix(".jsonl") + ".md",  # its rendering
+            "final-2026-10-08/OWNER_LIST_FINAL.md",  # this builder's own output
+            "HUMAN_ONLY.md",  # out of scope, with its reason
+            "teaser/runs/owner-d47-2026-10-19/OUTCOMES.jsonl",  # an out-of-scope directory
             "images/d17/OWNER_LIST.jsonl",  # nobody reads it
+            "teaser/runs/owner-d99/OUTCOMES.jsonl",  # an owner run nobody registered
+            "qid_repair/HUMAN_ONLY_LEFTOVERS.md",  # another name for an owner list
+            "qid_repair/owner.sql",  # not a list's suffix
         ):
             (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
             (tmp_path / rel).write_text("", encoding="utf-8")
         found = F.unregistered_lists(tmp_path, [F.LANE_LISTS[0].path])
-        assert found == ["images/d17/OWNER_LIST.jsonl"]
+        assert found == [
+            "images/d17/OWNER_LIST.jsonl",
+            "qid_repair/HUMAN_ONLY_LEFTOVERS.md",
+            "teaser/runs/owner-d99",
+        ]
 
 
 def tagged(sites: list[dict[str, Any]]) -> str:
@@ -290,3 +331,12 @@ class TestTheBuild:
         md = (out / F.OUT_MD).read_text(encoding="utf-8")
         assert "| no description (`description-empty`) | 1 | D22 |" in md
         assert "Kourion (`" in md
+        assert "D48 names 433" in md and "below 1600x900: 0 today" in md
+
+    def test_the_out_of_scope_artefacts_are_named_in_the_report(self, tmp_path: Path) -> None:
+        root = make_root(tmp_path)
+        (root / "HUMAN_ONLY.md").write_text("", encoding="utf-8")
+        built = F.build(root=root, read=lambda _sql: tagged([site()]), field_run=self.field_run({}))
+        assert built["out_of_scope"] == {"HUMAN_ONLY.md": F.OUT_OF_SCOPE["HUMAN_ONLY.md"]}
+        assert built["unregistered"] == []
+        assert "- `HUMAN_ONLY.md`: the 2026-09 questions" in F.render(built)

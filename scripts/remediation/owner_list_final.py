@@ -25,7 +25,24 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
 * **Production** (`TOPICS`): what stays empty on a shown curated site - no description, no card,
   an old card the shorts-v1 lane kept (D5), no picture, a thumbnail without a credited row, a small
   hero or one without the credit its licence asks for, no type, no period, a rule-made period, an
-  unsourced or unmarked point, no source URL, no Wikidata item, a pending scope.
+  unsourced or unmarked point, no source URL, no Wikidata item, a pending scope, and a card whose
+  Wikidata id or article link is no longer its site's (the fill-only `card_stats_ext` lane never
+  corrects one an identity lane moved afterwards).
+
+## The small heroes (D48)
+
+D48 puts "the 433 small heroes" on the owner list. The census of 2026-10-08 that counted them did
+not keep its SQL (`C:/tmp/wf_images` is gone; the images scout of 2026-10-24 could not reproduce the
+number), so the list uses the size the census reported heroes against, 1600x900 (809 below it on
+2026-10-24), and the report states that count beside the census figure and the count at most 800 px
+wide (643), so the owner sees how the topic relates to D48 instead of a silently different number.
+
+## What is read, and what is named
+
+Every owner-facing artefact under `output/remediation` - a file or directory whose name holds
+`owner` or `human_only` (`OWNER_NAME`), outside caches - is either a source above, the field runs'
+own lists (rebuilt from their runs), this builder's output, or one of `OUT_OF_SCOPE` with the reason
+the list does not read it (the report names those too). Anything else is `unregistered`.
 
 A lane row is still open only while production says so: a row of a retired site is set aside, and
 a field row whose stored value production no longer holds was answered by a later write
@@ -42,6 +59,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -73,10 +92,28 @@ CURATED, RETIRED, SHOWN_CONTRACT = "ancient_nerds", "retired", "shorts-v1"
 #: census of 2026-10-08 counted 433 without keeping its SQL; 1600x900 is the size the census
 #: reported heroes against ("2,999 heroes reach 1600x900, 809 fall below it").
 HERO_WIDTH, HERO_HEIGHT = 1600, 900
-#: The lists every lane leaves for the owner - the file names a lane's `result` writes.
-LIST_NAMES = ("OWNER_LIST.jsonl", "OWNER.jsonl")
+#: D48's own figure, and the narrower reading the images scout measured beside it (the report
+#: prints both counts, so the topic's relation to D48 is visible).
+D48_SMALL_HEROES, NARROW_WIDTH = 433, 800
+#: An owner-facing artefact: a file (`.jsonl`, `.json`, `.md`) or directory whose name holds this.
+OWNER_NAME = re.compile(r"owner|human_only", re.IGNORECASE)
+OWNER_SUFFIXES = frozenset({".jsonl", ".json", ".md"})
 #: Directories that hold caches, pages or scratch, never a lane's list.
 SKIP_PARTS = frozenset({"cache", "pages", "harvest", "wiki_cache"})
+#: Owner-facing artefacts that are no list of open sites, each with why this list does not read
+#: it (relative to output/remediation). The report names them.
+OUT_OF_SCOPE: dict[str, str] = {
+    "HUMAN_ONLY.md": (
+        "the 2026-09 questions for the owner; answered by HUMAN_ONLY_DECISIONS_2026-09-26.md and "
+        "OWNER_DECISIONS_2026-10-08.md - decisions, no open site"
+    ),
+    "HUMAN_ONLY_DECISIONS_2026-09-26.md": "the owner's answers to HUMAN_ONLY.md - no open site",
+    "OWNER_DECISIONS_2026-10-08.md": "the decisions D1-D66 the topics cite - no open site",
+    "teaser/runs/owner-d47-2026-10-19": (
+        "the 6 cards D47 cleared: each has no card text now and is listed under `card-empty` "
+        "from production"
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -144,6 +181,23 @@ def _hero_credit(row: Mapping[str, Any]) -> str | None:
     if missing:
         return f"hero {hero['filename']} ({hero['license'] or 'no licence'}) lacks {', '.join(missing)}"
     return None
+
+
+def _card_drift(row: Mapping[str, Any]) -> str | None:
+    """`card_stats_ext.readback`'s two drift metrics, per site: a filled card id that is not the
+    site's `site_external_ids` value."""
+    out = []
+    if row["card_qid"] is not None and row["card_qid"] != row["qid"]:
+        out.append(f"card wikidata_qid {row['card_qid']}, the site's {row['qid']}")
+    if row["card_wiki_url"] is not None and row["card_wiki_url"] != _english_url(
+        row["enwiki_title"]
+    ):
+        out.append(f"card best_wiki_url {row['card_wiki_url']}, the site's {row['enwiki_title']!r}")
+    return "; ".join(out) or None
+
+
+def _english_url(title: str | None) -> str | None:
+    return None if title is None else "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
 
 
 TOPICS: tuple[Topic, ...] = (
@@ -250,6 +304,12 @@ TOPICS: tuple[Topic, ...] = (
         "D20",
         lambda r: "scope_status pending" if r["scope_status"] == "pending" else None,
     ),
+    Topic(
+        "card-id-drift",
+        "a card whose Wikidata id or article link is no longer its site's",
+        "D25",
+        _card_drift,
+    ),
 )
 TOPIC_OF = {t.key: t for t in TOPICS}
 FIELD_TOPIC = {
@@ -268,7 +328,10 @@ SITES_SQL = (
     "'license', w.license, 'author', w.author, 'license_url', w.license_url) FROM wiki_images w "
     "WHERE w.site_id = u.id AND w.is_hero AND NOT w.is_excluded ORDER BY w.id LIMIT 1) AS hero, "
     "EXISTS (SELECT 1 FROM site_external_ids e WHERE e.site_id = u.id AND "
-    "e.kind = 'wikidata_qid') AS has_qid "
+    "e.kind = 'wikidata_qid') AS has_qid, c.wikidata_qid AS card_qid, c.best_wiki_url AS "
+    "card_wiki_url, (SELECT e.value FROM site_external_ids e WHERE e.site_id = u.id AND "
+    "e.kind = 'wikidata_qid') AS qid, (SELECT e.value FROM site_external_ids e WHERE "
+    "e.site_id = u.id AND e.kind = 'enwiki_title') AS enwiki_title "
     "FROM unified_sites u LEFT JOIN card_stats c ON c.site_id = u.id "
     f"WHERE u.source_id = '{CURATED}' ORDER BY u.id"
 )
@@ -388,21 +451,65 @@ def lane_rows(
     return out, aside
 
 
-def unregistered_lists(root: Path, registered: Iterable[str]) -> list[str]:
-    """Every owner list under `root` that no source covers - so none is dropped unseen. The field
-    runs' lists are rebuilt from their runs, and their adversarial lists are in those rows."""
-    known = set(registered)
+def owner_artefacts(root: Path) -> list[str]:
+    """Every owner-facing file or directory under `root` (`OWNER_NAME`), caches left out; a
+    matching directory is named once, not descended into."""
     found: list[str] = []
-    for name in LIST_NAMES:
-        for path in sorted(root.rglob(name)):
-            rel = path.relative_to(root).as_posix()
-            parts = rel.split("/")
-            if SKIP_PARTS & set(parts[:-1]) or rel in known:
+    for dirpath, dirnames, filenames in os.walk(root):
+        here = Path(dirpath).relative_to(root)
+        descend = []
+        for name in sorted(dirnames):
+            if name in SKIP_PARTS:
                 continue
-            if parts[0] == "fields" and len(parts) in (3, 4) and parts[1] in FIELD_RUNS:
-                continue  # <run>/OWNER_LIST.jsonl and <run>/adv/OWNER.jsonl
-            found.append(rel)
+            if OWNER_NAME.search(name):
+                found.append((here / name).as_posix())
+            else:
+                descend.append(name)
+        dirnames[:] = descend
+        found += [
+            (here / name).as_posix()
+            for name in filenames
+            if OWNER_NAME.search(name) and Path(name).suffix in OWNER_SUFFIXES
+        ]
+    return sorted(found)
+
+
+def unregistered_lists(root: Path, registered: Iterable[str]) -> list[str]:
+    """Every owner-facing artefact under `root` that no source covers and `OUT_OF_SCOPE` does not
+    explain - so none is dropped unseen. The field runs' lists are rebuilt from their runs (their
+    adversarial lists are in those rows), a registered list's `.md` is its rendering, and the
+    builder's own files are its output."""
+    known = set(registered) | {f"{OUT_DIR}/{OUT_JSONL}", f"{OUT_DIR}/{OUT_MD}"}
+    known |= {k.removesuffix(".jsonl") + ".md" for k in known if k.endswith(".jsonl")}
+    found: list[str] = []
+    for rel in owner_artefacts(root):
+        parts = rel.split("/")
+        if rel in known or rel in OUT_OF_SCOPE:
+            continue
+        if parts[0] == "fields" and len(parts) in (3, 4) and parts[1] in FIELD_RUNS:
+            continue  # <run>/OWNER_LIST.{jsonl,md} and <run>/adv/OWNER.jsonl
+        found.append(rel)
     return found
+
+
+def hero_sizes(sites: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """The shown curated heroes with a stored size, counted the topic's way and the narrower way,
+    beside D48's census figure. Pure."""
+    sized = [
+        s["hero"]
+        for s in sites
+        if s["scope_status"] != RETIRED
+        and s["hero"]
+        and s["hero"]["width"] is not None
+        and s["hero"]["height"] is not None
+    ]
+    return {
+        f"below_{HERO_WIDTH}x{HERO_HEIGHT}": sum(
+            1 for h in sized if h["width"] < HERO_WIDTH or h["height"] < HERO_HEIGHT
+        ),
+        f"at_most_{NARROW_WIDTH}_wide": sum(1 for h in sized if h["width"] <= NARROW_WIDTH),
+        "d48_census": D48_SMALL_HEROES,
+    }
 
 
 # ------------------------------------------------------------------------------ the build
@@ -458,6 +565,8 @@ def build(
         "set_aside": dict(sorted(set_aside.items())),
         "missing": missing,
         "unregistered": unregistered,
+        "out_of_scope": {k: v for k, v in OUT_OF_SCOPE.items() if (root / k).exists()},
+        "hero_sizes": hero_sizes(sites.values()),
         "pending": pending,
     }
 
@@ -494,6 +603,19 @@ def render(result: Mapping[str, Any]) -> str:
         title, decision = _title(topic)
         out.append(f"| {title} (`{topic}`) | {n} | {decision} |")
     out += ["", f"Set aside: {result['set_aside'] or 'none'}."]
+    sizes = result["hero_sizes"]
+    out += [
+        "",
+        f"**Small heroes (D48).** The topic `hero-small` lists every hero below "
+        f"{HERO_WIDTH}x{HERO_HEIGHT}: {sizes[f'below_{HERO_WIDTH}x{HERO_HEIGHT}']} today. D48 names "
+        f"{sizes['d48_census']}, the census figure of 2026-10-08 whose SQL was not kept, so that "
+        f"number cannot be reproduced; {sizes[f'at_most_{NARROW_WIDTH}_wide']} heroes are at most "
+        f"{NARROW_WIDTH} px wide. Neither reading gives {sizes['d48_census']}: the list errs on "
+        "the side of showing more.",
+    ]
+    if result["out_of_scope"]:
+        out += ["", "Owner-facing files this list does not read, and why:", ""]
+        out += [f"- `{k}`: {v}" for k, v in result["out_of_scope"].items()]
     if result["missing"] or result["unregistered"]:
         out += [
             "",

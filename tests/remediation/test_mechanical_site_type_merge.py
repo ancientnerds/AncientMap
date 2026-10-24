@@ -131,17 +131,75 @@ class TestTheMap:
         with pytest.raises(PlanError, match="names no `by`, `at` and `check`"):
             M.parse_map(map_text(decision={"by": "x", "at": "", "check": "c"}), "x")
 
-    def test_the_p31_table_offers_no_merged_alias(self) -> None:
-        """A later field lane picks a type from the P31 table: an alias left there would bring
-        the old names back (plans/fields.md item 8: map and table change in one commit)."""
-        aliases = set(M.load_map().merges)
+    def test_the_p31_table_keeps_every_alias_until_the_merge_is_in_production(self) -> None:
+        """Until the decided merge is applied and `table --write` moves the table with its pin,
+        the pinned table still lists every alias, so a classify run reads the unmerged rows as
+        before (the merge map is undecided today)."""
+        merge_map = M.load_map()
+        assert merge_map.decision is None
         offered = {t for entry in FC.load_table().values() for t in entry.types}
-        assert not offered & aliases
+        assert set(merge_map.merges) <= offered
+
+    def test_an_unmerged_alias_row_classifies_as_before(self) -> None:
+        """A `Settlement` site whose item is a 'human settlement' (a container class) holds its
+        type: no identity doubt, the type confirmed - with the pinned table, not a merged one."""
+        table = FC.load_table()
+        who = FC.identity("Settlement", [table["Q486972"]])
+        assert not who.doubt
+        merged = FC.parse_table(M.merged_table(_table_text(), decided())[0])
+        assert FC.identity("Settlement", [merged["Q486972"]]).doubt
 
     def test_the_group_lookup_is_the_card_game_s_own(self) -> None:
         from api.cardgame.constants import CATEGORY_GROUP
 
         assert dict(M.category_group()) == dict(CATEGORY_GROUP)
+
+
+def _table_text() -> str:
+    return FC.TABLE.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
+
+
+class TestTheTable:
+    def test_the_merged_table_offers_no_alias_and_keeps_the_rest(self) -> None:
+        text, changed = M.merged_table(_table_text(), decided())
+        merged, before = FC.parse_table(text), FC.parse_table(_table_text())
+        aliases = set(decided().merges)
+        assert changed > 0 and set(merged) == set(before)
+        assert not {t for e in merged.values() for t in e.types} & aliases
+        assert merged["Q486972"].types == ("City", "City/town/settlement", "Village")
+        assert all(
+            e.kind == before[q].kind and e.label == before[q].label for q, e in merged.items()
+        )
+        assert "without the site_type aliases" in json.loads(text)["about"]
+        # written the table's own way (indent 1, UTF-8 unescaped), which the pinned file is too
+        for t in (text, _table_text()):
+            assert json.dumps(json.loads(t), indent=1, ensure_ascii=False) + "\n" == t
+
+    def test_a_merged_table_is_not_merged_twice(self) -> None:
+        text, _ = M.merged_table(_table_text(), decided())
+        with pytest.raises(PlanError, match="merged already"):
+            M.merged_table(text, decided())
+
+    def test_an_undecided_map_moves_no_table(self) -> None:
+        with pytest.raises(PlanError, match="map is undecided"):
+            M.table(M.load_map(), read=reader([]))
+
+    def test_the_table_waits_for_the_last_merge_wave(self, tmp_path: Path) -> None:
+        path = tmp_path / "p31.json"
+        path.write_text(_table_text(), encoding="utf-8", newline="\n")
+        with pytest.raises(PlanError, match="1 curated row\\(s\\) still hold an alias"):
+            M.table(decided(), read=reader([SITE]), path=path, write=True)
+        assert path.read_text(encoding="utf-8") == _table_text()
+
+    def test_the_table_is_written_with_the_sha_its_pin_moves_to(self, tmp_path: Path) -> None:
+        path = tmp_path / "p31.json"
+        path.write_text(_table_text(), encoding="utf-8", newline="\n")
+        dry = M.table(decided(), read=reader([]), path=path)
+        assert dry["written"] is False and path.read_text(encoding="utf-8") == _table_text()
+        done = M.table(decided(), read=reader([]), path=path, write=True)
+        assert done["table_sha256"] == dry["table_sha256"] == FC.table_sha256(path)
+        assert done["table_sha256"] in done["next"]
+        FC.load_table(path, pin=done["table_sha256"])
 
 
 # ------------------------------------------------------------------------------ a row

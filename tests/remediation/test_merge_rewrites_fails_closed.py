@@ -1,7 +1,8 @@
 """Teeth for scripts/merge_rewrites.py: it must not be able to report success without succeeding.
 
 The script this replaces contained no `sys.exit` at all. In a faithful sandbox it exited 0 while:
-  * all ten rewrite batches were missing (it printed a WARNING and copied to public/data/ anyway),
+  * all ten rewrite batches were missing (it printed a WARNING and copied to public/data/ anyway -
+    the copy is gone since 2026-10-24, and every test below checks it never comes back),
   * every rewrite in the one present batch was invalid (it printed the errors and applied the
     valid subset, because the apply loop never consulted `errors`).
 `docs/procedures/FIELD_CONTRACT.md:220` records the consequence: "Do not trust its exit code."
@@ -83,11 +84,7 @@ def build_sandbox(
             for i, sid in enumerate(descriptions)
         ],
     )
-    # The deploy-relevant file, pre-existing, which a failed run must leave alone.
-    _write(
-        root / "public" / "data" / "card_descriptions.json",
-        {"descriptions": {"sentinel": "untouched"}},
-    )
+    # public/data/ exists, so a stray write into it would succeed - and be caught (`_public`).
 
     for index, payload in (batches or {}).items():
         _write(root / "output" / f"rewrite_output_{index:02d}.json", payload)
@@ -105,10 +102,9 @@ def run_merge(root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def public_payload(root: Path) -> dict[str, Any]:
-    return json.loads(
-        (root / "public" / "data" / "card_descriptions.json").read_text(encoding="utf-8")
-    )
+def _public(root: Path) -> Path:
+    """The dead deploy copy (deleted 2026-10-24, D25): no run, failed or not, may create it."""
+    return root / "public" / "data" / "card_descriptions.json"
 
 
 def output_payload(root: Path) -> dict[str, Any]:
@@ -130,13 +126,12 @@ def valid_batches(overrides: dict[int, str] | None = None) -> dict[int, dict[str
 
 
 def test_all_batches_missing_writes_nothing(tmp_path):
-    """Today's real state: ten missing batch files must not touch public/data/."""
+    """Today's real state: ten missing batch files write nothing."""
     root = build_sandbox(tmp_path, batches={})
     res = run_merge(root)
     assert res.returncode == EXIT_INCOMPLETE, res.stdout + res.stderr
     assert "missing" in res.stdout.lower()
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
-    assert "sentinel" not in output_payload(root)["descriptions"]
+    assert not _public(root).exists()
 
 
 def test_partial_batches_write_nothing(tmp_path):
@@ -145,7 +140,7 @@ def test_partial_batches_write_nothing(tmp_path):
     (root / "output" / "rewrite_output_09.json").unlink()
     res = run_merge(root)
     assert res.returncode == EXIT_INCOMPLETE, res.stdout + res.stderr
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
+    assert not _public(root).exists()
 
 
 def test_all_batches_empty_writes_nothing(tmp_path):
@@ -153,7 +148,7 @@ def test_all_batches_empty_writes_nothing(tmp_path):
     root = build_sandbox(tmp_path, batches={i: {"rewrites": {}} for i in range(NUM_BATCHES)})
     res = run_merge(root)
     assert res.returncode == EXIT_NOTHING, res.stdout + res.stderr
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
+    assert not _public(root).exists()
 
 
 @pytest.mark.parametrize(
@@ -168,7 +163,7 @@ def test_invalid_rewrite_writes_nothing(tmp_path, bad, expected_fragment):
     res = run_merge(root)
     assert res.returncode == EXIT_INVALID, res.stdout + res.stderr
     assert expected_fragment in res.stdout.lower()
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
+    assert not _public(root).exists()
 
 
 def test_invalid_rewrite_does_not_apply_the_valid_subset(tmp_path):
@@ -183,7 +178,7 @@ def test_invalid_rewrite_does_not_apply_the_valid_subset(tmp_path):
     res = run_merge(root)
     assert res.returncode == EXIT_INVALID, res.stdout + res.stderr
     assert "unknown site_id" in res.stdout.lower()
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
+    assert not _public(root).exists()
     # Not one of the valid rewrites reached the working copy.
     assert output_payload(root)["descriptions"]["site-0"] == CLEAN[0]
 
@@ -209,7 +204,7 @@ def test_regression_rolls_back_and_leaves_public_alone(tmp_path):
     res = run_merge(root)
     assert res.returncode == EXIT_REGRESSED, res.stdout + res.stderr
     assert "rolled back" in res.stdout.lower()
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
+    assert not _public(root).exists()
     # The working copy is restored exactly, not left half-changed.
     assert output_payload(root)["descriptions"] == descriptions
 
@@ -227,7 +222,7 @@ def test_malformed_batch_fails_loudly_and_names_the_file(tmp_path):
     assert res.returncode == EXIT_INPUT, res.stdout + res.stderr
     assert "rewrite_output_03.json" in res.stdout, "the failing file must be named"
     assert "not valid JSON" in res.stdout
-    assert public_payload(root) == {"descriptions": {"sentinel": "untouched"}}
+    assert not _public(root).exists()
 
 
 def test_rollback_restores_the_file_byte_for_byte(tmp_path):
@@ -346,7 +341,8 @@ def test_complete_valid_merge_is_published(tmp_path):
     res = run_merge(root)
     assert res.returncode == 0, res.stdout + res.stderr
     assert "OK: applied 5 rewrites" in res.stdout
-    published = public_payload(root)["descriptions"]
+    assert not _public(root).exists(), "a successful merge publishes nothing either"
+    published = output_payload(root)["descriptions"]
     assert published["site-0"] == "Sentence number 0 about the place sits here."
     assert len(published) == len(CLEAN), "the merge must never add or drop a description"
     # The untouched site keeps its original text.

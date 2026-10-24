@@ -578,46 +578,33 @@ class TestTheBasis:
                 bases=lambda wave: {**record, "wave": "2026-09-22"},
             )
 
-    def test_a_site_added_since_the_basis_is_left_out_of_the_proof(self, tmp_path: Path) -> None:
-        """A curated site inserted after the basis (the D57 insert lane) was no curated row at
-        the basis: the proof leaves it and its journal out, and the plan recomputes the cards it
-        now shares a `mystery` pair with - its own card included."""
+    def test_a_site_the_basis_does_not_know_refuses(self, tmp_path: Path) -> None:
         rows, entries, _ = self.scenario(tmp_path)
-        # the new site shares SITE_A's pair; its card is the zeroed placeholder row a new site
-        # gets (`rarity_tier = 0`, FIELD_CONTRACT 2.3)
-        zeroed = {f"stored_{c}": 0 for c in C.COLUMNS}
-        zeroed.update(
-            stored_category_group="unknown", stored_civilization=None, stored_empires="[]"
-        )
-        added = [
-            {
-                **row(SITE_B),
-                "site_type": rows[0]["site_type"],
-                "period_name": rows[0]["period_name"],
-                **zeroed,
-            }
-        ]
-        insert = jrow(999, SITE_B, "description", None, "A temple.")
-        result = C.build_card_stats_plan(
-            export([*rows, *added], (*entries, insert)),
-            NEXT,
-            built_at="t",
-            bases=bases_in(tmp_path),
-        )
-        assert result.proof.counters["counterfactual_sites_added_since_basis"] == 1
-        assert result.proof.counters["counterfactual_cells_differing"] == 0
-        changed = {(c.site_id, c.column) for c in result.plan.changes}
-        assert (SITE_A, "mystery") in changed, "the new site moved SITE_A's mystery share"
-        assert (SITE_B, "mystery") in changed
-
-    def test_a_site_the_basis_names_that_is_gone_refuses(self, tmp_path: Path) -> None:
-        rows, entries, _ = self.scenario(tmp_path)
-        record = bases_in(tmp_path)(WAVE)
-        ghost = {**record, "unjournalled": {**record["unjournalled"], SITE_B: [[], 0, 0, 0]}}
-        with pytest.raises(P.PlanError, match="1 gone"):
+        added = with_stored([row(SITE_B, site_type="Cairn")])
+        with pytest.raises(P.PlanError, match="the curated sites are not the basis's"):
             C.build_card_stats_plan(
-                export(rows, entries), NEXT, built_at="t", bases=lambda wave: ghost
+                export([*rows, *added], entries), NEXT, built_at="t", bases=bases_in(tmp_path)
             )
+
+    def test_a_site_the_insert_lane_created_after_the_horizon_was_not_there(
+        self, tmp_path: Path
+    ) -> None:
+        """D57: a journalled insert (the `id` row from NULL to the site's id) after the basis's
+        horizon explains the added site - absent from the counterfactual, counted in the recompute."""
+        rows, entries, _ = self.scenario(tmp_path)
+        added = {**row(SITE_B, site_type="Cairn", description=None), "has_card": False}
+        insert = {**jrow(len(entries) + 100, SITE_B, "id", None, SITE_B), "run_stamp": "d57_x-s001"}
+        result = C.build_card_stats_plan(
+            export([*rows, added], (*entries, insert)), NEXT, built_at="t", bases=bases_in(tmp_path)
+        )
+        assert result.proof.counters["counterfactual_cells_differing"] == 0
+        assert all(change.site_id != SITE_B for change in result.plan.changes)
+        below = {**insert, "id": 0}
+        with pytest.raises(P.PlanError, match="the curated sites are not the basis's"):
+            C.build_card_stats_plan(
+                export([*rows, added], (below, *entries)), NEXT, built_at="t",
+                bases=bases_in(tmp_path),
+            )  # fmt: skip
 
     def test_a_row_committed_below_the_horizon_after_the_export_refuses(
         self, tmp_path: Path
@@ -834,3 +821,22 @@ def test_main_writes_the_wave_s_basis_next_to_its_plan(tmp_path: Path) -> None:
     assert (record["wave"], record["cells"], record["proof_basis"]) == ("2026-09-24", 0, None)
     assert set(record["unjournalled"]) == {SITE_A, SITE_B}
     assert not (tmp_path / "ROLLBACK.sql").exists()
+
+
+def test_the_proof_counts_the_sites_the_insert_lane_added(tmp_path: Path) -> None:
+    """Phase 8: the proof says how many curated sites it left out as inserted after its basis, so
+    a recompute after the D57 inserts reports them instead of hiding them."""
+    scenario = TestTheBasis().scenario
+    rows, entries, _ = scenario(tmp_path)
+    assert (
+        C.build_card_stats_plan(
+            export(rows, entries), NEXT, built_at="t", bases=bases_in(tmp_path)
+        ).proof.counters["counterfactual_sites_added_since_basis"]
+        == 0
+    )
+    added = {**row(SITE_B, site_type="Cairn", description=None), "has_card": False}
+    insert = {**jrow(len(entries) + 100, SITE_B, "id", None, SITE_B), "run_stamp": "d57_x-s001"}
+    result = C.build_card_stats_plan(
+        export([*rows, added], (*entries, insert)), NEXT, built_at="t", bases=bases_in(tmp_path)
+    )
+    assert result.proof.counters["counterfactual_sites_added_since_basis"] == 1

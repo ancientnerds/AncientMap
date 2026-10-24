@@ -683,19 +683,28 @@ def counterfactual_sites(
     is put back, newest first, and every unjournalled input is the basis's. Returns the rows and
     how many journal rows were undone.
 
-    A curated site added since the basis (the insert lane of D57, 2026-10-24) is not one of its
-    rows: the basis names every curated site its export held (`unjournalled`), so a site it does
-    not name was no curated row then, took part in no `mystery` share and had no card the proof
-    could compare - it is left out, and its journal rows with it. A site the basis names that is
-    gone is refused: a curated row is retired, never deleted, and no basis explains one that
-    vanished.
+    Refused unless the curated sites are the basis's own: a site added or removed since changes
+    every `mystery` share it takes part in, and no basis says what it was. The one addition a basis
+    does explain is a journalled insert after its horizon (the D57 insert lane, `insert_site/
+    writer.py`: its `unified_sites.id` row runs from NULL to the site's own id): such a site did not
+    exist at the basis, so it is not in the counterfactual - and it adds to every `mystery` share of
+    the recompute that plans the next write, as the generator would count it.
     """
-    by_id = {row["id"]: dict(row) for row in sites if row["id"] in basis.unjournalled}
-    gone = set(basis.unjournalled) - set(by_id)
-    if gone:
+    created = {
+        str(entry["row_pk"])
+        for entry in journal
+        if entry["table_name"] == "unified_sites"
+        and entry["column_name"] == "id"
+        and entry["old_value"] is None
+        and entry["new_value"] == entry["row_pk"]
+        and int(entry["id"]) > basis.since
+    }
+    by_id = {row["id"]: dict(row) for row in sites if row["id"] not in created}
+    if set(by_id) != set(basis.unjournalled):
+        added, gone = set(by_id) - set(basis.unjournalled), set(basis.unjournalled) - set(by_id)
         raise PlanError(
-            f"the curated sites are not the basis's ({basis.label}): {len(gone)} gone "
-            f"{sorted(gone)[:3]}"
+            f"the curated sites are not the basis's ({basis.label}): {len(added)} added "
+            f"{sorted(added)[:3]}, {len(gone)} gone {sorted(gone)[:3]}"
         )
     seen = sum(1 for j in journal if int(j["id"]) <= basis.since)
     if seen != basis.journal_rows:

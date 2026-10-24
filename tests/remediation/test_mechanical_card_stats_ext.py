@@ -30,6 +30,9 @@ OTHER = "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6"
 QID = "Q6904806"
 WAVE = "2026-10-25"
 LABELS = {"Q219538": "scheduled monument", "Q9259": "World Heritage Site", "Q404": None}
+NONE_REFUSED: frozenset[tuple[str, int]] = frozenset()
+#: Monte Lazzu (Sardinia): an Old-World site dated -1800 .. -900.
+PLACE = {"lat": 40.95, "lon": 8.68, "country": "Italy", "period_start": -1800, "period_end": -900}
 
 
 def statement(value: Any, rank: str = "normal") -> dict[str, Any]:
@@ -64,9 +67,18 @@ def live(**over: Any) -> X.Live:
         "has_card": True,
         "stored": dict.fromkeys(X.COLUMNS),
         "premise": f"{QID}|Monte Lazzu",
+        **PLACE,
     }
     base.update(over)
     return X.Live(**base)
+
+
+def inception(e: dict[str, Any], refused: frozenset = NONE_REFUSED, **over: Any) -> Any:
+    return X.inception_year(e, live(**over), refused)
+
+
+def p571(year: int, precision: int = 9) -> dict[str, Any]:
+    return entity(P571=[statement(time_value(year, precision))])
 
 
 def cells(verdicts: list[Any]) -> dict[str, Any]:
@@ -153,43 +165,126 @@ class TestTheValues:
         unknown = entity(P1435=[statement({"id": "Q1"})])
         assert X.heritage_designation(unknown, LABELS).reason == "designation-without-label"
 
-    def test_an_inception_is_a_year_before_1500(self) -> None:
-        assert X.inception_year(entity(P571=[statement(time_value(-432))])).value == "-432"
-        assert X.inception_year(entity(P571=[statement(time_value(120, 11))])).value == "120"
+    def test_an_inception_is_a_year_within_the_site_s_dating(self) -> None:
+        assert inception(p571(-1500)).value == "-1500"
+        assert inception(p571(120, 11), period_start=-50, period_end=300).value == "120"
+        # a year on the period's end is still within it
+        assert inception(p571(-900)).value == "-900"
 
     def test_an_inception_coarser_than_a_year_states_none(self) -> None:
-        found = X.inception_year(entity(P571=[statement(time_value(-3000, 7))]))
+        found = inception(p571(-3000, 7))
         assert found.value is None and found.reason == "inception-not-a-year"
-        assert X.inception_year(entity()).reason == "no-p571"
+        assert inception(entity()).reason == "no-p571"
 
     def test_a_modern_inception_is_the_park_not_the_site(self) -> None:
-        found = X.inception_year(entity(P571=[statement(time_value(1927))]))
+        found = inception(p571(1927))
         assert found.value is None and found.reason == "inception-modern"
-        assert X.inception_year(entity(P571=[statement(time_value(1499))])).value == "1499"
+        americas = {"lat": 17.2, "lon": -89.6, "country": "Guatemala", "period_end": 1500}
+        assert inception(p571(1499), **americas).value == "1499"
+        assert inception(p571(1500), **americas).reason == "inception-modern"
 
     def test_two_inception_years_are_a_conflict(self) -> None:
-        e = entity(P571=[statement(time_value(-500)), statement(time_value(-450))])
-        assert X.inception_year(e).reason == "inception-conflict"
-        same = entity(P571=[statement(time_value(-500)), statement(time_value(-500, 10))])
-        assert X.inception_year(same).value == "-500"
+        e = entity(P571=[statement(time_value(-1500)), statement(time_value(-1450))])
+        assert inception(e).reason == "inception-conflict"
+        same = entity(P571=[statement(time_value(-1500)), statement(time_value(-1500, 10))])
+        assert inception(same).value == "-1500"
+
+    def test_a_medieval_charter_of_a_roman_city_is_no_start(self) -> None:
+        """Tarragona (Tarraco): Wikidata's P571 1165 at year precision is the town's medieval
+        charter; the site is Roman and the Old World's E3 cutoff is 500 AD."""
+        tarraco = {"lat": 41.12, "lon": 1.25, "country": "Spain", "period_start": -218,
+                   "period_end": 476}  # fmt: skip
+        found = inception(entity("Q15088", P571=[statement(time_value(1165))]), qid="Q15088",
+                          **tarraco)  # fmt: skip
+        assert found.value is None and found.reason == "inception-past-scope"
+        assert "500 AD" in found.note
+        # the same holds without a stored period end: the scope alone refuses it
+        assert inception(p571(1192), period_end=None).reason == "inception-past-scope"
+        # 500 AD itself is inside the window (passes_date_cutoff's `<=`)
+        assert inception(p571(500), period_end=500).value == "500"
+
+    def test_the_americas_and_oceania_run_to_1500(self) -> None:
+        maya = {"lat": 17.2, "lon": -89.6, "country": "Guatemala", "period_end": 1200}
+        assert inception(p571(900), **maya).value == "900"
+        maori = {"lat": -36.9, "lon": 174.8, "country": "New Zealand", "period_end": 1450}
+        assert inception(p571(1300), **maori).value == "1300"
+        # the same year on an Old-World site is past its window
+        assert inception(p571(900), period_end=1200).reason == "inception-past-scope"
+
+    def test_a_year_the_period_wave_refused_is_no_start(self) -> None:
+        refused = frozenset({(QID, -1500)})
+        found = inception(p571(-1500), refused)
+        assert found.value is None and found.reason == "inception-refused-by-period-wave"
+        assert inception(p571(-1500), frozenset({("Q1", -1500), (QID, -1400)})).value == "-1500"
+
+    def test_a_site_without_a_longitude_has_no_window(self) -> None:
+        assert inception(p571(-1500), lon=None).reason == "inception-region-unknown"
+
+    def test_a_year_after_the_band_of_the_stored_period_is_a_later_phase(self) -> None:
+        # dated -900, the band "1500 - 500 BC": -500 is the next band's first year
+        found = inception(p571(-500))
+        assert found.value is None and found.reason == "inception-after-period"
+        assert "'1500 - 500 BC'" in found.note
+        assert inception(p571(-501)).value == "-501"
+
+    def test_a_band_edge_period_admits_its_whole_band(self) -> None:
+        """Pyramid of Amenemhat I: period_start -3000 is the edge of "3000 - 1500 BC"
+        (`bucket_edge`), P571 -1990 lies inside that band."""
+        edge = {"period_start": -3000, "period_end": None}
+        assert inception(p571(-1990), **edge).value == "-1990"
+        assert inception(p571(-1500), **edge).reason == "inception-after-period"
+
+    def test_the_period_is_end_or_start(self) -> None:
+        # `period_end or period_start`: a missing or 0 end falls through to the start (-1800,
+        # the band "3000 - 1500 BC")
+        assert inception(p571(-1600), period_end=0).value == "-1600"
+        assert inception(p571(-1500), period_end=0).reason == "inception-after-period"
+        assert inception(p571(-1500), period_end=None).reason == "inception-after-period"
+
+    def test_the_readback_counts_every_inception_the_rule_refuses(self) -> None:
+        sql = X.readback(X.ext_lane(WAVE, 1))
+        assert "inception_year lies past the site''s E3 cutoff" in sql
+        assert "inception_year lies after the band of the site''s period" in sql
+        assert L.e3_cutoff_sql("u.") in sql and X._BAND_END in sql
+
+    def test_the_band_end_in_sql_is_the_python_band_end(self) -> None:
+        import sqlite3
+
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE u (period_start INTEGER, period_end INTEGER)")
+        rows = [(-6500, None), (-3000, None), (-1800, 0), (-1800, -900), (1, 300), (1000, 1700)]
+        db.executemany("INSERT INTO u VALUES (?, ?)", rows)
+        got = [r[0] for r in db.execute(f"SELECT {X._BAND_END} FROM u ORDER BY rowid")]
+        assert got == [X.band_end(end or start) for start, end in rows]
+
+    def test_the_band_end_is_the_bucket_table_s(self) -> None:
+        assert [X.band_end(y) for y in (-6500, -4500, -1, 1, 499, 1000, 1700)] == [
+            -4500, -3000, 1, 500, 500, 1500, 999999,
+        ]  # fmt: skip
+
+    def test_a_site_without_a_period_states_no_year(self) -> None:
+        found = inception(p571(-1500), period_start=None, period_end=None)
+        assert found.value is None and found.reason == "inception-without-period"
 
     def test_the_ids_give_the_qid_and_the_english_article(self) -> None:
-        got = X.derive(live(enwiki_title="Heraclea (Lucania)"), full_entity(), LABELS)
+        got = X.derive(live(enwiki_title="Heraclea (Lucania)"), full_entity(), LABELS, NONE_REFUSED)
         assert got["wikidata_qid"].value == QID
         assert got["best_wiki_url"].value == "https://en.wikipedia.org/wiki/Heraclea_(Lucania)"
 
     def test_without_a_qid_no_item_cell_is_derived(self) -> None:
-        got = X.derive(live(qid=None, premise="<NULL>|Monte Lazzu"), full_entity(), LABELS)
+        got = X.derive(
+            live(qid=None, premise="<NULL>|Monte Lazzu"), full_entity(), LABELS, NONE_REFUSED
+        )
         assert got["wikidata_qid"].reason == "no-qid"
         assert {got[c].reason for c in X.ITEM_COLUMNS} == {"no-qid"}
         assert got["best_wiki_url"].value is not None
 
     def test_an_item_missing_from_the_harvest_is_named(self) -> None:
-        got = X.derive(live(), None, LABELS)
+        got = X.derive(live(), None, LABELS, NONE_REFUSED)
         assert {got[c].reason for c in X.ITEM_COLUMNS} == {"entity-not-harvested"}
 
     def test_a_merged_item_refuses_every_item_cell(self) -> None:
-        got = X.derive(live(), {**full_entity(), "id": "Q1"}, LABELS)
+        got = X.derive(live(), {**full_entity(), "id": "Q1"}, LABELS, NONE_REFUSED)
         assert {got[c].reason for c in X.ITEM_COLUMNS} == {"qid-redirects"}
         assert got["wikidata_qid"].value == QID
 
@@ -197,7 +292,9 @@ class TestTheValues:
 # ------------------------------------------------------------------------------ a site
 class TestClassify:
     def test_every_empty_cell_with_a_value_is_filled(self) -> None:
-        verdicts = X.classify(SITE, live(), full_entity(), LABELS, entity_sha="s" * 64)
+        verdicts = X.classify(
+            SITE, live(), full_entity(), LABELS, NONE_REFUSED, entity_sha="s" * 64
+        )
         assert cells(verdicts) == {
             "wikidata_qid": QID,
             "best_wiki_url": "https://en.wikipedia.org/wiki/Monte_Lazzu",
@@ -211,13 +308,15 @@ class TestClassify:
 
     def test_a_filled_cell_is_never_overwritten(self) -> None:
         stored = {**dict.fromkeys(X.COLUMNS), "commons_image": "Other.jpg", "wikidata_qid": QID}
-        verdicts = X.classify(SITE, live(stored=stored), full_entity(), LABELS, entity_sha="s")
+        verdicts = X.classify(
+            SITE, live(stored=stored), full_entity(), LABELS, NONE_REFUSED, entity_sha="s"
+        )
         assert "commons_image" not in cells(verdicts) and "wikidata_qid" not in cells(verdicts)
         assert reasons(verdicts) == {"commons_image": "stored-differs"}
 
     def test_a_value_longer_than_its_column_is_refused(self) -> None:
         long = entity(P18=[statement("x" * 501 + ".jpg")])
-        verdicts = X.classify(SITE, live(), long, LABELS, entity_sha="s")
+        verdicts = X.classify(SITE, live(), long, LABELS, NONE_REFUSED, entity_sha="s")
         assert reasons(verdicts)["commons_image"] == "value-too-long"
 
     @pytest.mark.parametrize(
@@ -229,16 +328,19 @@ class TestClassify:
         ],
     )
     def test_a_site_whose_card_is_not_this_lane_s_is_listed(self, over: dict, reason: str) -> None:
-        verdicts = X.classify(SITE, live(**over), full_entity(), LABELS, entity_sha="s")
+        verdicts = X.classify(
+            SITE, live(**over), full_entity(), LABELS, NONE_REFUSED, entity_sha="s"
+        )
         assert [(v.ok, v.column, v.reason) for v in verdicts] == [(False, None, reason)]
 
     def test_a_site_that_is_gone_is_listed(self) -> None:
-        assert X.classify(SITE, None, None, LABELS, entity_sha=None)[0].reason == "site-gone"
+        gone = X.classify(SITE, None, None, LABELS, NONE_REFUSED, entity_sha=None)
+        assert gone[0].reason == "site-gone"
 
     def test_a_step_holds_at_most_a_hundred_sites(self) -> None:
         many = [f"00000000-0000-4000-8000-{n:012d}" for n in range(101)]
         with pytest.raises(PlanError, match="at most 100"):
-            X.build_step(WAVE, 1, many, {}, {}, {}, LABELS, built_at="t")
+            X.build_step(WAVE, 1, many, {}, {}, {}, LABELS, NONE_REFUSED, built_at="t")
 
     def test_the_counters_name_the_columns_and_the_reasons(self) -> None:
         built = X.build_step(
@@ -249,6 +351,7 @@ class TestClassify:
             {SITE: full_entity(), OTHER: None},
             {SITE: "s", OTHER: None},
             LABELS,
+            NONE_REFUSED,
             built_at="t",
         )
         c = built.plan.counters
@@ -268,7 +371,8 @@ def tagged(rows: dict[str, list[dict[str, Any]]]) -> str:
 def site_row(site: str = SITE, **over: Any) -> dict[str, Any]:
     base = {"site_id": site, "name": "Monte Lazzu", "source_id": "ancient_nerds",
             "scope_status": None, "qid": QID, "enwiki_title": "Monte Lazzu", "has_card": True,
-            **{f"stored_{c}": None for c in X.COLUMNS}, "premise": f"{QID}|Monte Lazzu"}  # fmt: skip
+            **{f"stored_{c}": None for c in X.COLUMNS}, "premise": f"{QID}|Monte Lazzu",
+            **PLACE}  # fmt: skip
     return {**base, **over}
 
 
@@ -303,6 +407,24 @@ def harvest(tmp_path: Path) -> Path:
     return root
 
 
+#: Two records in `period_wave/structured_refused.json`'s form: a refused P571 and a refused P2348.
+REFUSED_RECORDS = [
+    {"site_id": SITE, "name": "Monte Lazzu", "qid": QID, "property": "P571", "year": -1500,
+     "usable_as_period": False, "tier": "refused"},
+    {"site_id": OTHER, "name": "Other", "qid": "Q2978", "property": "P2348", "year": 1245,
+     "usable_as_period": False, "tier": "refused"},
+    {"site_id": OTHER, "name": "Other", "qid": "Q3", "property": "P571", "year": 300,
+     "usable_as_period": True, "tier": "structured"},
+]  # fmt: skip
+
+
+@pytest.fixture
+def refused(tmp_path: Path) -> Path:
+    path = tmp_path / "structured_refused.json"
+    path.write_text(json.dumps(REFUSED_RECORDS[1:]), encoding="utf-8")
+    return path
+
+
 def put(harvest: Path, e: dict[str, Any], qid: str = QID) -> None:
     H.entity_path(harvest, qid).write_text(json.dumps(e), encoding="utf-8")
 
@@ -332,22 +454,24 @@ class TestTheFetchTheWaveAndTheSteps:
         (root / WAVE).mkdir(parents=True, exist_ok=True)
         (root / WAVE / X.LABELS_FILE).write_text(json.dumps({"labels": LABELS}), encoding="utf-8")
 
-    def test_a_wave_needs_its_labels_and_every_item(self, tmp_path: Path, harvest: Path) -> None:
+    def test_a_wave_needs_its_labels_and_every_item(
+        self, tmp_path: Path, harvest: Path, refused: Path
+    ) -> None:
         candidates = [{"site_id": SITE, "qid": QID}]
         with pytest.raises(PlanError, match="LABELS.json is missing"):
-            X.build_wave(WAVE, harvest, read=reader(candidates), root=tmp_path)
+            X.build_wave(WAVE, harvest, refused, read=reader(candidates), root=tmp_path)
         self.labelled(tmp_path)
         with pytest.raises(PlanError, match="are not in"):
-            X.build_wave(WAVE, harvest, read=reader(candidates), root=tmp_path)
+            X.build_wave(WAVE, harvest, refused, read=reader(candidates), root=tmp_path)
 
     def test_the_wave_pins_the_items_and_the_labels_in_steps_of_100(
-        self, tmp_path: Path, harvest: Path
+        self, tmp_path: Path, harvest: Path, refused: Path
     ) -> None:
         put(harvest, full_entity())
         self.labelled(tmp_path)
         sites = [f"00000000-0000-4000-8000-{n:012d}" for n in range(150)]
         candidates = [{"site_id": s, "qid": QID if s == sites[0] else None} for s in sites]
-        assert X.build_wave(WAVE, harvest, read=reader(candidates), root=tmp_path) == {
+        assert X.build_wave(WAVE, harvest, refused, read=reader(candidates), root=tmp_path) == {
             "wave": WAVE,
             "sites": 150,
             "steps": 2,
@@ -356,19 +480,21 @@ class TestTheFetchTheWaveAndTheSteps:
         assert record["entity_sha256"][sites[0]] == X.sha256_file(H.entity_path(harvest, QID))
         assert record["entity_sha256"][sites[1]] is None
         with pytest.raises(PlanError, match="planned once"):
-            X.build_wave(WAVE, harvest, read=reader(candidates), root=tmp_path)
+            X.build_wave(WAVE, harvest, refused, read=reader(candidates), root=tmp_path)
 
-    def plan(self, tmp_path: Path, harvest: Path) -> Path:
+    def plan(self, tmp_path: Path, harvest: Path, refused: Path) -> Path:
         put(harvest, full_entity())
         self.labelled(tmp_path)
-        X.build_wave(WAVE, harvest, read=reader([{"site_id": SITE, "qid": QID}]), root=tmp_path)
+        X.build_wave(
+            WAVE, harvest, refused, read=reader([{"site_id": SITE, "qid": QID}]), root=tmp_path
+        )
         X.plan_step(WAVE, 1, read=reader([]), root=tmp_path)
         return tmp_path / WAVE / "s001"
 
     def test_a_step_is_planned_from_a_fresh_read_and_renders(
-        self, tmp_path: Path, harvest: Path
+        self, tmp_path: Path, harvest: Path, refused: Path
     ) -> None:
-        out = self.plan(tmp_path, harvest)
+        out = self.plan(tmp_path, harvest, refused)
         lines = [
             json.loads(x) for x in (out / "PLAN.jsonl").read_text(encoding="utf-8").splitlines()
         ]
@@ -384,36 +510,89 @@ class TestTheFetchTheWaveAndTheSteps:
             X.plan_step(WAVE, 1, read=reader([]), root=tmp_path)
 
     def test_an_item_that_moved_since_the_wave_refuses_the_step(
-        self, tmp_path: Path, harvest: Path
+        self, tmp_path: Path, harvest: Path, refused: Path
     ) -> None:
         put(harvest, full_entity())
         self.labelled(tmp_path)
-        X.build_wave(WAVE, harvest, read=reader([{"site_id": SITE, "qid": QID}]), root=tmp_path)
+        X.build_wave(
+            WAVE, harvest, refused, read=reader([{"site_id": SITE, "qid": QID}]), root=tmp_path
+        )
         put(harvest, entity(P18=[statement("New.jpg")]))
         with pytest.raises(PlanError, match="not the one wave 2026-10-25 pinned"):
             X.plan_step(WAVE, 1, read=reader([]), root=tmp_path)
 
     def test_labels_that_moved_since_the_wave_refuse_the_step(
-        self, tmp_path: Path, harvest: Path
+        self, tmp_path: Path, harvest: Path, refused: Path
     ) -> None:
         put(harvest, full_entity())
         self.labelled(tmp_path)
-        X.build_wave(WAVE, harvest, read=reader([{"site_id": SITE, "qid": QID}]), root=tmp_path)
+        X.build_wave(
+            WAVE, harvest, refused, read=reader([{"site_id": SITE, "qid": QID}]), root=tmp_path
+        )
         (tmp_path / WAVE / X.LABELS_FILE).write_text(json.dumps({"labels": {}}), encoding="utf-8")
         with pytest.raises(PlanError, match="is not the file wave"):
             X.plan_step(WAVE, 1, read=reader([]), root=tmp_path)
 
-    def test_a_step_waits_for_the_one_before_it(self, tmp_path: Path, harvest: Path) -> None:
+    def test_the_refused_dates_are_the_period_wave_s_refused_p571s(self, tmp_path: Path) -> None:
+        path = tmp_path / "refused.json"
+        path.write_text(json.dumps(REFUSED_RECORDS), encoding="utf-8")
+        assert X.read_refused(path) == frozenset({(QID, -1500)})
+
+    def test_a_refused_dates_file_is_read_whole(self, tmp_path: Path) -> None:
+        path = tmp_path / "refused.json"
+        with pytest.raises(PlanError, match="is missing"):
+            X.read_refused(path)
+        path.write_text(json.dumps([{"qid": QID, "property": "P571"}]), encoding="utf-8")
+        with pytest.raises(PlanError, match="record 0 lacks"):
+            X.read_refused(path)
+        path.write_text(json.dumps([]), encoding="utf-8")
+        with pytest.raises(PlanError, match="non-empty list"):
+            X.read_refused(path)
+
+    def test_a_refused_p571_refuses_the_cell_in_the_step(
+        self, tmp_path: Path, harvest: Path
+    ) -> None:
+        path = tmp_path / "refused.json"
+        path.write_text(json.dumps(REFUSED_RECORDS), encoding="utf-8")
+        out = self.plan(tmp_path, harvest, path)
+        planned = {
+            json.loads(x)["column"]
+            for x in (out / "PLAN.jsonl").read_text(encoding="utf-8").splitlines()
+        }
+        assert planned == set(X.COLUMNS) - {"inception_year"}
+        skipped = [json.loads(x) for x in (out / "SKIPPED.jsonl").read_text("utf-8").splitlines()]
+        assert any(r["reason"] == "inception-refused-by-period-wave" for r in skipped)
+
+    def test_a_refused_dates_file_that_moved_refuses_the_step(
+        self, tmp_path: Path, harvest: Path, refused: Path
+    ) -> None:
+        put(harvest, full_entity())
+        self.labelled(tmp_path)
+        X.build_wave(WAVE, harvest, refused, read=reader([{"site_id": SITE, "qid": QID}]),
+                     root=tmp_path)  # fmt: skip
+        assert X.read_wave(WAVE, tmp_path)["refused_sha256"] == X.sha256_file(refused)
+        refused.write_text(json.dumps(REFUSED_RECORDS), encoding="utf-8")
+        with pytest.raises(PlanError, match="not the refused-dates file"):
+            X.plan_step(WAVE, 1, read=reader([]), root=tmp_path)
+
+    def test_the_default_refused_dates_are_the_main_checkout_s(self) -> None:
+        from identity.common import main_checkout
+
+        assert X.default_refused() == main_checkout() / X.REFUSED_PATH
+
+    def test_a_step_waits_for_the_one_before_it(
+        self, tmp_path: Path, harvest: Path, refused: Path
+    ) -> None:
         self.labelled(tmp_path)
         sites = [{"site_id": f"00000000-0000-4000-8000-{n:012d}", "qid": None} for n in range(101)]
-        X.build_wave(WAVE, harvest, read=reader(sites), root=tmp_path)
+        X.build_wave(WAVE, harvest, refused, read=reader(sites), root=tmp_path)
         with pytest.raises(PlanError, match="step 1 is not accepted"):
             X.plan_step(WAVE, 2, read=reader([]), root=tmp_path)
 
     def test_the_acceptance_reads_production_back_and_records_it_once(
-        self, tmp_path: Path, harvest: Path
+        self, tmp_path: Path, harvest: Path, refused: Path
     ) -> None:
-        out = self.plan(tmp_path, harvest)
+        out = self.plan(tmp_path, harvest, refused)
         lane = X.ext_lane(WAVE, 1)
         plan = [
             json.loads(x) for x in (out / "PLAN.jsonl").read_text(encoding="utf-8").splitlines()
@@ -438,3 +617,17 @@ class TestTheFetchTheWaveAndTheSteps:
         assert any(
             "rollback journal row" in f for f in X.deviations(lane, planned, {SITE: live()}, undone)
         )
+
+
+def test_the_cli_takes_each_command_s_own_arguments(tmp_path: Path) -> None:
+    """`fetch` and `wave` take a harvest, `step` and `accept` a step, `wave` also `--refused`."""
+    assert X.main(["fetch", "--wave", WAVE, "--harvest", str(tmp_path / "none")]) == 1
+    wave = ["wave", "--wave", "2026-10-25x", "--harvest", str(tmp_path)]
+    assert X.main([*wave, "--refused", str(tmp_path / "none.json")]) == 1
+    for bad in (
+        ["fetch", "--wave", WAVE, "--harvest", "h", "--step", "1"],
+        ["step", "--wave", WAVE],
+    ):
+        with pytest.raises(SystemExit) as exc:
+            X.main(bad)
+        assert exc.value.code == 2

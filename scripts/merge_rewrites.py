@@ -3,14 +3,14 @@
 
 Reads:  output/rewrite_output_00..09.json
 Reads:  output/card_descriptions.json (original)
-Writes: output/card_descriptions.json (candidate)
-Copies: public/data/card_descriptions.json - ONLY on a complete, valid, non-regressing run
+Writes: output/card_descriptions.json (candidate) - a local working file, nothing else
 
-NOT A REMEDIATION PATH (2026-09-23): it fails closed now (below), but it still writes
-output/card_descriptions.json and copies it over public/data/card_descriptions.json (PUBLIC, :69)
-without a journal row, and the file is what every API boot upserts into card_stats. The 2026-09
-remediation's cards are extractive and journalled: scripts/remediation/phase4/write4.py (group P5)
-and scripts/remediation/phase4/card_json.py, docs/procedures/CARD_DESCRIPTIONS.md.
+NOT A REMEDIATION PATH (2026-09-23): it fails closed (below) and publishes nothing. It used to copy
+its result over public/data/card_descriptions.json, the file every API boot upserted into
+card_stats; that boot import is gone since 2026-10-09 and the file itself since 2026-10-24 (owner
+decision D25: the database is the one copy of a card text), so the copy is gone too and the script
+must never bring the file back. A card text reaches production only through the journalled card
+lane: docs/procedures/CARD_DESCRIPTIONS.md.
 
 WHY THIS SCRIPT IS WRITTEN THIS WAY (it used to be a script that could not fail)
 The previous version reported success in situations where it had done nothing or done harm. Measured,
@@ -30,11 +30,10 @@ same fixture, all ten batch files missing:
 `sys.exit` appeared zero times in it. A caller could not distinguish "merged 4,996 rewrites" from
 "found no input and overwrote the deploy file with a copy of itself".
 
-This version fails closed. It writes NOTHING to public/data/ unless every one of these holds: all ten
+This version fails closed. It keeps the merged candidate only if every one of these holds: all ten
 batches present, every rewrite valid, at least one rewrite, the description count unchanged, and the
-re-validation flagging no more descriptions than before. Any failure exits non-zero, leaves
-public/data/ untouched, and restores output/card_descriptions.json to its pre-run content so the
-working tree is not left half-changed.
+re-validation flagging no more descriptions than before. Any failure exits non-zero and restores
+output/card_descriptions.json to its pre-run content so the working tree is not left half-changed.
 
 Two notes on how failures are reported, because the distinction matters here:
 
@@ -43,9 +42,9 @@ Two notes on how failures are reported, because the distinction matters here:
     still fails. It replaces a bare traceback with the name of the file that broke. Unexpected
     exceptions are deliberately NOT caught - a bug in this script must not be able to look like bad
     input, which is why there is no blanket `except Exception` here.
-  * Both writes go through a temp file and `os.replace`. Writing in place with mode "w" truncates
-    first, so a failure part-way through the dump would leave a *truncated* card_descriptions.json -
-    including the file api/main.py imports at startup. An atomic replace cannot leave a half file.
+  * Every write goes through a temp file and `os.replace`. Writing in place with mode "w" truncates
+    first, so a failure part-way through the dump would leave a *truncated* card_descriptions.json.
+    An atomic replace cannot leave a half file.
 
 Note on the validation gate: it compares the flagged COUNT before and after, because
 verify_descriptions.py's exit code carries no information. That script checks no facts (it counts
@@ -59,14 +58,12 @@ Exit codes: 1 input missing/unreadable, 2 incomplete batches, 3 invalid rewrites
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "output"
-PUBLIC = ROOT / "public" / "data" / "card_descriptions.json"
 DESCRIPTIONS = OUTPUT / "card_descriptions.json"
 FLAGS = OUTPUT / "verification_flags.json"
 
@@ -115,16 +112,6 @@ def write_json_atomic(path, document):
         # leave litter beside the deploy data.
         tmp.unlink(missing_ok=True)
         raise MergeInputError(f"{path} could not be written: {exc}") from None
-
-
-def copy_atomic(src, dst):
-    """Copy so that a failure cannot leave a truncated destination."""
-    tmp = dst.with_name(dst.name + ".tmp")
-    try:
-        shutil.copy2(src, tmp)
-        os.replace(tmp, dst)
-    except OSError as exc:
-        raise MergeInputError(f"{dst} could not be written: {exc}") from None
 
 
 def collect_rewrites():
@@ -191,8 +178,8 @@ def merge():
     if not DESCRIPTIONS.exists():
         return fail(
             EXIT_INPUT,
-            f"{DESCRIPTIONS} does not exist. See the bootstrap in "
-            "docs/procedures/FIELD_CONTRACT.md (copy public/data/card_descriptions.json back).",
+            f"{DESCRIPTIONS} does not exist: the script merges into an existing local working "
+            "file and creates none.",
         )
 
     original = read_json(DESCRIPTIONS, "the description file")
@@ -266,7 +253,7 @@ def merge():
         return fail(
             EXIT_INPUT,
             f"the re-validation could not be read (returncode {rc}). The working copy was rolled "
-            "back to its pre-run content and public/data/ was not touched.",
+            "back to its pre-run content.",
         )
     print(f"after merge: {after} descriptions flagged (baseline {before})")
 
@@ -275,13 +262,10 @@ def merge():
         return fail(
             EXIT_REGRESSED,
             f"the merge flagged {after - before} more description(s) than before "
-            f"({before} -> {after}). The working copy was rolled back to its pre-run content and "
-            "public/data/ was NOT touched.",
+            f"({before} -> {after}). The working copy was rolled back to its pre-run content.",
         )
 
-    # 6. Only now is the deploy-relevant file written.
-    copy_atomic(DESCRIPTIONS, PUBLIC)
-    print(f"copied to {PUBLIC}")
+    # 6. The candidate stays in the working file; nothing is published (see the docstring).
     print(f"OK: applied {len(rewrites)} rewrites, flag count {before} -> {after}")
     return 0
 

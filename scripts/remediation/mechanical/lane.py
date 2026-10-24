@@ -983,6 +983,20 @@ def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     ROLLBACK.sql must stay what its plan renders (`tests/remediation/test_mechanical.py`,
     `TestTheDeliveredLanes`), so it keeps it.
     """
+    p = prefix
+    date = (
+        f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
+        f"ELSE {p}period_start END)"
+    )
+    cutoff = e3_cutoff_sql(p, before_o7=before_o7)
+    return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
+
+
+def e3_cutoff_sql(prefix: str = "", *, before_o7: bool = False) -> str:
+    """SQL: the E3 cutoff year of the row's region - `E3_CUTOFFS[e3_region(row)]`, Oceania first,
+    then the longitude window of the Americas, then the rest of the world. Only meaningful for a
+    row with a longitude (`e3_region` has no region without one); `before_o7` as in
+    `outside_e3_window`."""
     from pipeline.normalizers.dates import (
         AMERICAS_LON_MAX,
         AMERICAS_LON_MIN,
@@ -992,16 +1006,11 @@ def outside_e3_window(prefix: str = "", *, before_o7: bool = False) -> str:
     )
 
     p = prefix
-    date = (
-        f"(CASE WHEN {p}period_end IS NOT NULL AND {p}period_end <> 0 THEN {p}period_end "
-        f"ELSE {p}period_start END)"
-    )
     oceania = "" if before_o7 else f"WHEN {in_oceania_sql(p)} THEN {DATE_CUTOFF_OCEANIA} "
-    cutoff = (
+    return (
         f"(CASE {oceania}WHEN {p}lon BETWEEN {AMERICAS_LON_MIN} AND {AMERICAS_LON_MAX} "
         f"THEN {DATE_CUTOFF_AMERICAS} ELSE {DATE_CUTOFF_REST_OF_WORLD} END)"
     )
-    return f"({p}lon IS NOT NULL AND {date} > {cutoff})"
 
 
 _UNDECIDED_OUT_OF_WINDOW = Residual(

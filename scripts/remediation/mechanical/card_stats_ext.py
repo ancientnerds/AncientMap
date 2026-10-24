@@ -21,9 +21,24 @@ site page shows it only beside a non-English `source_language`, which this lane 
 * `heritage_designation` - the English labels of every best-rank P1435 value, `; `-joined in
   Wikidata's order; a value without an English label refuses the cell (it is never guessed);
 * `inception_year` - P571 at year precision or finer (9, 10, 11), when every such best-rank value
-  names one year and that year lies before 1500 (`fields/classify.MODERN`): a later inception is the
-  item's park, museum or designation, not the site's start (the 29 modern cases of
-  `period_wave/structured_refused.json`). A coarser value states no year.
+  names one year and that year passes every refusal of `plans/fields.md` trap 9 and the scope rule:
+  - before 1500 (`fields/classify.MODERN`): a later inception is the item's park, museum or
+    designation, not the site's start (the modern cases of `period_wave/structured_refused.json`);
+  - not a (QID, year) the period wave refused (`structured_refused.json`, `usable_as_period:
+    false`, read whole: the file is the trap's own list);
+  - within the site's E3 window (`pipeline.normalizers.dates`: 500 AD in the Old World, 1500 AD in
+    the Americas and Oceania): a P571 of 1165 on a Roman city is its medieval charter, a castle's or
+    a city wall's 1192 or 1336 is a medieval build - the project's scope has no medieval site, so
+    such a year is never a curated site's start. A site without a longitude has no region and
+    refuses the cell;
+  - within or before the band of the site's stored period: the year `passes_date_cutoff` reads
+    (`period_end or period_start`) falls in one of the nine `PERIOD_BUCKETS`, the band the card
+    shows (`categorize_period`), and the inception may not lie past that band's upper bound. A
+    period_start is often the band's edge, not a precise year (`bucket_edge`: a site the import
+    dates "3000 - 1500 BC" stores -3000), so the band and not the year is what the card asserts;
+    a year after it is a later phase. A site without a stored period refuses the cell (nothing to
+    check the year against).
+  A coarser value states no year.
 
 The item is read from a field harvest (`fields/harvest.py`: `<harvest>/entities/<QID>.json`, the raw
 `wbgetentities` answer). An item the harvest answered under another id (a merged item) refuses every
@@ -33,16 +48,29 @@ item-derived cell: the stored QID is stale, which is the external-id wave's repa
 
 `card-stats-ext-<wave>-sNNN`, a cell lane on `card_stats` (keyed by `site_id`) of at most 100 sites a
 step (D8), one journalled cell per filled column. It only **fills**: a cell whose stored value is not
-NULL is never planned (a differing one is listed). Guard 3 holds the NULL, guard 5 the site's two
-external ids the values were derived from - an id repaired after the plan refuses the step. The
-five columns are neither an input nor a cell of the card_stats recompute (`card_stats.COLUMNS`), so
-this lane and the recompute waves do not void each other's proof.
+NULL is never planned (a differing one is listed). Guard 3 holds the NULL, guard 5 what the values
+were derived from - the site's two external ids, its period and its place (the inception's checks):
+an id repaired or a period rewritten after the plan refuses the step. The five columns are neither
+an input nor a cell of the card_stats recompute (`card_stats.COLUMNS`), so this lane and the
+recompute waves do not void each other's proof.
+
+## Its place in the order: after every lane that writes a site's ids
+
+Because it only fills, a `wikidata_qid` or `best_wiki_url` it wrote is never corrected by a later
+wave of this lane: an id moved afterwards (a D13/D14 identity retarget, the stale-id and external-id
+waves, a qid repair) leaves the card on the old item, and the readback only counts it
+(`_QID_DRIFT`, and the best_wiki_url metric beside it). So the lane runs **after the last identity
+and id-repair lane is accepted** (the D13/D14 retarget, the scope window's retargets, the stale-id
+and external-id waves): `docs/procedures/FIELDS_WD5.md` section 13 orders it there. A card either
+metric names after that is an owner question (`owner_list_final.py` lists it), never a silent
+rewrite by this lane.
 
     M=scripts/remediation/mechanical
     H=<a field harvest root, e.g. output/remediation/fields/wd5/harvest>
     $M/card_stats_ext.py fetch  --wave W --harvest $H   (read-only production read; Wikidata GETs:
                                                          the missing items into $H, LABELS.json)
-    $M/card_stats_ext.py wave   --wave W --harvest $H   (read-only; WAVE.json, steps of 100)
+    $M/card_stats_ext.py wave   --wave W --harvest $H [--refused R]
+                                                        (read-only; WAVE.json, steps of 100)
     $M/card_stats_ext.py step   --wave W --step N       (read-only; PLAN.jsonl, ROLLBACK.sql)
     $M/apply.py --lane card-stats-ext-W-sNNN --emit | --rehearse | --probe-guards | --apply | --verify
     $M/apply.py --lane card-stats-ext-W-sNNN --rehearse-rollback
@@ -82,6 +110,7 @@ from mechanical.lane import (  # noqa: E402
     Column,
     Lane,
     Residual,
+    e3_cutoff_sql,
     journal_readback,
     sql_literal,
 )
@@ -98,12 +127,17 @@ from mechanical.plan import (  # noqa: E402
     write_rollback_sql,
     write_skipped_jsonl,
 )
+from pipeline.normalizers.dates import E3_CUTOFFS, e3_region  # noqa: E402
+from pipeline.utils.text import PERIOD_BUCKETS, categorize_period  # noqa: E402
 
 ROOT_NAME = "mechanical_card_stats_ext"
 ROOT = REPO / "output" / "remediation" / ROOT_NAME
 MAX_SITES = 100
 WAVE_FILE, WAVE_PIN_FILE, ACCEPTED_FILE = "WAVE.json", "WAVE.sha256", "ACCEPTED.json"
 LABELS_FILE = "LABELS.json"
+#: The period wave's refused structured dates (`plans/fields.md` trap 9): gitignored run data, so
+#: a worktree reads the main checkout's copy (`--refused` names another).
+REFUSED_PATH = Path("output") / "remediation" / "period_wave" / "structured_refused.json"
 RETIRED = "retired"
 ENWIKI = "https://en.wikipedia.org/wiki/"
 P_IMAGE, P_HERITAGE, P_INCEPTION = "P18", "P1435", "P571"
@@ -131,11 +165,15 @@ def _id_sql(kind: str, site: str = "u.id") -> str:
     )
 
 
-#: What the values are derived from: the site's two external ids, as text. Guard 5 refuses a site
-#: whose ids moved after the plan (the D25 id wave or a D13 retarget writes them).
+#: What the values are derived from: the site's two external ids, and its period and place (the
+#: inception's checks), as text. Guard 5 refuses a site whose ids moved after the plan (the D25 id
+#: wave or a D13 retarget writes them), or whose period or point was rewritten.
 PREMISE_SQL = (
     f"coalesce({_id_sql('wikidata_qid')}, '<NULL>') || '|' || "
-    f"coalesce({_id_sql('enwiki_title')}, '<NULL>')"
+    f"coalesce({_id_sql('enwiki_title')}, '<NULL>') || '|' || "
+    "concat_ws('|', coalesce(u.period_start::text, '<NULL>'), coalesce(u.period_end::text, "
+    "'<NULL>'), coalesce(u.country, '<NULL>'), coalesce(u.lat::text, '<NULL>'), "
+    "coalesce(u.lon::text, '<NULL>'))"
 )
 
 _QID_DRIFT = Residual(
@@ -178,6 +216,22 @@ def lane_of(name: str) -> Lane:
     return ext_lane(match.group(1), int(match.group(2)))
 
 
+#: `passes_date_cutoff`'s date in SQL: `period_end or period_start` (a 0 end falls through).
+_DATED = "coalesce(nullif(u.period_end, 0), u.period_start)"
+
+
+def band_end(year: int) -> int:
+    """The upper bound (exclusive) of the period band `year` falls in (`categorize_period`)."""
+    label = categorize_period(year)
+    return next(hi for name, _lo, hi in PERIOD_BUCKETS if name == label)
+
+
+#: `band_end(_DATED)` in SQL, rendered from the same table (the last band is open above).
+_BAND_END = (
+    "(CASE "
+    + " ".join(f"WHEN {_DATED} < {hi} THEN {hi}" for _name, _lo, hi in PERIOD_BUCKETS[:-1])
+    + f" ELSE {PERIOD_BUCKETS[-1][2]} END)"
+)
 _CARDS = "FROM card_stats cs JOIN unified_sites u ON u.id = cs.site_id WHERE u.source_id = 'ancient_nerds' AND "
 
 
@@ -201,6 +255,16 @@ def readback(lane: Lane) -> str:
             (
                 f"curated cards whose inception_year is from {C.MODERN} on",
                 _CARDS + f"cs.inception_year >= {int(C.MODERN)}",
+            ),
+            (
+                "curated cards whose inception_year lies past the site's E3 cutoff",
+                _CARDS + "cs.inception_year IS NOT NULL AND (u.lon IS NULL OR cs.inception_year > "
+                f"{e3_cutoff_sql('u.')})",
+            ),
+            (
+                "curated cards whose inception_year lies after the band of the site's period",
+                _CARDS + f"cs.inception_year IS NOT NULL AND ({_DATED} IS NULL OR "
+                f"cs.inception_year >= {_BAND_END})",
             ),
             (
                 "journal rows for this run that overwrite a value",
@@ -272,7 +336,10 @@ def heritage_designation(entity: Mapping[str, Any], labels: Mapping[str, str | N
     return Derived(SEPARATOR.join(names), "", f"P1435 {qids} -> {names}", P_HERITAGE)
 
 
-def inception_year(entity: Mapping[str, Any]) -> Derived:
+def inception_year(
+    entity: Mapping[str, Any], site: Live, refused: frozenset[tuple[str, int]]
+) -> Derived:
+    """P571 as the site's start, or why not (the module docstring's checks, in order)."""
     statements = best_rank(entity, P_INCEPTION)
     if not statements:
         return Derived(None, "no-p571", "the item has no P571 of the best rank")
@@ -293,14 +360,49 @@ def inception_year(entity: Mapping[str, Any]) -> Derived:
         return Derived(
             None, "inception-conflict", f"the best-rank P571 values name {sorted(set(years))}"
         )
-    if years[0] >= C.MODERN:
+    year = years[0]
+    if year >= C.MODERN:
         return Derived(
             None,
             "inception-modern",
-            f"P571 {years[0]} is from {C.MODERN} on: the item's park, museum or designation, not "
+            f"P571 {year} is from {C.MODERN} on: the item's park, museum or designation, not "
             "the site's start",
         )
-    return Derived(str(years[0]), "", f"P571 {years[0]}", P_INCEPTION)
+    if (str(entity.get("id")), year) in refused:
+        return Derived(
+            None,
+            "inception-refused-by-period-wave",
+            f"P571 {year} of {entity.get('id')} is in {REFUSED_PATH.name}: usable_as_period false",
+        )
+    region = e3_region({"lon": site.lon, "lat": site.lat, "country": site.country})
+    if region is None:
+        return Derived(
+            None,
+            "inception-region-unknown",
+            "the site has no longitude: its E3 cutoff, and so the year, cannot be checked",
+        )
+    if year > E3_CUTOFFS[region]:
+        return Derived(
+            None,
+            "inception-past-scope",
+            f"P571 {year} lies past the {region} cutoff of {E3_CUTOFFS[region]} AD: a medieval or "
+            "later charter, castle or wall, not the start of a site in the project's scope",
+        )
+    dated = site.period_end or site.period_start
+    if dated is None:
+        return Derived(
+            None,
+            "inception-without-period",
+            f"P571 {year}, but the site stores no period to check the year against",
+        )
+    if year >= band_end(dated):
+        return Derived(
+            None,
+            "inception-after-period",
+            f"P571 {year} lies after the band of the site's stored period ({dated}, "
+            f"{categorize_period(dated)!r}): a later phase, not the site's start",
+        )
+    return Derived(str(year), "", f"P571 {year}", P_INCEPTION)
 
 
 @dataclass(frozen=True)
@@ -316,10 +418,18 @@ class Live:
     has_card: bool
     stored: Mapping[str, str | None]
     premise: str
+    lat: float | None
+    lon: float | None
+    country: str | None
+    period_start: int | None
+    period_end: int | None
 
 
 def derive(
-    site: Live, entity: Mapping[str, Any] | None, labels: Mapping[str, str | None]
+    site: Live,
+    entity: Mapping[str, Any] | None,
+    labels: Mapping[str, str | None],
+    refused: frozenset[tuple[str, int]],
 ) -> dict[str, Derived]:
     """Every column's value for one site, or why there is none. Pure."""
     out: dict[str, Derived] = {}
@@ -357,7 +467,7 @@ def derive(
     else:
         out["commons_image"] = commons_image(entity)
         out["heritage_designation"] = heritage_designation(entity, labels)
-        out["inception_year"] = inception_year(entity)
+        out["inception_year"] = inception_year(entity, site, refused)
     return out
 
 
@@ -366,6 +476,7 @@ def classify(
     site: Live | None,
     entity: Mapping[str, Any] | None,
     labels: Mapping[str, str | None],
+    refused: frozenset[tuple[str, int]],
     *,
     entity_sha: str | None,
 ) -> list[Verdict]:
@@ -403,7 +514,7 @@ def classify(
                 "apply_remediation_change() only updates a row; the generator inserts it",
             )
         ]
-    derived = derive(site, entity, labels)
+    derived = derive(site, entity, labels, refused)
     out: list[Verdict] = []
     for cell in CELLS:
         column = cell.name
@@ -477,6 +588,7 @@ def build_step(
     entities: Mapping[str, Mapping[str, Any] | None],
     entity_shas: Mapping[str, str | None],
     labels: Mapping[str, str | None],
+    refused: frozenset[tuple[str, int]],
     *,
     built_at: str,
 ) -> StepPlan:
@@ -486,7 +598,9 @@ def build_step(
     verdicts = [
         v
         for s in sorted(sites)
-        for v in classify(s, live.get(s), entities.get(s), labels, entity_sha=entity_shas.get(s))
+        for v in classify(
+            s, live.get(s), entities.get(s), labels, refused, entity_sha=entity_shas.get(s)
+        )
     ]
     changes = tuple(v for v in verdicts if v.ok)
     skipped = tuple(v for v in verdicts if not v.ok)
@@ -526,6 +640,7 @@ def site_sql(site_ids: Iterable[str]) -> str:
     return (
         "SELECT u.id::text AS site_id, u.name, u.source_id, u.scope_status, "
         f"{_id_sql('wikidata_qid')} AS qid, {_id_sql('enwiki_title')} AS enwiki_title, "
+        "u.lat, u.lon, u.country, u.period_start, u.period_end, "
         "c.site_id IS NOT NULL AS has_card, "
         + ", ".join(f"c.{c}::text AS stored_{c}" for c in COLUMNS)
         + f", {PREMISE_SQL} AS premise FROM unified_sites u LEFT JOIN card_stats c ON "
@@ -545,6 +660,11 @@ def parse_sites(rows: Iterable[Mapping[str, Any]]) -> dict[str, Live]:
             has_card=bool(r["has_card"]),
             stored={c: r[f"stored_{c}"] for c in COLUMNS},
             premise=str(r["premise"]),
+            lat=None if r["lat"] is None else float(r["lat"]),
+            lon=None if r["lon"] is None else float(r["lon"]),
+            country=r["country"],
+            period_start=r["period_start"],
+            period_end=r["period_end"],
         )
         for r in rows
     }
@@ -637,6 +757,32 @@ def fetch(
     return {"sites": len(rows["site"]), "items": fetched, "designations": len(labels)}
 
 
+def default_refused() -> Path:
+    """The main checkout's `structured_refused.json` (a worktree carries no `output/`)."""
+    from identity.common import main_checkout
+
+    return main_checkout() / REFUSED_PATH
+
+
+def read_refused(path: Path) -> frozenset[tuple[str, int]]:
+    """Every (QID, year) the period wave refused as a P571 (`usable_as_period: false`). A record
+    without its QID, property, year or verdict refuses the file: the trap's list is read whole."""
+    if not path.exists():
+        raise PlanError(f"{path} is missing - the period wave's refused dates (fields.md trap 9)")
+    records = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(records, list) or not records:
+        raise PlanError(f"{path} is not a non-empty list of refused dates")
+    refused: set[tuple[str, int]] = set()
+    for n, r in enumerate(records):
+        if not {"qid", "property", "year", "usable_as_period"} <= set(r) or not isinstance(
+            r["year"], int
+        ):
+            raise PlanError(f"{path} record {n} lacks its qid, property, year or verdict: {r}")
+        if r["property"] == P_INCEPTION and r["usable_as_period"] is False:
+            refused.add((str(r["qid"]), int(r["year"])))
+    return frozenset(refused)
+
+
 def read_labels(wave: str, root: Path = ROOT) -> dict[str, str | None]:
     path = wave_dir(wave, root) / LABELS_FILE
     if not path.exists():
@@ -648,18 +794,20 @@ def read_labels(wave: str, root: Path = ROOT) -> dict[str, str | None]:
 def build_wave(
     wave: str,
     harvest: Path,
+    refused: Path,
     *,
     read: Callable[[str], str] = read_production,
     root: Path = ROOT,
 ) -> dict[str, Any]:
     """WAVE.json: the candidate sites in steps of 100, the harvest, the sha256 of each site's
-    entity file and of LABELS.json - from one read-only production read. Refused while an item
-    of a candidate is missing from the harvest."""
+    entity file, of LABELS.json and of the refused dates - from one read-only production read.
+    Refused while an item of a candidate is missing from the harvest."""
     ext_lane(wave, 1)
     target = wave_dir(wave, root)
     if (target / WAVE_FILE).exists():
         raise PlanError(f"{target / WAVE_FILE} exists: a wave is planned once")
     read_labels(wave, root)
+    read_refused(refused)
     rows, at = parse_tagged_export(
         read(tagged_export_script([("site", candidates_sql())])), ("site",)
     )
@@ -682,6 +830,8 @@ def build_wave(
         "read_at": at,
         "harvest": harvest.resolve().as_posix(),
         "labels_sha256": sha256_file(target / LABELS_FILE),
+        "refused": refused.resolve().as_posix(),
+        "refused_sha256": sha256_file(refused),
         "entity_sha256": dict(sorted(shas.items())),
         "sites": len(sites),
         "steps": steps,
@@ -723,6 +873,9 @@ def plan_step(
         )
     if sha256_file(wave_dir(wave, root) / LABELS_FILE) != record["labels_sha256"]:
         raise PlanError(f"{LABELS_FILE} is not the file wave {wave} was built from")
+    refused_path = Path(record["refused"])
+    if not refused_path.exists() or sha256_file(refused_path) != record["refused_sha256"]:
+        raise PlanError(f"{refused_path} is not the refused-dates file wave {wave} was built from")
     out = _step_dir(wave, step, root)
     if out.exists():
         raise PlanError(f"{out} exists: a step is planned once")
@@ -751,6 +904,7 @@ def plan_step(
         entities,
         shas,
         read_labels(wave, root),
+        read_refused(refused_path),
         built_at=datetime.now(UTC).isoformat(),
     )
     out.mkdir(parents=True)
@@ -854,12 +1008,19 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--harvest", type=Path, required=True, help="a field harvest root")
         else:
             command.add_argument("--step", type=int, required=True)
+        if name == "wave":
+            command.add_argument(
+                "--refused",
+                type=Path,
+                default=None,
+                help=f"the period wave's refused dates (default: the main checkout's {REFUSED_PATH})",
+            )
     args = parser.parse_args(argv)
     try:
         if args.command == "fetch":
             _print(fetch(args.wave, args.harvest))
         elif args.command == "wave":
-            _print(build_wave(args.wave, args.harvest))
+            _print(build_wave(args.wave, args.harvest, args.refused or default_refused()))
         elif args.command == "step":
             _print(plan_step(args.wave, args.step))
         else:
