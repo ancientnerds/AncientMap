@@ -35,6 +35,10 @@ already.**
 * Proposals closed by item or article: 11 (Colosseum, Carthage, Ephesus, Nineveh, Mohenjo-daro,
   Catalhoyuk, Tutankhamun's Tomb (KV62), Sanxingdui, Nan Madol, Mesa Verde - all `new` - and Chaco
   Canyon, `out_of_scope` on the park's 1980 designation date). L'Anse aux Meadows' proposal stays.
+* **5 of the 11 mirror a radar contribution** (`site_proposals.contribution_id`): Nineveh
+  (`919d5841`), KV62 (`99ee9d62`), Sanxingdui (`15718878`), Nan Madol (`565ea61e`) and Chaco Canyon
+  (`ec1e99a7`), all `enrichment_status = 'enriched'` with no `promoted_site_id` (read 2026-10-24).
+  The insert promotes each with its proposal (section 4); CANDIDATES.md flags them.
 * Proposals that name only the name are listed, never closed (a name does not say which place was
   meant: "Memphis" is also Memphis, Tennessee): Pantheon (needs_decision), Memphis (new), and
   `not_a_place` rows of Carthage, Nineveh, Pella, Susa, Caesarea Maritima; the plan lists those of
@@ -82,7 +86,7 @@ $I plan --run $R --step 1
 # 4. the write
 $I emit              --run $R --step 1      # APPLY.sql, pinned; refused without this plan's ROLLBACK.sql
 $I rehearse          --run $R --step 1      # COMMIT -> ROLLBACK on production, 0 journal rows after
-$I probe-guards      --run $R --step 1      # 7 corrupted copies, each refused by its own guard
+$I probe-guards      --run $R --step 1      # 8 corrupted copies (7 without a radar-backed proposal), each refused by its own guard
 $I apply             --run $R --step 1      # the one write, then the read-back
 $I readback          --run $R --step 1      # plan = journal = data, both ways
 $I rehearse-rollback --run $R --step 1      # the undo's guards on the landed rows, rolled back
@@ -120,29 +124,57 @@ row per written column, `old_value` NULL, `new_value` read back from the created
 * **`site_proposals`**: each open proposal naming the item or the article -> `approved`,
   `promoted_site_id`, `reviewed_by = 'remediation-d57'`, `reviewed_at`, `review_notes` (lane, D57,
   stamp, site), `updated_at`; journalled old -> new.
+* **`user_contributions`**: the radar row such a proposal mirrors -> `enrichment_status =
+  'promoted'`, `promoted_site_id` = the new site - what `POST /api/proposals/{id}/approve` does in its
+  own transaction (`_mirror_contribution`), so the radar counts the place as added and never offers
+  it for a second promotion; journalled old -> new (2 rows per contribution). The radar's counts
+  follow within its 60 s cache TTL (`api/routes/radar.py:CACHE_TTL`).
 
 Guards (before any write; `probe-guards` proves each): 1 no row holds the id or its page prefix; 2
 no curated row holds the `source_record_id`; 3 no curated row holds the item or the article; 4 no
-shown curated row carries the name key within 50 km; 5 every name key is Postgres' key; 6 every
-proposal still holds what the plan read; 7 a parent is a shown curated site of the child's country
-within 5 km at depth one. Invariants (after the writes): the rows stand as planned with a page
-(`curated_page`), the markers hash their values, exactly the planned names and ids, the proposals
-approved for the site, the D25 parent invariants, exactly the planned journal rows per site.
+shown curated row carries the name key - as its name or as any of its `unified_site_names` (label,
+alias, Wikidata alias: the Prospector's same-name rung) - within 50 km; 5 every name key is Postgres'
+key; 6 every proposal still holds what the plan read and mirrors the same contribution; 7 a parent
+is a shown curated site of the child's country within 5 km at depth one; 8 every radar contribution
+still holds what the plan read (and is not `promoted`). Invariants (after the writes): the rows stand
+as planned with a page (`curated_page`), the markers hash their values, exactly the planned names
+and ids, the proposals approved for the site, the contributions promoted to the site, the D25 parent
+invariants, exactly the planned journal rows per site.
+
+**The old-value guard rides on the two UPDATEs too.** `site_proposals` and `user_contributions` are
+no target of `apply_remediation_change()`, so their UPDATEs carry what it carries: every value the
+plan read is part of the UPDATE's own `WHERE` (`writer.proposal_held`, `writer.contribution_held`),
+and the transaction raises (`writer.WRITE_SAYS`) unless the UPDATE changed exactly the planned rows
+(`GET DIAGNOSTICS`). A founder who approves or merges a proposal in the admin UI between guard 6 and
+the write stops the insert instead of being overwritten, and the journal's `old_value` is the value
+the UPDATE replaced.
+
+**The lint judges code, not text** (`writer.code_of`): comments and quoted literals are blanked in one
+pass before it looks for `DELETE`, `TRUNCATE`, `DROP TABLE`, `ALTER TABLE` or a second
+`BEGIN`/`COMMIT`, so a web quote in `raw_data` or `evidence` that says DELETE does not refuse a plan.
+`plan` renders and lints both statements (`writer.render_checked`) **before** it writes any file of
+the step: a statement the lint refuses leaves no PLAN.jsonl behind to block the next `plan`.
 
 What the plan refuses (`REFUSALS.jsonl`, the owner list): `not-a-candidate`, `already-curated`,
 `name-*`, `coordinates-*`, `country-*`, `source_url-*` (`-unresolved`, `-held`, `-exhausted`),
 `country-disagrees` (the point is not in the country, D19's 2.5 km coast tolerance),
 `name-twin` (a shown curated namesake within 50 km - D14's question), `scope-after-1500`,
 `scope-d58-europe` (a start from 500 AD in a European country outside the Americas and Oceania),
-`parent-missing|retired|depth|far`, `proposal-promoted`, `proposal-contribution`. A type or a start
-nobody could source is written empty (`Undated`) and listed in PLAN.md.
+`parent-missing|retired|depth|far`, `proposal-promoted` (a proposal approved or merged already),
+`contribution-promoted` (the radar contribution a proposal mirrors is `promoted` or names a site: the
+radar created a row for the place - D14's question, never a second row). A radar contribution in any
+other state is promoted with its proposal, never a refusal. A type or a start nobody could source is
+written empty (`Undated`) and listed in PLAN.md.
 
 ## 5. Undo: retire, never delete
 
 `ROLLBACK.sql` (written by `plan`, pinned to the plan, rehearsed by `rehearse-rollback`) moves each
 site `in_scope -> retired` and its `scope_reason` to the undo's, through `apply_remediation_change()`
-(the scope lanes' write path), and restores each closed proposal to the values the plan read - one
-transaction, journalled under `<run stamp>-rollback`. The names and ids stay with the retired row:
+(the scope lanes' write path), and restores each closed proposal and each promoted radar
+contribution to the values the plan read - one transaction, journalled under `<run stamp>-rollback`.
+It locks those rows first (`FOR UPDATE`), refuses unless they still hold what the insert wrote
+(undo guards 2 and 3), restores only from those values (the same condition in the UPDATE's `WHERE`,
+the row count checked) and journals the values it replaced. The names and ids stay with the retired row:
 a retired site is hidden everywhere (its URL answers 410) but kept for matching, so the Prospector
 does not propose it again. Running it is a decision, never automatic:
 
@@ -178,13 +210,17 @@ insert: the plan refuses an item a curated row holds, retired or not.
    with no image row and no `thumbnail_url` (`candidate_search/population.py`) - the new sites are in
    it, with their item and article from `site_external_ids` and a sourced point (their
    `_coord_provenance`), so the geotag route searches around them.
-6. **Cards (WB, D53 judge)**: a new site has **no `card_stats` row** - the insert writes none, and
-   both the card lane and the card_stats lane only UPDATE (`apply_remediation_change()`; the
-   card_stats lane reports a missing row and writes nothing). So before its card: a journalled
-   `card_stats` row per new site (an insert step that this lane does not have - the orchestrator's
-   call; never `python -m api.cardgame.generator`, which rewrites every card unjournalled), then the
-   card_stats wave computes its stats, then `scripts/remediation/teaser/run.py select --sites
-   INSERTED_SITES.txt` after the description. The card_stats lane itself keeps working across the
+6. **Cards (WB, D53 judge) - OPEN, no path yet**: a new site has **no `card_stats` row** - the
+   insert writes none, and both the card lane and the card_stats lane only UPDATE
+   (`apply_remediation_change()`; the card_stats lane reports a missing row and writes nothing). So
+   the card part of D57 needs a follow-up task that does not exist yet: **a journalled `card_stats`
+   insert step for the rows of `INSERTED_SITES.txt`, built on this lane's pattern** (plan -> emit ->
+   rehearse -> probe-guards -> apply -> read-back -> accept, with its own journalled undo), owned by
+   the close-out orchestrator; never `python -m
+   api.cardgame.generator`, which rewrites every card unjournalled. Until it lands, the card waves
+   skip every new site and D57 is not done for cards. After it: the card_stats wave computes the
+   stats, then `scripts/remediation/teaser/run.py select --sites INSERTED_SITES.txt` after the
+   description. The card_stats lane itself keeps working across the
    insert: its counterfactual treats a site whose journalled insert lies after the basis horizon as
    absent at the basis (`mechanical/card_stats.counterfactual_sites`), and the new sites count in
    the next recompute's `mystery` shares, as the generator counts them.
@@ -196,8 +232,14 @@ insert: the plan refuses an item a curated row holds, retired or not.
 ## 7. Known limits
 
 * The SQL runs for the first time in the operator's rehearsal (there is no local Postgres). It was
-  parsed offline by libpg_query (pglast 8.7: the outer statements and the DO bodies of the apply, the
-  undo and all seven probes), and the plan's read ran read-only against production on 2026-10-24.
+  parsed offline by libpg_query (pglast 8.7, installed into a scratch directory, not the venv: the
+  outer statements and the DO bodies of the apply, the undo and all eight probes, for a step with a
+  radar-backed proposal, one with a plain proposal and one with none; re-run 2026-10-24 after the
+  contribution, old-value and alias changes), and the plan's read ran read-only against production
+  on 2026-10-24. Types are not checked offline: the rehearsal is the first semantic check.
+* The alias twin check (guard 4 and the plan's read) found no candidate refused on 2026-10-24: the
+  37 labels and articles match curated names or aliases only far away (Antioch of Pisidia 500 km,
+  Pella in Jordan 1,487 km, the Roman Circus of Merida 1,624 km).
 * D58's "medieval Europe" is applied mechanically as a start from 500 AD in a country the frontend's
   continent map calls Europe; a Byzantine subject outside it (Anatolia) is a pinned exclusion, not a
   rule. No candidate falls in that band outside the Americas and Oceania.

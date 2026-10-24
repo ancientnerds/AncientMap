@@ -502,27 +502,38 @@ def read_candidates(run: Path) -> list[dict[str, Any]]:
 def report(lines: Sequence[Mapping[str, Any]]) -> str:
     """`CANDIDATES.md`: the counts, then one row per candidate."""
     counts = Counter(str(line["status"]) for line in lines)
-    closing = sum(
-        1
+    open_proposals = [
+        p
         for line in lines
         if line["status"] == CANDIDATE
         for p in line["proposals"]
         if p["status"] not in CLOSED_PROPOSALS
-    )
+    ]
+    closing = len(open_proposals)
+    radar = sum(1 for p in open_proposals if p["contribution_id"] is not None)
     out = [
         "# D57 insert lane - the candidate list",
         "",
         f"{len(lines)} candidates: "
         + ", ".join(f"{counts.get(s, 0)} {s}" for s in STATUSES)
         + f". The {counts.get(CANDIDATE, 0)} candidates name {closing} open proposal(s) by item or "
-        "article (the rows the insert closes).",
+        f"article (the rows the insert closes); {radar} of them mirror a radar contribution, which "
+        "the insert marks promoted in the same transaction (`plan._proposals`).",
         "",
         "| # | item | name (label) | English article | status | proposals (item/article) | "
         "name-only proposals | name twins | parent |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for number, line in enumerate(lines, start=1):
-        proposals = "; ".join(f"{p['name']} ({p['status']})" for p in line["proposals"]) or "-"
+        proposals = (
+            "; ".join(
+                f"{p['name']} ({p['status']}"
+                + (f", radar contribution {p['contribution_id']}" if p["contribution_id"] else "")
+                + ")"
+                for p in line["proposals"]
+            )
+            or "-"
+        )
         named = "; ".join(f"{p['name']} ({p['status']})" for p in line["name_proposals"]) or "-"
         twins = (
             "; ".join(f"{t['name']} ({t['country']}, {t['metres']} m)" for t in line["name_twins"])

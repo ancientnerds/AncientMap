@@ -21,7 +21,12 @@ Beside the row, in the same transaction, what a curated site carries in its own 
   `refresh_site_external_ids` writes only for sites without one, so it leaves these alone);
 * `site_proposals` - every open proposal that names the item or the article, closed as `approved`
   with `promoted_site_id` (D57); a proposal that names only the name is listed in PLAN.md, never
-  closed.
+  closed;
+* `user_contributions` - the radar row a closed proposal mirrors (`contribution_id`), marked
+  `enrichment_status = 'promoted'` with `promoted_site_id`: what `POST /api/proposals/{id}/approve`
+  does in its own transaction (`_mirror_contribution`), so the radar counts the place as added and
+  never offers it for a second promotion. 5 of the 11 proposals of `d57-2026-10-24` mirror one
+  (Nineveh, KV62, Sanxingdui, Nan Madol, Chaco Canyon; all `enriched` on 2026-10-24).
 
 **`raw_data`** carries the provenance: `_insert_provenance` (the decision, the run, the item, every
 field's quotes and who answered them, the description's sources), and the two markers the fields
@@ -39,14 +44,16 @@ inserted and goes on the owner list):
 * its name, point, country or page has no counted, resolved answer (`<field>-unresolved`,
   `<field>-held`, `<field>-exhausted`) - a type or a start nobody could source does not refuse;
 * its country does not hold its point (`country-disagrees`: `bcases.classify.country_after_move`
-  with D19's coast tolerance), or a shown curated row carries its name within `NAME_TWIN_METRES`
+  with D19's coast tolerance), or a shown curated row carries its name - as its own name or as any
+  of its `unified_site_names`, the Prospector's same-name rung - within `NAME_TWIN_METRES`
   (`name-twin`: a possible duplicate is D14's question, never a second row);
 * the scope rule D58 keeps it out: a start after 1500 (`scope-after-1500`), or a start from 500 AD in
   a European country outside the Americas and Oceania (`scope-d58-europe`, the medieval Old World);
 * its pinned parent is not one shown curated site of its country within 5 km at depth one
   (`parent-*`, the D25 lane's invariants);
-* a proposal it would close is already promoted or merged, or mirrors a radar contribution
-  (`proposal-promoted`, `proposal-contribution`: the radar's own row is not this lane's to change).
+* a proposal it would close is already promoted or merged (`proposal-promoted`), or mirrors a
+  radar contribution that names a site already (`contribution-promoted`: the radar created a row for
+  the place). A contribution in any other state is promoted with the proposal, as the API does.
 
     PY=./.venv/Scripts/python.exe
     $PY scripts/remediation/insert_site/run.py plan --run d57-2026-10-24 --step 1   (read-only)
@@ -125,6 +132,20 @@ PROPOSAL_COLUMNS = (
     "review_notes",
     "updated_at",
 )
+#: The radar contribution's columns the insert writes and the undo restores (`_mirror_contribution`
+#: in `api/routes/proposals.py` writes these two), each compared as text.
+CONTRIBUTION_COLUMNS = ("enrichment_status", "promoted_site_id")
+PROMOTED = "promoted"
+
+
+def twin_predicate(site: str, key: str) -> str:
+    """A curated row `site` carries the name key `key`: as its own `name_normalized`, or as any of
+    its `unified_site_names` (label, alias, Wikidata alias - the Prospector's same-name rung). The
+    plan's read and APPLY's guard 4 share it."""
+    return (
+        f"({site}.name_normalized = {key} OR EXISTS (SELECT 1 FROM unified_site_names tn "
+        f"WHERE tn.site_id = {site}.id AND tn.name_normalized = {key}))"
+    )
 
 
 class InsertPlanError(ValueError):
@@ -188,16 +209,22 @@ class Insert:
         return {k: v for k, v in out.items() if v is not None}
 
     @property
+    def contributions(self) -> list[dict[str, Any]]:
+        """The radar contributions the closed proposals mirror, each with the values it holds."""
+        return [p["contribution"] for p in self.proposals if p["contribution"] is not None]
+
+    @property
     def journal_rows(self) -> int:
         """The rows the journal must carry for this site: the row's columns (`raw_data` and
         `updated_at` are written too and journalled from the row), four per name row, one per
-        external id, six per closed proposal."""
+        external id, six per closed proposal, two per promoted radar contribution."""
         return (
             len(self.site_columns())
             + 2
             + 4 * len(self.names)
             + len(self.external_ids)
             + len(PROPOSAL_COLUMNS) * len(self.proposals)
+            + len(CONTRIBUTION_COLUMNS) * len(self.contributions)
         )
 
     def as_json(self) -> dict[str, Any]:
@@ -375,17 +402,22 @@ def read_sql(
         (
             "twins",
             f"SELECT k.qid, u.id::text AS site_id, u.name, u.country, round(ST_DistanceSphere("
-            f"ST_MakePoint(u.lon, u.lat), ST_MakePoint(k.lon, k.lat))::numeric) AS metres FROM {k} "
+            f"ST_MakePoint(u.lon, u.lat), ST_MakePoint(k.lon, k.lat))::numeric) AS metres, "
+            f"(SELECT min(tn.name) FROM unified_site_names tn WHERE tn.site_id = u.id AND "
+            f"tn.name_normalized = {site_key_sql('k.name')}) AS as_name FROM {k} "
             f"JOIN unified_sites u ON u.source_id = '{CURATED}' AND {not_retired('u')} "
-            f"AND u.name_normalized = {site_key_sql('k.name')}",
+            f"AND {twin_predicate('u', site_key_sql('k.name'))}",
         ),
         (
             "proposals",
             "SELECT k.qid, p.id::text AS proposal_id, p.name, p.aliases, p.status, "
             "p.promoted_site_id::text AS promoted_site_id, p.contribution_id::text AS "
             "contribution_id, p.reviewed_by, p.reviewed_at::text AS reviewed_at, p.review_notes, "
-            f"p.updated_at::text AS updated_at FROM {k} "
-            "JOIN site_proposals p ON p.wikidata_qid = k.qid OR p.enwiki_title = k.title",
+            "p.updated_at::text AS updated_at, c.enrichment_status AS contribution_status, "
+            f"c.promoted_site_id::text AS contribution_promoted FROM {k} "
+            "JOIN site_proposals p ON p.wikidata_qid = k.qid OR p.enwiki_title = k.title "
+            # the FK is ON DELETE SET NULL: a non-NULL contribution_id always finds its row
+            "LEFT JOIN user_contributions c ON c.id = p.contribution_id",
         ),
         (
             "parents",
@@ -625,7 +657,12 @@ def build_inserts(
         if near:
             refuse(
                 "name-twin",
-                "; ".join(f"{t['name']} ({t['site_id']}, {t['metres']} m)" for t in near),
+                "; ".join(
+                    f"{t['name']}"
+                    + (f" as {t['as_name']!r}" if t.get("as_name") not in (None, t["name"]) else "")
+                    + f" ({t['site_id']}, {t['metres']} m)"
+                    for t in near
+                ),
             )
             continue
         start_text = _value(mine, "period_start")
@@ -747,7 +784,8 @@ def _parent(
 def _proposals(
     found: Sequence[Mapping[str, Any]],
 ) -> tuple[list[dict[str, Any]], tuple[str, str] | None]:
-    """The open proposals to close, each with the values it holds now; or why the site is refused."""
+    """The open proposals to close, each with the values it holds now and the radar contribution
+    it mirrors (promoted with it, as `approve_proposal` does); or why the site is refused."""
     closing = []
     for p in sorted(found, key=lambda p: str(p["proposal_id"])):
         if p["status"] in C.CLOSED_PROPOSALS:
@@ -756,18 +794,30 @@ def _proposals(
                 f"proposal {p['proposal_id']} ({p['name']}) is {p['status']}"
                 + (f", promoted to {p['promoted_site_id']}" if p["promoted_site_id"] else ""),
             )
+        contribution = None
         if p["contribution_id"] is not None:
-            return [], (
-                "proposal-contribution",
-                f"proposal {p['proposal_id']} mirrors the radar contribution "
-                f"{p['contribution_id']}, which this lane does not change",
-            )
+            if p["contribution_status"] == PROMOTED or p["contribution_promoted"] is not None:
+                return [], (
+                    "contribution-promoted",
+                    f"proposal {p['proposal_id']} mirrors the radar contribution "
+                    f"{p['contribution_id']}, which is {p['contribution_status']} and names the "
+                    f"site {p['contribution_promoted']}",
+                )
+            contribution = {
+                "contribution_id": str(p["contribution_id"]),
+                "old": {
+                    "enrichment_status": p["contribution_status"],
+                    "promoted_site_id": p["contribution_promoted"],
+                },
+            }
         closing.append(
             {
                 "proposal_id": str(p["proposal_id"]),
                 "name": str(p["name"]),
                 "aliases": list(p["aliases"] or []),
                 "old": {c: p[c] for c in PROPOSAL_COLUMNS},
+                "contribution_id": p["contribution_id"],
+                "contribution": contribution,
             }
         )
     return closing, None
@@ -826,6 +876,11 @@ def load_step(target: Path) -> Step:
     return step
 
 
+def _closed(proposal: Mapping[str, Any]) -> str:
+    c = proposal["contribution"]
+    return proposal["name"] + (f" (radar {c['contribution_id']})" if c is not None else "")
+
+
 def render_md(step: Step) -> str:
     refused = Counter(r.reason for r in step.refusals)
     out = [
@@ -835,10 +890,11 @@ def render_md(step: Step) -> str:
         f"{len(step.inserts)} site(s) to insert, {len(step.refusals)} refused"
         + (f" ({', '.join(f'{k} {v}' for k, v in sorted(refused.items()))})" if refused else "")
         + f"; {sum(len(i.proposals) for i in step.inserts)} proposal(s) to close, "
-        f"{sum(i.journal_rows for i in step.inserts)} journal rows.",
+        f"{sum(len(i.contributions) for i in step.inserts)} radar contribution(s) to mark "
+        f"promoted, {sum(i.journal_rows for i in step.inserts)} journal rows.",
         "",
         "| item | name | country | point | type | start | period | page | parent | names | "
-        "proposals closed |",
+        "proposals closed (radar contribution promoted) |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for i in step.inserts:
@@ -847,7 +903,7 @@ def render_md(step: Step) -> str:
             f"{i.site_type or '-'} | {i.period_start if i.period_start is not None else '-'} | "
             f"{i.period_name} | {i.source_url} | {i.parent_site_id or '-'} | "
             f"{', '.join(n['name'] for n in i.names)} | "
-            f"{', '.join(p['name'] for p in i.proposals) or '-'} |"
+            f"{', '.join(_closed(p) for p in i.proposals) or '-'} |"
         )
     if step.refusals:
         out += ["", "## Refused (the owner list)", "", "| item | name | reason | detail |"]

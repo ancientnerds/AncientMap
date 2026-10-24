@@ -26,23 +26,35 @@ which is how `probe-guards` tells that the right one refused):
    resolves a page by that prefix, `api/routes/sites_html.py`);
 2. no curated row holds a planned `source_record_id` (`d57-<QID>`, unique per source);
 3. no curated row holds the item or the article in `site_external_ids` (the site exists already);
-4. no shown curated row carries the name's key within `plan.NAME_TWIN_METRES` (a possible D14
-   duplicate);
+4. no shown curated row carries the name's key, as its name or as one of its
+   `unified_site_names`, within `plan.NAME_TWIN_METRES` (a possible D14 duplicate);
 5. every planned name key is the key Postgres gives the name (`site_key_sql`);
-6. every proposal the step closes still holds each value the plan read;
+6. every proposal the step closes still holds each value the plan read (and mirrors the same
+   radar contribution);
 7. a planned parent is a shown curated site of the child's country within 5 km at depth one (the
-   D25 lane's invariants, `mechanical/lane.parent_invariants`, checked again after the write).
+   D25 lane's invariants, `mechanical/lane.parent_invariants`, checked again after the write);
+8. every radar contribution the step promotes still holds the values the plan read.
+
+**The old-value guard rides on the write too.** `site_proposals` and `user_contributions` are no
+target of `apply_remediation_change()`, so their UPDATEs carry what that function carries: every
+value the plan read is part of the UPDATE's own `WHERE`, and the transaction raises unless the
+UPDATE changed exactly the planned rows. A founder who approves or merges a proposal between guard 6
+and the write therefore stops the insert instead of being overwritten, and the journal's `old_value`
+(the plan's value) is the value the UPDATE replaced.
 
 **The invariants** (after the writes, same transaction): each row stands with its planned values,
 its key, its point and its bucket label, and has a page (`curated_page`); its two `field_prov`
 markers hash the values they describe; each site has exactly its planned names and ids; each closed
-proposal is `approved` and names the site; the parent invariants hold; and the journal holds exactly
-the planned rows per site.
+proposal is `approved` and names the site; each mirrored radar contribution is `promoted` and names
+the site (`api/routes/proposals.py:_mirror_contribution`); the parent invariants hold; and the
+journal holds exactly the planned rows per site.
 
 **The undo is a retirement, never a DELETE** (`ancient_nerds` is a protected source). `ROLLBACK.sql`
 moves each site `in_scope -> retired` and its reason to the undo's, through
 `apply_remediation_change()` - the scope lanes' own write path - under the stamp
-`<run stamp>-rollback`, and puts each closed proposal back to the values the plan read. The site's
+`<run stamp>-rollback`, and puts each closed proposal and each promoted radar contribution back to
+the values the plan read (locked first, then restored only from the values the insert wrote, the
+row count checked). The site's
 names and ids stay with the retired row: a retired site is hidden everywhere but kept for matching
 (migration 0020), so the Prospector does not propose it again. Running it is a decision, never
 automatic: `ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map
@@ -104,6 +116,13 @@ GUARD_SAYS = {
         "planned site(s) name a parent that is not a shown curated site of their country within "
         f"{PARENT_METRES} m at depth one"
     ),
+    8: "planned radar contribution(s) no longer hold the values the plan read",
+}
+#: What the old-value check on a write says: the UPDATE changed fewer rows than planned, because a
+#: row no longer held the values the plan read when the UPDATE reached it.
+WRITE_SAYS = {
+    "proposals": "planned proposal(s) changed between their guard and their write",
+    "contributions": "planned radar contribution(s) changed between their guard and their write",
 }
 INVARIANT_SAYS = {
     "rows": "inserted site(s) do not stand as planned",
@@ -111,15 +130,22 @@ INVARIANT_SAYS = {
     "names": "inserted site(s) do not hold exactly their planned names",
     "ids": "inserted site(s) do not hold exactly their planned external ids",
     "proposals": "closed proposal(s) do not name the inserted site as approved",
+    "contributions": "promoted radar contribution(s) do not name the inserted site",
     "parents": "inserted site(s) break a parent invariant",
     "journal": "inserted site(s) do not have exactly their planned journal rows",
 }
 UNDO_SAYS = {
     1: "planned site(s) no longer hold the scope the insert wrote",
     2: "planned proposal(s) no longer hold what the insert wrote",
+    3: "planned radar contribution(s) no longer hold what the insert wrote",
     "rows": "undone site(s) are not retired with the reason of the undo",
     "proposals": "restored proposal(s) do not hold the values the plan read",
+    "contributions": "restored radar contribution(s) do not hold the values the plan read",
     "journal": "the undo did not journal exactly its planned rows",
+}
+UNDO_WRITE_SAYS = {
+    "proposals": "planned proposal(s) changed between their guard and their restore",
+    "contributions": "planned radar contribution(s) changed between their guard and their restore",
 }
 
 
@@ -216,7 +242,23 @@ def _proposal_rows(step: P.Step, inserts: Sequence[P.Insert]) -> list[str]:
                 f"    ({_lit(p['proposal_id'])}::uuid, {_lit(i.site_id)}::uuid, "
                 f"{_lit(review_notes(step, i.site_id))}, "
                 + ", ".join(_lit(old[c]) for c in P.PROPOSAL_COLUMNS)
-                + f", {_lit(i.change_key)})"
+                + f", {_lit(p['contribution_id'])}, {_lit(i.change_key)})"
+            )
+    return rows
+
+
+def _contribution_rows(inserts: Sequence[P.Insert]) -> list[str]:
+    rows = []
+    for i in inserts:
+        for p in i.proposals:
+            c = p["contribution"]
+            if c is None:
+                continue
+            old = c["old"]
+            rows.append(
+                f"    ({_lit(c['contribution_id'])}::uuid, {_lit(i.site_id)}::uuid, "
+                f"{_lit(old['enrichment_status'])}, "
+                f"{_lit(old['promoted_site_id'])}, {_lit(i.change_key)})"
             )
     return rows
 
@@ -254,7 +296,15 @@ _PROPOSAL_TEMP = (
     "    old_reviewed_at   TEXT,\n"
     "    old_review_notes  TEXT,\n"
     "    old_updated_at    TEXT NOT NULL,\n"
+    "    contribution_id   TEXT,\n"
     "    change_key        TEXT NOT NULL"
+)
+_CONTRIBUTION_TEMP = (
+    "    contribution_id       UUID NOT NULL UNIQUE,\n"
+    "    site_id               UUID NOT NULL,\n"
+    "    old_enrichment_status TEXT,\n"
+    "    old_promoted          TEXT,\n"
+    "    change_key            TEXT NOT NULL"
 )
 
 
@@ -289,6 +339,50 @@ def _old(column: str) -> str:
     return {"promoted_site_id": "old_promoted"}.get(column, f"old_{column}")
 
 
+def _written(stamp: str, says: str, table: str, journal_per_row: int) -> str:
+    """After a `WITH upd AS (UPDATE ...) INSERT INTO remediation_change_log ...`: raise unless the
+    UPDATE changed every row of `table` (each changed row journals `journal_per_row` rows)."""
+    return (
+        "    GET DIAGNOSTICS written = ROW_COUNT;\n"
+        f"    bad := (SELECT count(*) FROM {table}) - written / {journal_per_row};\n"
+        f"    IF bad <> 0 THEN\n        {_raise(stamp, says)}\n    END IF;\n"
+    )
+
+
+def proposal_held(sp: str = "sp", q: str = "q") -> str:
+    """The proposal still holds every value the plan read, and mirrors the same contribution: the
+    UPDATE's own old-value condition (guard 6 is its negation)."""
+    return " AND ".join(
+        [f"{sp}.{c}::text IS NOT DISTINCT FROM {q}.{_old(c)}" for c in P.PROPOSAL_COLUMNS]
+        + [f"{sp}.contribution_id::text IS NOT DISTINCT FROM {q}.contribution_id"]
+    )
+
+
+def contribution_held(uc: str = "uc", c: str = "c") -> str:
+    """The radar contribution still holds the values the plan read (guard 8 is its negation)."""
+    return (
+        f"{uc}.enrichment_status::text IS NOT DISTINCT FROM {c}.old_enrichment_status AND "
+        f"{uc}.promoted_site_id::text IS NOT DISTINCT FROM {c}.old_promoted"
+    )
+
+
+def proposal_written(sp: str = "sp", q: str = "q") -> str:
+    """The proposal holds what the insert wrote (the undo's guard 2 and its restore's condition)."""
+    return (
+        f"{sp}.status = 'approved' AND {sp}.promoted_site_id IS NOT DISTINCT FROM {q}.site_id AND "
+        f"{sp}.reviewed_by IS NOT DISTINCT FROM {_lit(P.REVIEWED_BY)} AND {sp}.review_notes IS NOT "
+        f"DISTINCT FROM {q}.review_notes"
+    )
+
+
+def contribution_written(uc: str = "uc", c: str = "c") -> str:
+    """The contribution holds what the insert wrote (the undo's guard 3 and its restore's condition)."""
+    return (
+        f"{uc}.enrichment_status IS NOT DISTINCT FROM {_lit(P.PROMOTED)} AND "
+        f"{uc}.promoted_site_id IS NOT DISTINCT FROM {c}.site_id"
+    )
+
+
 _JOURNAL = (
     "INSERT INTO remediation_change_log\n"
     "        (run_stamp, test_id, table_name, column_name, row_pk, old_value, new_value,\n"
@@ -305,7 +399,6 @@ def _metres(a: str, b: str) -> str:
 def apply_guards() -> dict[int, str]:
     """Each guard's query over the plan's temp tables: a row for every planned row it refuses."""
     curated = sql_literal(P.CURATED)
-    held = " ".join(f"OR sp.{c}::text IS DISTINCT FROM q.{_old(c)}" for c in P.PROPOSAL_COLUMNS)
     return {
         1: f"SELECT p.site_id FROM _ins_site p JOIN unified_sites u ON u.id >= {_LO} AND u.id <= {_HI}",
         2: (
@@ -319,7 +412,7 @@ def apply_guards() -> dict[int, str]:
         ),
         4: (
             f"SELECT p.site_id FROM _ins_site p JOIN unified_sites u ON u.source_id = {curated} "
-            f"AND {not_retired('u')} AND u.name_normalized = p.name_key "
+            f"AND {not_retired('u')} AND {P.twin_predicate('u', 'p.name_key')} "
             f"AND {_metres('u', 'p')} <= {P.NAME_TWIN_METRES}"
         ),
         5: (
@@ -328,7 +421,8 @@ def apply_guards() -> dict[int, str]:
         ),
         6: (
             "SELECT q.proposal_id FROM _ins_prop q LEFT JOIN site_proposals sp ON sp.id = "
-            f"q.proposal_id WHERE sp.id IS NULL OR sp.status IN ('approved', 'merged') {held}"
+            "q.proposal_id WHERE sp.id IS NULL OR sp.status IN ('approved', 'merged') OR NOT "
+            f"({proposal_held()})"
         ),
         7: (
             "SELECT p.site_id FROM _ins_site p LEFT JOIN unified_sites s ON s.id = "
@@ -336,6 +430,11 @@ def apply_guards() -> dict[int, str]:
             f"s.source_id <> {curated} OR s.scope_status IS NOT DISTINCT FROM "
             f"{sql_literal(RETIRED)} OR s.parent_site_id IS NOT NULL OR s.country IS DISTINCT "
             f"FROM p.country OR {_metres('s', 'p')} > {PARENT_METRES})"
+        ),
+        8: (
+            "SELECT c.contribution_id FROM _ins_contrib c LEFT JOIN user_contributions uc ON "
+            f"uc.id = c.contribution_id WHERE uc.id IS NULL OR uc.enrichment_status IS NOT "
+            f"DISTINCT FROM {_lit(P.PROMOTED)} OR NOT ({contribution_held()})"
         ),
     }
 
@@ -404,6 +503,10 @@ def apply_invariants(stamp: str) -> dict[str, str]:
             f"IS DISTINCT FROM q.site_id OR sp.reviewed_by IS DISTINCT FROM {_lit(P.REVIEWED_BY)} "
             "OR sp.review_notes IS DISTINCT FROM q.review_notes"
         ),
+        "contributions": (
+            "SELECT c.contribution_id FROM _ins_contrib c LEFT JOIN user_contributions uc ON "
+            f"uc.id = c.contribution_id WHERE uc.id IS NULL OR NOT ({contribution_written()})"
+        ),
         "parents": (
             "SELECT p.site_id FROM _ins_site p JOIN unified_sites u ON u.id = p.site_id WHERE "
             f"p.parent_site_id IS NOT NULL AND ({parent_bad})"
@@ -439,6 +542,7 @@ def render_apply(step: P.Step) -> str:
     )
     site_values = ",\n".join(f"            ({_lit(c)}, {e})" for c, e in SITE_JOURNAL)
     proposals = _values_block("_ins_prop", _proposal_rows(step, step.inserts))
+    contributions = _values_block("_ins_contrib", _contribution_rows(step.inserts))
     sites = _values_block("_ins_site", _site_rows(step.inserts))
     names = _values_block("_ins_name", _name_rows(step.inserts))
     ext = _values_block("_ins_ext", _ext_rows(step.inserts))
@@ -475,9 +579,14 @@ CREATE TEMP TABLE _ins_prop (
 {_PROPOSAL_TEMP}
 ) ON COMMIT DROP;
 {proposals}
+CREATE TEMP TABLE _ins_contrib (
+{_CONTRIBUTION_TEMP}
+) ON COMMIT DROP;
+{contributions}
 DO $$
 DECLARE
-    bad integer;
+    bad     integer;
+    written integer;
 BEGIN
 {guards}
     -- the rows
@@ -525,7 +634,8 @@ BEGIN
            NULL, ins.value, p.change_key || ':ext:' || ins.kind, {conf}, p.evidence, ins.site_id
       FROM ins JOIN _ins_site p ON p.site_id = ins.site_id;
 
-    -- the proposals the insert closes (D57: approved, with promoted_site_id)
+    -- the proposals the insert closes (D57: approved, with promoted_site_id), each only while it
+    -- holds every value the plan read - the old-value guard of apply_remediation_change()
     WITH upd AS (
         UPDATE site_proposals sp
            SET status = 'approved', promoted_site_id = q.site_id,
@@ -533,6 +643,7 @@ BEGIN
                review_notes = q.review_notes, updated_at = now()
           FROM _ins_prop q
          WHERE sp.id = q.proposal_id
+           AND {proposal_held()}
         RETURNING sp.id, sp.status, sp.promoted_site_id, sp.reviewed_by, sp.reviewed_at,
                   sp.review_notes, sp.updated_at, q.site_id AS for_site, q.old_status,
                   q.old_promoted, q.old_reviewed_by, q.old_reviewed_at, q.old_review_notes,
@@ -549,7 +660,26 @@ BEGIN
             ('reviewed_at', upd.old_reviewed_at, upd.reviewed_at::text),
             ('review_notes', upd.old_review_notes, upd.review_notes),
             ('updated_at', upd.old_updated_at, upd.updated_at::text)) AS t(col, old, val);
-
+{_written(stamp, WRITE_SAYS["proposals"], "_ins_prop", len(P.PROPOSAL_COLUMNS))}
+    -- the radar contributions those proposals mirror: promoted with the site, as
+    -- POST /api/proposals/{{id}}/approve does (_mirror_contribution), under the same guard
+    WITH upd AS (
+        UPDATE user_contributions uc
+           SET enrichment_status = {_lit(P.PROMOTED)}, promoted_site_id = c.site_id
+          FROM _ins_contrib c
+         WHERE uc.id = c.contribution_id
+           AND {contribution_held()}
+        RETURNING uc.id, uc.enrichment_status, uc.promoted_site_id, c.site_id AS for_site,
+                  c.old_enrichment_status, c.old_promoted)
+    {_JOURNAL}
+    SELECT {st}, {test}, 'user_contributions', t.col, upd.id::text, t.old, t.val,
+           p.change_key || ':contribution:' || upd.id::text || ':' || t.col, {conf}, p.evidence,
+           upd.for_site
+      FROM upd JOIN _ins_site p ON p.site_id = upd.for_site
+     CROSS JOIN LATERAL (VALUES
+            ('enrichment_status', upd.old_enrichment_status, upd.enrichment_status::text),
+            ('promoted_site_id', upd.old_promoted, upd.promoted_site_id::text)) AS t(col, old, val);
+{_written(stamp, WRITE_SAYS["contributions"], "_ins_contrib", len(P.CONTRIBUTION_COLUMNS))}
 {checks}END $$;
 
 SELECT '{READBACK_LABEL}', count(*)::text FROM remediation_change_log WHERE run_stamp = {st};
@@ -600,9 +730,11 @@ def undo_checks(stamp: str, planned: int) -> dict[Any, str]:
         ),
         2: (
             "SELECT q.proposal_id FROM _ins_prop q LEFT JOIN site_proposals sp ON sp.id = "
-            "q.proposal_id WHERE sp.id IS NULL OR sp.status <> 'approved' OR sp.promoted_site_id "
-            f"IS DISTINCT FROM q.site_id OR sp.reviewed_by IS DISTINCT FROM {_lit(P.REVIEWED_BY)} "
-            "OR sp.review_notes IS DISTINCT FROM q.review_notes"
+            f"q.proposal_id WHERE sp.id IS NULL OR NOT ({proposal_written()})"
+        ),
+        3: (
+            "SELECT c.contribution_id FROM _ins_contrib c LEFT JOIN user_contributions uc ON "
+            f"uc.id = c.contribution_id WHERE uc.id IS NULL OR NOT ({contribution_written()})"
         ),
         "rows": (
             "SELECT p.site_id FROM _ins_undo p LEFT JOIN unified_sites u ON u.id = p.site_id "
@@ -612,6 +744,10 @@ def undo_checks(stamp: str, planned: int) -> dict[Any, str]:
         "proposals": (
             "SELECT q.proposal_id FROM _ins_prop q JOIN site_proposals sp ON sp.id = "
             f"q.proposal_id WHERE {restored}"
+        ),
+        "contributions": (
+            "SELECT c.contribution_id FROM _ins_contrib c JOIN user_contributions uc ON uc.id = "
+            f"c.contribution_id WHERE NOT ({contribution_held()})"
         ),
         "journal": (
             "SELECT 1 FROM (SELECT count(*) AS n FROM remediation_change_log WHERE run_stamp = "
@@ -634,22 +770,31 @@ def render_rollback(step: P.Step) -> str:
         for seq, i in enumerate(step.inserts, start=1)
     ]
     proposal_rows = _proposal_rows(step, step.inserts)
-    planned = 2 * len(step.inserts) + len(P.PROPOSAL_COLUMNS) * len(proposal_rows)
+    contribution_rows = _contribution_rows(step.inserts)
+    planned = (
+        2 * len(step.inserts)
+        + len(P.PROPOSAL_COLUMNS) * len(proposal_rows)
+        + len(P.CONTRIBUTION_COLUMNS) * len(contribution_rows)
+    )
     checks = undo_checks(stamp, planned)
-    guards = "".join(f"    -- guard {n}\n" + _check(stamp, UNDO_SAYS[n], checks[n]) for n in (1, 2))
+    guards = "".join(
+        f"    -- guard {n}\n" + _check(stamp, UNDO_SAYS[n], checks[n]) for n in (1, 2, 3)
+    )
     invariants = "".join(
         f"    -- invariant: {n}\n" + _check(stamp, UNDO_SAYS[n], checks[n])
-        for n in ("rows", "proposals", "journal")
+        for n in ("rows", "proposals", "contributions", "journal")
     )
     undo = _values_block("_ins_undo", undo_rows)
     proposals = _values_block("_ins_prop", proposal_rows)
+    contributions = _values_block("_ins_contrib", contribution_rows)
     retired = _lit(RETIRED)
     in_scope = _lit(P.IN_SCOPE)
     return f"""-- Generated by scripts/remediation/insert_site/writer.py - do not edit by hand.
 {pin_line(step.digest)}
 -- The undo of lane {C.LANE!r} (D57), run stamp {step.run_stamp!r}: {len(step.inserts)} site(s)
 -- retired (never deleted - ancient_nerds is a protected source), {len(proposal_rows)} proposal(s)
--- restored. Journalled under {stamp!r}. Running it is a decision, never automatic.
+-- and {len(contribution_rows)} radar contribution(s) restored. Journalled under {stamp!r}.
+-- Running it is a decision, never automatic.
 \\set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL lock_timeout = '{LOCK_TIMEOUT}';
@@ -668,11 +813,22 @@ CREATE TEMP TABLE _ins_prop (
 {_PROPOSAL_TEMP}
 ) ON COMMIT DROP;
 {proposals}
+CREATE TEMP TABLE _ins_contrib (
+{_CONTRIBUTION_TEMP}
+) ON COMMIT DROP;
+{contributions}
 DO $$
 DECLARE
-    bad integer;
-    r   RECORD;
+    bad     integer;
+    written integer;
+    r       RECORD;
 BEGIN
+    -- the rows the undo restores, locked before they are judged: the journal reads their values
+    -- before the restore, and nobody may change them in between
+    PERFORM 1 FROM site_proposals sp JOIN _ins_prop q ON q.proposal_id = sp.id
+      ORDER BY sp.id FOR UPDATE OF sp;
+    PERFORM 1 FROM user_contributions uc JOIN _ins_contrib c ON c.contribution_id = uc.id
+      ORDER BY uc.id FOR UPDATE OF uc;
 {guards}
     -- the retirement, through the scope lanes' one write path
     FOR r IN SELECT * FROM _ins_undo ORDER BY seq LOOP
@@ -698,6 +854,7 @@ BEGIN
                review_notes = q.old_review_notes, updated_at = q.old_updated_at::timestamptz
           FROM _ins_prop q
          WHERE sp.id = q.proposal_id
+           AND {proposal_written()}
         RETURNING sp.id, sp.status, sp.promoted_site_id::text AS promoted, sp.reviewed_by,
                   sp.reviewed_at::text AS reviewed_at, sp.review_notes,
                   sp.updated_at::text AS updated_at, q.site_id AS for_site, q.change_key)
@@ -712,7 +869,25 @@ BEGIN
             ('reviewed_at', b.reviewed_at, upd.reviewed_at),
             ('review_notes', b.review_notes, upd.review_notes),
             ('updated_at', b.updated_at, upd.updated_at)) AS t(col, old, val);
-
+{_written(stamp, UNDO_WRITE_SAYS["proposals"], "_ins_prop", len(P.PROPOSAL_COLUMNS))}
+    -- the radar contributions, back to the values the plan read
+    WITH upd AS (
+        UPDATE user_contributions uc
+           SET enrichment_status = c.old_enrichment_status, promoted_site_id = c.old_promoted::uuid
+          FROM _ins_contrib c
+         WHERE uc.id = c.contribution_id
+           AND {contribution_written()}
+        RETURNING uc.id, uc.enrichment_status, uc.promoted_site_id::text AS promoted,
+                  c.site_id AS for_site, c.change_key)
+    {_JOURNAL}
+    SELECT {st}, {test}, 'user_contributions', t.col, upd.id::text, t.old, t.val,
+           upd.change_key || ':undo:contribution:' || upd.id::text || ':' || t.col, {conf},
+           u.evidence, upd.for_site
+      FROM upd JOIN _ins_undo u ON u.site_id = upd.for_site
+     CROSS JOIN LATERAL (VALUES
+            ('enrichment_status', {_lit(P.PROMOTED)}, upd.enrichment_status::text),
+            ('promoted_site_id', upd.for_site::text, upd.promoted)) AS t(col, old, val);
+{_written(stamp, UNDO_WRITE_SAYS["contributions"], "_ins_contrib", len(P.CONTRIBUTION_COLUMNS))}
 {invariants}END $$;
 
 SELECT '{READBACK_LABEL}', count(*)::text FROM remediation_change_log WHERE run_stamp = {st};
@@ -720,11 +895,42 @@ COMMIT;
 """
 
 
+def code_of(sql: str) -> str:
+    """The statement as code: every `-- comment` dropped to its line end and every `'literal'`
+    blanked to `''`, in one pass (a quote inside a comment opens no literal, `--` inside a literal
+    opens no comment). The literals carry web quotes (`raw_data`, `evidence`), and a quote that says
+    DELETE is text, not a statement (`gallery_audit/chunk_writer.py`'s rule)."""
+    out: list[str] = []
+    i, end = 0, len(sql)
+    while i < end:
+        ch = sql[i]
+        if ch == "-" and sql.startswith("--", i):
+            stop = sql.find("\n", i)
+            i = end if stop < 0 else stop
+        elif ch == "'":
+            j = i + 1
+            while True:
+                j = sql.find("'", j)
+                if j < 0:
+                    raise WriterError("the statement holds an unterminated literal")
+                if sql.startswith("''", j):
+                    j += 2
+                    continue
+                break
+            out.append("''")
+            i = j + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
 def lint(sql: str, kind: str) -> None:
-    """Refuse anything but this lane's two shapes (`import_hero/insert.lint_statement`'s rules)."""
+    """Refuse anything but this lane's two shapes (`import_hero/insert.lint_statement`'s rules),
+    judged on the code (`code_of`): neither a comment nor a quoted text can trip or pass it."""
     if kind not in ("apply", "rollback"):
         raise WriterError(f"unknown statement kind {kind!r}")
-    code = "\n".join(line for line in sql.splitlines() if not line.strip().startswith("--"))
+    code = code_of(sql)
     begins = re.findall(r"(?im)^BEGIN;\s*$", code)
     commits = list(re.finditer(r"(?im)^COMMIT;\s*$", code))
     if len(begins) != 1 or len(commits) != 1:
@@ -732,19 +938,31 @@ def lint(sql: str, kind: str) -> None:
             f"the statement must open and close one transaction: {len(begins)} BEGIN, "
             f"{len(commits)} COMMIT"
         )
-    for forbidden in ("DELETE", "TRUNCATE", "DROP TABLE", "ALTER TABLE"):
-        if forbidden in code:
+    for forbidden in (r"DELETE", r"TRUNCATE", r"DROP\s+TABLE", r"ALTER\s+TABLE"):
+        if re.search(rf"\b{forbidden}\b", code, re.IGNORECASE):
             raise WriterError(f"{forbidden} is not a statement this lane may make")
-    inserting = "INSERT INTO unified_sites" in code
+    inserting = re.search(r"\bINSERT\s+INTO\s+unified_sites\b", code) is not None
     if kind == "apply" and not inserting:
         raise WriterError("the statement creates no unified_sites row")
     if kind == "rollback":
         if inserting:
             raise WriterError("an undo creates no row")
-        if "apply_remediation_change('unified_sites', 'scope_status'" not in code:
+        if (
+            "apply_remediation_change('unified_sites', 'scope_status'" not in sql
+            or "PERFORM apply_remediation_change(''" not in code
+        ):
             raise WriterError("the undo retires through apply_remediation_change()")
     if "remediation_change_log" not in code[: commits[0].start()]:
         raise WriterError("the statement journals nothing before its COMMIT")
+
+
+def render_checked(step: P.Step) -> tuple[str, str]:
+    """APPLY.sql and ROLLBACK.sql rendered and linted, before any file of the step is written:
+    `run.py plan` calls it first, so a statement the lint refuses leaves no plan behind."""
+    apply_sql, rollback_sql = render_apply(step), render_rollback(step)
+    lint(apply_sql, "apply")
+    lint(rollback_sql, "rollback")
+    return apply_sql, rollback_sql
 
 
 # ------------------------------------------------------------------------------------ the files
@@ -842,6 +1060,20 @@ def readback(step: P.Step, *, read=None) -> list[str]:
         if proposal_ids
         else {}
     )
+    contribution_ids = [c["contribution_id"] for i in step.inserts for c in i.contributions]
+    contribs = (
+        {
+            str(r["id"]): r
+            for r in read(
+                "SELECT id::text AS id, enrichment_status, promoted_site_id::text AS "
+                "promoted_site_id FROM user_contributions WHERE id IN ("
+                + ", ".join(f"{_lit(x)}::uuid" for x in contribution_ids)
+                + ")"
+            )
+        }
+        if contribution_ids
+        else {}
+    )
     journal = read(
         "SELECT site_id_ref::text AS site_id, table_name, column_name, new_value, test_id, "
         f"confidence FROM remediation_change_log WHERE run_stamp = {_lit(step.run_stamp)}"
@@ -891,6 +1123,14 @@ def readback(step: P.Step, *, read=None) -> list[str]:
                 or got["review_notes"] != review_notes(step, i.site_id)
             ):
                 problems.append(f"{i.qid}: proposal {p['proposal_id']} is {got}")
+        for c in i.contributions:
+            held_c = contribs.get(c["contribution_id"])
+            if (
+                held_c is None
+                or held_c["enrichment_status"] != P.PROMOTED
+                or held_c["promoted_site_id"] != i.site_id
+            ):
+                problems.append(f"{i.qid}: radar contribution {c['contribution_id']} is {held_c}")
         logged = by_site.get(i.site_id, [])
         if len(logged) != i.journal_rows:
             problems.append(
@@ -929,6 +1169,39 @@ def rollback_readback(step: P.Step, *, read=None) -> list[str]:
     ]
     if len(rows) != len(step.inserts):
         problems.append(f"{len(rows)} of {len(step.inserts)} planned rows exist")
+    proposals = [p for i in step.inserts for p in i.proposals]
+    if proposals:
+        held = {
+            str(r["id"]): r
+            for r in read(
+                "SELECT id::text AS id, "
+                + ", ".join(f"{c}::text AS {c}" for c in P.PROPOSAL_COLUMNS)
+                + " FROM site_proposals WHERE id IN ("
+                + ", ".join(f"{_lit(p['proposal_id'])}::uuid" for p in proposals)
+                + ")"
+            )
+        }
+        for p in proposals:
+            got = held.get(p["proposal_id"])
+            if got is None or any(got[c] != p["old"][c] for c in P.PROPOSAL_COLUMNS):
+                problems.append(f"proposal {p['proposal_id']} is {got}, not {p['old']}")
+    contributions = [c for i in step.inserts for c in i.contributions]
+    if contributions:
+        held = {
+            str(r["id"]): r
+            for r in read(
+                "SELECT id::text AS id, enrichment_status, promoted_site_id::text AS "
+                "promoted_site_id FROM user_contributions WHERE id IN ("
+                + ", ".join(f"{_lit(c['contribution_id'])}::uuid" for c in contributions)
+                + ")"
+            )
+        }
+        for c in contributions:
+            got = held.get(c["contribution_id"])
+            if got is None or any(got[k] != c["old"][k] for k in P.CONTRIBUTION_COLUMNS):
+                problems.append(
+                    f"radar contribution {c['contribution_id']} is {got}, not {c['old']}"
+                )
     return problems
 
 
@@ -1095,6 +1368,26 @@ def probe_cases(step: P.Step) -> list[tuple[int, P.Step]]:
             i if i is not proposal_holder else replace(i, proposals=moved) for i in step.inserts
         ]
         out.append((6, replace(step, inserts=others)))
+    contribution_holder = next((i for i in step.inserts if i.contributions), None)
+    if contribution_holder is not None:
+        # production holds no promoted_site_id on a contribution the plan promotes (`plan._proposals`
+        # refuses one that names a site), so a shown site's id is a value it never holds
+        k = next(n for n, p in enumerate(contribution_holder.proposals) if p["contribution"])
+        p = contribution_holder.proposals[k]
+        c = p["contribution"]
+        corrupted = {
+            **p,
+            "contribution": {**c, "old": {**c["old"], "promoted_site_id": str(shown["site_id"])}},
+        }
+        moved = [
+            *contribution_holder.proposals[:k],
+            corrupted,
+            *contribution_holder.proposals[k + 1 :],
+        ]
+        others = [
+            i if i is not contribution_holder else replace(i, proposals=moved) for i in step.inserts
+        ]
+        out.append((8, replace(step, inserts=others)))
     return sorted(out, key=lambda c: c[0])
 
 

@@ -334,6 +334,15 @@ class TestTheResolution:
         text = C.report([candidate(), candidate(qid="Q2", status=C.EXCLUDED, reason="D58")])
         assert "2 candidates: 1 candidate, 1 excluded" in text and "| Q2 |" in text
 
+    def test_the_report_flags_a_radar_backed_proposal(self) -> None:
+        backed = {"proposal_id": "p1", "name": "Chaco Canyon", "status": "out_of_scope",
+                  "contribution_id": "ec1e99a7"}  # fmt: skip
+        plain = {**backed, "proposal_id": "p2", "name": "Chaco", "contribution_id": None}
+        text = C.report([candidate(proposals=[backed, plain])])
+        assert "2 open proposal(s)" in text and "1 of them mirror a radar contribution" in text
+        assert "Chaco Canyon (out_of_scope, radar contribution ec1e99a7)" in text
+        assert "Chaco (out_of_scope)" in text
+
 
 # ------------------------------------------------------------------------------------ research
 class TestTheQuestion:
@@ -500,6 +509,8 @@ class TestTheRounds:
 # ------------------------------------------------------------------------------------ the plan
 SITE_ID = "a1b2c3d4-0000-4000-8000-000000000001"
 PARENT_ID = "07ea80ce-863f-43b9-8f7e-d155a0182f4f"
+#: Chaco Canyon's radar contribution (`enriched`, no site, read 2026-10-24)
+CONTRIBUTION = "ec1e99a7-f2dd-48ad-bbd4-cb4926ce46a5"
 
 
 def decided(**override: Any) -> dict[str, dict[str, Any]]:
@@ -552,9 +563,16 @@ def proposal(**extra: Any) -> dict[str, Any]:
         "reviewed_at": None,
         "review_notes": None,
         "updated_at": "2026-09-15 10:00:00+00",
+        "contribution_status": None,
+        "contribution_promoted": None,
     }
     row.update(extra)
     return row
+
+
+def radar_backed(**extra: Any) -> dict[str, Any]:
+    """A proposal that mirrors a radar contribution, as 5 of D57's 11 do."""
+    return proposal(contribution_id=CONTRIBUTION, contribution_status="enriched", **extra)
 
 
 def read_rows(**override: Any) -> dict[str, list[dict[str, Any]]]:
@@ -756,11 +774,60 @@ class TestTheRefusals:
         ("change", "reason"),
         [
             ({"status": "approved", "promoted_site_id": "x"}, "proposal-promoted"),
-            ({"contribution_id": "c"}, "proposal-contribution"),
+            (
+                {"contribution_status": "promoted", "contribution_promoted": "s"},
+                "contribution-promoted",
+            ),
+            ({"contribution_promoted": "s"}, "contribution-promoted"),
+            ({"contribution_status": "promoted"}, "contribution-promoted"),
         ],
     )
     def test_a_proposal_the_lane_cannot_close_refuses_the_site(self, change, reason) -> None:
+        if reason == "contribution-promoted":
+            change = {"contribution_id": CONTRIBUTION, **change}
         assert self._refused(build(rows=read_rows(proposals=[proposal(**change)]))) == reason
+
+    def test_a_radar_backed_proposal_is_closed_and_its_contribution_promoted(self) -> None:
+        """The radar row is promoted with the proposal (`_mirror_contribution`), never a refusal:
+        Chaco Canyon, Nineveh, KV62, Sanxingdui and Nan Madol all carry one."""
+        [row] = build(rows=read_rows(proposals=[radar_backed()])).inserts
+        [p] = row.proposals
+        assert p["contribution_id"] == CONTRIBUTION
+        assert row.contributions == [
+            {
+                "contribution_id": CONTRIBUTION,
+                "old": {"enrichment_status": "enriched", "promoted_site_id": None},
+            }
+        ]
+        assert row.journal_rows == len(row.site_columns()) + 2 + 4 * 3 + 2 + 6 + 2
+
+    def test_a_proposal_without_a_contribution_promotes_none(self) -> None:
+        [row] = build().inserts
+        assert row.proposals[0]["contribution"] is None and row.contributions == []
+
+    def test_a_curated_alias_twin_nearby_is_refused_and_named(self) -> None:
+        twin = {"qid": COLOSSEUM, "site_id": "t", "name": "Flavian Amphitheatre",
+                "as_name": "Colosseum", "country": "Italy", "metres": 40}  # fmt: skip
+        step = build(rows=read_rows(twins=[twin]))
+        assert self._refused(step) == "name-twin"
+        assert "as 'Colosseum'" in step.refusals[0].detail
+
+    def test_the_twin_read_and_guard_4_read_the_curated_names_too(self) -> None:
+        [(_, sql)] = [part for part in P.read_sql([site()], []) if part[0] == "twins"]
+        key = "left(lower(unaccent(k.name)), 500)"
+        assert (
+            f"(u.name_normalized = {key} OR EXISTS (SELECT 1 FROM unified_site_names tn "
+            f"WHERE tn.site_id = u.id AND tn.name_normalized = {key}))"
+        ) in sql
+        assert (
+            "(u.name_normalized = p.name_key OR EXISTS (SELECT 1 FROM unified_site_names tn "
+            "WHERE tn.site_id = u.id AND tn.name_normalized = p.name_key))"
+        ) in W.apply_guards()[4]
+
+    def test_the_proposal_read_carries_the_radar_row(self) -> None:
+        [(_, sql)] = [part for part in P.read_sql([site()], []) if part[0] == "proposals"]
+        assert "LEFT JOIN user_contributions c ON c.id = p.contribution_id" in sql
+        assert "c.enrichment_status AS contribution_status" in sql
 
 
 def tagged(rows: dict[str, list[dict[str, Any]]]) -> str:
@@ -843,6 +910,17 @@ def step() -> P.Step:
     return build()
 
 
+@pytest.fixture
+def radar_step() -> P.Step:
+    return build(rows=read_rows(proposals=[radar_backed()]))
+
+
+def _between(sql: str, start: str, stop: str) -> str:
+    """The text of `sql` from `start` up to the next `stop`."""
+    at = sql.index(start)
+    return sql[at : sql.index(stop, at)]
+
+
 def landed(step: P.Step) -> Any:
     """A fake read-only reader that answers as production would after the step committed."""
     i = step.inserts[0]
@@ -887,11 +965,21 @@ def landed(step: P.Step) -> Any:
                  "reviewed_by": P.REVIEWED_BY, "review_notes": W.review_notes(step, i.site_id)}
                 for p in i.proposals
             ]  # fmt: skip
+        if "FROM user_contributions" in sql:
+            return [
+                {"id": c["contribution_id"], "enrichment_status": "promoted",
+                 "promoted_site_id": i.site_id}
+                for c in i.contributions
+            ]  # fmt: skip
         if "FROM remediation_change_log" in sql:
             return journal
         raise AssertionError(sql)
 
     return read
+
+
+def _lit_uuid(value: str) -> str:
+    return f"'{value}'::uuid"
 
 
 def code(sql: str) -> str:
@@ -945,9 +1033,46 @@ class TestTheStatements:
         assert "u.name_normalized = p.name_key" in g[4]
         assert f"<= {P.NAME_TWIN_METRES}" in g[4]
         assert "n.name_key IS DISTINCT FROM left(lower(unaccent(n.name)), 500)" in g[5]
+        assert f"NOT ({W.proposal_held()})" in g[6]
         for column in P.PROPOSAL_COLUMNS:
-            assert f"sp.{column}::text IS DISTINCT FROM" in g[6]
+            assert f"sp.{column}::text IS NOT DISTINCT FROM q.{W._old(column)}" in g[6]
+        assert "sp.contribution_id::text IS NOT DISTINCT FROM q.contribution_id" in g[6]
         assert "s.parent_site_id IS NOT NULL" in g[7] and f"> {W.PARENT_METRES}" in g[7]
+        assert "uc.enrichment_status IS NOT DISTINCT FROM 'promoted'" in g[8]
+        assert f"NOT ({W.contribution_held()})" in g[8]
+
+    def test_each_update_carries_its_old_values_and_counts_its_rows(self, radar_step) -> None:
+        """The old-value guard rides on the write itself (`apply_remediation_change`'s pattern): a
+        proposal or contribution changed after guard 6/8 is skipped by the UPDATE, and the row count
+        then stops the transaction instead of a lost update with a journal that lies."""
+        sql = W.render_apply(radar_step)
+        proposals = _between(sql, "UPDATE site_proposals sp", "RETURNING")
+        assert f"WHERE sp.id = q.proposal_id\n           AND {W.proposal_held()}" in proposals
+        contributions = _between(sql, "UPDATE user_contributions uc", "RETURNING")
+        assert "SET enrichment_status = 'promoted', promoted_site_id = c.site_id" in contributions
+        assert f"AND {W.contribution_held()}" in contributions
+        assert sql.count("GET DIAGNOSTICS written = ROW_COUNT;") == 2
+        assert "bad := (SELECT count(*) FROM _ins_prop) - written / 6;" in sql
+        assert "bad := (SELECT count(*) FROM _ins_contrib) - written / 2;" in sql
+        for says in W.WRITE_SAYS.values():
+            assert says in sql
+        assert sql.index(W.WRITE_SAYS["proposals"]) < sql.index("UPDATE user_contributions")
+        assert f"({_lit_uuid(CONTRIBUTION)}, " in sql and "'enriched'" in sql
+
+    def test_the_undo_locks_and_restores_only_what_the_insert_wrote(self, radar_step) -> None:
+        sql = W.render_rollback(radar_step)
+        W.lint(sql, "rollback")
+        assert sql.index("FOR UPDATE OF sp;") < sql.index("-- guard 1")
+        assert sql.index("FOR UPDATE OF uc;") < sql.index("-- guard 1")
+        proposals = _between(sql, "UPDATE site_proposals sp", "RETURNING")
+        assert f"AND {W.proposal_written()}" in proposals
+        contributions = _between(sql, "UPDATE user_contributions uc", "RETURNING")
+        assert "SET enrichment_status = c.old_enrichment_status" in contributions
+        assert f"AND {W.contribution_written()}" in contributions
+        for says in [*W.UNDO_SAYS.values(), *W.UNDO_WRITE_SAYS.values()]:
+            assert says in sql
+        # 2 per site, 6 per proposal, 2 per contribution
+        assert "c.n <> 10" in sql
 
     def test_each_invariant_reads_what_it_names(self, step: P.Step) -> None:
         inv = W.apply_invariants(step.run_stamp)
@@ -958,6 +1083,7 @@ class TestTheStatements:
         assert "_coord_provenance" in inv["markers"] and "_period_provenance" in inv["markers"]
         assert "COALESCE(l.n, 0) <> p.journal_rows" in inv["journal"]
         assert "sp.promoted_site_id IS DISTINCT FROM q.site_id" in inv["proposals"]
+        assert W.contribution_written() in inv["contributions"]
 
     def test_the_undo_moves_in_scope_to_retired_and_nothing_else(self, step: P.Step) -> None:
         sql = W.render_rollback(step)
@@ -984,11 +1110,32 @@ class TestTheStatements:
         sql = W.rehearsal_of(W.render_apply(step), "APPLY.sql")
         assert sql.endswith("\nROLLBACK;\n") and "\nCOMMIT;\n" not in sql
 
+    def test_the_lint_reads_code_and_not_literals_or_comments(self, step: P.Step) -> None:
+        """A web quote in `raw_data` may say anything; a plan must not fail on it after its files
+        exist. A comment with an apostrophe opens no literal, `--` in a literal opens no comment."""
+        [row] = step.inserts
+        quoted = P.Insert(**{**row.__dict__, "raw_data": {**row.raw_data, "q": (
+            "They DELETE nothing; ALTER TABLE x; DROP TABLE y; TRUNCATE z; -- not a comment\n"
+            "COMMIT;\nBEGIN;\nINSERT INTO unified_sites")}})  # fmt: skip
+        bare = P.Step(run="d57-test", number=1, inserts=[quoted])
+        bare.probe = step.probe
+        W.render_checked(bare)
+        assert W.code_of("-- the lane's 'x\nSELECT 'a--b', 'it''s';") == "\nSELECT '', '';"
+        with pytest.raises(W.WriterError, match="unterminated"):
+            W.code_of("SELECT 'open")
+
+    @pytest.mark.parametrize("word", ["DELETE FROM x", "delete from x", "ALTER  TABLE x"])
+    def test_the_lint_still_refuses_the_word_in_code(self, step: P.Step, word: str) -> None:
+        sql = W.render_apply(step).replace("\nCOMMIT;\n", f"\n{word};\nCOMMIT;\n")
+        with pytest.raises(W.WriterError, match="not a statement"):
+            W.lint(sql, "apply")
+
     def test_a_step_without_proposals_renders(self, step: P.Step) -> None:
         bare = P.Step(run="d57-test", number=1, inserts=[
             P.Insert(**{**step.inserts[0].__dict__, "proposals": []})])  # fmt: skip
         W.lint(W.render_apply(bare), "apply")
         assert "INSERT INTO _ins_prop VALUES" not in W.render_apply(bare)
+        assert "INSERT INTO _ins_contrib VALUES" not in W.render_apply(bare)
 
 
 class TestTheFiles:
@@ -1025,6 +1172,30 @@ class TestTheFiles:
             W.check_delivered(target)
 
 
+class TestThePlanCommand:
+    def test_a_statement_the_lint_refuses_leaves_no_plan_behind(self, run, step, monkeypatch):
+        monkeypatch.setattr(RUN, "_country_check", lambda: agrees)
+        monkeypatch.setattr(RUN.P, "plan_step", lambda *a, **k: step)
+
+        def refuse(sql: str, kind: str) -> None:
+            raise W.WriterError(f"{kind} refused")
+
+        monkeypatch.setattr(W, "lint", refuse)
+        with pytest.raises(W.WriterError, match="refused"):
+            RUN.plan(run, 1)
+        target = P.step_dir(run, 1)
+        assert not (target / P.PLAN_FILE).exists() and not (target / P.STEP_FILE).exists()
+
+    def test_a_clean_plan_writes_the_plan_and_its_undo(self, run, radar_step, monkeypatch):
+        monkeypatch.setattr(RUN, "_country_check", lambda: agrees)
+        monkeypatch.setattr(RUN.P, "plan_step", lambda *a, **k: radar_step)
+        out = RUN.plan(run, 1)
+        target = P.step_dir(run, 1)
+        assert (target / P.PLAN_FILE).exists() and (target / W.ROLLBACK_FILE).exists()
+        assert out["proposals_closed"] == 1 and out["contributions_promoted"] == 1
+        assert "(radar " + CONTRIBUTION + ")" in (target / P.PLAN_MD).read_text(encoding="utf-8")
+
+
 class TestTheReadback:
     def test_the_landed_write_reads_back_clean(self, step: P.Step) -> None:
         assert W.readback(step, read=landed(step)) == []
@@ -1048,6 +1219,44 @@ class TestTheReadback:
             return rows[:-1] if "remediation_change_log" in sql else rows
 
         assert any("journal holds" in p for p in W.readback(step, read=short))
+
+    def test_a_radar_contribution_reads_back(self, radar_step: P.Step) -> None:
+        read = landed(radar_step)
+        assert W.readback(radar_step, read=read) == []
+
+        def unpromoted(sql: str):
+            rows = read(sql)
+            if "FROM user_contributions" in sql:
+                rows = [{**rows[0], "enrichment_status": "enriched"}]
+            return rows
+
+        assert any("radar contribution" in p for p in W.readback(radar_step, read=unpromoted))
+
+    def test_the_undo_reads_back_the_restored_proposal_and_contribution(self, radar_step) -> None:
+        [i] = radar_step.inserts
+        [p] = i.proposals
+
+        def undone(restored: bool):
+            def read(sql: str):
+                if "FROM unified_sites" in sql:
+                    return [{"id": i.site_id, "scope_status": "retired",
+                             "scope_reason": W.retire_reason(radar_step)}]  # fmt: skip
+                if "FROM site_proposals" in sql:
+                    old = p["old"] if restored else {**p["old"], "status": "approved"}
+                    return [{"id": p["proposal_id"], **old}]
+                if "FROM user_contributions" in sql:
+                    old = p["contribution"]["old"]
+                    if not restored:
+                        old = {**old, "promoted_site_id": i.site_id}
+                    return [{"id": CONTRIBUTION, **old}]
+                raise AssertionError(sql)
+
+            return read
+
+        assert W.rollback_readback(radar_step, read=undone(True)) == []
+        problems = W.rollback_readback(radar_step, read=undone(False))
+        assert any("proposal" in x for x in problems)
+        assert any("radar contribution" in x for x in problems)
 
     def test_accept_records_once_and_lists_the_sites(self, run, step: P.Step) -> None:
         target = P.step_dir(run, 1)
@@ -1073,6 +1282,18 @@ class TestTheProbes:
         assert cases[5].inserts[0].name_key != first.name_key
         assert cases[6].inserts[0].proposals[0]["old"]["status"] == "rejected"
         assert cases[7].inserts[0].parent_site_id == step.probe["retired"]["site_id"]
+        for case in cases.values():
+            W.lint(W.render_apply(case), "apply")
+
+    def test_a_radar_backed_step_probes_guard_8(self, radar_step: P.Step) -> None:
+        cases = dict(W.probe_cases(radar_step))
+        assert sorted(cases) == [1, 2, 3, 4, 5, 6, 7, 8]
+        [p] = cases[8].inserts[0].proposals
+        assert p["old"] == radar_step.inserts[0].proposals[0]["old"]
+        assert p["contribution"]["old"] == {
+            "enrichment_status": "enriched",
+            "promoted_site_id": radar_step.probe["shown"]["site_id"],
+        }
         for case in cases.values():
             W.lint(W.render_apply(case), "apply")
 

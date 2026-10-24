@@ -76,6 +76,8 @@ def _country_check():
 def plan(run: Path, number: int) -> dict[str, Any]:
     step = P.plan_step(run, number, country_check=_country_check())
     target = P.step_dir(run, number)
+    if step.inserts:
+        W.render_checked(step)  # both statements render and lint before any file is written
     P.write_step(step, target)
     if step.inserts:
         W.write_rollback(step, target)
@@ -88,6 +90,7 @@ def plan(run: Path, number: int) -> dict[str, Any]:
         "sites": len(step.inserts),
         "refused": refused,
         "proposals_closed": sum(len(i.proposals) for i in step.inserts),
+        "contributions_promoted": sum(len(i.contributions) for i in step.inserts),
         "journal_rows": sum(i.journal_rows for i in step.inserts),
         "digest": step.digest,
     }
