@@ -538,7 +538,9 @@ def plan(
             Insert(
                 site_id=site_id,
                 demoted_id=str(hero["id"]) if hero else None,
-                old_thumbnail=str(thumb) if thumb else None,
+                # the read's value exactly: an empty string is not NULL, and guard 5 compares
+                # with IS DISTINCT FROM (Temple of Diana held '' on 2026-10-24)
+                old_thumbnail=None if thumb is None else str(thumb),
                 new_thumbnail=local_path(site_id, values["filename"]),
                 change_key=f"{LANE}:{site_id}",
                 reason=source

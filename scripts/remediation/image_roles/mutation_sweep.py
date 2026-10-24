@@ -1780,6 +1780,10 @@ CLOSEOUT_CASES: list[Case] = [
     g("gap1: a drawn pool picture must be on disk", CALIBRATE,
       "    if missing:\n        raise CalibrationError(\n            f\"{len(missing)} of the",
       "test_a_pool_picture_missing_from_disk_stops_the_gold_by_name", T_CAL),
+    c("d17: an empty thumbnail is planned as the empty string", INSERT,
+      "                old_thumbnail=None if thumb is None else str(thumb),",
+      "                old_thumbnail=str(thumb) if thumb else None,",
+      "test_an_empty_thumbnail_is_planned_as_the_empty_string_it_is", T_INSERT),
     # ---------------------------------------------------------------- gap 3: the re-check's role
     c("gap3: the served-image recheck is the adversarial role's", V_PY,
       'RECHECK_ROLE = "adversarial"', 'RECHECK_ROLE = "pilot_judge"',
