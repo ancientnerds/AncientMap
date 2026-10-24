@@ -24,6 +24,9 @@ note from `_card_provenance.ai_system`, `spoken_name` read by `shorts_tts`).
 | X9 | A MiniMax-written `period_start` that Claude cannot source (all 265 filled an empty cell) | Restored to the pre-MiniMax state: NULL start, label `Undated` (D10). |
 | X10 | `phase4/assemble._finish` still stamps the Claude+MiniMax `AI_SYSTEM` on new Phase-4 W/S provenance | Fix before the first new W-lane write (D13 re-targets); no W write runs before it. |
 | X11 | Where lanes run | The main checkout is the run tree (branch `run/2026-10-09-db-final`, fast-forwarded as code lands); code is built in worktrees `.worktrees/*`. |
+| X12 | (2026-10-24) A paper hero when no uncropped picture of the paper qualifies | No crop: the D60 hero kind takes only a record the paper already carries; such a hero stays and is listed (flying-discs, ufos). |
+| X13 | (2026-10-24) Sites of Islamic or Byzantine Europe dated 500-1500 (al-Andalus, Sicily: Talamanca, Huescar, Ponferrada, Castle of Cola, Villaggio Bizantino) | Medieval Europe under D58 ("only the medieval Old World of Europe, Byzantium and the Vikings is out"): they stay out; the scope-window lane treats them as outside the label window. |
+| X14 | (2026-10-24) The site_type alias map of the Phase-8 merge (decision null) | An alias merges into its canonical value only when it is the same category under another spelling or synonym of the vocabulary the frontend filters use; a distinct category is kept. Per-alias reasons in `final-2026-10-08/X14_SITE_TYPE_MAP.md`. |
 
 ## Throughput and cost (measured inputs, estimate)
 
