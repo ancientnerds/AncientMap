@@ -383,7 +383,11 @@ earlier one included, and the later plan **takes the site over**: the earlier ba
 `asked-again-later` (its written rows stay what they were: none for that site), the later batch
 plans it (`write4.plan_wc`). The same holds for a site `revert4 --site` took back from a written
 batch and a later chunk asks again: the earlier batch's re-plan leaves it out on the reversal proof
-(`sites_taken_back`). Should two batches still both plan rows for one site - two chunks read before
+(`sites_taken_back`). A site a written batch **wrote** and a later write superseded (lane WN's text
+over a WC clear, a later list run, a Phase-4 re-target; 2026-10-24) is still that batch's: its re-plan
+reads what the batch wrote (`write_gate4.wc_bases`, from the batch's own `PLAN.jsonl`) and plans the rows
+it was written from, whatever production holds now; what came after is the acceptance's question. Should
+two batches still both plan rows for one site - two chunks read before
 either was written, the `--after` left out - the gate stops before rendering anything and names the
 site; rebuild the later chunk as a new run exported with `--exclude` for it (a run has one
 population), and move the old chunk's rendered, never written batch directories out of the apply
@@ -454,7 +458,8 @@ description.
 | `judge-import` | the judge round validates; quotes on the judge's own fetch; independence from every checker and verifier of the run; `RESULT.json` names the judged plan's sha256 | `JUDGE_EXIT=1` below the pass mark |
 | gate: the pilot's verdict (`cli.pilot_approval`) | the first `--wc-plan` is a pilot run's, and every pilot named has `judge/RESULT.json` `passed: true` on exactly this plan (`plan_sha256`) | the whole run: nothing is planned |
 | gate: the verification (`write4.load_wc_plan`, `wc4.verification_problems`) | every outcome of every named plan carries a verification record that holds (section 2) | the whole run: a plan built before the verify stage, a verifier that checked the site, a record that is not what its rounds give, a round read over another text than it recorded |
-| gate dry run | reads each site's live description and raw_data (read-only); plans: a written site is the batch's while its description and WC's three keys are the outcome's (lane WB stamps others) | `written-by-p4` (a P4 text since), `asked-again-later` (a later plan asks it again and this batch did not write it), `moved-since-check` (not written by the batch and not the whole checked pair) - per site, the rest of the batch goes on |
+| gate dry run | reads each site's live description and raw_data (read-only); plans: a site the batch wrote is the batch's - re-planned from what it wrote (`wc_bases`), whatever came after; an unwritten site needs the checked description and the description's own state in raw_data (`write4.description_part`: WC's keys, the provenance's Phase-5 card left out unless the write keeps one) - a key of another lane that moved since (WB's `_card_provenance`, a field lane's marker) is kept and the row is planned over the live raw_data, which the transaction holds whole (the count is printed: "planned over a live raw_data another lane moved") | `written-by-p4` (a P4 text since), `asked-again-later` (a later plan asks it again and this batch did not write it), `moved-since-check` (not written by the batch and the description or its own raw_data state moved) - per site, the rest of the batch goes on |
+| gate: closed batches (`closed_wc_batches.verify`, 15.10) | a batch of the apply root no named plan plans is accepted only when a versioned record closes it and still holds (the recorded batch bytes, the journal's rows, the recorded acceptance, nothing stopped); a closed batch is never planned again | the whole run: a batch neither named nor closed, a record that does not hold, a closed batch a named plan plans |
 | gate: one site, one batch (`write4.wc_sites_planned_twice`) | no site is planned with rows by two batches | the whole run, before anything is rendered |
 | gate plan (`validate_rows`) | site-atomic pairs (kept, clear, raw_data alone for a byte-identical text, the description alone for the clear of a NULL raw_data), one evidence on both rows, the evidence's transition, `wc_problems`, the recorded marking re-derived from the row's old value and the AI disclosure it requires, the verification (`verification_problems`), no key outside the three changes, no full provenance | the whole batch |
 | in the transaction | guards 1-4 (curated site, allow-list, real change - NULL only for WC's two clear tests, old value held), invariants 1-2 (new values, journal both ways), 5 (the check record's `desc_sha256` and `verified_sha256` are the description's), 6 (provenance is lane L's and hashes it; a cleared description leaves none of the WC keys) | `RAISE`: nothing is written |
@@ -783,8 +788,9 @@ are in the apply root, this run last:
     $V --plan $M/logs/_write_apply_p4wc/LANE_PLAN.jsonl --complete   # at the end
 
 The writer's guards hold for a list run exactly as for a plain one (`tests/remediation/
-test_wc_list.py`): a site whose description or `raw_data` is no longer the checked pair is
-`moved-since-check`; a site a later plan asks again is that plan's (`asked-again-later`) and two batches
+test_wc_list.py`): a site whose description or the description's own state in `raw_data` is no
+longer the checked one is `moved-since-check` (another lane's key is not: the site is planned over the live
+raw_data, 15.10); a site a later plan asks again is that plan's (`asked-again-later`) and two batches
 that both plan a site stop the gate before anything is rendered; `--after` leaves the earlier runs'
 sites out; **a cell two plans of the lane write is a chain, not a double claim** (a text an earlier plan
 wrote - a clear, a kept text - and a later list run or lane WN writes again: per site and column the rows
@@ -933,9 +939,11 @@ with one `[n]` per distinct page of its quotes, and `description_citations` the 
 ### 12.4 The writer and what it holds for an empty old value
 
 Same writer group WC (`phase4wc`, `p4wc-NNNN`): `plan_wc` plans the description row with **old value
-NULL (or the blank string, exactly as the read found it)** and the raw_data row; the premise is the whole
-pair held - a text that arrived since, a `raw_data` that moved, a NULL read that is now blank (or the
-other way round), a vanished site: `moved-since-check`, refused before anything is rendered
+NULL (or the blank string, exactly as the read found it)** and the raw_data row; the premise is the
+description and its own state in `raw_data` held - a text that arrived since, a description state that
+moved (citations, a check record, a provenance), a NULL read that is now blank (or the other way round), a
+vanished site: `moved-since-check`, refused before anything is rendered (a key of another lane that moved
+is kept and the row planned over the live raw_data, 15.10)
 (`tests/remediation/test_wn_write.py`). The transaction's guard 4 (`IS DISTINCT FROM`) holds the NULL
 old value; invariant 5 holds the check record's hashes; **invariant 6 holds the provenance to the lane the
 evidence's marking calls for** (N for a lane-WN text, L for a March text, the old lane for a Phase-4 text),
@@ -1233,9 +1241,12 @@ for an ENRICH pilot): `output/remediation/calibration/` must hold a seal `enrich
 (threshold at least 0.7, the role's registry entry unchanged since) and its passed verdict (`verdicts/enrich-writer.json`:
 same role, model and threshold, no unanswered question, 0 false sources). The map's calibration - the 20 WN pilot sites
 through the full chain plus a leave-one-out on about 40 sites whose descriptions already carry a sourced open question,
-the sentence removed, recovery sealed at 70 % - is built by hand (description and provenance rehashed), answered by the
-writer into a calibration copy and measured with `calibrate_claude.py seal --id enrich-writer --role enrich_writer
-... --threshold 0.7`, `prepare`, `compare`, `verdict`. Until that verdict passes the gate refuses every lane-E plan.
+the sentence removed, recovery sealed at 70 % - lost its first half with the WN pilot (2026-10-24: the run lived in the
+removed worktree `db-finish`, and it was MiniMax-judged, no ground truth under X6). The leave-one-out half is built by
+`scripts/remediation/wc/enrich_calibration.py` (15.2): the production write question about each confirmed case's text
+without its open-question sentence, and a sealed truth file (the sentence, the hosts it cited); the comparator
+`enrich-recovery` measures the open question found again on a quote of one of those hosts. Until that verdict passes the
+gate refuses every lane-E plan.
 
 ### 14.6 Roles, independence and what is not counted
 
@@ -1431,6 +1442,36 @@ judged), so their list is empty and the verify bar is the agreement of 95 % plus
 
 `$K known --kind K --run R [--handoff H]` prints what `seal` would derive, to look at it first.
 
+**Measured 2026-10-24** (dry run into a temporary root, `--root C:/tmp/...`, nothing sealed in `$CAL`): every `seal` and
+`prepare` above runs as written - wc-fc-1/2/3 (10/15/5 cases, known errors 1/2/0), wc-wv-1/2 (20/15, none), wc-pj-1/2
+(5/10, known errors 1/2) - and `brief`, `verify-brief`, `judge-brief` print for the calibration copies. Run them **with the
+main checkout as the working directory**: a verify pool's round is found by its handoff path as the run recorded it
+(`output/remediation/handoff/...`, resolved against the working directory), so `seal --kind verify` from a worktree
+refuses with "is no verification round", and the briefs need the shared Wikipedia cache of the main checkout.
+
+**Lane E's writer, `enrich-writer`** (`scripts/remediation/wc/enrich_calibration.py`; `enrich.require_writer_calibration`
+blocks every lane-E pilot until its verdict stands). A leave-one-out truth pool: texts lane E would enrich whose sentence
+frames something about the site as open and cites a page; the writer is asked the production question about the text
+without that sentence and must find the open matter again, on a quote of a host the sentence cited (units
+`open_question` and `source`, comparator `enrich-recovery`). Measured 2026-10-24: 157 candidate sentences at 156 sites in
+the fresh read; all 156 build; seal and prepare run (temporary root).
+
+    EC="$PY scripts/remediation/wc/enrich_calibration.py"; R=$RUNS/enrich-cal-2026-10-24
+    $C read --run-dir $R                                            # a fresh read (read-only)
+    $EC candidates --run-dir $R --out $R/CANDIDATES.jsonl           # a proposal, never a decision
+    #   the orchestrator reads each candidate's cited page and keeps about 40 that a source calls open:
+    #   $R/CASES.jsonl, one line {"site_id", "sentence", "confirmed_by", "note"} per case
+    $EC build --run-dir $R --cases $R/CASES.jsonl --out $CAL/pools/enrich-writer   # prints the seal command
+    $CC seal --id enrich-writer --role enrich_writer --handoff $CAL/pools/enrich-writer/handoff \
+        --batches we-0001 ... --threshold 0.7 --truth $CAL/pools/enrich-writer/TRUTH.json --comparison enrich-recovery
+    $CC prepare --id enrich-writer --run $CAL/pools/enrich-writer/run
+    #   one enrich_writer agent (Sonnet, high) per batch, its instruction:
+    #   $C brief --run-dir $CAL/enrich-writer-run --handoff $CAL/enrich-writer --batch-id we-000N
+    $OH validate --dir $CAL/enrich-writer
+    $EC compare --id enrich-writer
+    #   spot-check the URL and quote of every disagreement in COMPARISON.json (O18), count the false ones
+    $CC verdict --id enrich-writer --false-sources <n>               # a fail moves enrich_writer to Opus (roles.py)
+
 A calibration run's rounds are marked `calibration`: no import reads them (`verify-import`, `judge-import`
 refuse). A role that fails is moved up one tier by a committed edit of `roles.ROLES`, sealed and calibrated again;
 Opus has no tier above (`held`: the owner decides).
@@ -1484,21 +1525,41 @@ plan built again after its judge all stop the write). Fix the cause (`revert4` t
 list run) and judge a rebuilt plan again. A chunk with no judge round at all is not asked by the gate: the sample is
 the operator's step.
 
-### 15.5 The 141 defect sites (D25b)
+### 15.5 The defect sites (D25b): 160 on 2026-10-24
 
-    # 1. copy-in (an operator step; the cardgap file lives in the db-finish worktree)
-    mkdir -p $M/teaser/runs/wb-cardgap-2026-10-07
-    cp C:/PythonProjects/AncientMap/.claude/worktrees/db-finish/output/remediation/teaser/runs/wb-cardgap-2026-10-07/DESCRIPTION_DEFECTS.jsonl \
-       $M/teaser/runs/wb-cardgap-2026-10-07/DESCRIPTION_DEFECTS.jsonl
-    # 2. the continuation of defects-2026-10-02 (136 sites, 45 answered by Sonnet, 91 held): its frozen prompts are
-    #    answered now by the fact checker (brief, validate, import, verify, build --first-batch 4700), exactly as 11.3
-    # 3. the five new sites (Wamanmarka, Tanqa Tanqa, Lakhan-Jo-Daro, Wain's Hill, Cave of Niaux): a run after it
-    R=defects-2026-10-09
+The population is built by `defect-population` against a fresh read: every DESCRIPTION_DEFECTS line whose site still
+serves the text the line was found on, the sites an earlier repair run asks (`--asked`), and the sites whose lines are
+lost (`--lost`). **The 9 lines of `wb-cardgap-2026-10-07` are lost** with the removed worktree `db-finish` and are not
+rebuilt: the journal of the run's card steps carries no description defect, and the AUDIT_LOG names the claims in prose
+only, so a rebuilt line would invent its URL and quote. The record
+`output/remediation/final-2026-10-08/reconstructed/wb-cardgap-2026-10-07.DESCRIPTION_DEFECTS.lost.json` names the five sites
+(Wamanmarka, Chumbivilcas; Tanqa Tanqa; Lakhan-Jo-Daro; Wain's Hill; Cave of Niaux) and why; the card lane finds them
+again (a re-card's verify writes new lines), and the population counts them as `lost` until then.
+
+A site an earlier run asks is `asked` only while that run's frozen prompt carried every standing claim of it (the
+entry's `defects`, compared by sentence text and claim: the URL and quote are evidence). A claim a later pilot found
+that the prompt did not carry makes it `asked+new-claims`: it goes on the new list with **every** standing claim,
+because the new run's plan is the later one and takes the site over in the gate (`asked-again-later`), so its agent
+must see the earlier claims too. Measured 2026-10-24 (read `6136de87`): 197 lines in 10 files, 0 skipped,
+**population 160 = 134 asked by defects-2026-10-02 + 2 asked+new-claims + 19 new** (the three shorts pilots: 5, 8, 8
+sites) **+ 5 lost**; the list holds 21 sites. The two are Hatun Uchku (`7a1fc276`, "2,206 metres") and Larisa, Argos
+(`e7f9d07d`): `wb-shorts-pilot2-2026-10-19` found the claim of `wb-ws-2026-09-27-0x` again in other words.
+
+    # 1. the continuation of defects-2026-10-02 (136 sites, 45 answered by Sonnet, 91 held): its frozen prompts are
+    #    answered now by the fact checker (brief, validate, import, verify, build --first-batch 4700), exactly as 11.3.
+    #    Its 19 sites whose raw_data lane WB moved since the read (_card_provenance only, measured) are NOT read again:
+    #    the gate plans them over the live raw_data (15.10). Its 2 asked+new-claims sites are taken over by step 2.
+    # 2. the new sites: a run after it
+    R=defects-2026-10-24
     $C read --run-dir $RUNS/$R
-    DEF=$(for f in $M/teaser/runs/*/DESCRIPTION_DEFECTS.jsonl; do printf -- '--defects %s ' "$f"; done)   # all 8 files
-    $C defect-sites --run-dir $RUNS/$R $DEF --out $RUNS/$R/DEFECT_SITES.txt
+    DEF=$(for f in $M/teaser/runs/*/DESCRIPTION_DEFECTS.jsonl; do printf -- '--defects %s ' "$f"; done)   # all 10 files
+    $C defect-population --run-dir $RUNS/$R $DEF --asked $RUNS/defects-2026-10-02 \
+        --lost $M/final-2026-10-08/reconstructed/wb-cardgap-2026-10-07.DESCRIPTION_DEFECTS.lost.json \
+        --out $RUNS/$R/DEFECT_SITES.txt
+    #   DEFECT_SITES.txt: the new and the asked+new-claims sites; .report.json their claims; .population.json all
+    #   160 with their state (and new_claims per asked site)
     $C export --run-dir $RUNS/$R --handoff $H/wc-$R-r1 --sites $RUNS/$R/DEFECT_SITES.txt \
-        --defects $RUNS/$R/DEFECT_SITES.txt.report.json --after $RUNS/defects-2026-10-02
+        --defects $RUNS/$R/DEFECT_SITES.txt.report.json
     #   ...answer, import, verify, build --first-batch 4710, write in the chain (15.8)
 
 A text whose check keeps every sentence is `defect-kept` and not written; that is the adversarial check's list.
@@ -1506,7 +1567,7 @@ After the repair plans are **written and accepted**:
 
     A=defects-adv-2026-10-09
     $C read --run-dir $RUNS/$A                                     # a fresh read: the written texts are in it
-    $C defect-kept-sites --run-dir $RUNS/$A --from $RUNS/defects-2026-10-02 --from $RUNS/defects-2026-10-09 --out $RUNS/$A/KEPT.txt
+    $C defect-kept-sites --run-dir $RUNS/$A --from $RUNS/defects-2026-10-02 --from $RUNS/defects-2026-10-24 --out $RUNS/$A/KEPT.txt
     #   each standing claim is found again in the live text and numbered as it stands (a trimmed sentence by its
     #   final text); `skipped` counts text-changed-since / no-description / retired / not-a-curated-row
     $C export --run-dir $RUNS/$A --handoff $H/wc-$A-r1 --sites $RUNS/$A/KEPT.txt \
@@ -1527,12 +1588,19 @@ Every repaired site's WB card turns stale (the `desc_sha256` tie): `lane WB sele
     R=wc-recheck-minimax-2026-10-09
     $C read --run-dir $RUNS/$R
     $C minimax-sites --run-dir $RUNS/$R --from $RUNS/mass-2026-09-27-01 --from $RUNS/mass-2026-09-27-02 \
-        --from <the WN run: C:/PythonProjects/AncientMap/.claude/worktrees/db-finish/output/remediation/wc_runner/runs/wn-2026-10-06> \
+        --closed $M/final-2026-10-08/reconstructed/p4wc-4325.closed.json \
         --out $RUNS/$R/MINIMAX_SITES.txt
+    #   run it in the main checkout: a --closed record is read only while it holds against lane WC's apply root
+    #   (--apply-root names another), as the gate reads it; the report's closed[].holds_against says where
 
 Each source run is read against the checkout it lives in (`<tree>/output/remediation/wc_runner/runs/<name>`
-records its handoffs relative to that tree, so the WN pilot of the db-finish worktree is named as it is), and a
-round whose handoff is not there stops the command. A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
+records its handoffs relative to that tree), and a round whose handoff is not there stops the command. **The WN pilot
+`wn-2026-10-06` is lost** (its run and handoffs lived in the removed worktree `db-finish`): its 17 texts are named from the
+record of its closed batch (`--closed`, 15.10) - all 17 MiniMax-shaped (the journal's `checker` is `model4.AI_SYSTEM`) -
+under the same rule as a source run's: the live text still the one `wn-2026-10-06` wrote. The record is read strictly
+(`closed_wc_batches.read_record`) and only while `verify` finds nothing - the batch files, the journal rows, the
+acceptance, and a site list whose `minimax` flags are its journal rows' checkers - so an edited or stale record stops
+the command instead of shortening the list. A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
 (the judge only measured) **and** the live text is still the one that run wrote (`_description_check` names the run
 and hashes the text). Measured on the owner's side before: 63 verify2 answers of mass-02 (57 sites still hold their
 text, 5 cleared, 1 without a record) and the 17 WN texts; the report names the others by reason (`cleared`: lane
@@ -1557,16 +1625,17 @@ duplicate pairs, retired sites) with `--exclude F`, and run it **after** the WC 
     #   J_THRESHOLDS unchanged: 0 WRONG, <= 5 % UNSUPPORTED, 0 incoherent, >= 10 of 20 judged
     $C export --run-dir $RUNS/wn-2026-10-09b --handoff $H/wn-...-w --wn --after $RUNS/$R           # the rest, one chunk
 
-The new pilot is the **second WN plan** in the chain: the old pilot (judged by MiniMax, RESULT passed, its batch is
-in the apply root) stays the first WN plan named; the gate's API check (12.6) still applies. Sites that stay empty
-are final: no card, no Short.
+The new pilot is the **first WN plan** the gate names (`pilot_approval`: the first plan of each kind is a judged pilot's):
+the old pilot's plan is lost and its batch `p4wc-4325` is closed by record (15.10), and it was MiniMax-judged, so it
+approves nothing any more. The gate's API check (12.6) still applies. Sites that stay empty are final: no card, no Short.
 
 ### 15.8 The chain the gate names
 
-`PLANS` in run order, the plain WC pilot first: `pilot-2026-09-27c`, `mass-2026-09-27-01`, `-02`, the old WN pilot
-(`wn-2026-10-06`, copy its `POPULATION.json`, `judge/RESULT.json` and `WC4.jsonl` into main `runs/` first, the
-gate names the pilot's path), then `mass-03`, `-04`, `-05`, `defects-2026-10-02`, `defects-2026-10-09`, the
-MiniMax recheck run, the new WN pilot and its chunk, the adversarial run last. Dry, `--rehearse`, `--apply --step
+`PLANS` in run order, the plain WC pilot first: `pilot-2026-09-27c`, `mass-2026-09-27-01`, `-02`, then `mass-03`,
+`-04`, `-05`, `defects-2026-10-02`, `defects-2026-10-24`, the MiniMax recheck run, the new WN pilot and its chunk, the
+adversarial run last. The old WN pilot is **not** named: its batch `p4wc-4325` is closed by record and the gate says so
+("closed batch p4wc-4325: written and accepted, its WC plan lost ..."). Measured 2026-10-24 (dry run, read-only): the
+first three plans re-plan to the 2,001 rows they wrote, 11 `written-by-p4`, 0 open batches, `WRITE_EXIT=0`. Dry, `--rehearse`, `--apply --step
 100`, acceptance with `--allow-stamp wb-teaser-prov-%`, `--accept`, finally `--complete`; run the acceptance from
 a tree that has `model4.AI_SYSTEMS` with the Claude-only strings (otherwise 209 false deviations); write the
 acceptance log as UTF-8 without BOM (Git Bash `>` is fine, PowerShell 5.1 `1>` is UTF-16).
@@ -1576,4 +1645,49 @@ acceptance log as UTF-8 without BOM (Git Bash `>` is fine, PowerShell 5.1 `1>` i
 `WCR_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py` (`mutation_sweep.py "wc roles" "wc adversarial"
 "wc sample" "wc minimax" "wc void" "wc calibration"`) holds a case for every guard above; the tests are
 `tests/remediation/test_wc_roles.py`, `test_wc_void.py`, `test_wc_repairs.py`, `test_wc_calibration.py`, and the
-re-pinned briefs in `test_wc.py` and `test_wn.py`.
+re-pinned briefs in `test_wc.py` and `test_wn.py`. The guards of 2026-10-24 (15.10, 15.5, 15.6, 15.2 and the Phase-4
+disclosure, X10) are `mutation_sweep.py "wc write4" "wc gate" "closed batches" "wc minimax" "wc defects population"
+"enrich calibration" "p4 disclosure"`, over `tests/remediation/test_phase4_wc_write.py`, `test_wc_list.py`,
+`test_closed_wc_batches.py`, `test_wc_desc_population.py`, `test_enrich_calibration.py` and `test_phase4_review.py`.
+
+### 15.10 Closed batches and stale reads (2026-10-24)
+
+**A batch whose WC plan is lost.** Apply batch `p4wc-4325` - the 17 texts of the WN pilot `wn-2026-10-06`, written
+2026-10-06 and accepted as step 12 - lost its plan, `POPULATION.json` and `judge/RESULT.json` with the worktree
+`.claude/worktrees/db-finish` (removed between 2026-10-09 and 2026-10-17; no copy anywhere, scout of 2026-10-24), and the
+gate refused every WC plan while the batch could not be named. It is closed by a versioned record, reconstructed from the
+production journal (read-only) and checked against the batch's surviving `PLAN.jsonl`, `APPLIED.json` and acceptance:
+
+    T="$PY output/remediation/tools/closed_wc_batches.py"
+    $T reconstruct --batch p4wc-4325 --lost-run wn-2026-10-06 --lost-where <where it lived> --lost-file WC4.jsonl \
+        --lost-file POPULATION.json --lost-file judge/RESULT.json --by "<who>" --reason "<why>"   # done once, 2026-10-24
+    $T verify                                     # every record against the apply root: CLOSED_EXIT=0
+
+The record is `output/remediation/final-2026-10-08/reconstructed/p4wc-4325.closed.json` (34 rows at 17 sites, the
+journal rows' change keys and the sha256 of their values and evidence, the batch files' sha256, the acceptance it was
+accepted on, the lost files, who and why). The gate (`write_gate4.wc_batches`, `--closed-batches` names another record
+directory) accepts the batch in the apply root only while the record holds, never plans it again and keeps its
+`PLAN.jsonl` in the lane plan, so every acceptance still judges its rows against the journal; a batch neither named nor
+closed is refused as before. Its 17 texts go to the D10 re-check (15.6).
+
+**The closed batch is a link of the chain.** All 17 sites were cleared earlier by named batches (the pilot `p4wc-4003`
+and mass-02), which re-plan those clears; the D10 re-check then plans the WN text again. The one-site-one-batch check
+(`write4.wc_sites_planned_twice`) accepts two batches on one cell only when their rows chain, and without the closed
+batch's rows the clear's NULL never meets the re-check's old value (the WN text): the gate would stop the whole lane
+again. `write_gate4.wc_chain` therefore puts each closed batch's recorded `PLAN.jsonl` rows (verified through its
+record, never rendered) into that check at the place they were written: before the first named plan not accepted on an
+earlier step (not written, pending, or accepted later). A raw_data link chains on the description's own state
+(`write4._links`, `description_part` without the card sub-key), because 2 of the 17 carry lane WB's `_card_provenance`
+since; the transaction still holds the full old value. Measured 2026-10-24 (read-only, a copy of the apply root): the
+real chain plus a re-check of the 17 texts at production's live values gives 17 sites planned twice without the
+closed batch and 0 with it.
+
+**Stale reads.** The gate compared the whole description and raw_data pair a site was checked with, so a write of
+another lane to `raw_data` voided a built plan as `moved-since-check` (19 of the 136 sites of `defects-2026-10-02`, by
+lane WB's `_card_provenance`; the field lane's provenance markers would do the same). It now holds the description and
+the description's own state (`write4.description_part`: WC's keys, the provenance's Phase-5 card left out unless the
+write keeps one - WB sets it to null); another lane's key is kept and the row is planned over the live raw_data, its
+old value exactly what the gate read and the transaction holds (guard 4). A write that lands between the gate's read
+and the transaction stops the batch at the preflight (`STOPPED.json`, nothing written, nothing lost): read it, run the
+gate again (a fresh live read), and do not run a raw_data lane over the same sites while a WC step is being applied. A
+written batch re-plans from what it wrote (`wc_bases`), so a later stamp never changes its rows.

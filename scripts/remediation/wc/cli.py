@@ -26,7 +26,8 @@ order, is `docs/procedures/SENTENCE_CHECK.md`.
     $C defect-kept-sites  --run-dir R --from R0 ... --out F     # standing defect claims -> a list
     $C export --sites F --defects F.report.json --adversarial   # the adversarial second check
     $C defect-closure     --run-dir R                           # what it decided, for AUDIT_LOG
-    $C minimax-sites      --run-dir R --from R0 ... --out F     # MiniMax-touched texts that stand
+    $C minimax-sites      --run-dir R --from R0 ... [--closed C ... [--apply-root A]] --out F   # MiniMax-touched texts that stand
+    $C defect-population  --run-dir R --defects D ... [--asked R0 ...] [--lost L ...] --out F
     $C export --sites F   ...                            # a site-list run (kind wc-list)
     $C export --wn        ...                            # lane WN: write the missing descriptions
     $C export --enrich --sites F [--disputes D] ...      # lane E: append sourced sentences
@@ -2540,6 +2541,33 @@ def cmd_defect_sites(
     row of the read. `out` gets one site id per line; `out.report.json` the counts and, per site,
     the claims. `proven_only` keeps only the lines whose contradicting quote the machine found."""
     rows = {row["id"]: row for row in read_jsonl(run / ROWS_FILE)}
+    lines, skipped, per_site = _standing_defects(rows, defects, proven_only=proven_only)
+    ids = sorted(per_site)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("".join(f"{site_id}\n" for site_id in ids), encoding="utf-8", newline="\n")
+    report = {
+        "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
+        "defects": [{"path": _shown(path), "sha256": _sha256(path)} for path in defects],
+        "proven_only": proven_only,
+        "lines": lines,
+        "sites": len(ids),
+        "skipped": dict(sorted(skipped.items())),
+        "by_owner_lane": dict(
+            sorted(Counter(c["owner_lane"] for cs in per_site.values() for c in cs[:1]).items())
+        ),
+        "out": {"path": _shown(out), "sha256": _sha256(out)},
+        "claims": {site_id: per_site[site_id] for site_id in ids},
+    }
+    RF.write_json(out.with_name(out.name + ".report.json"), report)
+    return {key: value for key, value in report.items() if key != "claims"}
+
+
+def _standing_defects(
+    rows: Mapping[str, Mapping[str, Any]], defects: Sequence[Path], *, proven_only: bool
+) -> tuple[int, Counter[str], dict[str, list[dict[str, Any]]]]:
+    """`(lines, skipped, claims by site)` of WB's description defects against a fresh read: a line
+    stands when its site is a curated, not retired row of the read whose description is still the
+    text the line was found on (`desc_sha256`); the others are counted by reason."""
     lines = 0
     skipped: Counter[str] = Counter()
     per_site: dict[str, list[dict[str, Any]]] = {}
@@ -2567,24 +2595,173 @@ def cmd_defect_sites(
                 per_site.setdefault(site_id, []).append(
                     {key: line[key] for key in DEFECT_CLAIM_KEYS}
                 )
-    ids = sorted(per_site)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("".join(f"{site_id}\n" for site_id in ids), encoding="utf-8", newline="\n")
-    report = {
-        "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
-        "defects": [{"path": _shown(path), "sha256": _sha256(path)} for path in defects],
-        "proven_only": proven_only,
-        "lines": lines,
-        "sites": len(ids),
-        "skipped": dict(sorted(skipped.items())),
-        "by_owner_lane": dict(
-            sorted(Counter(c["owner_lane"] for cs in per_site.values() for c in cs[:1]).items())
-        ),
-        "out": {"path": _shown(out), "sha256": _sha256(out)},
-        "claims": {site_id: per_site[site_id] for site_id in ids},
+    return lines, skipped, per_site
+
+
+#: The record of DESCRIPTION_DEFECTS lines that are lost with their run directory (2026-10-24: the 9
+#: lines of `wb-cardgap-2026-10-07`, in the removed worktree `db-finish`), versioned under
+#: `output/remediation/final-2026-10-08/reconstructed/`: the sites they named, and why the lines
+#: are not rebuilt. A line carries the URL, the quote and the sentence a verifier found; none of
+#: that is in the journal, so a rebuilt line would be invented - the card lane finds them again.
+LOST_DEFECTS_KIND = "lost-description-defects"
+LOST_DEFECTS_KEYS = frozenset(
+    {
+        "kind", "v", "run", "file", "where", "lines", "rebuilt", "why_not_rebuilt", "sites",
+        "mentioned", "re_find", "recorded_at", "recorded_by", "sources",
     }
-    RF.write_json(out.with_name(out.name + ".report.json"), report)
-    return {key: value for key, value in report.items() if key != "claims"}
+)  # fmt: skip
+#: The defect population's file beside the list `defect-population` writes.
+POPULATION_SUFFIX = ".population.json"
+#: The state of a site an earlier repair run asks whose standing claims that run's prompt did not
+#: all carry: it goes on the list again, with every standing claim (`cmd_defect_population`).
+ASKED_NEW_CLAIMS = "asked+new-claims"
+
+
+def _claim_key(claim: Mapping[str, Any]) -> tuple[str | None, str]:
+    """What makes two defect claims the same question to the agent: the sentence it names (its
+    text, `None` for a claim tied to none) and the claim. The URL and the quote are its evidence."""
+    sentence = claim["sentence_text"]
+    return (None if sentence is None else sentence.strip(), claim["claim"].strip())
+
+
+def read_lost_defects(path: Path) -> dict[str, Any]:
+    """A lost-defects record, read strictly: its kind and keys, `rebuilt: false`, and every site a
+    curated site id with its name."""
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(record, dict) or set(record) != LOST_DEFECTS_KEYS:
+        raise WcRunError(f"{path}: not a lost-defects record (keys {sorted(record)})")
+    if record["kind"] != LOST_DEFECTS_KIND or record["v"] != 1 or record["rebuilt"] is not False:
+        raise WcRunError(f"{path}: not a lost-defects record of version 1 that rebuilt nothing")
+    for site in record["sites"]:
+        try:
+            revert4.check_site(site["site_id"])
+        except revert4.RevertRefused as exc:
+            raise WcRunError(f"{path}: {exc}") from None
+        if not site.get("name"):
+            raise WcRunError(f"{path}: {site['site_id']} without its name")
+    return record
+
+
+def cmd_defect_population(
+    run: Path,
+    defects: Sequence[Path],
+    out: Path,
+    *,
+    asked: Sequence[Path] = (),
+    lost: Sequence[Path] = (),
+) -> dict[str, Any]:
+    """The description-defect population of D25b as it stands now, and the list of what is left to
+    ask. Every site a defect line names whose text is still the one the line was found on (the run's
+    fresh read; `defect-sites`' rule), every site a lost-defects record names (`lost`: its lines are
+    gone, the card lane finds them again), each with its state: `asked` by an earlier repair run
+    (`asked`, its `SITES.jsonl`) - that run answers it, and since 2026-10-24 a site whose raw_data
+    only another lane moved is planned over the live raw_data (`write4.description_part`), so it is
+    not read again -, `asked+new-claims` (an earlier run asks it, but its frozen prompt did not
+    carry every standing claim: a later pilot found another one on the same text), `new` (to ask
+    now) or `lost`. `out` is the list of the new sites and of the `asked+new-claims` sites, and
+    `out.report.json` their claims in `defect-sites`' shape (for `export --sites out --defects
+    out.report.json`) - **every** standing claim of the site, not only the new ones: the new run's
+    plan is the later one and takes the site over (`write4.RULE_TAKEN_OVER`), so its agent must see
+    what the earlier prompt carried too. `out.population.json` is the whole population with its
+    counts. A lost site is never on the list: there is no claim to put before the agent. A claim is
+    carried when the asked run's entry holds one with the same sentence and the same claim
+    (`_claim_key`)."""
+    rows = {row["id"]: row for row in read_jsonl(run / ROWS_FILE)}
+    lines, skipped, per_site = _standing_defects(rows, defects, proven_only=False)
+    earlier: dict[str, str] = {}
+    carried: dict[str, set[tuple[str | None, str]]] = {}
+    runs = []
+    for other in asked:
+        sites = read_sites(other)
+        runs.append(
+            {
+                "run": _shown(other),
+                "sites": len(sites),
+                "built": (other / SUMMARY_FILE).exists(),
+            }
+        )
+        for site_id, entry in sites.items():
+            if site_id not in earlier:
+                earlier[site_id] = other.name
+                carried[site_id] = {_claim_key(c) for c in entry.get("defects") or []}
+    records = [read_lost_defects(path) for path in lost]
+    lost_sites: dict[str, dict[str, Any]] = {}
+    for path, record in zip(lost, records, strict=True):
+        for site in record["sites"]:
+            lost_sites.setdefault(site["site_id"], {**site, "record": _shown(path)})
+    states: dict[str, dict[str, Any]] = {}
+    for site_id, claims in sorted(per_site.items()):
+        uncarried = [c for c in claims if _claim_key(c) not in carried.get(site_id, set())]
+        if site_id not in earlier:
+            state = "new"
+        elif uncarried:
+            state = f"{ASKED_NEW_CLAIMS}:{earlier[site_id]}"
+        else:
+            state = f"asked:{earlier[site_id]}"
+        states[site_id] = {
+            "name": rows[site_id]["name"],
+            "state": state,
+            "claims": len(claims),
+            "basis": claims[0]["basis"],
+            "runs": sorted({c["run"] for c in claims}),
+        }
+        if site_id in earlier:
+            states[site_id]["new_claims"] = len(uncarried)
+    for site_id, site in sorted(lost_sites.items()):
+        if site_id in states:
+            states[site_id]["lost_lines_too"] = site["record"]
+            continue
+        row = rows.get(site_id)
+        states[site_id] = {
+            "name": site["name"],
+            "state": "lost",
+            "claims": 0,
+            "in_read": row is not None,
+            "retired": row is not None and row["scope_status"] == "retired",
+            "record": site["record"],
+        }
+    new = [
+        site_id
+        for site_id, state in states.items()
+        if state["state"] == "new" or state["state"].startswith(f"{ASKED_NEW_CLAIMS}:")
+    ]
+    report = _write_list(
+        out,
+        sorted(new),
+        {
+            "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
+            "defects": [{"path": _shown(path), "sha256": _sha256(path)} for path in defects],
+            "proven_only": False,
+            "lines": lines,
+            "sites": len(new),
+            "skipped": dict(sorted(skipped.items())),
+            "claims": {site_id: per_site[site_id] for site_id in sorted(new)},
+        },
+    )
+    counts = Counter(state["state"].split(":", 1)[0] for state in states.values())
+    population = {
+        "read": report["read"],
+        "defects": report["defects"],
+        "asked_runs": runs,
+        "lost_records": [{"path": _shown(p), "sha256": _sha256(p)} for p in lost],
+        "lines": lines,
+        "skipped": report["skipped"],
+        "population": len(states),
+        "counts": dict(sorted(counts.items())),
+        "asked_by_run": dict(
+            sorted(
+                Counter(
+                    s["state"].split(":", 1)[1]
+                    for s in states.values()
+                    if s["state"].startswith("asked:")
+                ).items()
+            )
+        ),
+        "list": report["out"],
+        "sites": states,
+    }
+    RF.write_json(out.with_name(out.name + POPULATION_SUFFIX), population)
+    return {key: value for key, value in population.items() if key != "sites"}
 
 
 # ------------------------------------------------------------------------------------ the repairs
@@ -2792,8 +2969,57 @@ def _text_rounds(run: Path, base: Path) -> list[tuple[str, Path, Mapping[str, Se
     return rounds
 
 
+#: The tools of the write lanes (`closed_wc_batches.py`, `lanes.py`), imported where a command needs
+#: them: they import this package's neighbours, not the other way round at import time.
+TOOLS = REPO / "output" / "remediation" / "tools"
+
+
+def _closed_batches() -> Any:
+    if str(TOOLS) not in sys.path:
+        sys.path.insert(0, str(TOOLS))
+    import closed_wc_batches
+
+    return closed_wc_batches
+
+
+def wc_apply_root() -> Path:
+    """Lane WC's apply root (`lanes.lane("p4wc")`), where a closed batch's record is held."""
+    _closed_batches()
+    import lanes
+
+    return lanes.lane("p4wc").apply_root
+
+
+def closed_minimax_sites(path: Path, *, apply_root: Path) -> dict[str, str]:
+    """Site id -> the lost run, for every site a closed-batch record (`closed_wc_batches.py`: a
+    written batch whose run is lost, reconstructed from the production journal) names as
+    MiniMax-shaped - read as the write gate reads it: strictly (`read_record`) and only while it
+    holds against the apply root (`verify`: the batch files, the journal rows, the acceptance, and a
+    site list whose `minimax` flags are its journal's checkers). A record that does not hold is
+    refused: the D10 list is never built from an edited or stale one."""
+    closed = _closed_batches()
+    try:
+        record = closed.read_record(path)
+    except closed.ClosedBatchError as exc:
+        raise WcRunError(
+            f"{path}: not the record of a closed WC batch (closed_wc_batches.py reconstruct): {exc}"
+        ) from None
+    problems = closed.verify(record, apply_root)
+    if problems:
+        raise WcRunError(
+            f"{path}: the record does not hold against {apply_root} - " + "; ".join(problems)
+        )
+    return closed.minimax_sites(record)
+
+
 def cmd_minimax_sites(
-    run: Path, sources: Sequence[Path], out: Path, *, base: Path = REPO
+    run: Path,
+    sources: Sequence[Path],
+    out: Path,
+    *,
+    base: Path = REPO,
+    closed: Sequence[Path] = (),
+    apply_root: Path | None = None,
 ) -> dict[str, Any]:
     """The site list of the Claude re-check of MiniMax-touched texts (owner decision D10,
     2026-10-08): every site that has an answer stamped MiniMax in a check, write or verification
@@ -2801,9 +3027,20 @@ def cmd_minimax_sites(
     wrote (`_description_check` names the source and hashes the live description). The others are
     reported by reason and not asked: `cleared` (no description now: lane WN's rerun takes them),
     `rewritten-since` (another lane wrote the text), `retired`, `not-a-curated-row`. The list goes to
-    `export --sites`, where a text lane WN wrote is asked again as `web`."""
+    `export --sites`, where a text lane WN wrote is asked again as `web`.
+
+    `closed` names the records of closed batches whose run is lost (2026-10-24: `p4wc-4325`, the
+    17 texts of the WN pilot `wn-2026-10-06`): their MiniMax-shaped sites count as touched by the
+    lost run, under the same rule (`closed_minimax_sites`; each record must hold against
+    `apply_root`, lane WC's by default, and the report says so)."""
+    if not sources and not closed:
+        raise WcRunError("minimax-sites reads source runs (--from) or closed records (--closed)")
     rows = {row["id"]: row for row in read_jsonl(run / ROWS_FILE)}
     touched: dict[str, set[str]] = {}
+    held_against = apply_root if apply_root is not None else wc_apply_root() if closed else None
+    for record in closed:
+        for site_id, lost_run in closed_minimax_sites(record, apply_root=held_against).items():
+            touched.setdefault(site_id, set()).add(lost_run)
     for source in sources:
         for stage, handoff, batches in _text_rounds(source, base):
             for batch_id, labels in batches.items():
@@ -2840,6 +3077,10 @@ def cmd_minimax_sites(
         {
             "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
             "from": [_shown(s) for s in sources],
+            "closed": [
+                {"path": _shown(c), "sha256": _sha256(c), "holds_against": _shown(held_against)}
+                for c in closed
+            ],
             "touched": len(touched),
             "sites": len(holds),
             "others": {reason: sorted(ids) for reason, ids in sorted(other.items())},
@@ -2878,6 +3119,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("defect-kept-sites", "a site list for the adversarial second check of standing claims"),
         ("defect-closure", "what an adversarial second check decided, for the audit log"),
         ("minimax-sites", "a site list: the texts MiniMax answers shaped and that still stand"),
+        ("defect-population", "the description-defect population now and the list left to ask"),
     ):
         command = sub.add_parser(name, help=text)
         command.add_argument("--run-dir", required=True, type=Path)
@@ -2889,6 +3131,7 @@ def build_parser() -> argparse.ArgumentParser:
             "defect-kept-sites",
             "defect-closure",
             "minimax-sites",
+            "defect-population",
         ):
             command.add_argument("--handoff", required=True, type=Path)
         if name in (
@@ -2940,8 +3183,26 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--tag", default=None)
         if name in ("defect-kept-sites", "minimax-sites"):
             command.add_argument(
-                "--from", type=Path, action="append", required=True, dest="sources"
+                "--from",
+                type=Path,
+                action="append",
+                required=name == "defect-kept-sites",  # minimax-sites: or --closed alone
+                default=[],
+                dest="sources",
             )
+            command.add_argument("--out", type=Path, required=True)
+        if name == "minimax-sites":
+            command.add_argument("--closed", type=Path, action="append", default=[])
+            command.add_argument(
+                "--apply-root",
+                type=Path,
+                default=None,
+                help="where a --closed record must hold (default: lane WC's apply root)",
+            )
+        if name == "defect-population":
+            command.add_argument("--defects", type=Path, action="append", required=True)
+            command.add_argument("--asked", type=Path, action="append", default=[])
+            command.add_argument("--lost", type=Path, action="append", default=[])
             command.add_argument("--out", type=Path, required=True)
     return parser
 
@@ -3031,7 +3292,13 @@ def run_command(args: argparse.Namespace) -> int:
         _print({k: record[k] for k in ("run", "claims")} | {"closure": _shown(run / CLOSURE_FILE)})
         print(closure_markdown(record))
     elif command == "minimax-sites":
-        _print(cmd_minimax_sites(run, args.sources, args.out))
+        _print(
+            cmd_minimax_sites(
+                run, args.sources, args.out, closed=args.closed, apply_root=args.apply_root
+            )
+        )
+    elif command == "defect-population":
+        _print(cmd_defect_population(run, args.defects, args.out, asked=args.asked, lost=args.lost))
     return 0
 
 

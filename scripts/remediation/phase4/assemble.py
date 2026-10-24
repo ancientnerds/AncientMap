@@ -20,6 +20,14 @@ assigned here by the first appearance of each source - the model never sees or w
 Lanes T and R publish generated text (a translation, a restatement), so edit 5 is the only edit
 their published sentence gets; their provenance still pins the quote's range in the source.
 
+**The AI disclosure** (`provenance.ai_system`) names the models whose answers the text rests on: the
+stamps of the site's model calls in its batch, as the run's own ledger records them (`answer_stamps`:
+the selector's, a translation's or restatement's, and after S6 the reviewer's), through
+`model4.ai_system_for` - never a constant (orchestrator item X10, 2026-10-24: `_finish` wrote the
+Claude-and-MiniMax `model4.AI_SYSTEM` on every new provenance; owner decision D56 makes the string
+exact, `ai_system_for` decides it). A site without a recorded call, or with a stamp no handoff answer
+carries, is refused: the disclosure is never guessed.
+
 A card (lanes W and S) is 1-2 of the published sentences, each cut by its DESC drops plus its CARD
 drops, with edits 1-4, no marker, and the one spoken edit `'c.'`/`'ca.'` -> `'circa'` in front of
 a number. Lanes T and R build no card (their text is not the source's, so no offered span applies):
@@ -38,7 +46,8 @@ from urllib.parse import urlsplit
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from phase3.run import InputError  # noqa: E402
+from phase3.ledger import LedgerKind  # noqa: E402
+from phase3.run import InputError, read_jsonl  # noqa: E402
 
 from phase4 import batch4 as B  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
@@ -133,6 +142,49 @@ def _numbers(order: Sequence[str]) -> dict[str, int]:
     return numbers
 
 
+def read_ledger(path: Path) -> list[dict]:
+    """The run's ledger (`<run>/LEDGER.jsonl`, `model4.LEDGER_FILE`), every line. A run whose
+    ledger is missing has recorded no call, and a text nobody answered has no disclosure."""
+    if not path.exists():
+        raise InputError(
+            f"{path}: no ledger - the AI disclosure names the models whose answers the text rests "
+            "on, and this run records no call"
+        )
+    return read_jsonl(path)
+
+
+def answer_stamps(
+    ledger: Sequence[Mapping[str, object]], *, batch_id: str, site_id: str
+) -> set[str]:
+    """The stamps of the answers this site's text rests on in this batch: per label of the site
+    (`<site_id>/<answer_key>`, the labels `write4.ledger_labels` puts into the journal evidence),
+    the stamp of its **last** `model_call` line in the run's ledger. That call's answer is the one
+    stored: `model_stage.judge_site` appends the line before it stores the answer and asks nothing
+    while an answer is stored, so a second line for a label is a re-ask - the answer of the line
+    before was deleted (or never stored), and the text does not rest on it (D56: the disclosure
+    names exactly the models the text rests on)."""
+    last: dict[str, str] = {}
+    for row in ledger:
+        label = str(row.get("label", ""))
+        if (
+            row.get("kind") == LedgerKind.MODEL_CALL.value
+            and row.get("batch_id") == batch_id
+            and label.startswith(f"{site_id}/")
+        ):
+            last[label] = str(row["model"])
+    return set(last.values())
+
+
+def site_ai_system(ledger: Sequence[Mapping[str, object]], *, batch_id: str, site_id: str) -> str:
+    """The AI disclosure of one site's text: `model4.ai_system_for` over its answering stamps
+    (`answer_stamps`). No stamp, or one no handoff answer carries, raises - never guessed."""
+    stamps = answer_stamps(ledger, batch_id=batch_id, site_id=site_id)
+    try:
+        return M.ai_system_for(stamps)
+    except ValueError as exc:
+        raise InputError(f"{batch_id}: {site_id}: {exc}") from None
+
+
 def _finish(
     *,
     site: M.PlanSite,
@@ -141,8 +193,10 @@ def _finish(
     sources: Mapping[str, M.SourceDoc],
     published: Sequence[tuple[str, str, int, int, tuple[tuple[int, int], ...]]],
     card: tuple[str, M.Card] | None,
+    ai_system: str,
 ) -> Built:
-    """Number, mark, join and record. `published` is (body, src, start, end, drops) in order."""
+    """Number, mark, join and record. `published` is (body, src, start, end, drops) in order;
+    `ai_system` is the disclosure of the answers the text rests on (`site_ai_system`)."""
     numbers = _numbers([src for _, src, _, _, _ in published])
     sentences = tuple(with_marker(body, numbers[src]) for body, src, _, _, _ in published)
     description = " ".join(sentences)
@@ -152,7 +206,7 @@ def _finish(
         run=run,
         lane=lane,
         ai=M.LANE_AI[lane],
-        ai_system=M.AI_SYSTEM,
+        ai_system=ai_system,
         licence=M.PUBLISHED_LICENCE,
         attribution=M.Attribution(
             title=_title(first),
@@ -216,6 +270,7 @@ def build_picks(
     texts: Mapping[str, str],
     *,
     run: str,
+    ai_system: str,
     translations: Mapping[str, str] | None = None,
 ) -> Built:
     """Lanes W, S and T from DESC picks and 0-2 CARD picks (0: no card, as after a review drop).
@@ -260,7 +315,13 @@ def build_picks(
         card_text = " ".join(texts_of_card)
         built_card = (card_text, M.Card(items=tuple(items), text_sha256=M.text_sha256(card_text)))
     return _finish(
-        site=site, lane=lane, run=run, sources=sources, published=published, card=built_card
+        site=site,
+        lane=lane,
+        run=run,
+        sources=sources,
+        published=published,
+        card=built_card,
+        ai_system=ai_system,
     )
 
 
@@ -273,6 +334,7 @@ def assemble(
     texts: Mapping[str, str],
     *,
     run: str,
+    ai_system: str,
     translations: Mapping[str, str] | None = None,
 ) -> M.Assembly:
     """The contract's entry for lanes W, S (and T, with its `translations`)."""
@@ -287,6 +349,7 @@ def assemble(
         sources,
         texts,
         run=run,
+        ai_system=ai_system,
         translations=translations,
     ).assembly
 
@@ -303,6 +366,7 @@ def build_restated(
     sources: Mapping[str, M.SourceDoc],
     *,
     run: str,
+    ai_system: str,
 ) -> Built:
     """Lane R: each restated sentence cites the page its quote was located in; no card.
 
@@ -314,7 +378,13 @@ def build_restated(
         raise ValueError(f"{site.site_id}: no restated sentence to assemble")
     published = [(r.text, r.src, r.start, r.end, ()) for r in restated_order(restatements)]
     return _finish(
-        site=site, lane=M.Lane.R, run=run, sources=sources, published=published, card=None
+        site=site,
+        lane=M.Lane.R,
+        run=run,
+        sources=sources,
+        published=published,
+        card=None,
+        ai_system=ai_system,
     )
 
 
@@ -415,11 +485,13 @@ def batch_inputs(batch_dir: Path) -> tuple[str, list[SiteInputs]]:
     return batch_id, out
 
 
-def build_site(inputs: SiteInputs, *, run: str) -> Built:
+def build_site(inputs: SiteInputs, *, run: str, ai_system: str) -> Built:
     if inputs.lane is M.Lane.R:
         if inputs.restatements is None:
             raise ValueError(f"{inputs.site.site_id}: lane R without restatements")
-        return build_restated(inputs.site, inputs.restatements, inputs.sources, run=run)
+        return build_restated(
+            inputs.site, inputs.restatements, inputs.sources, run=run, ai_system=ai_system
+        )
     if inputs.selection is None:
         raise ValueError(f"{inputs.site.site_id}: lane {inputs.lane.value} without a selection")
     return build_picks(
@@ -431,14 +503,24 @@ def build_site(inputs: SiteInputs, *, run: str) -> Built:
         inputs.sources,
         inputs.texts,
         run=run,
+        ai_system=ai_system,
         translations=inputs.translations,
     )
 
 
-def assemble_batch(batch_dir: Path) -> int:
-    """S4 over one batch: `assembly.jsonl`, one `Assembly` per site that reached a text."""
-    _, inputs = batch_inputs(batch_dir)
+def assemble_batch(batch_dir: Path, *, ledger: Path) -> int:
+    """S4 over one batch: `assembly.jsonl`, one `Assembly` per site that reached a text, each
+    disclosing the models its answers came from (`site_ai_system` over the run's `ledger`)."""
+    batch_id, inputs = batch_inputs(batch_dir)
     run = B.run_name(batch_dir)
-    assemblies = [build_site(site_inputs, run=run).assembly for site_inputs in inputs]
+    calls = read_ledger(ledger)
+    assemblies = [
+        build_site(
+            site_inputs,
+            run=run,
+            ai_system=site_ai_system(calls, batch_id=batch_id, site_id=site_inputs.site.site_id),
+        ).assembly
+        for site_inputs in inputs
+    ]
     B.write_text_atomic(batch_dir / M.ASSEMBLY_FILE, M.dump_jsonl(assemblies))
     return 0

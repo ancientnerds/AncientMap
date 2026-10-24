@@ -167,14 +167,152 @@ def test_a_written_site_a_later_lane_stamped_still_re_plans_to_its_rows(tmp_path
     assert [(r.site_id, r.rule) for r in moved.refusals] == [(FX.SITE_A, W4.RULE_MOVED)]
 
 
-def test_a_site_not_written_yet_whose_other_raw_data_moved_is_refused(tmp_path: Path) -> None:
-    """Before the write, the whole pair must be the checked one: the write's old value is held in
-    the transaction (guard 4), so another key that moved would stop the whole batch there."""
+def test_a_site_not_written_yet_whose_other_raw_data_moved_is_planned_over_the_live_raw_data(
+    tmp_path: Path,
+) -> None:
+    """2026-10-24 (the stale reads): before the write, the description and the description's own
+    state in raw_data (WC's keys) must be the checked ones; a key of another lane that moved since
+    (lane WB's `_card_provenance`) does not move the text the check answered. The site is planned
+    over the live raw_data: the row's old value is what production holds now - the transaction
+    holds it whole (guard 4) - and its new value keeps the other lane's key."""
     batch, outcomes = _loaded(tmp_path)
     db = _db()
-    db.sites[FX.SITE_A].raw_data = {**db.sites[FX.SITE_A].raw_data, "_card_provenance": {"v": 1}}
+    stamped = {**db.sites[FX.SITE_A].raw_data, "_card_provenance": {"v": 1}}
+    db.sites[FX.SITE_A].raw_data = stamped
     plan = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
-    assert [(r.site_id, r.rule) for r in plan.refusals] == [(FX.SITE_A, W4.RULE_MOVED)]
+    assert not plan.refusals and plan.rebased == [FX.SITE_A]
+    raw = next(r for r in plan.rows if (r.site_id, r.column) == (FX.SITE_A, "raw_data"))
+    assert json.loads(raw.old_value) == stamped
+    new = json.loads(raw.new_value)
+    assert new.pop("_card_provenance") == {"v": 1}
+    assert new == outcomes[batch.batch_id][FX.SITE_A].raw_data
+    # the other rows are the plan's as before: only the moved site's raw_data row is another one
+    plain = W4.plan_wc(batch, outcomes=outcomes, live=_live(_db()))
+    assert {r.change_key for r in plain.rows} - {r.change_key for r in plan.rows} == {
+        r.change_key for r in plain.rows if (r.site_id, r.column) == (FX.SITE_A, "raw_data")
+    }
+    # one of the description's own keys moved: refused, as before
+    db.sites[FX.SITE_A].raw_data = {**stamped, M.CITATIONS_KEY: []}
+    moved = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert [(r.site_id, r.rule) for r in moved.refusals] == [(FX.SITE_A, W4.RULE_MOVED)]
+
+
+def test_a_clear_whose_raw_data_another_lane_stamped_keeps_that_key(tmp_path: Path) -> None:
+    """A cleared site loses WC's keys and nothing else: over a live raw_data another lane stamped,
+    the clear row writes that raw_data less WC's keys (here lane WB's key and the March title)."""
+    batch, outcomes = _loaded(tmp_path)
+    db = _db()
+    db.sites[FX.SITE_C].raw_data = {**db.sites[FX.SITE_C].raw_data, "_card_provenance": {"v": 1}}
+    plan = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert plan.rebased == [FX.SITE_C]
+    raw = next(r for r in plan.rows if (r.site_id, r.column) == (FX.SITE_C, "raw_data"))
+    assert raw.test_id == W4.TEST_WC_RAW_DATA_CLEAR
+    assert json.loads(raw.new_value) == {"_card_provenance": {"v": 1}}
+
+
+def test_a_written_site_a_later_write_superseded_re_plans_to_the_rows_it_was_written_from(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """2026-10-24: the WN pilot wrote texts over sites the WC pilot and mass-02 had cleared
+    (`p4wc-4325` over `p4wc-4003`), and the written batches could no longer re-plan - the cleared
+    site was neither the outcome's nor the checked pair, so the re-plan refused it and the gate
+    stopped (`sites_taken_back`: not reverted). A site the batch wrote (`wc_bases`) whose live
+    state moved on is the batch's write: it re-plans to the rows it was written from; what came
+    after is the acceptance's question. A site the batch wrote that is back at its checked state
+    (taken back by `revert4 --site`) and that a later plan asks again is still that plan's."""
+    plan = _plan(tmp_path)
+    db = _db()
+    assert G.main(_args(tmp_path, plan, "--apply"), runner=db) == 0
+    _accept_step(tmp_path, capsys, monkeypatch, db)
+    later_raw = {M.PROVENANCE_KEY: {"lane": "N"}, M.CITATIONS_KEY: [], WC4.CHECK_KEY: {"v": 2}}
+    db.sites[FX.SITE_C].description = "A text a later lane wrote over the clear."
+    db.sites[FX.SITE_C].raw_data = later_raw
+    db.sites[FX.SITE_A].raw_data = {M.PROVENANCE_KEY: {"lane": "W"}}  # a Phase-4 re-target since
+    written = (tmp_path / "apply" / "p4wc-4001" / W4.PLAN_FILE).read_bytes()
+    assert G.main(_args(tmp_path, plan), runner=db) == 0
+    assert "rows planned: 7 | refused by rule: {}" in capsys.readouterr().out
+    assert (tmp_path / "apply" / "p4wc-4001" / W4.PLAN_FILE).read_bytes() == written
+    # without the record of what the batch wrote, the same sites are refused as before
+    batch, outcomes = _loaded(tmp_path / "fresh")
+    bare = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert sorted((r.site_id, r.rule) for r in bare.refusals) == sorted(
+        [(FX.SITE_A, W4.RULE_WRITTEN), (FX.SITE_C, W4.RULE_MOVED)]
+    )
+    bases = G.wc_bases(tmp_path / "apply", ["p4wc-4001"], write_round=1)
+    assert set(bases["p4wc-4001"]) == {FX.SITE_A, FX.SITE_B, FX.SITE_C, UNCHANGED}
+    replanned = W4.plan_wc(batch, outcomes=outcomes, live=_live(db), bases=bases)
+    assert not replanned.refusals and len(replanned.rows) == 7
+    # back at its checked state and asked again by a later plan: the later plan's, as before
+    reverted = _db()
+    later = {**outcomes, "p4-4002": {FX.SITE_B: outcomes[batch.batch_id][FX.SITE_B]}}
+    taken = W4.plan_wc(batch, outcomes=later, live=_live(reverted), bases=bases)
+    assert [(r.site_id, r.rule) for r in taken.refusals] == [(FX.SITE_B, W4.RULE_TAKEN_OVER)]
+    assert G.wc_bases(tmp_path / "apply", ["p4wc-4001"], write_round=2) == {}
+
+
+def _between_read_and_write(db: PFX.FakeDb, write) -> Any:
+    """The fake psql, with another lane's `write` landing right after the gate's live read - between
+    the plan and the transaction."""
+
+    def runner(sql: str, *, host: str) -> str:
+        out = db(sql, host=host)
+        if sql.startswith(G.WC_LIVE_READ):
+            write(db)
+        return out
+
+    return runner
+
+
+def test_concurrent_lanes_a_write_planned_over_one_lanes_key_survives_it_and_loses_no_later_one(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The concurrent-lane scenario of 2026-10-24. Lane WB stamps a site after its check: the gate
+    plans the site over the live raw_data and writes it, WB's key kept. WB stamps it again after the
+    write: the written batch re-plans to exactly the rows it was written from (`wc_bases`), the
+    acceptance reads WB's write as a later lane. And a WB write that lands between the gate's read
+    and the transaction is never overwritten: the preflight finds the row off its planned old value,
+    the batch stops, nothing is written."""
+    plan = _plan(tmp_path)
+    db = _db()
+    _stamp_card_provenance(db, FX.SITE_A)
+    assert G.main(_args(tmp_path, plan, "--apply"), runner=db) == 0
+    out = capsys.readouterr().out
+    assert "refused by rule: {}" in out and "moved since the check" in out and ": 1 site(s)" in out
+    assert db.sites[FX.SITE_A].raw_data["_card_provenance"] == {"v": 1}
+    assert db.sites[FX.SITE_A].description == outcome_text(plan, FX.SITE_A)
+    written = (tmp_path / "apply" / "p4wc-4001" / W4.PLAN_FILE).read_bytes()
+    _accept_step(tmp_path, capsys, monkeypatch, db, "--allow-stamp", "wb-teaser-prov-%")
+    db.sites[FX.SITE_A].raw_data = {**db.sites[FX.SITE_A].raw_data, "_card_provenance": {"v": 2}}
+    assert G.main(_args(tmp_path, plan), runner=db) == 0
+    out = capsys.readouterr().out
+    assert "rows planned: 7 | refused by rule: {}" in out
+    assert (tmp_path / "apply" / "p4wc-4001" / W4.PLAN_FILE).read_bytes() == written
+
+    # a second root, the same plan: WB writes between the gate's read and the transaction
+    plan2 = _plan(tmp_path / "second")
+    db2 = _db()
+
+    def wb_writes(target: PFX.FakeDb) -> None:
+        site = target.sites[FX.SITE_A]
+        site.raw_data = {**site.raw_data, "_card_provenance": {"v": 9}}
+
+    args = ["--group", "WC", "--wc-plan", str(plan2), "--apply-root", str(tmp_path / "apply2")]
+    code = G.main([*args, "--apply"], runner=_between_read_and_write(db2, wb_writes))
+    out = capsys.readouterr().out
+    assert code == 1 and "STOP at p4wc-4001" in out
+    assert "the row no longer holds the planned old value" in out
+    assert db2.sites[FX.SITE_A].raw_data["_card_provenance"] == {"v": 9}
+    assert db2.sites[FX.SITE_A].description == FX.TEXT_A and not db2.journal
+    assert (tmp_path / "apply2" / "p4wc-4001" / G.STOPPED_FILE).exists()
+
+
+def outcome_text(plan: Path, site_id: str) -> str | None:
+    """The description the plan's outcome for `site_id` leaves."""
+    for record in lanes.read_jsonl(plan):
+        for outcome in record["outcomes"]:
+            if outcome["site_id"] == site_id:
+                return outcome["description"]
+    raise AssertionError(site_id)
 
 
 def test_a_site_a_later_plan_asks_again_leaves_every_earlier_batch_that_did_not_write_it(

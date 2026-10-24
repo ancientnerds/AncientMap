@@ -131,12 +131,19 @@ def handed_off(
     therefore captured with the prompt the import will send (an answer already on disk is reused and
     never recorded, as the import will reuse it), and nothing the stages write - holds, selections,
     answers, reports, ledger lines - survives the export.
+
+    The scratch ledger starts as a copy of the run's own (when the run has recorded a call): a stage
+    that builds a text reads the stamps of the calls it rests on from it (`assemble.site_ai_system`,
+    the review's S4 again), as the import does from the run's ledger.
     """
     recorder = MS.RecordingRunner()
     with tempfile.TemporaryDirectory() as scratch:
         copy = Path(scratch) / B.run_name(batch_dir) / batch_dir.name
         shutil.copytree(batch_dir, copy)
         ledger = Path(scratch) / "LEDGER.jsonl"
+        recorded = batch_dir.parent / M.LEDGER_FILE
+        if recorded.exists():
+            shutil.copyfile(recorded, ledger)
         for name, stage in stages:
             if stage(copy, ledger, recorder) != 0:
                 raise InputError(f"{batch_dir.name}: the export's run of {name} did not complete")
@@ -332,7 +339,7 @@ def preview_select(batch_dir: Path) -> Report:
 
 def cmd_assemble(args: argparse.Namespace) -> tuple[int, Report]:
     batch_dir = batch_dir_of(args)
-    code = A.assemble_batch(batch_dir)
+    code = A.assemble_batch(batch_dir, ledger=run_ledger(args))
     return code, {"batch_id": args.batch_id, "assembly": str(batch_dir / M.ASSEMBLY_FILE)}
 
 

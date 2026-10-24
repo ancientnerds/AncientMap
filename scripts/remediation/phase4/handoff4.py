@@ -264,7 +264,15 @@ def check_review(batch_dir: Path, line: Mapping[str, Any], site_id: str, text: s
     found = [item for item in inputs if item.site.site_id == site_id]
     if len(found) != 1:
         raise HandoffCheckError(f"{batch_dir.name}: {site_id} is no assembled site of the batch")
-    built = A.build_site(found[0], run=B.run_name(batch_dir))
+    built = A.build_site(
+        found[0],
+        run=B.run_name(batch_dir),
+        ai_system=A.site_ai_system(
+            A.read_ledger(batch_dir.parent / M.LEDGER_FILE),
+            batch_id=batch_dir.name,
+            site_id=site_id,
+        ),
+    )
     _exported(line, RV.reviewer_prompt(found[0], built).render())
     card = built.assembly.card is not None
     try:

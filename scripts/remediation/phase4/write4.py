@@ -89,6 +89,7 @@ from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 from urllib.parse import unquote
 
@@ -561,6 +562,9 @@ class WritePlan4:
     rows: list[Row4] = field(default_factory=list)
     refusals: list[W.Refusal] = field(default_factory=list)
     unclaimed: list[legacy4.Unclaimed] = field(default_factory=list)
+    #: WC: the sites planned over a live raw_data another lane moved since the check, in a key that
+    #: is not the description's (`plan_wc`, `description_part`): written over that raw_data.
+    rebased: list[str] = field(default_factory=list)
 
     def refusals_by_rule(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -1049,7 +1053,14 @@ def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
     Rows that chain are no claim twice: a site whose text an earlier plan wrote (a clear) and a later
     plan writes again (lane WN's text, a site-list run over a written text) has, per column, one row
     per plan, each one's old value the new value of the row before it, in plan order. The earlier
-    batch re-plans the rows it was written from, the later one plans its own."""
+    batch re-plans the rows it was written from, the later one plans its own.
+
+    `plans` are in write order and may hold written batches that are never rendered: a closed batch
+    whose plan is lost (`write_gate4.wc_chain`) is a link of the chain like any written batch. A
+    `raw_data` link chains on the description's own state (`_links`, `description_part` without the
+    card sub-key): a key another lane wrote between two WC writes (lane WB's `_card_provenance`)
+    moves the later row's old value - it is planned over the live raw_data - without making the
+    two rows two claims; the transaction still holds that old value whole (guard 4)."""
     by_site: dict[str, dict[str, list[tuple[str, Row4]]]] = {}
     for plan in plans:
         for row in plan.rows:
@@ -1061,12 +1072,25 @@ def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
         for rows in columns.values():
             ids = list(dict.fromkeys(batch_id for batch_id, _ in rows))
             chained = all(
-                before.new_value == after.old_value
+                _links(before, after)
                 for (_, before), (_, after) in zip(rows, rows[1:], strict=False)
             )
             if len(ids) > 1 and not (chained and len(ids) == len(rows)):
                 twice[site_id] = list(dict.fromkeys([*twice.get(site_id, []), *ids]))
     return twice
+
+
+def _links(before: Row4, after: Row4) -> bool:
+    """Does `after` (a later batch's row of the same cell) start where `before` ended? The
+    description chains byte for byte; raw_data on the description's own state (`description_part`
+    without the card sub-key, which lane WB nulls)."""
+    if before.column != "raw_data":
+        return before.new_value == after.old_value
+
+    def state(value: str | None) -> dict[str, Any]:
+        return description_part(None if value is None else M.parse_json(value), keep_card=False)
+
+    return state(before.new_value) == state(after.old_value)
 
 
 def source_files(
@@ -1321,41 +1345,108 @@ def _wc_part(raw: Mapping[str, Any] | None) -> dict[str, Any]:
     return {key: value for key, value in (raw or {}).items() if key in wc4.WC_KEYS}
 
 
+#: The one sub-key of the description's provenance that is not the description's: the Phase-5 card
+#: (`model4.Provenance.card`), which lane WB sets to null when it writes a teaser card
+#: (`mechanical/teaser.new_raw_data`). A WC write that leaves no card there does not depend on it.
+PROVENANCE_CARD_KEY = "card"
+
+
+def _keeps_card(raw: Mapping[str, Any] | None) -> bool:
+    """Does the `raw_data` a WC outcome leaves carry a Phase-5 card in its provenance? A filtered
+    Phase-4 provenance carries none (`wc4.filtered_provenance`), lane L's and lane N's have none."""
+    provenance = _wc_part(raw).get(M.PROVENANCE_KEY)
+    return isinstance(provenance, dict) and provenance.get(PROVENANCE_CARD_KEY) is not None
+
+
+def description_part(raw: Mapping[str, Any] | None, *, keep_card: bool) -> dict[str, Any]:
+    """What of `raw_data` is the description's own state: WC's keys (`wc4.WC_KEYS` - the citations,
+    the provenance, the check and the enrichment record), the provenance's Phase-5 card left out
+    unless the write keeps one (`keep_card`). Another lane's key (lane WB's `_card_provenance`, the
+    field lanes' `_period_provenance`, ...) is not in it: a change there does not move the text a
+    check answered."""
+    part = _wc_part(raw)
+    provenance = part.get(M.PROVENANCE_KEY)
+    if not keep_card and isinstance(provenance, dict) and PROVENANCE_CARD_KEY in provenance:
+        part[M.PROVENANCE_KEY] = {
+            key: value for key, value in provenance.items() if key != PROVENANCE_CARD_KEY
+        }
+    return part
+
+
+def on_basis(
+    outcome_raw: Mapping[str, Any] | None, basis: Mapping[str, Any] | None
+) -> dict[str, Any] | None:
+    """The `raw_data` a WC outcome leaves when it is written over `basis`: the basis less WC's keys,
+    plus the outcome's WC keys (`wc4.written_raw_data` does the same over the checked read, so over
+    that read this is the outcome's own value). `None` when nothing remains."""
+    new = {key: value for key, value in (basis or {}).items() if key not in wc4.WC_KEYS}
+    new.update(_wc_part(outcome_raw))
+    return new or None
+
+
+#: What each lane-WC batch applied in this round wrote, by write batch, site and column
+#: (`write_gate4.wc_bases`, from its `PLAN.jsonl`): the old value of each row. A site in it is the
+#: batch's write; its raw_data row's old value is the `raw_data` the write was planned over, which a
+#: re-plan of the written batch starts from again.
+WcBases = Mapping[str, Mapping[str, Mapping[str, str | None]]]
+
+
 def plan_wc(
     batch: BatchInputs,
     *,
     outcomes: WcOutcomes,
     live: Mapping[str, Mapping[str, Any]],
+    bases: WcBases = MappingProxyType({}),
 ) -> WritePlan4:
     """WC: the rows of each checked site of the batch (owner decision O5, 2026-09-26).
 
     `outcomes` are every named WC plan's, by plan batch in plan order (`load_wc_plan`); `live` is
     production's description and raw_data of each planned site (`write_gate4`, read-only, at the
-    gate). Per site, in this order:
+    gate); `bases` what each batch applied in this round wrote (`write_gate4.wc_bases`; empty for
+    a batch not written yet). Per site, in this order:
 
+    * **written by this batch and moved on since** - a site the batch wrote (its `bases` entry)
+      whose live state is no longer the one it was checked with: its write stands, or a later write
+      superseded it (lane WN's text over a WC clear - the closed batch `p4wc-4325` over the clears
+      of the pilot and of mass-02 -, a later list run's text, a Phase-4 re-target). Its rows,
+      re-planned over the raw_data the batch was written over, whatever production holds now: a
+      written batch re-plans to the rows it was written from, as lane L's does from its plan file,
+      and what came after the write is the acceptance's question (`verify_writes4`: a later stamp is
+      a later lane or a deviation). Until 2026-10-24 such a site was refused (`asked-again-later`
+      or `moved-since-check`), and the written batch's re-plan then stopped the gate;
     * a live full Phase-4 provenance: refused (`written-by-p4`) - unless the site was asked as a
-      Phase-4 text (a site-list run, `wc4.Marking.PHASE4`), where the pair held whole is the rule;
-    * written by this batch - the live description is the outcome's and so are WC's own three
+      Phase-4 text (a site-list run, `wc4.Marking.PHASE4`), where the description's own state held
+      is the rule;
+    * written by this batch - the live description is the outcome's and so are WC's own
       `raw_data` keys (`wc4.WC_KEYS`; a later lane may have stamped others: lane WB's
-      `_card_provenance`, the review of 2026-09-26): its rows, so a written batch re-plans to the
-      rows it was written from, as lane L's does from its plan file;
+      `_card_provenance`, the review of 2026-09-26): its rows, planned over the raw_data the batch
+      was written over (its `bases` entry);
     * named by a later WC plan's batch: refused (`asked-again-later`) - that plan's answer to the
       text now served is the one planned; a site the batch wrote and `revert4 --site` took back
       then leaves the re-plan on the reversal proof the gate asks for (`sites_taken_back`);
-    * the pair it was checked with, whole (the transaction holds the old values): its rows;
+    * the description it was checked with and the description's own state in `raw_data`
+      (`description_part`: WC's keys, the provenance's Phase-5 card left out unless the write keeps
+      one) - its rows, planned over the **live** raw_data. A key another lane wrote since (lane WB's
+      `_card_provenance`, the card sub-key WB sets to null, a field lane's provenance marker) does
+      not move the text the check answered, so it does not void the check (the stale reads of
+      2026-10-24: 19 of the 136 sites of `defects-2026-10-02`); the row's old value is the live
+      raw_data, which the transaction holds whole (guard 4), and its new value that raw_data with
+      WC's keys replaced (`on_basis`) - so the other lane's key is kept, and a write between this
+      read and the transaction stops the batch at the preflight instead of being lost (`rebased`);
     * anything else, and no row at all: refused (`moved-since-check`) - the check answers a text
-      that is not served.
+      that is not served, or a description state that is not the one served.
 
     No scope: the population is every curated March text that stays (`wc/cli.py`). The rows write
     the outcome's pair: the description (NULL for a clear) and raw_data - raw_data alone when the
-    kept text is the stored one byte for byte, the description alone for the clear of a NULL
-    raw_data.
+    kept text is the stored one byte for byte, the description alone for a clear that leaves the
+    raw_data as it is (NULL over NULL, or a raw_data without WC's keys).
 
     **A site without a description** (lane WN, `wc4.Marking.NONE`): the premise is an empty old
     value - NULL or blank, exactly as the read found it (`site.description`, kept in the evidence as
-    `checked`) - and the live row must still hold exactly that description and raw_data (a text
-    that arrived since is `moved-since-check`: lane WN never overwrites one). The description row's
-    old value is that NULL (or blank) and the transaction's guard 4 (`IS DISTINCT FROM`) holds it.
+    `checked`) - and the live row must still hold exactly that description and its own raw_data
+    state (a text that arrived since is `moved-since-check`: lane WN never overwrites one). The
+    description row's old value is that NULL (or blank) and the transaction's guard 4
+    (`IS DISTINCT FROM`) holds it.
     """
     plan = WritePlan4(group=Group.WC, batch_id=group_batch_id(batch.batch_id, Group.WC))
     full = {lane.value for lane in M.LANE_CHANGES}
@@ -1365,6 +1456,7 @@ def plan_wc(
         for batch_id in order[order.index(batch.batch_id) + 1 :]
         for site_id in outcomes[batch_id]
     }
+    written_over = bases.get(plan.batch_id, {})
     for site in batch.sites:
         outcome = outcomes[batch.batch_id].get(site.site_id)
         if outcome is None or outcome.evidence["checked"] != site.description:
@@ -1372,13 +1464,26 @@ def plan_wc(
                 f"{batch.batch_id}: {site.site_id} has no outcome for the text it was checked with"
             )
         now = live.get(site.site_id)
+        keep_card = _keeps_card(outcome.raw_data)
+        checked = (
+            now is not None
+            and now["description"] == site.description
+            and description_part(now["raw_data"], keep_card=keep_card)
+            == description_part(site.raw_data, keep_card=keep_card)
+        )
+        written_here = written_over.get(site.site_id)
+        superseded = written_here is not None and not checked
         lane = ((now or {}).get("raw_data") or {}).get(M.PROVENANCE_KEY, {}).get("lane")
-        if lane in full and outcome.evidence["marking"]["old"] != wc4.Marking.PHASE4.value:
+        if (
+            not superseded
+            and lane in full
+            and outcome.evidence["marking"]["old"] != wc4.Marking.PHASE4.value
+        ):
             plan.refusals.append(
                 W.Refusal(site.site_id, "description", RULE_WRITTEN, "Phase 4 wrote this text")
             )
             continue
-        written = (
+        written = superseded or (
             now is not None
             and now["description"] == outcome.description
             and _wc_part(now["raw_data"]) == _wc_part(outcome.raw_data)
@@ -1393,23 +1498,35 @@ def plan_wc(
                 )
             )
             continue
-        checked = now is not None and (now["description"], now["raw_data"]) == (
-            site.description,
-            site.raw_data,
-        )
         if not (written or checked):
             plan.refusals.append(
                 W.Refusal(
                     site.site_id,
                     "description",
                     RULE_MOVED,
-                    "production no longer holds the description and raw_data it was checked with",
+                    "production no longer holds the description, or the description's own state "
+                    "in raw_data, it was checked with",
                 )
             )
             continue
+        basis = site.raw_data
+        if written_here is not None and "raw_data" in written_here:
+            stored = written_here["raw_data"]
+            basis = None if stored is None else M.parse_json(stored)
+            if description_part(basis, keep_card=keep_card) != description_part(
+                site.raw_data, keep_card=keep_card
+            ):
+                raise PlanInputError(
+                    f"{plan.batch_id}: {site.site_id} was written over a raw_data whose description "
+                    "state is not the one it was checked with: not this plan's write"
+                )
+        elif written_here is None and not written and now["raw_data"] != site.raw_data:
+            basis = now["raw_data"]
+            plan.rebased.append(site.site_id)
+        new_raw = on_basis(outcome.raw_data, basis)
         cleared = outcome.description is None
         if not cleared and outcome.description == site.description:
-            if outcome.raw_data == site.raw_data:
+            if new_raw == basis:
                 plan.refusals.append(
                     W.Refusal(site.site_id, "raw_data", RULE_NOT_A_CHANGE, "nothing moves")
                 )
@@ -1426,15 +1543,15 @@ def plan_wc(
                     evidence=outcome.evidence,
                 )
             )
-        if cleared and site.raw_data is None and outcome.raw_data is None:
-            continue  # NULL stays NULL: the clear is the description row alone (WC_PAIRS)
+        if cleared and new_raw == basis:
+            continue  # nothing of raw_data moves: the clear is the description row alone (WC_PAIRS)
         plan.rows.append(
             make_row(
                 group=Group.WC,
                 site=site,
                 column="raw_data",
-                old_value=None if site.raw_data is None else raw_json(site.raw_data),
-                new_value=None if outcome.raw_data is None else raw_json(outcome.raw_data),
+                old_value=None if basis is None else raw_json(basis),
+                new_value=None if new_raw is None else raw_json(new_raw),
                 test_id=TEST_WC_RAW_DATA_CLEAR if cleared else TEST_WC_RAW_DATA,
                 evidence=outcome.evidence,
             )

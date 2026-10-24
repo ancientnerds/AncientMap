@@ -216,10 +216,12 @@ class Kept:
     restated: tuple[B.Restatement, ...] = ()
 
 
-def build(inputs: A.SiteInputs, kept: Kept, *, run: str) -> A.Built:
+def build(inputs: A.SiteInputs, kept: Kept, *, run: str, ai_system: str) -> A.Built:
     """S4 again, through the assembler's own builders."""
     if inputs.lane is M.Lane.R:
-        return A.build_restated(inputs.site, kept.restated, inputs.sources, run=run)
+        return A.build_restated(
+            inputs.site, kept.restated, inputs.sources, run=run, ai_system=ai_system
+        )
     return A.build_picks(
         inputs.site,
         kept.desc,
@@ -229,6 +231,7 @@ def build(inputs: A.SiteInputs, kept: Kept, *, run: str) -> A.Built:
         inputs.sources,
         inputs.texts,
         run=run,
+        ai_system=ai_system,
         translations=inputs.translations,
     )
 
@@ -289,14 +292,22 @@ class Outcome:
 
 
 def settle(
-    inputs: A.SiteInputs, built: A.Built, verdict: Verdict, reverify: Reverify, *, run: str
+    inputs: A.SiteInputs,
+    built: A.Built,
+    verdict: Verdict,
+    reverify: Reverify,
+    *,
+    run: str,
+    ai_system: str,
 ) -> Outcome:
-    """Apply the verdict, assemble again, verify again (twice when only the card is held)."""
+    """Apply the verdict, assemble again, verify again (twice when only the card is held).
+    `ai_system` is the disclosure of every answer the reviewed text rests on - the reviewer's
+    included (`assemble.site_ai_system` over the ledger after the review call)."""
     site_id = inputs.site.site_id
     kept, holds, fate = keep(inputs, built, verdict)
     if kept is None:
         return Outcome(None, holds, "held")
-    rebuilt = build(inputs, kept, run=run)
+    rebuilt = build(inputs, kept, run=run, ai_system=ai_system)
     card = rebuilt.assembly.card
     if fate == "rebuilt" and (card is None or len(card) < MIN_CARD_CHARS):
         detail = (
@@ -306,7 +317,7 @@ def settle(
         holds = (*holds, _card_hold(site_id, detail))
         fate = "held"
         kept = dataclasses.replace(kept, card=())
-        rebuilt = build(inputs, kept, run=run)
+        rebuilt = build(inputs, kept, run=run, ai_system=ai_system)
     found = reverify(inputs.site, rebuilt.assembly)
     if any(hold.scope is M.HoldScope.SITE for hold in found):
         return Outcome(None, (*holds, *found), "held")
@@ -314,7 +325,7 @@ def settle(
         return Outcome(rebuilt.assembly, holds, fate)
     if rebuilt.assembly.card is None:
         raise ValueError(f"{site_id}: the verifier held a card on an assembly without one")
-    bare = build(inputs, dataclasses.replace(kept, card=()), run=run)
+    bare = build(inputs, dataclasses.replace(kept, card=()), run=run, ai_system=ai_system)
     again = reverify(inputs.site, bare.assembly)
     if again:
         return Outcome(None, (*holds, *found, *again), "held")
@@ -337,6 +348,9 @@ def review_batch(
     run = B.run_name(batch_dir)
     reviews = F.EvidenceStore(batch_dir / B.REVIEWS_DIR)
     book = L.Ledger(ledger)
+    # The run ledger, read once: each bought review call's line is added to these rows as the
+    # ledger gets it, so the disclosure of a reviewed text is computed without re-reading the file.
+    calls = A.read_ledger(ledger) if assembled else []
     written: list[M.Assembly] = []
     holds: list[M.Hold] = []
     rows: list[dict[str, Any]] = []
@@ -345,7 +359,11 @@ def review_batch(
         site_id = site_inputs.site.site_id
         if site_id not in assembled:
             continue
-        built = A.build_site(site_inputs, run=run)
+        built = A.build_site(
+            site_inputs,
+            run=run,
+            ai_system=A.site_ai_system(calls, batch_id=batch_id, site_id=site_id),
+        )
         row: dict[str, Any] = {"site_id": site_id, "sentences": len(built.sentences)}
         rows.append(row)
         try:
@@ -368,6 +386,15 @@ def review_batch(
             error = str(exc)
             row["outcome"] = "not-asked"
             break
+        if bought.model is not None:  # a call was made: `judge_site` appended its ledger line
+            calls.append(
+                {
+                    "kind": L.LedgerKind.MODEL_CALL.value,
+                    "batch_id": batch_id,
+                    "label": bought.label,
+                    "model": bought.model,
+                }
+            )
         row.update(
             label=bought.label,
             prompt_sha256=bought.prompt_sha256,
@@ -384,7 +411,14 @@ def review_batch(
             row["outcome"] = "held"
             continue
         verdict, followed = follow_drops(verdict, built.sentences)
-        outcome = settle(site_inputs, built, verdict, reverify, run=run)
+        outcome = settle(
+            site_inputs,
+            built,
+            verdict,
+            reverify,
+            run=run,
+            ai_system=A.site_ai_system(calls, batch_id=batch_id, site_id=site_id),
+        )
         holds.extend(outcome.holds)
         row.update(
             lines=list(verdict.lines),

@@ -28,6 +28,9 @@ from phase4 import sentences as S  # noqa: E402
 
 from tests.remediation import p4_fixtures as X  # noqa: E402
 
+#: The disclosure an all-Opus text gets (`model4.ai_system_for`, which owns the string).
+AI = M.ai_system_for([X.MS.MODEL])
+
 
 def _pool(text: str = X.ARTICLE, lane: M.Lane = M.Lane.W) -> tuple[M.Sentence, ...]:
     return S.candidate_pool(S.split_source("W", text), lane=lane, names=["Stone Temple"], text=text)
@@ -45,6 +48,7 @@ def _built(answer: str, *, text: str = X.ARTICLE, lane: M.Lane = M.Lane.W) -> A.
         {"W": X.wiki_doc("W", text)},
         {"W": text},
         run="pilot",
+        ai_system=AI,
     )
 
 
@@ -155,13 +159,10 @@ def test_the_provenance_pins_ranges_drops_hashes_and_the_disclosure() -> None:
         {"n": 1, "src": "W", "start": starts["W6"][0], "end": starts["W6"][1], "drop": [list(p1)]},
     ]
     assert provenance["lane"] == "W" and provenance["ai"] == "selected"
-    assert provenance["ai_system"] == M.AI_SYSTEM and provenance["run"] == "pilot"
-    # a NEW write discloses both AI families (owner decisions 2026-10-01 and 2026-10-03)
-    assert provenance["ai_system"] == (
-        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
-        "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
-        "an-sites-remediation-2026-09"
-    )
+    assert provenance["ai_system"] == AI and provenance["run"] == "pilot"
+    # the disclosure is the one of the stamps the text rests on (orchestrator item X10,
+    # 2026-10-24): an all-Opus selection never names MiniMax, whatever string ai_system_for picks
+    assert "MiniMax" not in provenance["ai_system"]
     assert provenance["attribution"] == {
         "title": "Stone Temple",
         "url": X.PERMALINK,
@@ -232,7 +233,7 @@ def test_no_card_pick_means_no_card() -> None:
     selection = SEL.parse_selection("s", GOOD, pool)
     built = A.build_picks(
         X.plan_site(), selection.desc, (), pool, M.Lane.W,
-        {"W": X.wiki_doc("W", X.ARTICLE)}, {"W": X.ARTICLE}, run="pilot",
+        {"W": X.wiki_doc("W", X.ARTICLE)}, {"W": X.ARTICLE}, run="pilot", ai_system=AI,
     )  # fmt: skip
     assert built.assembly.card is None and built.assembly.provenance.card is None
 
@@ -240,7 +241,7 @@ def test_no_card_pick_means_no_card() -> None:
 def test_an_abstaining_selection_is_never_assembled() -> None:
     selection = M.Selection(site_id="s", desc=(), card=(), abstain="about the town")
     with pytest.raises(ValueError, match="abstaining"):
-        A.assemble(X.plan_site(), selection, _pool(), M.Lane.W, {}, {}, run="pilot")
+        A.assemble(X.plan_site(), selection, _pool(), M.Lane.W, {}, {}, run="pilot", ai_system=AI)
 
 
 # -------------------------------------------------------------------------------- lanes T, R
@@ -259,7 +260,7 @@ def test_lane_t_publishes_the_translation_with_its_marker_and_no_card() -> None:
     doc = X.wiki_doc("T.fr", FR_TEXT, title="Temple de pierre", host="fr.wikipedia.org")
     built = A.build_picks(
         X.plan_site(), selection.desc, selection.card, pool, M.Lane.T,
-        {"T.fr": doc}, {"T.fr": FR_TEXT}, run="pilot",
+        {"T.fr": doc}, {"T.fr": FR_TEXT}, run="pilot", ai_system=AI,
         translations={"T.fr1": "The temple was built around 2500 BC by farmers.",
                       "T.fr2": "It was excavated by archaeologists in 1911."},
     )  # fmt: skip
@@ -283,7 +284,7 @@ def test_translations_belong_to_lane_t_only() -> None:
     with pytest.raises(ValueError, match="for lane T and only for it"):
         A.build_picks(
             X.plan_site(), selection.desc, selection.card, pool, M.Lane.W,
-            {"W": X.wiki_doc("W", X.ARTICLE)}, {"W": X.ARTICLE}, run="p", translations={},
+            {"W": X.wiki_doc("W", X.ARTICLE)}, {"W": X.ARTICLE}, run="p", ai_system=AI, translations={},
         )  # fmt: skip
 
 
@@ -299,7 +300,9 @@ def test_lane_r_numbers_pages_by_first_appearance_and_keeps_each_page_in_order()
         B.Restatement(text="Farmers built it in the Bronze Age.", src="R1", start=12, end=62),
         B.Restatement(text="It carries a stone circle.", src="R2", start=37, end=64),
     ]
-    assembly = A.build_restated(X.plan_site(), restated, {"R1": one, "R2": two}, run="p").assembly
+    assembly = A.build_restated(
+        X.plan_site(), restated, {"R1": one, "R2": two}, run="p", ai_system=AI
+    ).assembly
     assert assembly.description == (
         "A ditch surrounds the mound [1]. It carries a stone circle [1]. "
         "Farmers built it in the Bronze Age [2]."
@@ -345,7 +348,7 @@ def test_assemble_batch_writes_one_assembly_per_site_that_reached_a_text(tmp_pat
         [X.w_site("site-1"), X.w_site("site-2")],
         {"site-1": GOOD, "site-2": "ABSTAIN: about the town"},
     )
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl") == 0
     rows = M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly)
     assert [row.site_id for row in rows] == ["site-1"]
     assert rows[0].description == EXPECTED
@@ -356,7 +359,7 @@ def test_a_site_with_neither_a_selection_nor_a_hold_stops_the_batch(tmp_path: Pa
     batch_dir = _selected(tmp_path, [X.w_site("site-1")], {"site-1": GOOD})
     (batch_dir / B.SELECTIONS_FILE).write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="neither a selection nor a hold"):
-        A.assemble_batch(batch_dir)
+        A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl")
 
 
 T_TEXT = "Le temple de pierre fut construit vers 2500 av. J.-C. par des paysans du village.\n"
@@ -387,19 +390,19 @@ def test_a_site_its_lane_stage_left_without_text_or_hold_stops_the_batch(
     answers = {"site-1": "DESC: T.fr1\nCARD: T.fr1"} if lane is M.Lane.T else {}
     batch_dir = _selected(tmp_path, [setup], answers)
     with pytest.raises(ValueError, match=re.escape(detail)):
-        A.assemble_batch(batch_dir)
+        A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl")
 
 
 def test_a_stage_file_that_was_never_written_is_an_error(tmp_path: Path) -> None:
     batch_dir = _selected(tmp_path, [X.w_site("site-1")], {"site-1": GOOD})
     (batch_dir / B.TRANSLATIONS_FILE).unlink()
     with pytest.raises(FileNotFoundError):
-        A.assemble_batch(batch_dir)
+        A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl")
 
 
 def test_the_assembly_file_is_the_model4_jsonl(tmp_path: Path) -> None:
     batch_dir = _selected(tmp_path, [X.w_site("site-1")], {"site-1": GOOD})
-    A.assemble_batch(batch_dir)
+    A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl")
     line = (batch_dir / M.ASSEMBLY_FILE).read_text(encoding="utf-8")
     assert line == M.dump_jsonl(M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly))
     assert json.loads(line)["citations"][0]["license"] == "CC BY-SA 4.0"

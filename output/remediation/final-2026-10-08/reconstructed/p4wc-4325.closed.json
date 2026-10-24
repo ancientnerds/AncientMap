@@ -1,0 +1,1207 @@
+{
+ "accepted": {
+  "file": "step-0012.json",
+  "sha256": "0ad50e07001d43dab868342c3f19f43421d718da7c090eb64476bf5468c28538"
+ },
+ "batch_files": {
+  "APPLIED.json": "dee337f6d5dd7bc6c10a2363e0d12285ae28e00f1cd26200b142a82057a34d5d",
+  "PLAN.jsonl": "2963e937c2157dccb66f8ecf311fb20d7220eb3188effb658068e8a84a21220a"
+ },
+ "batch_id": "p4wc-4325",
+ "group": "WC",
+ "journal": {
+  "read_sha256": "386f82905b321744c738437d788c0bd4cf94a79f78f5177c0331982270e065bf",
+  "rows": [
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:273a51c8f6840a7c4d8fcb146d10b1b41839c097ddc21b53e9cf4c8e2e55fa6f",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "635816989c78c81571aa8d356e8f79e3a4d2cee4ee1bef0899f5abbba20b2f37",
+    "id": 338467,
+    "new_sha256": "0e09b5a33792e6b61b08582eb21fc2aaf053d22e66f5f642b756290baa96b4de",
+    "old_sha256": null,
+    "row_pk": "0784c790-17b2-4450-9a95-286c1d9ef2f2",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:77e57c0e989be8abe1d904e25d3fe48885683828fade54adad2eabc9999f8526",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "635816989c78c81571aa8d356e8f79e3a4d2cee4ee1bef0899f5abbba20b2f37",
+    "id": 338468,
+    "new_sha256": "5fe210534a118c0efac76077832a0be85271934f86308b4373f528db0bbe294f",
+    "old_sha256": null,
+    "row_pk": "0784c790-17b2-4450-9a95-286c1d9ef2f2",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:61615360d2ed3382d74bd35e70beaf9545dbb396fa151861d317dd28f33e85d8",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "0c8b244f728b0e85fecc018e2ea23d736d132363639b21962ca33dcbf5624e66",
+    "id": 338469,
+    "new_sha256": "78560b5b768a62f42f8654573fa3295fb17898cd7c958b90087862465f410a61",
+    "old_sha256": null,
+    "row_pk": "09b07712-628c-4c14-bf87-62c586f1ced3",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:89a59e4a8b81657554451c605c3e6f8e001470c37e25fb6eedfa2d8ee95ae698",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "0c8b244f728b0e85fecc018e2ea23d736d132363639b21962ca33dcbf5624e66",
+    "id": 338470,
+    "new_sha256": "25a8e813afe97ffac556de0ab8fc4184fe5270834f3b8ee589a2d98d6a9c1570",
+    "old_sha256": null,
+    "row_pk": "09b07712-628c-4c14-bf87-62c586f1ced3",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:1ff0e2a5278a04f573d9d2780bdb5bdc599109203da61b1c0c40329e5f7ac5ed",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "d39fb12f95e223e9779c5cefe4be8ab67446b635cb0a7c5dbcf56b467702240a",
+    "id": 338471,
+    "new_sha256": "ec738fe4160c02f4e82bc55f99d7d54fcc0310239471c9049705f771f5f70416",
+    "old_sha256": null,
+    "row_pk": "0d938cf2-c77d-4741-83cb-c3413761d2c1",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:1c8e3ce57481765d65d5eead236067cbfd12da2a6dee05bcb18b03bda8710f9c",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "d39fb12f95e223e9779c5cefe4be8ab67446b635cb0a7c5dbcf56b467702240a",
+    "id": 338472,
+    "new_sha256": "f0c45db612a40fad9b950462e64197b83804e751699fed15d3cca25b271918ac",
+    "old_sha256": null,
+    "row_pk": "0d938cf2-c77d-4741-83cb-c3413761d2c1",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:7f6ab8747059a00bb19a3ebbb64eb9865a914256ac7199eaa8e52a1cafcd560a",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "38e49e42d9460777e473fdfc845f6f68fc6176064fa67711cae9eda1d83a670e",
+    "id": 338473,
+    "new_sha256": "1114a386d0468a5c8fc25fe8f7a980c806806fa1878f89273f1b9eca0ad26460",
+    "old_sha256": null,
+    "row_pk": "0d9bd81d-d41c-4381-8e2e-7626928fedc1",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:e65f69283ccc4df9ac9437e9196d50d7815eccbdae5e303e1e96135498101eeb",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0001"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0001"
+    ],
+    "evidence_sha256": "38e49e42d9460777e473fdfc845f6f68fc6176064fa67711cae9eda1d83a670e",
+    "id": 338474,
+    "new_sha256": "d53041dafe6e71a2c382227550b07a97048b2a535dcdaddedfd765183f5e2f4e",
+    "old_sha256": null,
+    "row_pk": "0d9bd81d-d41c-4381-8e2e-7626928fedc1",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:eb5a59aa79c7eb227903beb6d41f50313d787b6365b3649a1e06b74069a68ef6",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0002"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "c2b40e9a26258278fd6aeacfefb718c3f8e2b20e7a8cb1c82dca9bdb7bda49c7",
+    "id": 338475,
+    "new_sha256": "7fc980a16c88fca1fc7a5f2eb63a1a67597d9a89d7d216f232a5fbe36364183c",
+    "old_sha256": null,
+    "row_pk": "1a76bfc9-7056-4848-ac12-d24016a923bb",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:af4eb20a0112a8b605546e8471d5c819a1ebbb26f84e47ecbc9d09da42f42c5d",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0002"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "c2b40e9a26258278fd6aeacfefb718c3f8e2b20e7a8cb1c82dca9bdb7bda49c7",
+    "id": 338476,
+    "new_sha256": "a27e9c015ae3640e50801170e5bffe31f5fae776e2f5e704c5418900cd6ae446",
+    "old_sha256": null,
+    "row_pk": "1a76bfc9-7056-4848-ac12-d24016a923bb",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:fd8abed9a43874f199b054d9ada791b9afa9e8e6961ba2d5084cfaa7153aa7c4",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0002"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "edf61e671f0895956c9a791a4faa337c3222f085c6866d1a0fb36ccd0bb8fad2",
+    "id": 338477,
+    "new_sha256": "8fc59568aad9a04c6690e7c6ff741238f8b0223c6c7f487932ccc8c59043b7c4",
+    "old_sha256": null,
+    "row_pk": "1cd78c0b-23be-40b7-b880-203e0f514956",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:c820e69d6de8c7aaa81d594a138741071d5ab1b648aeb9d097c8dc051556f607",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0002"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "edf61e671f0895956c9a791a4faa337c3222f085c6866d1a0fb36ccd0bb8fad2",
+    "id": 338478,
+    "new_sha256": "86aa3adcd4042a8fb7ac97589731da1cbe3c3dfc8a902fb46fc1916a032e1925",
+    "old_sha256": null,
+    "row_pk": "1cd78c0b-23be-40b7-b880-203e0f514956",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:a602518c7dfabf55fb5e12e05b1e0c4d2a0e3fcbbe048940582aef36332c40ff",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0002"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "01918b794c0e35b5d21fcc27f56633e2ebb3dc99c459866153b1e5ce590becf8",
+    "id": 338479,
+    "new_sha256": "3f8ce251343d2fbb63a5f93bb599c80148b8478f767c26884a87e01c41dd9f97",
+    "old_sha256": null,
+    "row_pk": "1f34f490-a5ef-462d-961e-e4bbd8eb5422",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:31ac7dd190247ad857c82a6f56c7cdf009a723c26b71b8f3965a9fd489fd04f3",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0002"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "01918b794c0e35b5d21fcc27f56633e2ebb3dc99c459866153b1e5ce590becf8",
+    "id": 338480,
+    "new_sha256": "2bb886c31e6ea2f1159851c5ba72a277a661339a985d29d03d052720d3975d7e",
+    "old_sha256": null,
+    "row_pk": "1f34f490-a5ef-462d-961e-e4bbd8eb5422",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:bf2a4358b1aa9711cff25165118eec50a76bbc3d4d2a777289c1d76cae58acef",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "dd9420337b0c5598aff2cb63cbc5e7e246c4ac949dc1fc0acf477a20efb647f4",
+    "id": 338481,
+    "new_sha256": "859ca8997e57ed91b93032cf93a843529a8c0d1152ee33c0373d5aad14dc4223",
+    "old_sha256": null,
+    "row_pk": "25cf40c9-4d5a-4818-9d6a-254bc7e097a7",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:8cca249443eebbee0a519e5f25fa9222236ee8fbecd450c5dc7af48f43887965",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0002"
+    ],
+    "evidence_sha256": "dd9420337b0c5598aff2cb63cbc5e7e246c4ac949dc1fc0acf477a20efb647f4",
+    "id": 338482,
+    "new_sha256": "41092f05ec88f77b4a6e82c32ac86edfe93d22bf153ccb7f774a39def571c0d4",
+    "old_sha256": null,
+    "row_pk": "25cf40c9-4d5a-4818-9d6a-254bc7e097a7",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:1e600334506c6e4e293bf163818eab2204f389c3cc743b83da4daba289e73a83",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "49a4391fbe55d7bb18c2b90398a72ce9918ed6671045971e5f1dc7fd515e2b38",
+    "id": 338483,
+    "new_sha256": "4fd959734c6f275402fe9ecccb8cfcc5f319536ff6a724c970c53216f9a19710",
+    "old_sha256": null,
+    "row_pk": "2ad2ae09-19fb-4994-8f1d-33d84694c5fb",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:741f9bfe3cd03e0019cf4de9e9295644c04958f12b00ea9569f8484d263092c7",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "49a4391fbe55d7bb18c2b90398a72ce9918ed6671045971e5f1dc7fd515e2b38",
+    "id": 338484,
+    "new_sha256": "59c52acedd3dab4797eb3626896446191de6e67dc5decf8179122718b2589893",
+    "old_sha256": null,
+    "row_pk": "2ad2ae09-19fb-4994-8f1d-33d84694c5fb",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:af876ac7e185325292ef135922571ef6f9060447f4ed3fbc73f73a80af5dc728",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify2-verify2-0001",
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "bddc89f7f12732a95e3c9f81f748b4dade8bd63dd6f838d6b2627707855c1a69",
+    "id": 338485,
+    "new_sha256": "fc7e20ba761000a345ed66f6e6883be9e7d0ad2767d7fcc5784fd8349377d023",
+    "old_sha256": null,
+    "row_pk": "2b0f2420-5602-471f-b4be-eb03e7d33151",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:da632dd9ee3fa50b4ede638d0b33c7167aa39578d13aac36a02055ed65823c2d",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify2-verify2-0001",
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "bddc89f7f12732a95e3c9f81f748b4dade8bd63dd6f838d6b2627707855c1a69",
+    "id": 338486,
+    "new_sha256": "f39702c41345f5fe1a26e6f2c73c31710f7c494fe81583544aa894abc5e24f3a",
+    "old_sha256": null,
+    "row_pk": "2b0f2420-5602-471f-b4be-eb03e7d33151",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:ebc407ff4f9de72bf37de2a9281b801805d912c98ecbbc4bc4cea0d2df7e41d4",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "5db7496a867691ede8a4fd51d2fa09d95caa0d3b1e942afa82b95f267c3996e9",
+    "id": 338487,
+    "new_sha256": "f0a835157fc1095b846959ec23977d69bacfe848d907e7bde0d48a888640a3b8",
+    "old_sha256": null,
+    "row_pk": "2c170344-d5e4-46ad-9239-68959f5436f5",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:97701a8864f2579ed3c99c50440097fd72ac9eee8b641e93db0532f49df9cf6b",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "5db7496a867691ede8a4fd51d2fa09d95caa0d3b1e942afa82b95f267c3996e9",
+    "id": 338488,
+    "new_sha256": "017f3f0029d1e2316ac04079ac3b1a03b00807c4d8f17da9b4ee04dc454e7cb3",
+    "old_sha256": null,
+    "row_pk": "2c170344-d5e4-46ad-9239-68959f5436f5",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:fad543d03b5ee0675ff092ae26bbfa008db14ddd08959489d3255055680ccb1b",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify2-verify2-0001",
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "a8782d2a335b0acc17634cf3495931580c4624add6163b57dff2dc6f33aed033",
+    "id": 338489,
+    "new_sha256": "09092c557ebe4caec5da9dadedff256536345fd903deb4620cbc5acf87dd2f1d",
+    "old_sha256": null,
+    "row_pk": "2caba95a-c797-4e59-bea2-959793b6c6fc",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:d5511333c28f895823b3b936eeab6dea64748c3943cf274b742cbd6ef4b248ae",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0003"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify2-verify2-0001",
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "a8782d2a335b0acc17634cf3495931580c4624add6163b57dff2dc6f33aed033",
+    "id": 338490,
+    "new_sha256": "3315a11839f93f626a29db85607ec5ce609a3165869d7364ebeeb14e7dbe7d8e",
+    "old_sha256": null,
+    "row_pk": "2caba95a-c797-4e59-bea2-959793b6c6fc",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:778cef75649e2e4d4dc2169f40b3a882bca6784ffaa43b90b7b6da85445cf3d8",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "edfdc1bf286f67ff94be1feb4c73fa96ddd7c0393b25270e8678c5411598166a",
+    "id": 338491,
+    "new_sha256": "2f5fa57c22b78cacfaffac245aebac639d97c3850984b73737d5531d399f5804",
+    "old_sha256": null,
+    "row_pk": "2e23ad32-b50b-4439-8260-fe854b891c5d",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:770f3dab8166cb1fbc23b2b8883e97acc186db230fd0d772b3291927bc657dde",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0003"
+    ],
+    "evidence_sha256": "edfdc1bf286f67ff94be1feb4c73fa96ddd7c0393b25270e8678c5411598166a",
+    "id": 338492,
+    "new_sha256": "44a5f62b3f76efce5dfee6491ac6bf13ba1054afdafa4ac59dd7b1886954da7d",
+    "old_sha256": null,
+    "row_pk": "2e23ad32-b50b-4439-8260-fe854b891c5d",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:b0befd53c64fe4bc202af7691a5b215f23f1170d90518f74066a0c1473120b25",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "040c060d7de1ff218ed412b0c24df147c24916628a6499d54cc541e71f11b0a2",
+    "id": 338493,
+    "new_sha256": "0b09d49b929c23acf06ebb1cbe928df12ba680f7ba240750b7321cf11802b960",
+    "old_sha256": null,
+    "row_pk": "2ff6f6ff-dada-465c-ad3b-6db67b57a31b",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:9e278ea7675b602bce0ffa747e93d7b405e094aa27fc5a0f4717442737565b07",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "040c060d7de1ff218ed412b0c24df147c24916628a6499d54cc541e71f11b0a2",
+    "id": 338494,
+    "new_sha256": "0e607e61a22890a822f754981c17740f9c26d0cf8b01c9834f67cd4ac9eba048",
+    "old_sha256": null,
+    "row_pk": "2ff6f6ff-dada-465c-ad3b-6db67b57a31b",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:780c7d7dd828aebc681c7a22776067dc48ceea9a321bec93551a1f6426c47d71",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify2-verify2-0001",
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "d66663a6650ab290ea98c77484d0160834bced8c41f24407250bdd3b7c16908f",
+    "id": 338495,
+    "new_sha256": "774ecf075338c6f8b57cd81072f0c27f1773f07ff0cee50a832086d5a4d3f4c4",
+    "old_sha256": null,
+    "row_pk": "34d064de-8773-4d0c-9fff-7e2ea5a1f11d",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:9a0cd09371da81b7e5943609004411b3a9ed8457639e55f8988ddcc712454c62",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify2-verify2-0001",
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "d66663a6650ab290ea98c77484d0160834bced8c41f24407250bdd3b7c16908f",
+    "id": 338496,
+    "new_sha256": "532a7276b0c87a6c9ca4317506b1b236a0354bb09df8ba7018ddccf306540fec",
+    "old_sha256": null,
+    "row_pk": "34d064de-8773-4d0c-9fff-7e2ea5a1f11d",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:e96dc5561046864a59036c934dafcf8d7c0d3feb0aebea9793d7163809b39818",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "0d50206325e74ddecc49c6e33caf27733a0a940ab73b59ad963bfe634c4784a9",
+    "id": 338497,
+    "new_sha256": "72365cff7ccd01bf7c918cef3474e8d822cac62762963163b34f9b3d42cf7d10",
+    "old_sha256": null,
+    "row_pk": "3a86a102-9b92-4f11-8dcf-4230d3534858",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:3cc12259aed9da538f5bba09cbfb5ad981a43d54075718b5daf283e43918cc04",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "0d50206325e74ddecc49c6e33caf27733a0a940ab73b59ad963bfe634c4784a9",
+    "id": 338498,
+    "new_sha256": "425e389ef7755833e926e8e03b39ec66dc301318ad850f0f83a19b2f129fea14",
+    "old_sha256": null,
+    "row_pk": "3a86a102-9b92-4f11-8dcf-4230d3534858",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:578adf3544dbc30818a4e76795e21756d172f824f8014177923a572b6786deab",
+    "column_name": "description",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "2e1c48a5e0ce7d05d84181a396e20c92f9ecf00aed633d8e550ffa816cc5264b",
+    "id": 338499,
+    "new_sha256": "3b66fc0521593394995f6bb7d5d25adf3efc689a237fac8cf23ad260e097000a",
+    "old_sha256": null,
+    "row_pk": "474fa9e0-74cc-4a87-9cac-dd7dbe83ddd5",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/description"
+   },
+   {
+    "applied_at": "2026-10-06T17:59:16.494259+00:00",
+    "change_key": "phase4wc:a65b6f7e81487741cfbd524c4c72e8a590ff211fd4535fbe090f145afef5620c",
+    "column_name": "raw_data",
+    "ev_answered_by": [
+     "mcode-write-wn-0004"
+    ],
+    "ev_checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+    "ev_handoffs": [
+     "output/remediation/handoff/wn-2026-10-06-w"
+    ],
+    "ev_marking": "none",
+    "ev_run": "wn-2026-10-06",
+    "ev_verified_by": [
+     "mcode-verify-verify-0004"
+    ],
+    "evidence_sha256": "2e1c48a5e0ce7d05d84181a396e20c92f9ecf00aed633d8e550ffa816cc5264b",
+    "id": 338500,
+    "new_sha256": "f906bc32968c2d320666ba7ce851ef1b5a478a6e118a7788c0f41ed43f375fcb",
+    "old_sha256": null,
+    "row_pk": "474fa9e0-74cc-4a87-9cac-dd7dbe83ddd5",
+    "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+    "table_name": "unified_sites",
+    "test_id": "WC/raw_data"
+   }
+  ],
+  "source": "remediation_change_log (production, read-only SELECT)"
+ },
+ "kind": "closed-wc-batch",
+ "lost": {
+  "files": [
+   "WC4.jsonl",
+   "POPULATION.json",
+   "judge/RESULT.json"
+  ],
+  "handoffs": [
+   "output/remediation/handoff/wn-2026-10-06-w"
+  ],
+  "run": "wn-2026-10-06",
+  "where": ".claude/worktrees/db-finish/output/remediation/wc_runner/runs/wn-2026-10-06"
+ },
+ "reason": "The WC plan of apply batch p4wc-4325 (the lane-WN pilot wn-2026-10-06, 17 texts written 2026-10-06 and accepted as step 12) lived only in the removed worktree .claude/worktrees/db-finish and is lost (scout 2026-10-24: no copy in the main checkout, the worktrees, C:/tmp, C:/PythonProjects/Backup or the VPS evidence). write_gate4.wc_batches refused every further WC plan while the batch could not be named. The batch is closed from the production journal; its 17 MiniMax-shaped texts are re-checked under D10/X6 (minimax-sites --closed).",
+ "reconstructed": true,
+ "reconstructed_at": "2026-10-24T08:36:47+00:00",
+ "reconstructed_by": "Claude Opus 5.5 (Claude Code, close-out builder closeout/desc-blockers)",
+ "rows": 34,
+ "run_stamp": "phase4wc:p4wc-4325:chunk-0001",
+ "site_list": [
+  {
+   "answered_by": [
+    "mcode-write-wn-0001"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "0e09b5a33792e6b61b08582eb21fc2aaf053d22e66f5f642b756290baa96b4de",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Domus De Janas Torre Argentina",
+   "run": "wn-2026-10-06",
+   "site_id": "0784c790-17b2-4450-9a95-286c1d9ef2f2",
+   "verified_by": [
+    "mcode-verify-verify-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0001"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "78560b5b768a62f42f8654573fa3295fb17898cd7c958b90087862465f410a61",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Currachjaghju",
+   "run": "wn-2026-10-06",
+   "site_id": "09b07712-628c-4c14-bf87-62c586f1ced3",
+   "verified_by": [
+    "mcode-verify-verify-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0001"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "ec738fe4160c02f4e82bc55f99d7d54fcc0310239471c9049705f771f5f70416",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Ivinghoe",
+   "run": "wn-2026-10-06",
+   "site_id": "0d938cf2-c77d-4741-83cb-c3413761d2c1",
+   "verified_by": [
+    "mcode-verify-verify-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0001"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "1114a386d0468a5c8fc25fe8f7a980c806806fa1878f89273f1b9eca0ad26460",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Apolyanka",
+   "run": "wn-2026-10-06",
+   "site_id": "0d9bd81d-d41c-4381-8e2e-7626928fedc1",
+   "verified_by": [
+    "mcode-verify-verify-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0002"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "7fc980a16c88fca1fc7a5f2eb63a1a67597d9a89d7d216f232a5fbe36364183c",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Khuntichi Vaat Hadsar Fort",
+   "run": "wn-2026-10-06",
+   "site_id": "1a76bfc9-7056-4848-ac12-d24016a923bb",
+   "verified_by": [
+    "mcode-verify-verify-0002"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0002"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "8fc59568aad9a04c6690e7c6ff741238f8b0223c6c7f487932ccc8c59043b7c4",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Colcampata",
+   "run": "wn-2026-10-06",
+   "site_id": "1cd78c0b-23be-40b7-b880-203e0f514956",
+   "verified_by": [
+    "mcode-verify-verify-0002"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0002"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "3f8ce251343d2fbb63a5f93bb599c80148b8478f767c26884a87e01c41dd9f97",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Hellenistic-Roman Theatre",
+   "run": "wn-2026-10-06",
+   "site_id": "1f34f490-a5ef-462d-961e-e4bbd8eb5422",
+   "verified_by": [
+    "mcode-verify-verify-0002"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0003"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "859ca8997e57ed91b93032cf93a843529a8c0d1152ee33c0373d5aad14dc4223",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Bluestonehenge",
+   "run": "wn-2026-10-06",
+   "site_id": "25cf40c9-4d5a-4818-9d6a-254bc7e097a7",
+   "verified_by": [
+    "mcode-verify-verify-0002"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0003"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "4fd959734c6f275402fe9ecccb8cfcc5f319536ff6a724c970c53216f9a19710",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Veluška Tumba",
+   "run": "wn-2026-10-06",
+   "site_id": "2ad2ae09-19fb-4994-8f1d-33d84694c5fb",
+   "verified_by": [
+    "mcode-verify-verify-0003"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0003"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "fc7e20ba761000a345ed66f6e6883be9e7d0ad2767d7fcc5784fd8349377d023",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "The Hwangnyongsa Belt",
+   "run": "wn-2026-10-06",
+   "site_id": "2b0f2420-5602-471f-b4be-eb03e7d33151",
+   "verified_by": [
+    "mcode-verify-verify-0003",
+    "mcode-verify2-verify2-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0003"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "f0a835157fc1095b846959ec23977d69bacfe848d907e7bde0d48a888640a3b8",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Svileuva",
+   "run": "wn-2026-10-06",
+   "site_id": "2c170344-d5e4-46ad-9239-68959f5436f5",
+   "verified_by": [
+    "mcode-verify-verify-0003"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0003"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "09092c557ebe4caec5da9dadedff256536345fd903deb4620cbc5acf87dd2f1d",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Nyons",
+   "run": "wn-2026-10-06",
+   "site_id": "2caba95a-c797-4e59-bea2-959793b6c6fc",
+   "verified_by": [
+    "mcode-verify-verify-0003",
+    "mcode-verify2-verify2-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0004"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "2f5fa57c22b78cacfaffac245aebac639d97c3850984b73737d5531d399f5804",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Massinissa Mausoleum",
+   "run": "wn-2026-10-06",
+   "site_id": "2e23ad32-b50b-4439-8260-fe854b891c5d",
+   "verified_by": [
+    "mcode-verify-verify-0003"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0004"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "0b09d49b929c23acf06ebb1cbe928df12ba680f7ba240750b7321cf11802b960",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Karta",
+   "run": "wn-2026-10-06",
+   "site_id": "2ff6f6ff-dada-465c-ad3b-6db67b57a31b",
+   "verified_by": [
+    "mcode-verify-verify-0004"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0004"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "774ecf075338c6f8b57cd81072f0c27f1773f07ff0cee50a832086d5a4d3f4c4",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Likya Anıt Mezar",
+   "run": "wn-2026-10-06",
+   "site_id": "34d064de-8773-4d0c-9fff-7e2ea5a1f11d",
+   "verified_by": [
+    "mcode-verify-verify-0004",
+    "mcode-verify2-verify2-0001"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0004"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "72365cff7ccd01bf7c918cef3474e8d822cac62762963163b34f9b3d42cf7d10",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Ramesses III Temple",
+   "run": "wn-2026-10-06",
+   "site_id": "3a86a102-9b92-4f11-8dcf-4230d3534858",
+   "verified_by": [
+    "mcode-verify-verify-0004"
+   ]
+  },
+  {
+   "answered_by": [
+    "mcode-write-wn-0004"
+   ],
+   "checker": "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-09",
+   "description_sha256": "3b66fc0521593394995f6bb7d5d25adf3efc689a237fac8cf23ad260e097000a",
+   "handoffs": [
+    "output/remediation/handoff/wn-2026-10-06-w"
+   ],
+   "marking_old": "none",
+   "minimax": true,
+   "name": "Cave of Salemas",
+   "run": "wn-2026-10-06",
+   "site_id": "474fa9e0-74cc-4a87-9cac-dd7dbe83ddd5",
+   "verified_by": [
+    "mcode-verify-verify-0004"
+   ]
+  }
+ ],
+ "sites": 17,
+ "v": 1,
+ "write_round": 1
+}

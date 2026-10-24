@@ -171,12 +171,14 @@ def test_a_site_that_got_a_description_since_its_write_round_is_never_overwritte
     plan_path: Path,
 ) -> None:
     """The premise of lane WN is an empty site: a text that arrived since (a WC write, a hand edit)
-    makes the pair `moved-since-check`, refused before anything is rendered; so does a raw_data that
-    moved, and a site that vanished."""
+    makes the pair `moved-since-check`, refused before anything is rendered; so does a raw_data whose
+    description state moved (here: citations a text brings along), and a site that vanished. A key
+    of another lane is not the description's state: the site is planned over the live raw_data
+    (2026-10-24, `write4.description_part`) and the key stays."""
     batch, outcomes = _loaded(plan_path)
     db = _db()
     db.sites[WX.SITE_N].description = "A text somebody wrote meanwhile."
-    db.sites[WX.SITE_BLANK].raw_data = {"title_es": "Templos", "title_mt": "Tempji"}
+    db.sites[WX.SITE_BLANK].raw_data = {M.CITATIONS_KEY: []}
     live = _live(db)
     del live[WX.SITE_BAD]
     plan = W4.plan_wc(batch, outcomes=outcomes, live=live)
@@ -184,6 +186,14 @@ def test_a_site_that_got_a_description_since_its_write_round_is_never_overwritte
         [(s, W4.RULE_MOVED) for s in (WX.SITE_N, WX.SITE_BLANK, WX.SITE_BAD)]
     )
     assert not plan.rows
+    db = _db()
+    db.sites[WX.SITE_BLANK].raw_data = {"title_es": "Templos", "title_mt": "Tempji"}
+    rebased = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert rebased.rebased == [WX.SITE_BLANK] and not rebased.refusals
+    raw = next(r for r in rebased.rows if (r.site_id, r.column) == (WX.SITE_BLANK, "raw_data"))
+    assert json.loads(raw.old_value) == {"title_es": "Templos", "title_mt": "Tempji"}
+    new = json.loads(raw.new_value)
+    assert (new["title_es"], new[M.PROVENANCE_KEY]["lane"]) == ("Templos", "N")
 
 
 def test_blank_and_null_are_two_old_values_and_the_plan_holds_the_one_it_was_asked_with(

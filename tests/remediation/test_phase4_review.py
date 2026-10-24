@@ -57,7 +57,7 @@ def _assembled(tmp_path: Path, sites: tuple[str, ...] = ("site-1",), select: str
     assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl") == 0
     return batch_dir
 
 
@@ -67,7 +67,7 @@ def _review(
     runner = X.ScriptedRunner({(site, "review"): answer})
     verify = verifier or Verifier()
     code = RV.review_batch(
-        batch_dir, ledger=batch_dir.parent / "L.jsonl", runner=runner, reverify=verify
+        batch_dir, ledger=batch_dir.parents[2] / "L.jsonl", runner=runner, reverify=verify
     )
     return code, runner, verify
 
@@ -241,7 +241,7 @@ def _chain(tmp_path: Path, answer: str) -> tuple[Path, dict]:
     assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl") == 0
     assert _review(batch_dir, answer)[0] == 0
     report = json.loads((batch_dir / B.REVIEW_REPORT).read_text(encoding="utf-8"))
     return batch_dir, report["sites"][0]
@@ -313,7 +313,7 @@ def test_a_later_namesake_building_is_dropped_with_the_sentence_that_leans_on_it
     assert SEL.select_batch(batch_dir, ledger=tmp_path / "L.jsonl", runner=runner) == 0
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl") == 0
     answer = (
         "R1: DROP its subject is the pub, a later building that shares the site's name\n"
         "R2: KEEP\nR3: KEEP\nR4: KEEP\nR5: KEEP\nCARD: KEEP"
@@ -422,7 +422,7 @@ def test_a_resumed_review_buys_nothing_and_writes_the_same_file(tmp_path: Path) 
     batch_dir = _assembled(tmp_path)
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: DROP x\nCARD: KEEP"
     _review(batch_dir, answer)
-    ledger = batch_dir.parent / "L.jsonl"
+    ledger = batch_dir.parents[2] / "L.jsonl"
     before = (ledger.read_bytes(), (batch_dir / M.ASSEMBLY_FILE).read_bytes())
     code, runner, _ = _review(batch_dir, MS.ModelCallFailed("must not be asked"))
     assert code == 0 and runner.calls == []
@@ -443,3 +443,115 @@ def test_an_unreadable_review_stream_holds_the_site(tmp_path: Path) -> None:
     batch_dir = _assembled(tmp_path)
     assert _review(batch_dir, MS.UnreadableStream("no usage"))[0] == 0
     assert X.holds_of(batch_dir)[0].reason is M.HoldReason.MODEL_STREAM_UNREADABLE
+
+
+# ------------------------------------------------------------------------------ the disclosure (X10)
+class _Stamped(X.ScriptedRunner):
+    """`ScriptedRunner` answering as another model: its stamp goes into the ledger line."""
+
+    def __init__(self, script, model: str) -> None:
+        super().__init__(script)
+        self.model = model
+
+    def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
+        answer = super().run(call)
+        return MS.ModelAnswer(text=answer.text, usage=answer.usage, model=self.model)
+
+
+def test_the_disclosure_names_the_models_whose_answers_the_text_rests_on(tmp_path: Path) -> None:
+    """Orchestrator item X10 (2026-10-24): S4 stamped the Claude-and-MiniMax `model4.AI_SYSTEM` on
+    every new Phase-4 provenance. The disclosure is now `model4.ai_system_for` over the stamps of
+    the site's calls in the run's ledger: the selector's at S4, the selector's and the reviewer's
+    after S6 - and the string itself is `ai_system_for`'s (owner decision D56 makes it exact)."""
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1")])
+    ledger = tmp_path / "L.jsonl"
+    selector = _Stamped({("site-1", "select"): SELECT}, X.MS.OH.SONNET_MODEL)
+    assert SEL.select_batch(batch_dir, ledger=ledger, runner=selector) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir, ledger=ledger) == 0
+    (assembly,) = M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly)
+    assert assembly.provenance.ai_system == M.ai_system_for([X.MS.OH.SONNET_MODEL])
+    # a reviewer of another model joins the disclosure (Haiku: a set every version of
+    # ai_system_for names apart from Sonnet alone)
+    reviewer = _Stamped({("site-1", "review"): ALL_KEEP}, X.MS.OH.HAIKU_MODEL)
+    assert RV.review_batch(batch_dir, ledger=ledger, runner=reviewer, reverify=Verifier()) == 0
+    (reviewed,) = _written(batch_dir)
+    both = M.ai_system_for([X.MS.OH.SONNET_MODEL, X.MS.OH.HAIKU_MODEL])
+    assert reviewed.provenance.ai_system == both != assembly.provenance.ai_system
+    assert "MiniMax" not in reviewed.provenance.ai_system
+
+
+def test_a_site_whose_calls_the_ledger_does_not_hold_has_no_disclosure(tmp_path: Path) -> None:
+    """No stamp, no disclosure: a site whose calls are not in the ledger it is assembled with, a
+    ledger that is missing, and a stamp no handoff answer carries are refused, never guessed."""
+    batch_dir = _assembled(tmp_path)
+    with pytest.raises(A.InputError, match="no answering model"):
+        A.assemble_batch(batch_dir, ledger=_empty_ledger(tmp_path))
+    with pytest.raises(A.InputError, match="no ledger"):
+        A.assemble_batch(batch_dir, ledger=tmp_path / "missing.jsonl")
+    rows = [
+        {"kind": "model_call", "batch_id": "p4-0001", "label": "site-1/select", "model": "x/y"},
+    ]
+    with pytest.raises(A.InputError, match="no stamp of opus_handoff.ANSWER_MODELS"):
+        A.site_ai_system(rows, batch_id="p4-0001", site_id="site-1")
+
+
+def test_the_stamps_are_the_sites_own_calls_in_its_own_batch() -> None:
+    rows = [
+        {"kind": "model_call", "batch_id": "p4-0001", "label": "site-1/select", "model": "a"},
+        {"kind": "model_call", "batch_id": "p4-0001", "label": "site-1/review", "model": "b"},
+        {"kind": "model_call", "batch_id": "p4-0002", "label": "site-1/select", "model": "c"},
+        {"kind": "model_call", "batch_id": "p4-0001", "label": "site-10/select", "model": "d"},
+        {"kind": "fetch", "batch_id": "p4-0001", "label": "site-1/W", "model": None},
+    ]
+    assert A.answer_stamps(rows, batch_id="p4-0001", site_id="site-1") == {"a", "b"}
+    minimax = [{**rows[0], "model": X.MS.OH.MINIMAX_MODEL}]
+    assert A.site_ai_system(minimax, batch_id="p4-0001", site_id="site-1") == M.AI_SYSTEM
+
+
+def test_a_re_asked_call_discloses_only_the_model_whose_answer_is_stored() -> None:
+    """The review of 2026-10-24 (D56, exact): deleting a stored answer is how a human asks again
+    (`model_stage.judge_site`), and the new call adds a second ledger line for the label. A selector
+    answered first by a MiniMax agent and asked again under D6 by Sonnet rests on Sonnet alone."""
+    first = {"kind": "model_call", "batch_id": "p4-0001", "label": "site-1/select"}
+    rows = [
+        {**first, "model": X.MS.OH.MINIMAX_MODEL},
+        {**first, "label": "site-1/review", "model": X.MS.OH.OPUS_MODEL},
+        {**first, "model": X.MS.OH.SONNET_MODEL},
+    ]
+    assert A.answer_stamps(rows, batch_id="p4-0001", site_id="site-1") == {
+        X.MS.OH.SONNET_MODEL,
+        X.MS.OH.OPUS_MODEL,
+    }
+    assert A.site_ai_system(rows, batch_id="p4-0001", site_id="site-1") == M.AI_SYSTEM_CLAUDE
+    asked_back = [*rows, {**first, "model": X.MS.OH.MINIMAX_MODEL}]
+    assert A.site_ai_system(asked_back, batch_id="p4-0001", site_id="site-1") == M.AI_SYSTEM
+
+
+def test_the_review_reads_the_run_ledger_once_per_batch(tmp_path: Path, monkeypatch) -> None:
+    """S6 reads the ledger once and adds each bought review call to the rows it read, so the
+    disclosure after the review names the reviewer without re-parsing the file per site."""
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1"), X.w_site("site-2")])
+    ledger = tmp_path / "L.jsonl"
+    script = {("site-1", "select"): SELECT, ("site-2", "select"): SELECT}
+    selector = _Stamped(script, X.MS.OH.SONNET_MODEL)
+    assert SEL.select_batch(batch_dir, ledger=ledger, runner=selector) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir, ledger=ledger) == 0
+    reads: list[Path] = []
+    real = A.read_ledger
+    monkeypatch.setattr(A, "read_ledger", lambda path: reads.append(path) or real(path))
+    review = {("site-1", "review"): ALL_KEEP, ("site-2", "review"): ALL_KEEP}
+    reviewer = _Stamped(review, X.MS.OH.HAIKU_MODEL)
+    assert RV.review_batch(batch_dir, ledger=ledger, runner=reviewer, reverify=Verifier()) == 0
+    assert reads == [ledger]
+    both = M.ai_system_for([X.MS.OH.SONNET_MODEL, X.MS.OH.HAIKU_MODEL])
+    assert {a.provenance.ai_system for a in _written(batch_dir)} == {both}
+
+
+def _empty_ledger(tmp_path: Path) -> Path:
+    path = tmp_path / "empty.jsonl"
+    path.write_text("", encoding="utf-8")
+    return path

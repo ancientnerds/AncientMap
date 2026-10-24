@@ -109,7 +109,7 @@ def test_a_translated_site_assembles_as_generated_text(tmp_path: Path) -> None:
         runner=X.ScriptedRunner({("site-t", "translate"): answer}),
     )
     B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl") == 0
     (assembly,) = M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly)
     assert assembly.description == (
         "The stone temple was built around 2500 BC by farmers [1]. It was dug in 1911 [1]."
@@ -212,7 +212,7 @@ def test_every_restated_sentence_carries_its_quote_range(tmp_path: Path) -> None
     B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
     B.write_records(batch_dir / B.POOLS_FILE, [])
     B.write_text_atomic(batch_dir / B.SELECTIONS_FILE, "")
-    assert A.assemble_batch(batch_dir) == 0
+    assert A.assemble_batch(batch_dir, ledger=tmp_path / "L.jsonl") == 0
     (assembly,) = M.load_jsonl(batch_dir / M.ASSEMBLY_FILE, M.Assembly)
     assert assembly.description == (
         "Farmers built the mound in the Bronze Age [1]. A ditch surrounds it [1]. "
