@@ -5,6 +5,7 @@ from pipeline.lyra.coherence_pass import (
     check_title_terms_in_body,
     extract_numeric_claims,
     extract_title_terms,
+    undefined_title_terms,
 )
 
 # ---------------------------------------------------------------------------
@@ -34,6 +35,35 @@ def test_extract_title_terms_drops_fillers():
 
 def test_extract_title_terms_empty():
     assert extract_title_terms("") == []
+
+
+def test_extract_title_terms_keeps_an_article_inside_a_phrase():
+    """The body is searched for the phrase verbatim: dropping the inner "the" made
+    "Mogollon Pithouse Sites Across Upper Gila", a phrase no grammatical text holds, so
+    the paper's undefined_title_terms was 1 for every possible body (D60, 2026-10-24)."""
+    assert extract_title_terms("Mogollon Pithouse Sites Across the Upper Gila") == [
+        "Mogollon Pithouse Sites Across the Upper Gila"
+    ]
+
+
+def test_extract_title_terms_strips_filler_and_connectors_at_the_edges():
+    assert extract_title_terms("Cosmic Rays, and the Human Genius") == [
+        "Cosmic Rays",
+        "Human Genius",
+    ]
+    # Filler does not count as a content word: "the Pot" is one word.
+    assert extract_title_terms("The Pot: the Watched Pot") == ["Watched Pot"]
+
+
+def test_undefined_title_terms_names_the_terms_the_body_lacks():
+    title = "Mogollon Pithouse Sites Across the Upper Gila"
+    assert (
+        undefined_title_terms(title, "We dug the Mogollon pithouse sites across the Upper Gila.")
+        == []
+    )
+    assert undefined_title_terms(title, "We dug pithouses along the Gila.") == [
+        "Mogollon Pithouse Sites Across the Upper Gila"
+    ]
 
 
 # ---------------------------------------------------------------------------

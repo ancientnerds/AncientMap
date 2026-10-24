@@ -119,20 +119,59 @@ def test_artifact_gate_returns_the_audit():
 
 def test_quality_needs_the_stored_verdict_and_the_recomputation():
     audit = validate_paper_artifact(REPORT)
-    assert tp.check_quality(QUALITY, audit, require_stored_passed=True)["passed"] is True
-    held = tp.check_quality({**QUALITY, "passed": False}, audit, require_stored_passed=True)
+    assert (
+        tp.check_quality(QUALITY, audit, title=TITLE, report=REPORT, require_stored_passed=True)[
+            "passed"
+        ]
+        is True
+    )
+    held = tp.check_quality(
+        {**QUALITY, "passed": False}, audit, title=TITLE, report=REPORT, require_stored_passed=True
+    )
     assert held["passed"] is False
     assert held["issues"] == ["quality_score.passed is not true"]
     # Corrections recompute only: the stored flag predates the corrected text.
     assert (
-        tp.check_quality({**QUALITY, "passed": False}, audit, require_stored_passed=False)["passed"]
+        tp.check_quality(
+            {**QUALITY, "passed": False},
+            audit,
+            title=TITLE,
+            report=REPORT,
+            require_stored_passed=False,
+        )["passed"]
         is True
     )
     no_summary = {k: v for k, v in QUALITY.items() if k != "audit_gate_failures"}
     assert (
-        tp.check_quality(no_summary, audit, require_stored_passed=False)["recomputed_passed"]
+        tp.check_quality(
+            no_summary, audit, title=TITLE, report=REPORT, require_stored_passed=False
+        )["recomputed_passed"]
         is False
     )
+
+
+def test_quality_recomputes_the_title_terms_from_the_gated_text():
+    """A stored undefined_title_terms no longer decides (D60): mogollon stored 1 and was
+    held on every correction; the count now comes from the title and the gated text."""
+    audit = validate_paper_artifact(REPORT)
+    stored_one = {
+        **QUALITY,
+        "audit_gate_failures": {**QUALITY["audit_gate_failures"], "undefined_title_terms": 1},
+    }
+    lifted = tp.check_quality(
+        stored_one, audit, title=TITLE, report=REPORT, require_stored_passed=False
+    )
+    assert lifted["passed"] is True
+    assert lifted["undefined_title_terms"] == []
+    held = tp.check_quality(
+        QUALITY,
+        audit,
+        title="The Lost Obelisk of Baalbek",
+        report=REPORT,
+        require_stored_passed=False,
+    )
+    assert held["passed"] is False
+    assert held["undefined_title_terms"] == ["Lost Obelisk"]
 
 
 # --- evidence -----------------------------------------------------------------------
@@ -260,11 +299,12 @@ def test_a_verified_no_marker_never_ships(tmp_path):
     52 of the 511 image references in the 31-paper corpus carried it, and every one of
     those papers passed every gate that existed.
     """
-    report = REPORT.replace(f"![Quarry block with a person for scale]({IMG})", f"![gallery:aa11bb22|verified:no|Quarry block with a person for scale]({IMG})")
-    images_root, served = images_tree(tmp_path, IMG_NAME)
-    gate = tp.check_pictures(
-        REQ, report, make_result()["probative_images"], served_root=served
+    report = REPORT.replace(
+        f"![Quarry block with a person for scale]({IMG})",
+        f"![gallery:aa11bb22|verified:no|Quarry block with a person for scale]({IMG})",
     )
+    images_root, served = images_tree(tmp_path, IMG_NAME)
+    gate = tp.check_pictures(REQ, report, make_result()["probative_images"], served_root=served)
     assert gate["passed"] is False
     assert gate["rules"] == ["unverified"]
     assert "verified:no" in gate["issues"][0]
@@ -280,9 +320,7 @@ def test_a_picture_the_site_cannot_serve_fails(tmp_path):
     """
     images_root, served = images_tree(tmp_path)
     report = REPORT.replace(IMG, f"/data/research-images/{REQ}/p9_never_uploaded.jpg")
-    gate = tp.check_pictures(
-        REQ, report, make_result()["probative_images"], served_root=served
-    )
+    gate = tp.check_pictures(REQ, report, make_result()["probative_images"], served_root=served)
     assert gate["passed"] is False
     assert gate["rules"] == ["not_served"]
     assert "p9_never_uploaded.jpg" in gate["issues"][0]
@@ -290,9 +328,7 @@ def test_a_picture_the_site_cannot_serve_fails(tmp_path):
 
 def test_a_credited_licensed_picture_in_the_right_folder_passes(tmp_path):
     images_root, served = images_tree(tmp_path, IMG_NAME)
-    gate = tp.check_pictures(
-        REQ, REPORT, make_result()["probative_images"], served_root=served
-    )
+    gate = tp.check_pictures(REQ, REPORT, make_result()["probative_images"], served_root=served)
     assert gate == {"passed": True, "issues": [], "figures": 1, "rules": []}
 
 

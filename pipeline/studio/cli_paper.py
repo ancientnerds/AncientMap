@@ -95,14 +95,24 @@ def _day(value: str) -> date:
         raise StudioError(f"--date {value!r} is not a calendar day (YYYY-MM-DD)") from exc
 
 
-def _report_file(value: str) -> str:
+def _report_file_text(value: str, flag: str) -> str:
     path = Path(value)
     if not path.is_file():
-        raise StudioError(f"--report-file {value} does not exist")
+        raise StudioError(f"{flag} {value} does not exist")
     try:
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
-        raise StudioError(f"--report-file {value} is not UTF-8: {exc}") from exc
+        raise StudioError(f"{flag} {value} is not UTF-8: {exc}") from exc
+
+
+def _report_file(value: str) -> str:
+    return _report_file_text(value, "--report-file")
+
+
+def _card_file(value: str) -> str:
+    """The card a correction sends: the file's text without its final line break."""
+    card = _report_file_text(value, "--card-file")
+    return card.removesuffix("\n")
 
 
 def cmd_correct(args: argparse.Namespace) -> int:
@@ -125,6 +135,18 @@ def cmd_correct(args: argparse.Namespace) -> int:
         republish=args.republish,
         report=report,
         rewrite=args.rewrite,
+        image_changes=(
+            read_json(Path(args.image_changes), "a JSON object {verify?, drop?} of web paths")
+            if args.image_changes
+            else None
+        ),
+        hero=args.hero,
+        card=_card_file(args.card_file) if args.card_file else None,
+        evidence_changes=(
+            read_json(Path(args.evidence_changes), "a JSON object {retire?, add?}")
+            if args.evidence_changes
+            else None
+        ),
     )
     _print(record["apply"])
     return 0
@@ -211,6 +233,22 @@ def register(sub: argparse._SubParsersAction) -> None:
         "--rewrite",
         action="store_true",
         help="with --report-file: a full rewrite (the page shows the writer's disclosure line)",
+    )
+    # The small kinds of owner decision D60: alone or with --report-file, never with
+    # --with-report or --republish; each changes only what the paper already carries.
+    p.add_argument(
+        "--image-changes",
+        help="JSON file {verify?: [web_path], drop?: [web_path]}: flip stored verified:false "
+        "flags to true, drop stored picture records",
+    )
+    p.add_argument(
+        "--hero", help="web path of one of the paper's own pictures: the new banner (no new file)"
+    )
+    p.add_argument("--card-file", help="UTF-8 file holding the corrected card description")
+    p.add_argument(
+        "--evidence-changes",
+        help="JSON file {retire?: [ev-NN], add?: [entry]}: retire evidence ids (each named by "
+        "an entry's evidence_id) and add re-anchored entries under new ids",
     )
     p.set_defaults(func=cmd_correct)
     p = ps.add_parser(

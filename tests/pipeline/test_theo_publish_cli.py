@@ -261,6 +261,70 @@ def test_a_rewrite_is_a_text_correction(seen):
     assert seen[0][:3] == ("correct", REQ, True)
 
 
+PARTS = {
+    "probative_image_changes": {"verify": [f"/data/research-images/{REQ}/p1.jpg"]},
+    "hero_image": {"web_path": f"/data/research-images/{REQ}/p1.jpg"},
+    "card_description": "A corrected card.",
+    "evidence_changes": {"retire": ["ev-01"]},
+}
+
+
+@pytest.mark.parametrize("key", sorted(PARTS))
+def test_the_small_kinds_are_correction_keys(seen, key):
+    """D60: each small kind travels in a --correct envelope, alone or with `report`."""
+    correction = {
+        "version": 1,
+        "request_id": REQ,
+        "writer": WRITER,
+        "corrections_append": [{"date": "2026-09-22", "text": "Corrected."}],
+        key: PARTS[key],
+    }
+    assert _run(["--correct", "--dry-run"], _raw(correction))[0] == 0
+    assert _run(["--correct", "--dry-run"], _raw({**correction, "report": "# T\n"}))[0] == 0
+    assert [call[:3] for call in seen] == [("correct", REQ, True)] * 2
+
+
+@pytest.mark.parametrize("key", sorted(PARTS))
+def test_a_republish_excludes_every_small_kind(seen, key):
+    correction = {
+        "version": 1,
+        "request_id": REQ,
+        "writer": WRITER,
+        "corrections_append": [],
+        "result": make_result(),
+        key: PARTS[key],
+    }
+    code, outcome = _run(["--correct"], _raw(correction))
+    assert code == 2
+    assert outcome == {"ok": False, "error": f"result (a full republish) excludes {[key]}"}
+    assert seen == []
+
+
+@pytest.mark.parametrize(
+    "extra", [{"evidence": []}, {"rewrite": True, "report": "# T\n"}], ids=["evidence", "rewrite"]
+)
+def test_evidence_changes_exclude_a_full_evidence_list_and_a_rewrite(seen, extra):
+    correction = {
+        "version": 1,
+        "request_id": REQ,
+        "writer": WRITER,
+        "corrections_append": [],
+        "evidence_changes": {"retire": ["ev-01"]},
+        **extra,
+    }
+    code, outcome = _run(["--correct"], _raw(correction))
+    assert code == 2
+    assert outcome == {"ok": False, "error": "evidence_changes excludes evidence and rewrite"}
+    assert seen == []
+
+
+def test_the_small_kinds_are_not_patch_or_publish_keys(seen):
+    bundle = _bundle(card_description="A card.")
+    code, outcome = _run(["--dry-run"], _raw(bundle))
+    assert code == 2
+    assert outcome == {"ok": False, "error": "unknown keys: ['card_description']"}
+
+
 def test_a_video_may_carry_a_poster_and_nothing_else(seen):
     video = {
         "version": 1,

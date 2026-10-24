@@ -68,18 +68,18 @@ _STORED = {
 def test_repaired_audit_lifts_a_stored_paper():
     """The exact case: stored quality says False because the audit did."""
     fresh = {"passed": True, "placeholder_markers": [], "language_bleed": []}
-    assert recompute_quality_passed(_STORED, fresh) is True
+    assert recompute_quality_passed(_STORED, fresh, undefined_title_terms=0) is True
 
 
 def test_still_failing_audit_keeps_the_paper_held():
     fresh = {"passed": False, "placeholder_markers": [], "language_bleed": []}
-    assert recompute_quality_passed(_STORED, fresh) is False
+    assert recompute_quality_passed(_STORED, fresh, undefined_title_terms=0) is False
 
 
 def test_fresh_language_bleed_blocks_even_with_a_passing_audit():
     """Defence in depth: the audit's own `passed` is not the only signal."""
     fresh = {"passed": True, "placeholder_markers": [], "language_bleed": ["实验"]}
-    assert recompute_quality_passed(_STORED, fresh) is False
+    assert recompute_quality_passed(_STORED, fresh, undefined_title_terms=0) is False
 
 
 def test_stored_llm_measurements_still_count():
@@ -90,13 +90,13 @@ def test_stored_llm_measurements_still_count():
         "audit_gate_failures": {**_STORED["audit_gate_failures"], "hallucination_final": 2},
     }
     fresh = {"passed": True, "placeholder_markers": [], "language_bleed": []}
-    assert recompute_quality_passed(stored, fresh) is False
+    assert recompute_quality_passed(stored, fresh, undefined_title_terms=0) is False
 
 
 def test_missing_metrics_do_not_pass_by_accident():
     """An empty stored score must not read as a clean one."""
     fresh = {"passed": True, "placeholder_markers": [], "language_bleed": []}
-    assert recompute_quality_passed({}, fresh) is False
+    assert recompute_quality_passed({}, fresh, undefined_title_terms=0) is False
 
 
 def test_stale_stored_metrics_do_not_hold_a_repaired_paper():
@@ -113,7 +113,7 @@ def test_stale_stored_metrics_do_not_hold_a_repaired_paper():
         "placeholder_markers": [],
         "language_bleed": [],
     }
-    assert recompute_quality_passed(stored, fresh) is True
+    assert recompute_quality_passed(stored, fresh, undefined_title_terms=0) is True
 
 
 def test_fresh_uncited_paragraphs_block_despite_clean_stored_metrics():
@@ -125,7 +125,7 @@ def test_fresh_uncited_paragraphs_block_despite_clean_stored_metrics():
         "placeholder_markers": [],
         "language_bleed": [],
     }
-    assert recompute_quality_passed(_STORED, fresh) is False
+    assert recompute_quality_passed(_STORED, fresh, undefined_title_terms=0) is False
 
 
 def test_fresh_invalid_marker_blocks_despite_clean_stored_metrics():
@@ -137,7 +137,7 @@ def test_fresh_invalid_marker_blocks_despite_clean_stored_metrics():
         "placeholder_markers": [],
         "language_bleed": [],
     }
-    assert recompute_quality_passed(_STORED, fresh) is False
+    assert recompute_quality_passed(_STORED, fresh, undefined_title_terms=0) is False
 
 
 def test_metric_formulas_match_the_judge_rubric():
@@ -149,3 +149,17 @@ def test_metric_formulas_match_the_judge_rubric():
     assert reference_integrity_score({"invalid_markers": [], "orphaned_refs": []}) == 10
     assert reference_integrity_score({"invalid_markers": [3], "orphaned_refs": [7]}) == 6
     assert reference_integrity_score({"invalid_markers": list(range(9)), "orphaned_refs": []}) == 0
+
+
+def test_title_terms_come_from_the_caller_not_the_stored_summary():
+    """undefined_title_terms is a function of the title and the text, like coverage: the
+    caller recomputes it (coherence_pass.undefined_title_terms). mogollon-pithouse-sites-
+    across-the-upper-gila stored 1 and stayed held on every correction until 2026-10-24
+    (D60); a stored 0 does not vouch for a text that lost its title terms either."""
+    fresh = {"passed": True, "placeholder_markers": [], "language_bleed": []}
+    held = {
+        **_STORED,
+        "audit_gate_failures": {**_STORED["audit_gate_failures"], "undefined_title_terms": 1},
+    }
+    assert recompute_quality_passed(held, fresh, undefined_title_terms=0) is True
+    assert recompute_quality_passed(_STORED, fresh, undefined_title_terms=1) is False

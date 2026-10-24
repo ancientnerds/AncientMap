@@ -108,7 +108,8 @@ Slug, `published_at`, the publisher and the stored corrections log stay.
 |---|---|
 | Log entry only | `studio paper correct <id> --text '<entry>' [--evidence-id ev-NN]` |
 | Text fix of a studio paper (same images, title, card description) | fix `draft.md`, steps 3-5, then `studio paper correct <id> --text '<entry>' --with-report` |
-| New title, card or images; full rewrite of a studio paper | edit its workspace files, steps 3-5, `paper bundle`, then `studio paper correct <id> --text '<entry>' --republish` |
+| New title or new picture files; full rewrite of a studio paper | edit its workspace files, steps 3-5, `paper bundle`, then `studio paper correct <id> --text '<entry>' --republish` |
+| A card, a hero among the paper's own pictures, a stored picture's flag or record, an evidence anchor | the small kinds below (`--card-file`, `--hero`, `--image-changes`, `--evidence-changes`) |
 | Legacy paper, small fix (e.g. the Roswell date, owner #6) | `content` of `GET https://ancientnerds.com/api/v1/research/<slug>` (its `id` is `<id>`), fixed, saved as FILE: `studio paper correct <id> --text '<entry>' --report-file FILE`. Keeps the stored writer, sends no notice |
 | Legacy paper, full rewrite of its stored text by this session | the same plus `--rewrite`: the page shows the writer's disclosure line and the `paper_published` notice goes out |
 | Legacy paper, rewrite from a fresh Theo run RUN on its question (#17, #18) | `studio paper pull <id> --dossier-from <RUN>` (RUN must be `researched`), write as in step 2, steps 3-5, `paper bundle`, then `studio paper correct <id> --text '<entry>' --republish`. **Never `paper publish`**: it refuses this workspace. The first republish sends RUN as `dossier_request_id` and theo_publish closes RUN as `cancelled` |
@@ -118,7 +119,38 @@ Slug, `published_at`, the publisher and the stored corrections log stay.
   (`--evidence-id`). The studio never fills `result.corrections` (it is always `[]`).
 - A log-only correction re-runs the quality gate on the stored text. 9 legacy papers fail it
   there: send their entry with a `--report-file` text that passes `validate_paper_artifact`.
-  `mogollon-pithouse-sites-across-the-upper-gila` changes only through a full `--republish`.
+  The gate recomputes the title terms from the whole text (D60), so
+  `mogollon-pithouse-sites-across-the-upper-gila` takes a `--report-file` correction too: its
+  text must keep the phrase "Mogollon Pithouse Sites Across the Upper Gila" somewhere (the
+  `## <title>` heading counts).
+
+### The small kinds (owner decision D60, 2026-10-24)
+
+Four more keys of `paper correct`. Each goes alone, with the others, or with `--report-file`;
+never with `--with-report` or `--republish`. Each changes only what the paper already carries
+(no new images, owner 2026-10-20). None stores a writer or sends a notice, and the log entry
+names no model (the owner's stamp decision of 2026-10-20: the stored writer stays, do not
+"repair" it). No MiniMax and no Theo run: the writing session (Claude, D60) writes and checks,
+the server gates.
+
+| Change | Flag | The server refuses |
+|---|---|---|
+| Stored picture records: `verified: false` to true, or drop a record | `--image-changes FILE`, `{"verify": [web_path], "drop": [web_path]}` | a path that is not exactly one stored record; `verify` on a record that is not `verified: false`; dropping a picture the text still shows (remove its block in the `--report-file` text first) or the hero's |
+| Hero | `--hero WEB_PATH` | a path that is not exactly one record of the paper's own pictures; `verified: false`; the current hero; a portrait or narrower than 600 px (measured on the served file) |
+| Card description (API `summary`) | `--card-file FILE` | more than 600 characters, a line break, markdown or citations, the stored card. The studio also holds it to the house rule first: at most 400 characters and three sentences |
+| Evidence re-anchoring | `--evidence-changes FILE`, `{"retire": [ev-NN], "add": [entry]}` | a retired id no `--entries` entry names (`evidence_id`); an added entry with a current or earlier retired id, a verdict other than `supported`, an anchor that is not on exactly one paragraph |
+
+- Flip a picture to `verify` only after looking at it: the flag says someone opened the picture
+  and it shows what the caption says. A wrong picture is dropped (its image block out of the text).
+- Pick a hero only after looking at it: landscape, no person in frame. The code checks the size,
+  not the people.
+- For an anchor-blocked finding: fix the anchored opening in the `--report-file` text, retire the
+  old id (an `--entries` entry with that `evidence_id` says what changed), and add the re-anchored
+  entry under the next free id. Before any production call, the studio checks the added entry's
+  quote verbatim against the workspace's dossier. The entry's `claim` must say what the new
+  sentence says.
+- Every write dry-runs before it applies. A refused gate is fixed in the files, never by
+  loosening a rule.
 
 ## When theo_publish refuses or the outcome is unknown
 

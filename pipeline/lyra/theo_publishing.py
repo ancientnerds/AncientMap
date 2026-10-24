@@ -29,6 +29,7 @@ from typing import Any
 
 from sqlalchemy import text
 
+from pipeline.lyra.coherence_pass import undefined_title_terms
 from pipeline.lyra.quality_gate import recompute_quality_passed
 from pipeline.lyra.theo_citations import (
     _is_non_prose_block,
@@ -387,20 +388,32 @@ def check_artifact(report: str) -> tuple[dict, dict]:
     return _gate(list(audit["issues"])[:20]), audit
 
 
-def check_quality(quality_score: dict, audit: dict, *, require_stored_passed: bool) -> dict:
+def check_quality(
+    quality_score: dict, audit: dict, *, title: str, report: str, require_stored_passed: bool
+) -> dict:
     """recompute_quality_passed against the fresh audit; for a first publish also the stored verdict.
 
     A correction recomputes only: the stored `passed` predates the corrected text
-    and cannot be refreshed (the 2026-08-31 lesson in quality_gate.py).
+    and cannot be refreshed (the 2026-08-31 lesson in quality_gate.py). The title
+    terms are recomputed from `title` and the whole gated `report` like the audit
+    (coherence_pass.undefined_title_terms, D60): the rule the stored counts were
+    made with, so the recompute holds a paper only where its text no longer
+    carries a term. The gate names the missing ones.
     """
     stored = quality_score.get("passed") is True
-    recomputed = recompute_quality_passed(quality_score, audit)
+    missing = undefined_title_terms(title, report)
+    recomputed = recompute_quality_passed(quality_score, audit, undefined_title_terms=len(missing))
     issues = []
     if require_stored_passed and not stored:
         issues.append("quality_score.passed is not true")
     if not recomputed:
         issues.append("recompute_quality_passed rejects the paper against the fresh audit")
-    return _gate(issues, stored_passed=stored, recomputed_passed=recomputed)
+    return _gate(
+        issues,
+        stored_passed=stored,
+        recomputed_passed=recomputed,
+        undefined_title_terms=missing,
+    )
 
 
 def check_evidence(report: str, title: str, evidence: list) -> dict:
@@ -982,7 +995,13 @@ def publish_paper(
     if gates["shape"]["passed"]:
         gates["snapshot"] = check_snapshot(result)
         gates["artifact"], audit = check_artifact(result["report"])
-        gates["quality"] = check_quality(result["quality_score"], audit, require_stored_passed=True)
+        gates["quality"] = check_quality(
+            result["quality_score"],
+            audit,
+            title=result["title"],
+            report=result["report"],
+            require_stored_passed=True,
+        )
         gates["evidence"] = check_evidence(result["report"], result["title"], result["evidence"])
         gates["retention"] = check_evidence_retention(
             previous.get("evidence", []), result["evidence"], previous.get("corrections", []), []
@@ -1144,12 +1163,298 @@ def check_correction_shape(correction: dict, *, published_on: date | None, today
         issues.extend(
             _result_issues(correction["result"], correction.get("writer"), republish=True)
         )
+    issues.extend(_part_shape_issues(correction))
     issues.extend(
         _correction_entry_issues(
             correction.get("corrections_append"), earliest=published_on, latest=today
         )
     )
     return _gate(issues)
+
+
+# ---------------------------------------------------------------------------
+# The small correction kinds (owner decision D60, 2026-10-24). Each changes one
+# part of a public paper besides its text, and only within what the paper
+# already carries: no new picture (owner 2026-10-20, "no new images"), no
+# evidence id reused. A full republish (`result`) replaces every part and
+# excludes these keys (the CLI refuses the pair, exit 2).
+# ---------------------------------------------------------------------------
+
+#: The optional correction keys of the small kinds (the CLI's C5 envelope lists them).
+CORRECTION_PART_KEYS = (
+    "evidence_changes",
+    "probative_image_changes",
+    "hero_image",
+    "card_description",
+)
+_IMAGE_CHANGE_KEYS = frozenset({"verify", "drop"})
+_EVIDENCE_CHANGE_KEYS = frozenset({"retire", "add"})
+#: What a card never carries: it is plain text on the research index and in the
+#: public API's `summary` (the studio's meta gate holds a new paper's card to the
+#: same rule).
+_CARD_MARKUP = ("[", "](", "#", "*")
+
+
+def _string_list_issues(value: Any, label: str) -> list[str]:
+    """A list of distinct non-empty strings, or the issues saying why not."""
+    if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
+        return [f"{label} must be a list of non-empty strings"]
+    return [f"{label} names {v} twice" for v in sorted({v for v in value if value.count(v) > 1})]
+
+
+def _image_changes_shape(changes: Any) -> list[str]:
+    label = "probative_image_changes"
+    if not isinstance(changes, dict):
+        return [f"{label} must be an object {{verify?, drop?}}"]
+    unknown = sorted(set(changes) - _IMAGE_CHANGE_KEYS)
+    issues = [f"{label} has unknown keys {unknown}"] if unknown else []
+    for key in sorted(_IMAGE_CHANGE_KEYS & set(changes)):
+        issues.extend(_string_list_issues(changes[key], f"{label}.{key}"))
+    if issues:
+        return issues
+    verify, drop = changes.get("verify", []), changes.get("drop", [])
+    if not verify and not drop:
+        issues.append(f"{label} must name at least one picture to verify or drop")
+    issues.extend(f"{label} both verifies and drops {p}" for p in sorted(set(verify) & set(drop)))
+    return issues
+
+
+def _evidence_changes_shape(changes: Any) -> list[str]:
+    label = "evidence_changes"
+    if not isinstance(changes, dict):
+        return [f"{label} must be an object {{retire?, add?}}"]
+    unknown = sorted(set(changes) - _EVIDENCE_CHANGE_KEYS)
+    issues = [f"{label} has unknown keys {unknown}"] if unknown else []
+    retire, add = changes.get("retire", []), changes.get("add", [])
+    retire_issues = _string_list_issues(retire, f"{label}.retire")
+    if not retire_issues:
+        retire_issues = [
+            f"{label}.retire: {ev!r} is not an evidence id (ev-NN)"
+            for ev in retire
+            if not EVIDENCE_ID_RE.fullmatch(ev)
+        ]
+    issues.extend(retire_issues)
+    if not isinstance(add, list):
+        issues.append(f"{label}.add must be a list of evidence entries")
+    elif not issues and not retire and not add:
+        issues.append(f"{label} must retire or add at least one entry")
+    return issues
+
+
+def _card_shape(card: Any) -> list[str]:
+    if not (isinstance(card, str) and card.strip()):
+        return ["card_description must be a non-empty string"]
+    issues = []
+    if card != card.strip() or "\n" in card:
+        issues.append("card_description must be one line without leading or trailing whitespace")
+    if len(card) > MAX_CARD_CHARS:
+        issues.append(f"card_description must be 1-{MAX_CARD_CHARS} characters")
+    if any(token in card for token in _CARD_MARKUP):
+        issues.append("card_description must be plain text (no citations, no markdown)")
+    return issues
+
+
+def _part_shape_issues(correction: dict) -> list[str]:
+    """Value types of the small kinds' keys (D60); what they name is checked against the row."""
+    issues: list[str] = []
+    if "evidence_changes" in correction:
+        issues.extend(_evidence_changes_shape(correction["evidence_changes"]))
+    if "probative_image_changes" in correction:
+        issues.extend(_image_changes_shape(correction["probative_image_changes"]))
+    if "hero_image" in correction:
+        hero = correction["hero_image"]
+        if not (
+            isinstance(hero, dict)
+            and set(hero) == {"web_path"}
+            and isinstance(hero["web_path"], str)
+            and hero["web_path"].strip()
+        ):
+            issues.append(
+                "hero_image must be {web_path}: the path of a picture the paper already carries"
+            )
+    if "card_description" in correction:
+        issues.extend(_card_shape(correction["card_description"]))
+    return issues
+
+
+def apply_evidence_changes(current: list, changes: dict) -> tuple[list, list[str]]:
+    """(the new evidence list, issues): the stored entries minus `retire`, then `add`.
+
+    A re-anchored entry takes a new id: an id this paper carries (or carried, the
+    retention gate's half) is never handed out again, so a video or a link to
+    #ev-NN that predates the correction lands on the correction that retired it.
+    Every retired id must be named by a corrections_append entry (retention gate).
+    The added entries are held to the publish rule by the evidence gate (shape,
+    `supported`, every anchor on exactly one paragraph of the markdown and of the
+    served page); the claim itself is the writing session's judgement, the quote
+    check against the archived source text the studio's (`paper correct
+    --evidence-changes`).
+    """
+    retire, add = changes.get("retire", []), changes.get("add", [])
+    current_ids = [entry["id"] for entry in current]
+    issues = [f"{ev} is not an evidence id of this paper" for ev in retire if ev not in current_ids]
+    issues += [
+        f"{entry['id']} is a current evidence id: a re-anchored entry takes a new id"
+        for entry in add
+        if isinstance(entry, dict) and entry.get("id") in current_ids
+    ]
+    return [entry for entry in current if entry["id"] not in retire] + list(add), issues
+
+
+def apply_image_changes(stored: list, changes: dict, served: str) -> tuple[list, list[str]]:
+    """(the new probative_images, issues): flip `verified` false -> true, drop entries.
+
+    Only within the stored list: every named web path must be exactly one stored
+    entry, `verify` flips only a stored `verified: false` (an entry without the
+    flag predates it, theo_image_gate), and a dropped picture must no longer be
+    shown by the served text (its record carries the credit the page prints). The
+    caller also refuses dropping the hero's picture. A changed picture file is
+    `--patch-images`, never this.
+    """
+    verify, drop = changes.get("verify", []), changes.get("drop", [])
+    paths = [entry.get("web_path") if isinstance(entry, dict) else None for entry in stored]
+    issues = [
+        f"{path}: the stored probative_images hold {paths.count(path)} entries for it, not "
+        "exactly one (a correction changes only pictures the paper carries)"
+        for path in [*verify, *drop]
+        if paths.count(path) != 1
+    ]
+    issues += [
+        f"{path}: its stored entry is not marked verified: false; only a false flag is flipped"
+        for path in verify
+        if paths.count(path) == 1 and stored[paths.index(path)].get("verified") is not False
+    ]
+    from pipeline.lyra import theo_image_gate
+
+    shown = {figure["src"] for figure in theo_image_gate.parse_figures(served)}
+    issues += [
+        f"{path}: the text still shows this picture; remove its image block in `report` first"
+        for path in drop
+        if path in shown
+    ]
+    images = [
+        {**entry, "verified": True} if entry.get("web_path") in verify else entry
+        for entry in stored
+        if not (isinstance(entry, dict) and entry.get("web_path") in drop)
+    ]
+    return images, issues
+
+
+def check_hero_choice(
+    request_id: str,
+    web_path: str,
+    probative_images: list,
+    current_hero: dict | None,
+    *,
+    served_root: Path,
+) -> tuple[dict, dict | None]:
+    """(gate, the new hero dict or None): a hero the paper already carries, fit to be a banner.
+
+    The picture must be exactly one entry of the paper's probative_images (after
+    this correction's image changes), never a new file (owner 2026-10-20: no new
+    images); not marked `verified: false`; not the current hero; and, measured on
+    the served file, landscape and at least HERO_MIN_WIDTH wide (the owner's
+    banner rule of 2026-10-06: no portrait; that it shows no person is the
+    writing session's look at the picture, not code). The dict is
+    hero_picker.hero_from_entry of that entry, stored as hero_image and
+    published_hero_image alike (spec 2.6.3).
+    """
+    from pipeline.lyra.hero_picker import HERO_MIN_WIDTH, hero_from_entry
+
+    matches = [e for e in probative_images if isinstance(e, dict) and e.get("web_path") == web_path]
+    if len(matches) != 1:
+        return _gate(
+            [
+                f"{web_path}: the paper's probative_images hold {len(matches)} entries for it, "
+                "not exactly one (a hero is a picture the paper already carries, never a new one)"
+            ]
+        ), None
+    entry = matches[0]
+    issues = []
+    if entry.get("verified") is False:
+        issues.append(f"{web_path} is marked verified: false: nobody has opened this picture")
+    if current_hero is not None and current_hero.get("src") == web_path:
+        issues.append(f"{web_path} is already the hero")
+    match = _IMAGE_PATH_RE.fullmatch(web_path)
+    if match is None or match["rid"] != request_id:
+        issues.append(f"{web_path} is not a picture in research-images/{request_id}/")
+        return _gate(issues), hero_from_entry(entry)
+    from PIL import Image
+
+    file = served_root / "research-images" / request_id / match["name"]
+    try:
+        with Image.open(file) as picture:
+            width, height = picture.size
+    except OSError as exc:  # missing or not an image: the gate names it, nothing is written
+        issues.append(f"{web_path}: the size of {file} cannot be read: {exc}")
+        return _gate(issues), hero_from_entry(entry)
+    if width < height:
+        issues.append(f"{web_path} is portrait ({width}x{height}): a banner is landscape")
+    if width < HERO_MIN_WIDTH:
+        issues.append(f"{web_path} is {width} px wide, below the banner minimum {HERO_MIN_WIDTH}")
+    return _gate(issues, width=width, height=height), hero_from_entry(entry)
+
+
+def _hero_paths(hero: dict | None) -> set[str]:
+    return {hero[key] for key in ("src", "web_path") if hero and isinstance(hero.get(key), str)}
+
+
+def _apply_parts(
+    request_id: str,
+    current: dict,
+    correction: dict,
+    served: str,
+    *,
+    served_root: Path,
+) -> tuple[dict, dict[str, dict]]:
+    """(the changed parts of the paper, their gates) for the small kinds a correction sends.
+
+    Gates, one per kind sent: `evidence_changes`, `image_changes`, `hero`, `card`.
+    The evidence list a correction stores comes from here too: `evidence` (the
+    complete list, `--with-report`), else `evidence_changes`, else the stored one.
+    """
+    parts: dict[str, Any] = {}
+    gates: dict[str, dict] = {}
+    if "evidence_changes" in correction:
+        parts["evidence"], issues = apply_evidence_changes(
+            current.get("evidence", []), correction["evidence_changes"]
+        )
+        gates["evidence_changes"] = _gate(issues)
+    else:
+        parts["evidence"] = correction.get("evidence", current.get("evidence", []))
+    images = current.get("probative_images") or []
+    image_issues: list[str] = []
+    if "probative_image_changes" in correction:
+        images, image_issues = apply_image_changes(
+            images, correction["probative_image_changes"], served
+        )
+        parts["probative_images"] = images
+    hero = current.get("hero_image")
+    if "hero_image" in correction:
+        gates["hero"], hero = check_hero_choice(
+            request_id,
+            correction["hero_image"]["web_path"],
+            images,
+            current.get("hero_image"),
+            served_root=served_root,
+        )
+        parts["hero_image"] = parts["published_hero_image"] = hero
+    if "probative_image_changes" in correction:
+        image_issues += [
+            f"{path} is the hero's picture; name another hero in hero_image first"
+            for path in correction["probative_image_changes"].get("drop", [])
+            if path in _hero_paths(hero)
+        ]
+        gates["image_changes"] = _gate(image_issues)
+    if "card_description" in correction:
+        card = correction["card_description"]
+        parts["card_description"] = card
+        gates["card"] = _gate(
+            ["card_description equals the stored one"]
+            if card == current.get("card_description")
+            else []
+        )
+    return parts, gates
 
 
 def _update_result(session: Any, row: Any, stored: dict) -> None:
@@ -1235,6 +1540,23 @@ def correct_paper(
     `evidence`, a `rewrite` that is not true, comes without `report` or with
     `evidence`, and a `dossier_request_id` without `result` (exit 2).
 
+    The small kinds of owner decision D60 (2026-10-24) change one part besides
+    the text, alone or together with `report`, and only within what the paper
+    carries (_apply_parts): `probative_image_changes` flips stored `verified:
+    false` flags to true or drops stored entries; `hero_image` names a picture of
+    the paper's own probative_images as the banner; `card_description` replaces
+    the card (the API's `summary`); `evidence_changes` retires evidence ids (each
+    named by a corrections_append entry) and adds re-anchored entries under new
+    ids. Each adds its gate (`image_changes`, `hero`, `card`, `evidence_changes`)
+    and every other gate runs on the result as for a text correction. None of
+    them stores a writer or sends the owner notice: the stored writer stays (the
+    owner's stamp decision of 2026-10-20). The CLI refuses them with `result`, and
+    `evidence_changes` with `evidence` or `rewrite` (exit 2).
+
+    The quality gate recomputes the title terms from the served text
+    (check_quality): a stored `undefined_title_terms` no longer holds a paper
+    whose text carries its title terms.
+
     The corrections log is appended to, so sending one correction twice would
     leave two identical entries on the page -- 42 of them did (rule 7). A
     correction whose sha256 is the paper's newest journal row is therefore not
@@ -1280,7 +1602,6 @@ def correct_paper(
             served = paper["report"]
             quality_score, require_stored_passed = paper["quality_score"], True
         else:
-            paper = {**current, "evidence": correction.get("evidence", current.get("evidence", []))}
             # The page serves published_report (report only on a legacy row
             # without one). The founder block workflow assembles published_report
             # from the approved blocks, so it can differ from report: a
@@ -1290,6 +1611,11 @@ def correct_paper(
                 served = correction["report"]
             else:
                 served = current.get("published_report") or current.get("report", "")
+            parts, part_gates = _apply_parts(
+                request_id, current, correction, served, served_root=served_root
+            )
+            gates.update(part_gates)
+            paper = {**current, **parts}
             quality_score, require_stored_passed = current.get("quality_score") or {}, False
         gates["retention"] = check_evidence_retention(
             current.get("evidence", []),
@@ -1299,7 +1625,11 @@ def correct_paper(
         )
         gates["artifact"], audit = check_artifact(served)
         gates["quality"] = check_quality(
-            quality_score, audit, require_stored_passed=require_stored_passed
+            quality_score,
+            audit,
+            title=paper["title"],
+            report=served,
+            require_stored_passed=require_stored_passed,
         )
         gates["evidence"] = check_evidence(served, paper["title"], paper["evidence"])
         gates["images"] = check_images(
@@ -1540,7 +1870,8 @@ def patch_images(
 ) -> PublishOutcome:
     """Replace pictures in a public paper without republishing its text (rule 8).
 
-    `correct_paper` cannot write `probative_images` (the stored ones stay), so
+    `correct_paper` writes `probative_images` only within the stored list (a
+    `verified` flag flipped, an entry dropped, D60), never a new picture, so
     before this a picture could only change through a full republish, which
     replaces the whole stored text of a live paper -- the report's 7 dead
     image URLs would have cost 7 republications. This action writes the image

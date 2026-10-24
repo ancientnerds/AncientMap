@@ -323,9 +323,50 @@ exact bytes sent.
 | Small fix of a legacy paper | `... --report-file FILE` | `report` | none; the stored writer stays |
 | Full rewrite of a legacy paper's text by this session's model | `... --report-file FILE --rewrite` | `report` and `rewrite: true` | `paper_published`; the page shows the writer's disclosure line |
 | Rewrite from a fresh Theo run | `paper pull ID --dossier-from RUN`, the session of section 3, then `paper correct ID --text T --republish` | `result` and, on the first republish, `dossier_request_id: RUN` | `paper_published`; RUN ends `cancelled` |
+| Picture records: flip `verified: false` to true, drop a record | `... --image-changes FILE` (`{"verify": [web_path], "drop": [web_path]}`) | `probative_image_changes` | none |
+| Hero: one of the paper's own pictures | `... --hero WEB_PATH` | `hero_image: {web_path}` | none |
+| Card description (the API's `summary`) | `... --card-file FILE` (UTF-8, one line) | `card_description` | none |
+| Evidence re-anchoring | `... --evidence-changes FILE` (`{"retire": [ev-NN], "add": [entry]}`), with `--entries` naming each retired id | `evidence_changes` | none |
+
+The last four rows are the small kinds of owner decision D60 (2026-10-24). They fix the leftovers
+of the 2026-10-19 paper audit without MiniMax and without a Theo run: a Claude session writes and
+checks the change, the server gates it. Each one goes alone, together with the others, or with
+`--report-file`, never with `--with-report` or `--republish`. Each changes only what the paper
+already carries (owner, 2026-10-20: no new images). None of them stores a writer or sends a notice:
+the stored writer stays, and the log entry names no model (the owner's stamp decision of
+2026-10-20). theo_publish adds one gate per kind (`image_changes`, `hero`, `card`,
+`evidence_changes`) and runs every other gate of a text correction on the result.
+
+- `--image-changes`: every web path must be exactly one stored record. `verify` flips only a
+  stored `verified: false` (a record without the flag predates it). A dropped record must not be
+  shown by the served text (remove its image block in the `--report-file` text first), and must not
+  be the hero's picture unless `--hero` names another one in the same correction. A new picture file
+  is still `paper patch-images`. This is what unblocks enuma-elish (10 stored `verified: false`
+  records) and solar-superflares (11): today the pictures gate fails every correction on them.
+- `--hero`: the web path must be exactly one record of the paper's `probative_images` (after this
+  correction's image changes), not `verified: false`, not the current hero. Measured on the served
+  file, it must be landscape (width at least height) and at least 600 px wide (`HERO_MIN_WIDTH`).
+  The banner is built from that record by `hero_picker.hero_from_entry` and stored as `hero_image`
+  and `published_hero_image`. That the picture shows no person (owner, 2026-10-06) is the session's
+  look at the picture: the code cannot see it. A re-encode of the same file (quantum's GIF under
+  `.jpg`) changes no record and is not this kind.
+- `--card-file`: the studio holds the card to the house rule of a new paper (`gates.card_problems`:
+  at most 400 characters, three sentences, plain text); the server to one line of at most 600
+  plain-text characters that differs from the stored card. 31 of the 41 public cards were longer
+  than 400 characters on 2026-10-24, so a corrected card is usually a shorter one.
+- `--evidence-changes`: `retire` drops stored evidence ids; each needs an `--entries` entry with
+  that `evidence_id` (gate `retention`). `add` brings re-anchored entries under **new** ids (gate
+  `evidence_changes` refuses a current id, `retention` one retired earlier). Before the dry run the
+  studio checks each added entry against the workspace's dossier, without MiniMax: the shape rule,
+  every source id in the dossier and in `sources.json`, the quote verbatim in its source's archived
+  (or saved live) text. A retirement alone needs no dossier. The server resolves every anchor on the
+  served text and page (gate `evidence`). The claim itself is the Claude session's judgement. This
+  replaces the full MiniMax re-check of `--with-report` for the 25 anchor-blocked findings: change
+  the anchored opening in the `--report-file` text, retire the old id, add the re-anchored entry.
+  The kept entries stay byte for byte, so their stored claims keep their wording.
 
 - `--with-report` cannot change the images, the title or the card description: they must equal
-  `published_bundle.json`. A change there is a `--republish`.
+  `published_bundle.json`. A change there is a `--republish`, or one of the small kinds above.
 - A republish keeps the slug, `published_at` and `published_by`: a founder-published paper keeps its
   founder as publisher (owner decisions 17 and 19; 7 of the 31 public papers carry a founder's name).
   It keeps the stored corrections log: the studio sends `result.corrections: []` and theo_publish
@@ -341,16 +382,25 @@ exact bytes sent.
 - Measured read-only on 2026-09-26 (plan A C5): 10 of the 31 public papers fail the quality recompute
   with their stored text. For 9 of them the audit of the stored text fails (uncited paragraphs,
   non-Latin script): a text correction whose report passes `validate_paper_artifact` passes, a
-  log-only correction fails. `mogollon-pithouse-sites-across-the-upper-gila` also carries a stored
-  `undefined_title_terms = 1` and changes only through a full republish.
+  log-only correction fails.
+- Since D60 (2026-10-24) the quality gate recomputes `undefined_title_terms` from the title and the
+  whole served text (`coherence_pass.undefined_title_terms`, as it recomputes coverage since
+  2026-09-24) instead of reading the stored count. The whole text is the rule the stored counts were
+  made with: measured on the 41 public papers, 41 of 41 equal it, while the studio's stricter
+  prose-only rule (a new paper's `coherence` gate) fails 26 of them. The term extraction kept an
+  article out of the middle of a phrase, so `mogollon-pithouse-sites-across-the-upper-gila`
+  ("Mogollon Pithouse Sites Across Upper Gila") carried a term no text could hold and stored 1;
+  with the article kept it recomputes to 0, and mogollon takes a `--report-file` correction like
+  every legacy paper. Its stored `quality_score` (badge "Unverified") stays as stored.
 - In a `--dossier-from` workspace, `paper pull` refuses RUN unless its export is `researched`. The
   republish's `dossier_source` gate checks RUN again, and the apply closes RUN in the same transaction:
   `status = 'cancelled'`, `error_message = 'dossier used by the republish of <ID>'` (Q10). RUN then
   leaves `theo_dossier list` and the unwritten-dossier cap.
 
 A picture of a published paper changes through `paper patch-images ID --patch FILE [--images DIR]
-[--dry-run]`, never through a republish. FILE is the `theo_publish --patch-images` envelope: the
-complete new `probative_images` list, one `replacements` entry per replaced picture (`old_web_path`
+[--dry-run]`, never through a republish (a stored record's `verified` flag, a record of a picture
+the text no longer shows, and the hero go through `paper correct --image-changes/--hero` above).
+FILE is the `theo_publish --patch-images` envelope: the complete new `probative_images` list, one `replacements` entry per replaced picture (`old_web_path`
 plus the finished markdown block the studio built) and the `corrections_append` entries that say
 on the page what changed. The new files are uploaded from `--images` (default
 `<workspace>/images/selected`) before the dry run, because the images gate checks them on the VPS.
@@ -807,17 +857,23 @@ by hand only to inspect.
   2 bad request id.
 - `theo_publish` reads one JSON object on stdin: `publish` `{version, request_id, writer, result}`;
   `correct` adds `corrections_append` and optionally `report`, `evidence`, `result`, `rewrite`,
-  `dossier_request_id`; `register_video` `{version, request_id, writer, youtube_id, title,
+  `dossier_request_id`, and the small kinds of D60 `probative_image_changes` (`{verify?, drop?}`),
+  `hero_image` (`{web_path}`), `card_description`, `evidence_changes` (`{retire?, add?}`), which
+  `result` excludes (exit 2: `result (a full republish) excludes [...]`), and `evidence_changes`
+  also `evidence` and `rewrite` (exit 2: `evidence_changes excludes evidence and rewrite`);
+  `register_video` `{version, request_id, writer, youtube_id, title,
   published_at, evidence_timestamps}` plus optionally `poster`. `request_id` is a canonical lowercase
   UUID. It prints one `PublishOutcome` JSON (`ok`, `action`, `slug`, `url`, `gates`, `side_effects`,
   `journal_id`) or `{"ok": false, "error": ...}`. Exit codes: 0 ok (a failed side effect is reported,
   not fatal), 1 a gate failed, 2 unusable input, 3 the row changed between read and write (nothing
   committed), 4 committed but the re-read row differs (side effects not run).
 - Gates per action: `publish` = `status`, `shape`, `snapshot`, `artifact`, `quality`, `evidence`,
-  `retention`, `images`, `page`; `correct` = `status`, `shape`, `retention`, `artifact`, `quality`,
-  `evidence`, `images`, `page` (a full republish adds `snapshot`, and `dossier_source` with
-  `dossier_request_id`); `register_video` = `status`, `shape`, `evidence_refs`, `duplicate`, `images`,
-  `page`. A dry run of a publish on a public row answers `apply_allowed: false`.
+  `retention`, `images`, `pictures`, `page`; `correct` = `status`, `shape`, `retention`,
+  `artifact`, `quality`,
+  `evidence`, `images`, `pictures`, `page` (a full republish adds `snapshot`, and `dossier_source`
+  with `dossier_request_id`; each small kind adds its own: `evidence_changes`, `image_changes`,
+  `hero`, `card`; `quality` names the recomputed `undefined_title_terms`); `register_video` =
+  `status`, `shape`, `evidence_refs`, `duplicate`, `images`, `page`. A dry run of a publish on a public row answers `apply_allowed: false`.
 - Side effects: a publish runs IndexNow, Qdrant and the owner notice; a correction re-runs IndexNow and
   Qdrant, plus the notice for a full republish and a `rewrite: true` text correction; a video
   registration runs IndexNow. Dry runs write nothing and notify nobody.

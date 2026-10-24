@@ -6,7 +6,9 @@ leave the VPS:
     ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --dry-run < bundle.json
     ... --apply < bundle.json
     ... --correct [--dry-run] < correction.json   (a log entry, a text correction, or a full republish via
-                                                     `result`, optionally from a fresh run's `dossier_request_id`)
+                                                     `result`, optionally from a fresh run's `dossier_request_id`;
+                                                     the small kinds of D60 change pictures, hero,
+                                                     card or evidence anchors within the paper)
     ... --register-video [--dry-run] < video.json   (an optional `poster`: our own thumbnail, uploaded first)
     ... --patch-images [--dry-run] < patch.json   (replace pictures in a public paper; the stored
                                                      text outside the replaced image blocks is
@@ -34,6 +36,7 @@ from typing import BinaryIO, TextIO
 
 from pipeline.database import get_session
 from pipeline.lyra.theo_publishing import (
+    CORRECTION_PART_KEYS,
     PublishConflictError,
     PublishInputError,
     PublishVerificationError,
@@ -54,7 +57,9 @@ ENVELOPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "publish": (frozenset({"version", "request_id", "writer", "result"}), frozenset()),
     "correct": (
         frozenset({"version", "request_id", "writer", "corrections_append"}),
-        frozenset({"report", "evidence", "result", "rewrite", "dossier_request_id"}),
+        frozenset(
+            {"report", "evidence", "result", "rewrite", "dossier_request_id", *CORRECTION_PART_KEYS}
+        ),
     ),
     "register_video": (
         frozenset(
@@ -152,6 +157,15 @@ def _check_envelope(payload: object, action: str) -> dict:
         raise PublishInputError("result must be a JSON object")
     if action == "correct" and "result" in payload and {"report", "evidence"} & set(payload):
         raise PublishInputError("result (a full republish) excludes report and evidence")
+    # The small kinds (D60) change one part of the stored paper; a full republish
+    # replaces every part, so it carries none of them.
+    parts = sorted(set(CORRECTION_PART_KEYS) & set(payload))
+    if action == "correct" and "result" in payload and parts:
+        raise PublishInputError(f"result (a full republish) excludes {parts}")
+    # evidence_changes edits the stored evidence list; `evidence` replaces it whole
+    # and `rewrite` (a legacy paper's text) carries none.
+    if "evidence_changes" in payload and {"evidence", "rewrite"} & set(payload):
+        raise PublishInputError("evidence_changes excludes evidence and rewrite")
     # `rewrite` marks a text correction as a Claude rewrite (C5, from `paper correct
     # --report-file FILE --rewrite`): only JSON true, only with `report` and without
     # `evidence`, never with `result` (a full republish sets the writer anyway).

@@ -192,7 +192,45 @@ def test_a_republish_prints_the_notice_it_sent(monkeypatch, tmp_path, capsys, mo
         "republish": mode == "republish",
         "report": None if mode == "republish" else "# Title\n\nThe rewritten paper.\n",
         "rewrite": mode == "rewrite",
+        "image_changes": None,
+        "hero": None,
+        "card": None,
+        "evidence_changes": None,
     }
+
+
+def test_the_small_kinds_reach_correct_from_their_files(monkeypatch, tmp_path, capsys):
+    """D60: --image-changes, --hero, --card-file and --evidence-changes, read as given."""
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    seen = {}
+
+    def fake_correct(ws, entries, **modes):
+        seen.update(modes)
+        return {"apply": {"ok": True, "journal_id": 9, "side_effects": {}}}
+
+    monkeypatch.setattr(publish, "correct", fake_correct)
+    hero = f"/data/research-images/{fx.REQ}/p1.jpg"
+    images = tmp_path / "images.json"
+    images.write_text(json.dumps({"verify": [hero]}), encoding="utf-8")
+    card = tmp_path / "card.txt"
+    card.write_text("Zecharia Sitchin read Nibiru as a planet.\n", encoding="utf-8")
+    changes = tmp_path / "evidence_changes.json"
+    changes.write_text(json.dumps({"retire": ["ev-02"]}), encoding="utf-8")
+    args = ["paper", "correct", fx.REQ, "--text", "Corrected.", "--image-changes", str(images)]
+    args += ["--hero", hero, "--card-file", str(card), "--evidence-changes", str(changes)]
+    assert cli.main(args) == 0
+    assert seen["image_changes"] == {"verify": [hero]}
+    assert seen["hero"] == hero
+    assert seen["card"] == "Zecharia Sitchin read Nibiru as a planet."  # the final break goes
+    assert seen["evidence_changes"] == {"retire": ["ev-02"]}
+    assert seen["report"] is None and seen["with_report"] is False
+
+
+def test_a_missing_card_file_exits_2(monkeypatch, tmp_path):
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr(publish, "correct", lambda *a, **k: pytest.fail("reached correct"))
+    missing = str(tmp_path / "no-card.txt")
+    assert cli.main(["paper", "correct", fx.REQ, "--text", "x", "--card-file", missing]) == 2
 
 
 def test_register_video_sends_the_poster_between_two_dry_runs(monkeypatch, tmp_path):
