@@ -14347,3 +14347,16 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   (262 s), freshness 0 differing sites, IndexNow 502 URLs accepted (every page changed on 2026-10-24). The P31 table moved
   with its pin in one commit (`table --write`, 314 classes changed, TABLE_SHA256 fe54e166...); the pre-merge table is
   now a test fixture and a test pins the pinned table as its exact merged form.
+- **D10 re-check of the live MiniMax cards - done 2026-10-24/25** (beta-exit condition 2). card_adversarial calibrated
+  first (teaser-2026-10-24 PASSED, agreement 0.9302). Run `wb-recheck-2026-10-24` (contract recheck-v1, seeded from
+  `wb-cardgap-2026-10-07`): 166 live cards; check (card_fact_checker, 12 canaries) PASS 126 / FAIL 40; verify
+  (card_web_verifier, 126) VERIFIED 73, DISPUTED 28, CONTRADICTED 17, UNPROVEN 8; adversarial (card_adversarial, 73)
+  PASS 64 / FAIL 9; outcomes: **64 confirmed, 102 cleared** (check-failed 40, disputed 28, contradicted 17,
+  adversarial-failed 9, unproven 8). Clears written as lane WB steps **s039** (54 prov + 54 card) and **s040** (48 + 48):
+  backup + drill `2026-10-25_remediation` passed, emit/rehearse/probe-guards/apply (APPLY OK)/verify/rehearse-rollback,
+  accept 0 deviations each; journal recounted 54/54/48/48. Curated sites with a card 4820 -> 4718; the cleared sites get
+  a checked card in the waves. One page (lovevda.it) stayed unreachable through 3 import retries.
+- **WC calibrations on Opus** (after the role moves, `wc-roles` merge): wc-fc-1o PASSED, wc-fc-3o PASSED, wc-fc-2o FAILED
+  (0.8841, both known errors missed), wc-wv-1o FAILED (0.8675 of 0.95), wc-wv-2o FAILED (0.8696); all at the top tier ->
+  held. Next: adjudicate their disagreements against the recorded single-sample gold (the 2026-10-09 lesson) before any
+  release. wc-pj-1o/2o (the X15-sharpened judge, `wc-judge` merge) sealed and prepared. enrich-writer PASSED (1.0).
