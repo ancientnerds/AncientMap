@@ -133,16 +133,20 @@ def parse_fenced_json(
 
 # MiniMax model — single source of truth for every call site (config.py,
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
-# Owner decision 2026-10-03: Theo research and Lyra run on
-# `MiniMax-M3.1-Flash-Preview` (probed live that day: the forced tool call the
-# research stages depend on works, 14 findings vs 6 on the same realistic
-# prompt). One difference matters: M3.1-Flash REJECTS
+# Owner decision 2026-10-03: Theo research and Lyra run on M3.1-Flash (probed
+# live that day: the forced tool call the research stages depend on works,
+# 14 findings vs 6 on the same realistic prompt). The model went GA on
+# 2026-10-19 under the released id `MiniMax-M3.1-Flash`; the preview id
+# `MiniMax-M3.1-Flash-Preview` was retired with it (measured 2026-10-25: the
+# API's model list carries only the released id, and the retired id now merely
+# aliases to it — so the old default named a model that no longer exists).
+# One difference matters: M3.1-Flash REJECTS
 # `thinking={"type":"disabled"}` with HTTP 400 "requires adaptive thinking;
 # thinking.type=disabled (including reasoning.effort=none) is not allowed"
 # (error 2013), so every call reasons — there is no lean mode on this model.
 # M3.1 also needs no thinking block to reason: adaptive is the default.
 # Env-overridable so a successor can be switched without a code deploy.
-MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "MiniMax-M3.1-Flash-Preview")
+MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "MiniMax-M3.1-Flash")
 
 # MiniMax search endpoint (Token Plan / Coding Plan)
 MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
