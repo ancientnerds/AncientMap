@@ -1551,14 +1551,17 @@ written text does not have). It decides in three steps, in order:
    rule: a present-tense state that held only in the past is contradicted). The judge searches for what contradicts a
    claim as well as for what supports it (superlative, uniqueness and style claims named). **WRONG**: a reputable
    source contradicts a claim as worded, with that quote; the answer has no DISPUTED verdict, so a sentence that
-   states as settled what reputable sources dispute is WRONG too unless it carries the sources' own hedge, and a
-   claim only non-reputable pages state that a reputable source contradicts is WRONG, not UNSUPPORTED.
-   **UNSUPPORTED**: no reputable source states the claim either way - the verdict of a search for both that found
-   neither. **SUPPORTED**: reputable sources support every claim and none contradicts it as worded.
-   `web_rules.CONTRADICTION_RULE` follows verbatim, then what it means here: a rounding, an overlapping range, an
-   estimate or variance the claim's own hedge covers, another spelling and the same fact in other words stay
-   SUPPORTED, and two sources disagree only when they state the same thing (a route's length and a straight-line
-   distance, an arch's span and a bridge's length, a founding and a first mention are different facts).
+   states as settled what reputable sources dispute is WRONG too unless it carries the sources' own hedge, and
+   support from pages that are no reputable source does not outweigh a reputable contradiction (WRONG, not
+   UNSUPPORTED). **UNSUPPORTED**: no reputable source states the claim either way - the verdict of a search for both
+   that found neither. **SUPPORTED**: reputable sources support every claim and none contradicts it as worded.
+   `web_rules.CONTRADICTION_RULE` follows verbatim, then what it means here: its DISPUTED is mapped onto this format
+   ("This answer format has no DISPUTED: a claim on which reputable sources disagree, stated without the hedge they
+   share, is WRONG, with the quote of the source that disputes it; stated with that hedge, it can be SUPPORTED"), so
+   the rule's "never report it as a contradiction" cannot be read as a way back to UNSUPPORTED; a rounding, an
+   overlapping range, an estimate or variance the claim's own hedge covers, another spelling and the same fact in
+   other words stay SUPPORTED; and two sources disagree only when they state the same fact (two measures of one thing
+   taken differently, or two different events, are no disagreement).
 2. Each dropped sentence (DROP_OK / DROP_WRONG, unchanged).
 3. Coherence, a step of its own: the kept sentences read alone, in order, beside each trimmed sentence's old wording
    and the dropped sentences. Incoherent when (a) a pronoun or definite phrase lost its referent to a drop or a cut
@@ -1567,26 +1570,61 @@ written text does not have). It decides in three steps, in order:
    contradicts itself, a kept sentence states what another denies; (e) the sentences describe two different sites.
    Coherence is decided apart from the verdicts; the closing note names which of (a)-(e) fails.
 
-The rules are general - neither case is named - and they decide both misses: Cloghanmore's kept-3 has a reputable
-source against "passage tomb-style" and none for it (WRONG, not UNSUPPORTED), and Nyons' "The ancient name" was
-written about the Nyrax of the cut piece shown in K1's "trimmed from" line (rule (a), and (b)). The brief
-(`JUDGE_BRIEF`, re-pinned) asks every point in the prompt's order and a search for contradiction for each kept
-sentence; it is also lane E's judge brief, whose own question (`prompts_enrich.JUDGE_QUESTION_ENRICH`) is not changed.
-No judge round was open (the three pilots' rounds are imported), so no exported answer went stale.
+**No example from the recalibrated pools.** The first wording (commit `53a907a`) named no case, but several of its
+examples were the pools' own units, and wc-pj-1o/2o re-run those pools: "passage tomb-style" and "unique" are the
+seeded WRONG of `5facc061/kept-3`, "carved" where the sources say "built" is the seeded WRONG of `fedd9198/kept-3`
+(both reused from `CHECK_QUESTION`), and "a route's length and a straight-line distance, an arch's span and a
+bridge's length, a founding and a first mention" answered `fedd9198/kept-2` (a 26 km route against "16 km as the crow
+flies", the fresh judge's UNSUPPORTED against a SUPPORTED gold - a disagreement the spec did not name), the Nyons and
+aqueduct spans and Nyons' settlement against Hecataeus' mention; "the complex" also occurs in the pools. Calibrated on
+those pools, such a prompt measures whether the judge follows a pointer, not whether the rules generalise. The review
+of 2026-10-25 found it, and the examples were replaced by ones that match no unit of either copy: every word and
+phrase the question quotes or puts in parentheses was searched in the prompts, answers and `RECORDED.json` of all
+four batches of `$CAL/wc-pj-1` and `$CAL/wc-pj-2` ("moulded"/"engraved", "the tallest", "one of a kind",
+"Etruscan-style", "Mycenaean in style", "the later phase", a height with or without its plinth, a ruler's accession
+and his coronation: 0 hits each). One example stays although its words occur in the pools: "still", "today", "now" -
+the card lane's D52 tense rule verbatim, which the spec requires; no known error of the pools is a tense error.
+`test_wc.POOL_EXAMPLES` refuses the removed examples. The rules themselves remain written after the two misses (the
+spec asks that they decide them), so a pass on the same pools is evidence on rules, not on unseen cases; a fresh
+sealed pool the prompt has never seen would be the stronger test and is the owner's option after the verdicts.
+
+The rules decide both misses without naming them: a uniqueness and a style attribution need a source that states
+exactly that and a search for one that disputes it, and a disputed claim stated as settled is WRONG (Cloghanmore's
+kept-3); a definite phrase whose referent stood in a cut piece makes the text incoherent, also when it can be re-read
+as something still in the text (rule (a), Nyons' "The ancient name" beside K1's "trimmed from" line). The "same fact"
+rule, now without an example, decides whether the aqueduct's 26 km route and its 16 km straight-line distance
+disagree; a judge that calls it WRONG makes the one extra WRONG `MAX_EXTRA_WRONG` allows. The brief (`JUDGE_BRIEF`,
+re-pinned) asks every point in the prompt's order and a search for contradiction for each kept sentence. No judge
+round was open (the three pilots' rounds are imported), so no exported answer went stale.
+
+**Open (out of X15's scope): lane E's judge question.** `JUDGE_BRIEF` is also lane E's judge brief and now asks for a
+contradiction search, but lane E's question (`prompts_enrich.JUDGE_QUESTION_ENRICH`) keeps the definitions X15 found
+faulty - "WRONG (a source contradicts)", "UNSUPPORTED (some claim is supported by no such source)" - and no coherence
+step. A wc-pj-1o/2o pass under `pilot_judge` therefore says nothing about how the role decides lane E's question.
+Before lane E's first judge round, derive its verdict definitions from the sharpened text and calibrate that question
+on a lane E pool of its own (its seal binds `JUDGE_QUESTION_ENRICH` already, see below).
 
 **The seal binds the texts** (`wc/calibration.py`). A lane WC seal records `lane.templates`: the sha256 of its
 kind's question, brief and cache note (`KIND_TEMPLATES`: check - `CHECK_QUESTION`, `REASK_BLOCK`, `CHECK_BRIEF`;
-verify - `VERIFY_QUESTION`, `VERIFY_BRIEF`; judge - `JUDGE_QUESTION`, `JUDGE_BRIEF`; each with `WIKI_CACHE_NOTE`), as a
-teaser seal binds its prompt modules. `prepare` and `compare` refuse a calibration whose texts changed after its seal
-("... changed after <id> was sealed: its agents answer another prompt"). A seal made before the binding carries no
-`templates` and binds `TEMPLATES_BEFORE_X15`, the texts of 2026-10-24: wc-fc-1o/2o/3o and wc-wv-1o/2o stand on
-unchanged texts and go on as sealed, while wc-pj-1/2 are refused - their agents answered the old question. A judge
-pool's copy is **asked the question the code builds now** (`register_judge_pool` exports the calibrated batches'
-questions again from the calibration run's `FINAL.jsonl` and `SITES.jsonl`; measured 2026-10-25: the old code rebuilt
-all 40 questions of the two pilots' judge rounds byte for byte, so only the template differs), the recorded answers
-stay the gold, and `compare` refuses a copy that asks another judge question and a fresh answer to another prompt
-(stale). Known limit: a check or verify pool is copied with its prompts as exported (wc-fc-1o's pool,
-`wc-pilot-2026-09-27-r1`, carries the check question from before the 2026-09-27 re-pin); the binding refuses a later
+verify - `VERIFY_QUESTION`, `VERIFY_BRIEF`; judge - `JUDGE_QUESTION`, `prompts_sonnet.JUDGE_QUESTION_WN`,
+`prompts_enrich.JUDGE_QUESTION_ENRICH`, `JUDGE_BRIEF`; each with `WIKI_CACHE_NOTE`), as a teaser seal binds its prompt
+modules. A judge seal binds the judge question of every kind of run because the seal is made before the run that is
+prepared is named, and `register_judge_pool` asks the question of that run's kind (`POPULATION.json` records it), so
+an edit of lane WN's or lane E's question refuses a judge seal as an edit of WC's does. `prepare` and `compare` refuse
+a calibration whose texts changed after its seal ("... changed after <id> was sealed: its agents answer another
+prompt"). A seal made before the binding carries no `templates` and binds `TEMPLATES_BEFORE_X15`, the texts of
+2026-10-24: wc-fc-1o/2o/3o and wc-wv-1o/2o stand on unchanged texts and go on as sealed, while wc-pj-1/2 are refused -
+their agents answered the old question. A judge pool's copy is **asked the question the code builds now**
+(`register_judge_pool` exports the calibrated batches' questions again from the calibration run's `FINAL.jsonl` and
+`SITES.jsonl`; measured 2026-10-25: the old code rebuilt all 40 questions of the two pilots' judge rounds byte for
+byte, so only the template differs). Every question is built before anything is written: `prepare` builds them from
+the source run before the copy exists (a site without its final text or site record refuses there and leaves the id
+free), and `register_judge_pool` builds all of them again before it replaces the first. The recorded answers stay the
+gold, and `compare` refuses a copy that asks another judge question and a fresh answer to another prompt (stale).
+Known limits: the code that fills a question's slots (`cli.judge_prompt`, `site_block`, the kept and dropped lines) is
+not bound - a change to it between seal and prepare is asked without a refusal, one after prepare is refused by
+`compare`; and a check or verify pool is copied with its prompts as exported (wc-fc-1o's pool,
+`wc-pilot-2026-09-27-r1`, carries the check question from before the 2026-09-27 re-pin): the binding refuses a later
 edit of those texts but does not re-ask such a pool.
 
 The re-run, new ids sealed before any agent answers, same pools, thresholds and known errors (variables of 11.3 and
@@ -1595,7 +1633,8 @@ The re-run, new ids sealed before any agent answers, same pools, thresholds and 
     $K seal --id wc-pj-1o --kind judge --handoff $H/wc-pilot-2026-09-27-judge  --batches judge-0002 --threshold 0.9 --run $RUNS/pilot-2026-09-27
     $K seal --id wc-pj-2o --kind judge --handoff $H/wc-pilot-2026-09-27b-judge --batches judge-0001 judge-0004 --threshold 0.9 --run $RUNS/pilot-2026-09-27b
     #   read "lane" in $CAL/THRESHOLDS.json: 1 and 2 expectations (5facc061/kept-3 WRONG; 2caba95a coherent False,
-    #   fedd9198/kept-3 WRONG), "templates" JUDGE_QUESTION e6dd6284..., JUDGE_BRIEF 22fa321b...; role pilot_judge, claude-opus-5-5, xhigh
+    #   fedd9198/kept-3 WRONG), "templates" JUDGE_QUESTION cfedf7e9..., JUDGE_QUESTION_WN 905473a0...,
+    #   JUDGE_QUESTION_ENRICH 56283b5c..., JUDGE_BRIEF 22fa321b..., WIKI_CACHE_NOTE f3bcd218...; role pilot_judge, claude-opus-5-5, xhigh
     $K prepare --id wc-pj-1o --run $RUNS/pilot-2026-09-27
     $K prepare --id wc-pj-2o --run $RUNS/pilot-2026-09-27b
     grep -L "STEP 3 - coherence" $CAL/wc-pj-1o/judge-0002/judge/*.prompt.txt $CAL/wc-pj-2o/judge-000[14]/judge/*.prompt.txt   # prints nothing
@@ -1825,6 +1864,13 @@ copy asking another question and a stale fresh answer are refused; over `test_wc
 `"wc judge question"` (the contradiction rule, the UNSUPPORTED definition, the DISPUTED-as-fact rule, the tense
 rule, the coherence step and its (a), (d) and (e), the brief's search for contradiction, over `test_wc.py`; lane
 WN's derived question, over `test_wn.py`). Every earlier anchor of the `"wc "` families still matches.
+The review of X15 adds nine: four in `"wc judge question"` (a pool example put back in the made-of and in the
+disagreement example, over `test_the_judge_question_points_at_no_unit_of_the_recalibrated_pools`; the DISPUTED
+mapping left out; two measures of a thing counted as a disagreement) and five in `"wc calibration"` (lane WN's or
+lane E's judge question not bound; a bound text read from the wrong module; prepare building no question before the
+copy; an unbuildable question passing). The test that `register_judge_pool` builds every question before it
+replaces the first (`test_the_copy_is_asked_its_new_questions_only_once_all_are_built`) has no single-anchor mutant:
+the build and the swap are two calls apart.
 
 ### 15.10 Closed batches and stale reads (2026-10-24)
 

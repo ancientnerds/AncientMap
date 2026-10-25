@@ -22,9 +22,14 @@ a comparison that did not come from here (`verdict`).
 * **extra WRONG verdicts** (judge pool): a fresh judge that calls WRONG what the recorded one did not
   is allowed one (`MAX_EXTRA_WRONG`);
 * **the texts** (`templates`, X15 of 2026-10-25): the seal binds the sha256 of the kind's question,
-  brief and cache note, and `prepare` and `compare` refuse a calibration whose texts changed since (a
-  seal made before carries none and binds `TEMPLATES_BEFORE_X15`). A judge pool's copy is asked the
-  question the code builds now, and `compare` refuses a copy or a fresh answer to another one;
+  brief and cache note - for a judge pool the judge questions of every kind of run (WC, WN, lane E),
+  as the seal does not know which run will be prepared - and `prepare` and `compare` refuse a
+  calibration whose texts changed since (a seal made before carries none and binds
+  `TEMPLATES_BEFORE_X15`). A judge pool's copy is asked the question the code builds now - every
+  question is built before the first one is replaced, and `prepare` builds them before it copies
+  anything - and `compare` refuses a copy or a fresh answer to another one. Not bound: the code that
+  fills a question's slots (`cli.judge_prompt`); a change to it between seal and prepare is asked,
+  and one after prepare is refused by `compare`;
 * **the judge pool is registrable** (`register_judge_pool`): `mcode_driver.register_calibration_run`
   knows the check and the verification rounds, not the judge's, so the calibration run of a judge pool
   is written here (`judge/ROUND.json` marked `calibration`, tied to no plan, the `FINAL.jsonl` lines of its sites).
@@ -64,6 +69,8 @@ from phase3.run import read_jsonl  # noqa: E402
 
 from wc import cli as WC  # noqa: E402 - the verification rounds' records
 from wc import prompts as P  # noqa: E402 - the frozen texts a seal binds
+from wc import prompts_enrich as PE  # noqa: E402 - lane E's judge question
+from wc import prompts_sonnet as P2  # noqa: E402 - lane WN's judge question
 
 #: The verdicts of a check answer that count as one (a sentence kept whole or with a piece cut off).
 MERGED = frozenset({"KEEP", "KEEP_TRIMMED"})
@@ -82,12 +89,23 @@ JUDGE_ROUND = Path("judge") / "ROUND.json"
 #: brief and the cache note every brief carries. A seal binds their bytes (`templates`), as a teaser
 #: seal binds its prompt modules, so a question or brief changed after the seal refuses the
 #: calibration's prepare and compare: its agents would answer another prompt than the one sealed
-#: (orchestrator decision X15, 2026-10-25).
+#: (orchestrator decision X15, 2026-10-25). A judge pool binds the judge question of every kind of
+#: run - WC (`JUDGE_QUESTION`), WN (`prompts_sonnet.JUDGE_QUESTION_WN`, derived from it) and lane E
+#: (`prompts_enrich.JUDGE_QUESTION_ENRICH`) - because the seal is made before the run that is
+#: prepared is named, and `register_judge_pool` asks the question of that run's kind.
 KIND_TEMPLATES = {
     "check": ("CHECK_QUESTION", "REASK_BLOCK", "CHECK_BRIEF", "WIKI_CACHE_NOTE"),
     "verify": ("VERIFY_QUESTION", "VERIFY_BRIEF", "WIKI_CACHE_NOTE"),
-    "judge": ("JUDGE_QUESTION", "JUDGE_BRIEF", "WIKI_CACHE_NOTE"),
+    "judge": (
+        "JUDGE_QUESTION",
+        "JUDGE_QUESTION_WN",
+        "JUDGE_QUESTION_ENRICH",
+        "JUDGE_BRIEF",
+        "WIKI_CACHE_NOTE",
+    ),
 }
+#: The module each bound text lives in; a text not named here is `wc/prompts.py`'s.
+TEMPLATE_MODULES = {"JUDGE_QUESTION_WN": P2, "JUDGE_QUESTION_ENRICH": PE}
 #: What a seal made before the templates were bound carries none of: the texts in force when every
 #: such seal was made (2026-10-24, the pins of `tests/remediation/test_wc.py` since 2026-10-09). Such
 #: a seal binds these, so the judge question sharpened by X15 refuses wc-pj-1/2's agents while the
@@ -106,6 +124,8 @@ TEMPLATES_BEFORE_X15 = {
     },
     "judge": {
         "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
+        "JUDGE_QUESTION_WN": "75c58553ed4a650834f9052672b3a93225c2dda73f1d5914870aefb64b4df2e4",
+        "JUDGE_QUESTION_ENRICH": "56283b5ceee543722d8450e1721d6d456e98e79b01ca9d05606cfeb95cc7ad09",
         "JUDGE_BRIEF": "84e03f52b104ee213367dd18958fca4cf6d49927a6b26573cc446b89d504a95d",
         "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
     },
@@ -297,7 +317,9 @@ def templates(kind: str) -> dict[str, str]:
     if kind not in KIND_TEMPLATES:
         raise WcCalibrationError(f"kind {kind!r} is none of {', '.join(KIND_ROLE)}")
     return {
-        name: hashlib.sha256(getattr(P, name).encode("utf-8")).hexdigest()
+        name: hashlib.sha256(
+            getattr(TEMPLATE_MODULES.get(name, P), name).encode("utf-8")
+        ).hexdigest()
         for name in KIND_TEMPLATES[kind]
     }
 
@@ -403,6 +425,12 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
     sealed, lane = _lane(root, calibration_id)
     _need_unchanged_templates(calibration_id, lane)
     _need_round_role(lane["kind"], run, sealed["role"])
+    handoff = Path(sealed["handoff"])
+    record = _judge_record(run, handoff)
+    if record is not None:
+        # every question the copy will be asked is built before the copy is written: a site the run
+        # cannot build one for refuses here, not halfway through a copy that is written once
+        _current_questions(record, run, handoff, sealed["batches"])
     return CC.prepare(root, calibration_id=calibration_id, run=run, register=register_judge_pool)
 
 
@@ -454,20 +482,13 @@ def register_judge_pool(
     calibrated batches and marked `calibration`) and the `FINAL.jsonl` lines of its sites, which are
     what `judge-brief` and `judge-check-answer` read. Any other pool goes to
     `mcode_driver.register_calibration_run`."""
-    round_path = source_run / JUDGE_ROUND
-    if not round_path.exists():
+    record = _judge_record(source_run, source_handoff)
+    if record is None:
         return D.register_calibration_run(source_run, source_handoff, out, batches)
-    record = json.loads(round_path.read_text(encoding="utf-8"))
-    if Path(record["handoff"]).resolve() != source_handoff.resolve():
-        return D.register_calibration_run(source_run, source_handoff, out, batches)
-    missing = [batch for batch in batches if batch not in record["batches"]]
-    if missing:
-        raise WcCalibrationError(
-            f"{source_handoff}: no batch {', '.join(missing)} in the judge round"
-        )
     run_dir = D.calibration_run(out)
     if run_dir.exists():
         raise WcCalibrationError(f"{run_dir} exists: a calibration run is written once")
+    asked = _current_questions(record, source_run, out, batches)
     labels = [label for batch in batches for label in record["batches"][batch]]
     (run_dir / "judge").mkdir(parents=True)
     (run_dir / "POPULATION.json").write_text(
@@ -494,34 +515,77 @@ def register_judge_pool(
     (run_dir / WC.SITES_FILE).write_text(
         D._labels_of(source_run / WC.SITES_FILE, labels), encoding="utf-8"
     )
-    _ask_with_current_question(run_dir, out, calibration_round["batches"])
+    _ask_with_current_question(out, asked)
     return run_dir
 
 
-def _ask_with_current_question(run_dir: Path, out: Path, batches: dict[str, list[str]]) -> None:
-    """Export the calibrated judge questions of the copy again, built by the code as it stands (the
-    site's final text with the question the seal binds): the copy holds them as the pilot's round
-    asked them, and a calibration measures the judge on the question it will be asked. The recorded
-    answers stay the gold. Their answers are not in the copy (`copy_for_calibration`), so no answer
-    is left to a question that changed."""
-    finals, sites, kind = WC._finals(run_dir), WC.read_sites(run_dir), WC.run_kind(run_dir)
-    for batch, labels in batches.items():
-        lines = OH.read_manifest(out, batch)
+def _judge_record(source_run: Path, source_handoff: Path) -> dict[str, Any] | None:
+    """The judge round of `source_run` when `source_handoff` is its handoff, else None (the pool is
+    another kind of round, which `mcode_driver.register_calibration_run` registers)."""
+    round_path = source_run / JUDGE_ROUND
+    if not round_path.exists():
+        return None
+    record = json.loads(round_path.read_text(encoding="utf-8"))
+    if Path(record["handoff"]).resolve() != source_handoff.resolve():
+        return None
+    return record
+
+
+#: Per batch: the manifest lines of its judge questions and the question each label is asked now.
+Asked = dict[str, tuple[dict[tuple[str, str], dict[str, Any]], dict[str, str]]]
+
+
+def _current_questions(
+    record: dict[str, Any], run: Path, handoff: Path, batches: Sequence[str]
+) -> Asked:
+    """Build every judge question of `batches` as the code asks it now - the site's final text of
+    `run` with the question of the run's kind - against the manifests of `handoff` (the pool or its
+    copy, whose manifests are the pool's); `record` is the run's judge round. Nothing is written: a
+    batch the round lacks or a label the run cannot build a question for refuses before any file is
+    touched."""
+    missing = [batch for batch in batches if batch not in record["batches"]]
+    if missing:
+        raise WcCalibrationError(f"{handoff}: no batch {', '.join(missing)} in the judge round")
+    finals, sites, kind = WC._finals(run), WC.read_sites(run), WC.run_kind(run)
+    asked: Asked = {}
+    for batch in batches:
+        labels = record["batches"][batch]
+        lines = OH.read_manifest(handoff, batch)
         if set(lines) != {(WC.JUDGE_STAGE, label) for label in labels}:
             raise WcCalibrationError(
-                f"{out / batch}: the manifest is not the judge round's questions of the batch"
+                f"{handoff / batch}: the manifest is not the judge round's questions of the batch"
             )
+        unbuildable = sorted(label for label in labels if label not in finals or label not in sites)
+        if unbuildable:
+            raise WcCalibrationError(
+                f"{run}: no final text or site record for {', '.join(unbuildable)} - the judge "
+                "question of the calibration cannot be built"
+            )
+        asked[batch] = (
+            lines,
+            {label: _judge_prompt(finals, sites, kind, label) for label in labels},
+        )
+    return asked
+
+
+def _ask_with_current_question(out: Path, asked: Asked) -> None:
+    """Export the calibrated judge questions of the copy again, as `_current_questions` built them
+    before anything was written (the site's final text with the question the seal binds): the copy
+    holds them as the pilot's round asked them, and a calibration measures the judge on the question
+    it will be asked. The recorded answers stay the gold. Their answers are not in the copy
+    (`copy_for_calibration`), so no answer is left to a question that changed."""
+    for batch, (lines, prompts) in asked.items():
         for line in lines.values():
             (out / line["prompt_path"]).unlink()
         (out / batch / OH.MANIFEST_FILE).unlink()
-        for label in labels:
+        for label, prompt in prompts.items():
             OH.export(
                 out,
                 batch_id=batch,
                 stage=WC.JUDGE_STAGE,
                 label=label,
                 field=lines[(WC.JUDGE_STAGE, label)]["field"],
-                prompt=_judge_prompt(finals, sites, kind, label),
+                prompt=prompt,
             )
 
 

@@ -592,7 +592,13 @@ def test_a_seal_binds_the_kinds_texts_and_a_judge_pool_is_asked_the_current_ques
     root = _seal(tmp_path, run, "judge")
     lane = CC._sealed(root, "c1")["lane"]
     assert lane["templates"] == K.templates("judge")
-    assert sorted(lane["templates"]) == ["JUDGE_BRIEF", "JUDGE_QUESTION", "WIKI_CACHE_NOTE"]
+    assert sorted(lane["templates"]) == [
+        "JUDGE_BRIEF",
+        "JUDGE_QUESTION",
+        "JUDGE_QUESTION_ENRICH",
+        "JUDGE_QUESTION_WN",
+        "WIKI_CACHE_NOTE",
+    ]
     prepared = K.prepare(root, calibration_id="c1", run=run)
     out, calibration_run = Path(prepared["prepared"]), Path(prepared["calibration_run"])
     source = _handoff(tmp_path, "judge")
@@ -700,11 +706,13 @@ def test_a_seal_made_before_the_texts_were_bound_binds_the_texts_of_its_day(
         for name, digest in K.TEMPLATES_BEFORE_X15[kind].items()
         if K.templates(kind)[name] != digest
     )
-    assert moved == ([] if stands else ["JUDGE_BRIEF", "JUDGE_QUESTION"])
+    assert moved == ([] if stands else ["JUDGE_BRIEF", "JUDGE_QUESTION", "JUDGE_QUESTION_WN"])
     if stands:
         assert K.prepare(root, calibration_id="c1", run=run)["questions"] > 0
     else:
-        with pytest.raises(K.WcCalibrationError, match="JUDGE_BRIEF, JUDGE_QUESTION changed"):
+        with pytest.raises(
+            K.WcCalibrationError, match="JUDGE_BRIEF, JUDGE_QUESTION, JUDGE_QUESTION_WN changed"
+        ):
             K.prepare(root, calibration_id="c1", run=run)
 
 
@@ -713,3 +721,77 @@ def test_the_bound_texts_of_each_kind_are_its_question_its_brief_and_the_cache_n
     for kind, names in K.KIND_TEMPLATES.items():
         assert set(K.TEMPLATES_BEFORE_X15[kind]) == set(names)
         assert "WIKI_CACHE_NOTE" in names and any(n.endswith("_BRIEF") for n in names)
+
+
+def test_a_judge_seal_binds_the_judge_question_of_every_kind_of_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The seal does not know which run will be prepared, and `register_judge_pool` asks the judge
+    question of that run's kind (WC, WN or lane E): an edit of lane WN's or lane E's judge question
+    after the seal refuses the prepare as an edit of WC's does."""
+    from wc import prompts_enrich as PE
+    from wc import prompts_sonnet as P2
+
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "judge")
+    for module, name in ((P2, "JUDGE_QUESTION_WN"), (PE, "JUDGE_QUESTION_ENRICH")):
+        with monkeypatch.context() as patch:
+            patch.setattr(module, name, getattr(module, name) + " ")
+            with pytest.raises(K.WcCalibrationError, match=f"{name} changed after c1"):
+                K.prepare(root, calibration_id="c1", run=run)
+    assert not (root / "c1").exists()
+    assert K.prepare(root, calibration_id="c1", run=run)["questions"] > 0
+
+
+def test_a_judge_question_that_cannot_be_built_refuses_before_the_copy_is_written(
+    tmp_path: Path,
+) -> None:
+    """Every question the copy will be asked is built before anything is written: a site of the pool
+    without its site record refuses the prepare, and the calibration id stays free - no copy that is
+    written once is left with half its questions replaced."""
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "judge")
+    sites = run / C.SITES_FILE
+    rows = sites.read_text(encoding="utf-8").splitlines(keepends=True)
+    sites.write_text(
+        "".join(row for row in rows if json.loads(row)["site_id"] != FX.SITE_A), encoding="utf-8"
+    )
+    with pytest.raises(K.WcCalibrationError, match="question of the calibration cannot be built"):
+        K.prepare(root, calibration_id="c1", run=run)
+    assert not (root / "c1").exists() and not (root / "c1-run").exists()
+
+
+def test_the_copy_is_asked_its_new_questions_only_once_all_are_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`register_judge_pool` builds every question before it replaces the first: a build that fails
+    on the last label leaves every question of the copy as it was."""
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "judge")
+    built, preflight = K._judge_prompt, K._current_questions
+    last = sorted(C._finals(run))[-1]
+    state = {"preflight_done": False}
+
+    def fails_on_the_last(finals: Any, sites: Any, kind: str, label: str) -> str:
+        if label == last and state["preflight_done"]:
+            raise RuntimeError("build failed")
+        return built(finals, sites, kind, label)
+
+    def after_the_preflight(record: Any, run_: Path, handoff: Path, batches: Any) -> Any:
+        asked = preflight(record, run_, handoff, batches)
+        state["preflight_done"] = True  # prepare's own build passed; register's build fails
+        return asked
+
+    monkeypatch.setattr(K, "_judge_prompt", fails_on_the_last)
+    monkeypatch.setattr(K, "_current_questions", after_the_preflight)
+    with pytest.raises(RuntimeError, match="build failed"):
+        K.prepare(root, calibration_id="c1", run=run)
+    out, source = root / "c1", _handoff(tmp_path, "judge")
+    batch = POOLS["judge"][1][0]
+    assert (out / batch / OH.MANIFEST_FILE).read_bytes() == (
+        source / batch / OH.MANIFEST_FILE
+    ).read_bytes()
+    for line in OH.manifest(out):
+        assert (out / line["prompt_path"]).read_bytes() == (
+            source / line["prompt_path"]
+        ).read_bytes()

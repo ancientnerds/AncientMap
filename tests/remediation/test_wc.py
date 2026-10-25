@@ -826,13 +826,17 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: SUPPORTED told apart and the claim's tense part of it, each dropped sentence, then coherence with
 #: what makes a text incoherent named. No judge round was open (every pilot's is imported), so no
 #: exported answer went stale; a calibration seal binds the new bytes (`wc/calibration.py`).
+#: JUDGE_QUESTION re-pinned the same day, before any seal of it: its examples were replaced by ones
+#: that match no unit of the pools wc-pj-1o/2o re-run (a recalibration on those pools must not hand
+#: the judge their known errors), and the contradiction rule's DISPUTED is mapped onto this answer
+#: format, which has none.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
     "CHECK_BRIEF": "df2eaa3e04a08c70a223f04e54eb8b5164e895c86c134e1badb12b54d69e7b55",
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
     "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
-    "JUDGE_QUESTION": "e6dd6284e9770a5cc0a0212e14641b36e8229d7184c9e9873bf6d5efba835574",
+    "JUDGE_QUESTION": "cfedf7e933a6a7ab7214e71ac7597049dd006c5e5e5dbe0f62dc064666baefdb",
     "JUDGE_BRIEF": "22fa321b6141187955c07d0beb2b650e940a2e3e9d4be2a3a25ae06abe6b4296",
     "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
     "WIKI_CACHE_NOTE_WRITER": "746aa07c4f69f99ee1f7c19c91ccfffb7ea5ad427bc282479f9be71bb05fec1d",
@@ -1312,6 +1316,9 @@ def test_the_judge_question_tells_wrong_from_unsupported_and_makes_coherence_a_s
     for rule in (
         "WRONG: a reputable source contradicts a claim as the sentence words it; give that quote.",
         "This answer has no DISPUTED verdict",
+        "This answer format has no DISPUTED: a claim on which reputable sources disagree, stated "
+        "without the hedge they share, is WRONG, with the quote of the source that disputes it",
+        "make sure they state the same fact",
         "UNSUPPORTED: no reputable, independent source you found states the claim either way",
         "when you find no support, keep searching for a contradiction before you decide",
         "is WRONG, not UNSUPPORTED",
@@ -1333,6 +1340,39 @@ def test_the_judge_question_tells_wrong_from_unsupported_and_makes_coherence_a_s
     brief = C.judge_brief(run, handoff, "judge-0001")
     assert "for each kept sentence search for what contradicts it as well as" in brief
     assert C.J_THRESHOLDS == {"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}
+
+
+#: Examples the judge question carried in its first X15 wording, each a unit of the pools the
+#: recalibration wc-pj-1o/2o re-runs (wc-pilot-2026-09-27 judge-0002, wc-pilot-2026-09-27b
+#: judge-0001/0004): a judge graded on those pools must not be pointed at their known errors or their
+#: disagreements. The rules stay; the examples are drawn from no unit of the pools.
+POOL_EXAMPLES = (
+    '"carved" where the sources say "built"',
+    "passage tomb-style",
+    '"unique"',
+    "a route's length and a straight-line distance",
+    "an arch's span and a bridge's length",
+    "a founding and a first mention",
+    "the complex",
+)
+
+
+def test_the_judge_question_points_at_no_unit_of_the_recalibrated_pools() -> None:
+    """The rules a pool's known errors need - a single word of how something was made is a claim, a
+    uniqueness or style claim needs a source that states it and a search for one that disputes it,
+    two sources disagree only when they state the same fact - are there, without the pools' own
+    wording as their examples."""
+    text = P.JUDGE_QUESTION
+    for example in POOL_EXAMPLES:
+        assert example not in text, example
+    for rule in (
+        "also a single word that says how, by whom or from what something was made",
+        "a superlative or uniqueness claim",
+        "a style or cultural attribution",
+        "needs a source that states exactly that and a search for a source that disputes or qualifies",
+        "make sure they state the same fact",
+    ):
+        assert rule in " ".join(text.split()), rule
 
 
 def test_the_pilot_passes_only_below_every_threshold(tmp_path: Path) -> None:

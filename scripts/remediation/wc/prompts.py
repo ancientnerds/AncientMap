@@ -286,6 +286,12 @@ sentences you found SUPPORTED, UNSUPPORTED and WRONG, and how many texts incoher
 #: of it (D52); each dropped sentence; then coherence as a step of its own, with what makes a text
 #: incoherent named. `prompts_sonnet.JUDGE_QUESTION_WN` is derived from this text, so lane WN's judge
 #: decides the same way. A calibration seal binds these bytes (`wc/calibration.py`, `templates`).
+#: The rules are general and their examples are drawn from no unit of the pools the recalibration
+#: wc-pj-1o/2o re-runs (wc-pilot-2026-09-27 judge-0002, wc-pilot-2026-09-27b judge-0001/0004): a judge
+#: graded on those pools must not be pointed at their known errors (`test_wc.POOL_EXAMPLES`). The
+#: contradiction rule's DISPUTED is mapped onto this answer format, which has none: a disputed claim
+#: stated without the sources' shared hedge is WRONG. The tense words "still", "today", "now" are the
+#: card lane's D52 rule verbatim, the one example kept although such words occur in the pools.
 JUDGE_QUESTION = (
     """\
 You judge, independently, the result of a sentence check of one site description of the Ancient \
@@ -309,22 +315,22 @@ DECIDE in three steps, in this order.
 
 STEP 1 - each kept sentence K<k>. A claim is every name, number, date, measurement, attribution, \
 relation and stated fact - also a single word that says how, by whom or from what something was \
-made ("carved" where the sources say "built"). Take each claim as the sentence words it: its \
+made ("moulded" where the sources say "engraved"). Take each claim as the sentence words it: its \
 tense, its "still", "today" or "now", and every qualifier and hedge are part of the claim. Never \
 restate a claim in the present as one in the past, nor the reverse: a state the sentence gives in \
 the present that held only in the past - a casing since robbed, a building since collapsed - is \
 contradicted, even where a page uses the same present tense. For every claim search for what \
-supports it AND for what contradicts it; a superlative or uniqueness claim ("the only", "the \
-first", "the largest", "unique") and a style or cultural attribution ("passage tomb-style", \
-"Roman-style") needs a source that states exactly that and a search for a source that disputes or \
-qualifies it. Read what the checker's pages say around its quotes: a quote torn from its context \
-supports nothing. Then give exactly one verdict:
+supports it AND for what contradicts it; a superlative or uniqueness claim ("the tallest", "one \
+of a kind") and a style or cultural attribution ("Etruscan-style", "Mycenaean in style") needs a \
+source that states exactly that and a search for a source that disputes or qualifies it. Read \
+what the checker's pages say around its quotes: a quote torn from its context supports nothing. \
+Then give exactly one verdict:
 - WRONG: a reputable source contradicts a claim as the sentence words it; give that quote. This \
 answer has no DISPUTED verdict: a sentence that states as settled fact a claim that reputable \
 sources dispute, qualify or call uncertain is WRONG - quote the source that disputes it - unless \
-the sentence carries the hedge the sources share ("probably", "is thought to"). A claim that only \
-pages which are no reputable source state (a blog, a self-published or tourism page) and that a \
-reputable source contradicts is WRONG, not UNSUPPORTED.
+the sentence carries the hedge the sources share. Support from pages that are no reputable source \
+does not outweigh a reputable source that contradicts the claim: such a claim is WRONG, not \
+UNSUPPORTED.
 - UNSUPPORTED: no reputable, independent source you found states the claim either way - none \
 supports it and none contradicts it. It is the verdict of a search for both that found neither: \
 when you find no support, keep searching for a contradiction before you decide.
@@ -332,11 +338,13 @@ when you find no support, keep searching for a contradiction before you decide.
 your own - and none contradicts it as worded.
 """
     + WR.CONTRADICTION_RULE
-    + """ So a rounding, a range that overlaps the claim's, an estimate or variance that the claim's \
-own hedge covers, another spelling and the same fact in other words leave a claim SUPPORTED. \
-Before you count two sources as disagreeing, make sure they state the same thing: a route's \
-length and a straight-line distance, an arch's span and a bridge's length, a founding and a first \
-mention are different facts.
+    + """ This answer format has no DISPUTED: a claim on which reputable sources disagree, stated \
+without the hedge they share, is WRONG, with the quote of the source that disputes it; stated with \
+that hedge, it can be SUPPORTED. A rounding, a range that overlaps the claim's, an estimate or \
+variance that the claim's own hedge covers, another spelling and the same fact in other words \
+leave a claim SUPPORTED. Before you count two sources as disagreeing, make sure they state the \
+same fact: two measures of one thing taken differently (a height with or without its plinth) or \
+two different events (a ruler's accession and his coronation) are no disagreement.
 
 STEP 2 - each dropped sentence D<d>: DROP_OK (it is contradicted or unsupported) or DROP_WRONG (a \
 reputable, independent source supports every claim in it; give the quote).
@@ -344,15 +352,15 @@ reputable, independent source supports every claim in it; give the quote).
 STEP 3 - coherence, a step of its own, after the sentences. Read the kept sentences alone, in \
 order, as the site page will show them, and compare each with the old sentence it was cut from \
 (where one is shown) and with the dropped sentences. "coherent" is false when any of these holds:
-(a) a pronoun or a definite phrase ("it", "this", "the complex", "the later phase") whose \
+(a) a pronoun or a definite phrase ("it", "this", "the later phase") whose \
 referent stood in a dropped sentence or in a piece cut from a sentence - also when a reader could \
 now take it to mean something that is still in the text: it was written about what was removed;
 (b) a sentence that now says something else than it said in the old text;
 (c) a sentence that is no longer grammatical, or that ends mid-sentence;
 (d) the text contradicts itself: a kept sentence states something that another kept sentence \
 denies (two dates, two places, two functions of one thing);
-(e) the kept sentences describe two different sites - this site and a namesake, the region, or a \
-later building on the spot.
+(e) the kept sentences describe two different sites - this site and a namesake elsewhere, or a \
+later building on the same spot.
 Otherwise "coherent" is true. Coherence is decided apart from the verdicts of step 1: a text of \
 SUPPORTED sentences can be incoherent, and a WRONG sentence does not by itself make a text \
 incoherent. The closing "note" names which of (a) to (e) fails, or says that none does.
