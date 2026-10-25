@@ -927,6 +927,88 @@ def apply(run: Path) -> dict[str, Any]:
     return {"decisions": len(out), "listed_for_the_owner": len(owner), **record["counts"]}
 
 
+# ------------------------------------------------------------------------------ the owner's word
+OWNER_ACCEPTED_FILE = "OWNER_ACCEPTED.jsonl"
+OWNER_PRE_PREFIX = "DECISIONS.pre-owner-"
+
+
+def owner_accept(run: Path, cells: Sequence[str], *, decision: str, reason: str) -> dict[str, Any]:
+    """The owner's word on held cells: each named cell the re-check left `held` - `unclear`, never a
+    `reject` - gets the researcher's decision back, the one `apply` kept whole in
+    `adversarial.original` with the quotes it found, plus an `owner` note naming the decision; the
+    re-check's own note stays, so the journal's evidence shows both.
+
+    Refused: a run the re-check was not applied to, or whose DECISIONS.jsonl is not the pinned file;
+    a decision that names no owner decision (`D<n>`); a cell that is not in the run, not held, or
+    held on a reject; a researcher decision that is no replace or has no quote it found. The file
+    before is kept as `DECISIONS.pre-owner-<n>.jsonl`, the cells go to `adv/OWNER_ACCEPTED.jsonl`,
+    and APPLIED.json pins the new file (its `owner_accepted` list keeps each earlier pin), so
+    `plan.py wave` plans them like a confirmed cell."""
+    adv = run / HO.ADV_DIR
+    applied = adv / APPLIED_FILE
+    if not applied.exists():
+        raise AdversarialError(f"{applied} is missing: the owner decides on what the re-check held")
+    record = json.loads(applied.read_text(encoding="utf-8"))
+    fields_fn = run / HO.DECISIONS_FILE
+    before = _sha256_text(fields_fn)
+    if before != record["decisions_sha256"]:
+        raise AdversarialError(f"{fields_fn} is not the file APPLIED.json pins")
+    if not (decision[:1] == "D" and decision[1:].isdigit()):
+        raise AdversarialError(f"{decision!r} names no owner decision (D<n>)")
+    if not cells:
+        raise AdversarialError("name at least one cell (<site_id>.<field>)")
+    decisions = HO._read_jsonl(fields_fn)
+    index = {cell_id(d["site_id"], d["field"]): i for i, d in enumerate(decisions)}
+    accepted: list[dict[str, Any]] = []
+    at = H.now()
+    for cell in dict.fromkeys(cells):
+        if cell not in index:
+            raise AdversarialError(f"{cell} is no decided cell of this run")
+        held = decisions[index[cell]]
+        note = held.get("adversarial") or {}
+        # `held` is what `apply` makes of an unclear verdict; a reject is `unresolved` and refused here
+        if held["decision"] != HO.HELD or held.get("via") != ADVERSARIAL:
+            raise AdversarialError(f"{cell} is not held by the re-check ({held['decision']})")
+        original = note["original"]
+        if original["decision"] != A.REPLACE:
+            raise AdversarialError(f"{cell}: the researcher decided {original['decision']}")
+        if not any(q.get("outcome") == "found" for q in original["quotes"]):
+            raise AdversarialError(f"{cell}: the researcher's decision has no quote it found")
+        kept = {k: v for k, v in note.items() if k != "original"}
+        decisions[index[cell]] = {
+            **original,
+            "adversarial": kept,
+            "owner": {"decision": decision, "reason": reason, "at": at},
+        }
+        accepted.append(
+            {
+                "cell": cell,
+                "name": original["name"],
+                "value": original["value"],
+                "decision": decision,
+                "reason": reason,
+                "at": at,
+                "held": kept,
+            }
+        )
+    n = 1 + sum(1 for p in run.glob(f"{OWNER_PRE_PREFIX}*.jsonl"))
+    (run / f"{OWNER_PRE_PREFIX}{n}.jsonl").write_bytes(fields_fn.read_bytes())
+    HO._write_jsonl(fields_fn, decisions)
+    previous = (
+        HO._read_jsonl(adv / OWNER_ACCEPTED_FILE) if (adv / OWNER_ACCEPTED_FILE).exists() else []
+    )
+    HO._write_jsonl(adv / OWNER_ACCEPTED_FILE, [*previous, *accepted])
+    after = _sha256_text(fields_fn)
+    record["owner_accepted"] = [
+        *record.get("owner_accepted", []),
+        {"at": at, "decision": decision, "cells": [a["cell"] for a in accepted],
+         "pre_sha256": before, "decisions_sha256": after},
+    ]  # fmt: skip
+    record["decisions_sha256"] = after
+    _write_json(applied, record)
+    return {"accepted": len(accepted), "cells": [a["cell"] for a in accepted], "decision": decision}
+
+
 # ------------------------------------------------------------------------------------------ the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
@@ -939,10 +1021,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         name: sub.add_parser(name)
         for name in (
             "select", "export", "export-reask", "brief", "check-answer", "import", "apply", "status",
+            "owner-accept",
         )
     }  # fmt: skip
-    for name in ("select", "apply"):
+    for name in ("select", "apply", "owner-accept"):
         commands[name].add_argument("--run", type=Path, required=True, help="the wd5 run")
+    commands["owner-accept"].add_argument(
+        "--cell", action="append", required=True, help="<site_id>.<field>"
+    )
+    commands["owner-accept"].add_argument(
+        "--decision", required=True, help="the owner decision, D<n>"
+    )
+    commands["owner-accept"].add_argument("--reason", required=True)
     for name in ("export", "export-reask", "brief", "check-answer", "import", "status"):
         commands[name].add_argument("--adv", type=Path, required=True, help="the stage directory")
     for name in ("export", "export-reask", "brief", "check-answer"):
@@ -972,6 +1062,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "apply":
             result = apply(HO._resolve(args.run))
+        elif args.command == "owner-accept":
+            result = owner_accept(
+                HO._resolve(args.run), args.cell, decision=args.decision, reason=args.reason
+            )
         else:
             adv = HO._resolve(args.adv)
             if args.command == "export":

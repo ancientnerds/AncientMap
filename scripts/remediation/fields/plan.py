@@ -405,6 +405,10 @@ def _decision_evidence(decision: Mapping[str, Any], rule: R.Rule) -> list[dict[s
         entry["model"] = decision["model"]
     if "adversarial" in decision:
         entry["adversarial"] = decision["adversarial"]
+    if (
+        "owner" in decision
+    ):  # the owner's word on a cell the re-check held (adversarial.owner_accept)
+        entry["owner"] = decision["owner"]
     return [*quoted, entry]
 
 

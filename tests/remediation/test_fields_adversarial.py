@@ -692,6 +692,75 @@ class TestApply:
             AD.apply(run)
 
 
+class TestTheOwnersWord:
+    """`owner_accept`: the owner's decision on a cell the re-check held as unclear (2026-10-25)."""
+
+    def applied(self, tmp_path: Path, verdicts: dict[str, str]) -> Path:
+        run = TestApply().prepared(tmp_path, verdicts)
+        adv = run / HO.ADV_DIR
+        if any(v == "unclear" for v in verdicts.values()):
+            AD.export_reask(adv, tmp_path / "h-r1")
+            for site, verdict in verdicts.items():
+                if verdict == "unclear":
+                    record(
+                        tmp_path / "h-r1",
+                        "adv-r1-b0001",
+                        cell_of(site),
+                        reply("period_start", "unclear"),
+                    )
+            AD.import_answers(adv, client=TH.pages_client(), pace=0)
+        AD.apply(run)
+        return run
+
+    def test_an_unclear_cell_gets_the_researchers_decision_and_the_owners_note(
+        self, tmp_path: Path
+    ) -> None:
+        run = self.applied(tmp_path, {C_ID: "unclear"})
+        result = AD.owner_accept(run, [cell_of(C_ID)], decision="D68", reason="owner: write it")
+        assert result["accepted"] == 1
+        rows = {(d["site_id"], d["field"]): d for d in HO._read_jsonl(run / HO.DECISIONS_FILE)}
+        row = rows[(C_ID, "period_start")]
+        assert row["decision"] == "replace" and row["value"] == "-449"
+        assert row["quotes"][0]["outcome"] == "found"
+        assert row["owner"]["decision"] == "D68" and row["adversarial"]["verdict"] == "unclear"
+        assert "original" not in row["adversarial"]
+        applied = json.loads((run / HO.ADV_DIR / AD.APPLIED_FILE).read_text(encoding="utf-8"))
+        assert applied["decisions_sha256"] == FP._sha256_text(run / HO.DECISIONS_FILE)
+        assert applied["owner_accepted"][0]["cells"] == [cell_of(C_ID)]
+        [line] = HO._read_jsonl(run / HO.ADV_DIR / AD.OWNER_ACCEPTED_FILE)
+        assert line["cell"] == cell_of(C_ID) and line["value"] == "-449"
+        assert (run / f"{AD.OWNER_PRE_PREFIX}1.jsonl").exists()
+
+    def test_a_rejected_cell_is_never_the_owners_shortcut(self, tmp_path: Path) -> None:
+        run = self.applied(tmp_path, {B_ID: "reject"})
+        before = (run / HO.DECISIONS_FILE).read_bytes()
+        with pytest.raises(AD.AdversarialError, match=r"not held by the re-check \(unresolved\)"):
+            AD.owner_accept(run, [cell_of(B_ID)], decision="D68", reason="r")
+        assert (run / HO.DECISIONS_FILE).read_bytes() == before
+
+    def test_a_confirmed_cell_is_not_held(self, tmp_path: Path) -> None:
+        run = self.applied(tmp_path, {})
+        with pytest.raises(AD.AdversarialError, match="not held by the re-check"):
+            AD.owner_accept(run, [cell_of(A_ID)], decision="D68", reason="r")
+
+    def test_the_decision_must_name_an_owner_decision(self, tmp_path: Path) -> None:
+        run = self.applied(tmp_path, {C_ID: "unclear"})
+        with pytest.raises(AD.AdversarialError, match="names no owner decision"):
+            AD.owner_accept(run, [cell_of(C_ID)], decision="owner", reason="r")
+
+    def test_decisions_that_moved_since_the_pin_are_refused(self, tmp_path: Path) -> None:
+        run = self.applied(tmp_path, {C_ID: "unclear"})
+        with (run / HO.DECISIONS_FILE).open("a", encoding="utf-8") as handle:
+            handle.write("\n")
+        with pytest.raises(AD.AdversarialError, match="not the file APPLIED.json pins"):
+            AD.owner_accept(run, [cell_of(C_ID)], decision="D68", reason="r")
+
+    def test_it_needs_the_applied_recheck(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [dec()], A_ID)
+        with pytest.raises(AD.AdversarialError, match="is missing"):
+            AD.owner_accept(run, [cell_of(A_ID)], decision="D68", reason="r")
+
+
 class TestWhatThePlanReads:
     def test_a_wave_is_planned_only_from_the_decisions_the_check_was_applied_to(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
