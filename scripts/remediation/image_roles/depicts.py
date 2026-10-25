@@ -93,6 +93,8 @@ def build_questions(
     read: Callable[[Mapping[str, Any]], bytes],
     *,
     first_batch: int = 1,
+    prompt: str = PROMPT,
+    line: Callable[[Mapping[str, Any]], str] = source_line,
 ) -> tuple[list[SG.Question], dict[str, bytes], list[dict[str, Any]]]:
     """The questions of the depicts role, the pictures and the candidates left out by name.
 
@@ -100,7 +102,9 @@ def build_questions(
     candidates: [{file, why, distance_m?, ...}]}` - the survivors of the prefilter. They are packed by
     `judge.pack` (a site never split); a site with more than `MAX_PER_SITE` survivors is judged on the
     first ones and the rest are returned as `left_out`, never dropped silently. `read(c)` gives a
-    candidate's picture at 1280 px."""
+    candidate's picture at 1280 px. `prompt` (with `PROMPT`'s fields) and `line` (what the judge is
+    told about a candidate) are the lane's own unless the calibration's adjudication asks its own
+    question over the same answer shape (`calibrate.ADJUDICATE_PROMPT`)."""
     batches = CJ.pack(sites)
     questions: list[SG.Question] = []
     pictures: dict[str, bytes] = {}
@@ -121,9 +125,9 @@ def build_questions(
                 image = SG.image_ref(name, data)
                 pictures[name] = data
                 images.append(image)
-                lines.append(f"{label}: {image.path} - {source_line(candidate)}")
+                lines.append(f"{label}: {image.path} - {line(candidate)}")
                 items.append({"label": label, "file": str(candidate["file"])})
-            prompt = PROMPT.format(
+            text = prompt.format(
                 name=site["name"],
                 site_type=site.get("site_type") or "type unknown",
                 country=site.get("country") or "country unknown",
@@ -140,9 +144,7 @@ def build_questions(
                 candidates="\n".join(lines),
             )
             meta = {"site_id": site["site_id"], "name": site["name"], "items": items}
-            questions.append(
-                SG.Question(batch_id, str(site["site_id"]), prompt, meta, tuple(images))
-            )
+            questions.append(SG.Question(batch_id, str(site["site_id"]), text, meta, tuple(images)))
     return questions, pictures, left_out
 
 
