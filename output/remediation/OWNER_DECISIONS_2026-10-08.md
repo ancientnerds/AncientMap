@@ -134,3 +134,9 @@ decided or orchestrator calls, these were open.
 | D64 | Untracked reports in a public repo | **Commit the two reports only** (rec): `docs/reports/2026-10-08-seo-geo-audit.md`, `docs/reports/2026-10-19-stats-seo-auswertung.md`; `docs/ideas.md` moves to a gitignored place. |
 | D65 | Restart after a plan-limit stop | **Heartbeat about every 3 h** (rec): a durable cron job in the Claude Code session resumes the run from the resume point (renewed after its 7-day expiry). |
 | D66 | Owner-only actions during the run | The owner runs the **sudo logrotate install now** (visitor classes push 2a, then 2b >= 48 h later); the GSC checklist stays for later (final report). |
+
+## Follow-up decision of 2026-10-25 (Claude Code session, Opus 5.5)
+
+| # | question | decision |
+| --- | --- | --- |
+| D67 | The token cost of the full close-out (D54: about 25,000-30,000 more model answers, weeks) | **Stop now** (rec): the close-out run ends after the beta-exit work; the DB rest (card waves, WC finish, identity, images D17, the 38 sites, phase 8) waits at a written resume point for a later session. Only the story backbone keeps running on the VPS (MiniMax, no Claude tokens); a short session pushes the beta label once the alt-history stories are done. Supersedes D54's scope and D55/D65 (no heartbeat). |
