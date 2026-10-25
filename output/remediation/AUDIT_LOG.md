@@ -14360,3 +14360,18 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   (0.8841, both known errors missed), wc-wv-1o FAILED (0.8675 of 0.95), wc-wv-2o FAILED (0.8696); all at the top tier ->
   held. Next: adjudicate their disagreements against the recorded single-sample gold (the 2026-10-09 lesson) before any
   release. wc-pj-1o/2o (the X15-sharpened judge, `wc-judge` merge) sealed and prepared. enrich-writer PASSED (1.0).
+
+## 2026-10-25 - Owner: "warum ist Shypyntsi undated" (D68, D69)
+
+- Cause: the wd5 researcher had found the date (enwiki: "5th Millennium to early 4th Millennium BC", value -5000); the
+  Sonnet adversarial re-check called it unclear twice (Ukrainian sources: 4th-3rd millennium) and the lane keeps a held
+  cell empty and lists it in `adv/OWNER.jsonl` - a list that was never put before the owner.
+- New step `adversarial.py owner-accept` (`734554f`, 6 tests): restores the researcher's kept decision (a replace with a
+  found quote) for named cells held as unclear, under a D<n> owner decision; the journal evidence keeps the re-check's
+  verdict and adds the owner's note; a rejected cell is refused.
+- Waves (backup + drill 2026-10-25_remediation, 04:18): **2026-10-25o** (D68, wd5-reask): Shypyntsi period_start -5000,
+  period_name "< 4500 BC" (2 rows); **2026-10-25p** (D69, wd5): 45 sites, 90 rows, 10 steps; **2026-10-25q** (D69,
+  wd5-reask): 3 sites, 6 rows (Chitinamit, Humbleton Hill, New Ditch). All emit/rehearse/probe-guards/apply (APPLY OK)/
+  verify/rehearse-rollback/accept 0 deviations; journal recounted 2/90/6. Only 4 of the 49 period starts were empty
+  before; 45 replaced a stored value with the researcher's sourced one. Shown curated sites without a period start:
+  618 -> 615. Static export rebuilt, IndexNow 135 URLs. The 128 rejected cells stay unwritten.
