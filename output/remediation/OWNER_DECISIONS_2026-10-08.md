@@ -143,3 +143,36 @@ decided or orchestrator calls, these were open.
 | D68 | (2026-10-25) Shypyntsi shows "Undated" although its Wikipedia article dates the Cucuteni-Trypillian settlement to the 5th to early 4th millennium BC (the wd5 re-check held the cell as unclear: Ukrainian sources say 4th-3rd millennium) | **Write the Wikipedia date** (owner, 2026-10-25: "warum ist die scheisse bei uns undated"): the researcher's value -5000 with its found quote goes in through `adversarial.py owner-accept` and a journalled wd5 wave; the re-check's unclear note stays in the evidence. |
 | D69 | (2026-10-25) The other 48 cells the wd5 re-check held as unclear (45 in wd5, 3 in wd5-reask) whose researcher found a quote for the value | **Write them the same way as D68** (rec): `owner-accept` + one journalled wave per run; the 128 rejected cells (a contradicting reputable source) stay unwritten and listed. |
 | D70 | (2026-10-25) 615 of 4,909 shown curated sites still have no period start; the owner's spot check found a dating at once | **Stop now; the next step is a proper dating extractor** (owner): before any further model research, build a deterministic extractor that finds a site's dating whenever a source states one - not only English Wikipedia but the other sources too (other Wikipedia languages, Wikidata date properties, heritage registers, Pleiades and the other connected sources) - and measure its coverage on the 615 undated sites and a gold set first. The close-out run is stopped and counted by the owner as a failure. |
+
+## Owner questionnaire of 2026-11-05 (Claude Code session, Opus 5.5; 43 open questions, answered interactively)
+
+| # | question | decision |
+| --- | --- | --- |
+| D71 | D70 extractor write gate | **Write without a model check** (rec) when the extractor's precision on a sealed gold set is >= 95 % and every cell carries a verbatim quote + source URL; 30 cells shown to the owner before the wave; journalled through the wd5 lane. |
+| D72 | D70 extractor scope | **Fill the 615 undated only** (rec); the comparison against the ~4,294 dated sites is measured and shown as a conflict list, never written. |
+| D73 | Sites the extractor finds nothing for | **Decide after the measurement** (rec); they stay "Undated", the rest list goes to the owner. |
+| D74 | Beta label vs. alt-history stories that never finish | **The label goes once at most ~10 permanently failing alt-history stories remain** (rec); their ids go to the owner, they stay online. |
+| D75 | MiniMax weekly quota priority | **Story backbone first from the reset Mon 2026-11-09** until the 346 alt-history stories are done (rec); afterwards the backbone runs Mon-Wed only, Thu-Sun stays reserve for studio and Lyra. |
+| D76 | Google cliff of 2026-10-20 | **The owner checks GSC "Security & manual actions" and the ancientnerdsdao@gmail.com inbox** and sends the wording (rec). |
+| D77 | Visitor classes push 2b (hidden /index-all/ link, 8773db9) | **Hold until the GSC manual-action check is done** (rec); supersedes D66 for 2b. |
+| D78 | Resume of the DB close-out (D67) | **In stages, owner release per lane with a cost estimate** (rec): first the cheap steps (D14 part A, D48, D49, D57), then card wave A, then the rest. |
+| D79 | Card wave A (1,189 sites) | **Stages, a1 first** (rec): measure the cost per card, spot-check, then the owner decides on a2-a4. |
+| D80 | Lane WC calibrations that failed at the top tier | **Adjudicate the disagreements, release wc-wv-1o; sharpen and re-seal the briefings of fc-2o, wv-2o and the pilot judge** (rec). |
+| D81 | New contradicted description sentences found by card waves (est. 450-750 sites beyond D25's 160) | **Repair them per wave through the D25b mechanism, then rewrite the card** (rec). |
+| D82 | D17 image sources | **Commons only** (rec); sites without a usable Commons image stay imageless and go on the owner list; the D48/D49 rest lists (433 small heroes, 6 strips, 11 without author, Qasr Qaroun) stay live and are searched within D17. |
+| D83 | D13 re-target when the ancient site has no Wikidata item and no enwiki article | **Re-target without ids** (rec): name and text move to the ancient site, source_url = the best scholarly source, no Short. |
+| D84 | D50 country of the Baltic Sea Anomaly | **Empty / international waters, no country page** (rec). |
+| D85 | Theo worker (Q1) | **Off until after the beta label** (rec); then the 14 campaign topics with 1 slot, /theo-write after the first dossier; the 12 old UI requests of 2026-07-05 go to cancelled. |
+| D86 | Paper quality badges from the old M3 score | **Remove the M3 badge** (rec); show "Claim-checked" only where the studio check ran (code + journalled correction). |
+| D87 | YouTube as a whole (Shorts production, Baalbek slice Q2, first full episode, comment agent) | **Deferred** (owner: "youtube zurückstellen", Shorts "weiter warten"); OAuth is set up together with the Shorts release; **no "altered or synthetic content" label**, the AI voice is named in the description only. |
+| D88 | SerpApi November quota | **Use ~50 searches for the cliff diagnosis** (head + brand terms), keep the rest (rec). |
+| D89 | Reaction if Google confirms a scaled/thin-content action | **Wait for the finding**, then decide from Google's example URLs (rec). |
+| D90 | SEO audit 2026-10-08 E1b, E6, E12, E13 | **All four recommendations confirmed** (rec). |
+| D91 | GSC checklist of 2026-10-20 | **Only the exports now** (owner, ~10 min); Soft-404 validation and indexing requests after the cliff is resolved. |
+| D92 | 30-day stats review | **Postponed** (owner); the creator flywheel panel and the mobile globe layout follow after the review (rec); TTFB/CDN stays as is (rec). |
+| D93 | God's-Eye-View layer | **Keep waiting for issue #1005; commit scripts/export_gods_eye_view_layer.py** (rec). |
+| D94 | Trademark "Ancient Nerds" | **First settle the owner with Matt** (owner). |
+| D95 | Matt Cavana's seed DB licence | **Not needed** (owner): the internal release of 2026-10-11 suffices. |
+| D96 | Wikidata item "Ancient Nerds" | **Wait for an independent source** (rec). Training-data policy: rest (rec). |
+| D97 | Prospector queue (1,944 new, 361 needs_decision) | **Plan as its own lane after D70/D57** (rec); the owner rejects L'Anse aux Meadows (01e29c6e) in the Radar now. |
+| D98 | Housekeeping | Offsite sync task (D24) **registered Sun 08:00 + run once**; VPS leftovers **deleted except .env.bak-*** (owner handles those); merged branches deleted, the four unmerged ones (develop, feature/new-ingesters, worktree-phosphor-tinting, chore/2026-10-04-corrections-reversal) **archived as tags, then deleted**; studio Q3-Q17 confirmed; video/src/lyra-haiku/ stays local; NERV redesign rests. |
