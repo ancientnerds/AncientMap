@@ -1,0 +1,31 @@
+{
+ "excluded": [
+  {
+   "already_retired": true,
+   "cluster_id": "retired-4a5a324f",
+   "excluded_because": "O5 (orchestrator, owner AFK mandate 2026-11-05): the plan of 2026-10-08 meant to swap Tarxien's survivor (Templos de Tarxien holds 0 images, the loser 20); moving the images now would have to be undone by D14 part B. Left for part B.",
+   "limit_evidence": [],
+   "loser": "4a5a324f-832f-4dca-b688-d4a006d297c7",
+   "loser_name": "Tarxien Temples",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "318414bc-098b-4459-95c0-41e1ec49c8a8",
+   "survivor_name": "Templos de Tarxien",
+   "why": "already retired as duplicate_of its survivor; its images and links still sit on it"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-5a04d6f3",
+   "excluded_because": "O5 (orchestrator, owner AFK mandate 2026-11-05): the plan of 2026-10-08 meant to swap Dodona's survivor (Archaeological Site of Dodoni holds 0 images, the loser 20); moving the images now would have to be undone by D14 part B. Left for part B.",
+   "limit_evidence": [],
+   "loser": "5a04d6f3-c82d-4c82-b1e9-3d70bff135ae",
+   "loser_name": "Dodona",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "56f594fc-6819-4d51-98a4-1cf5b4a265a6",
+   "survivor_name": "Archaeological Site of Dodoni",
+   "why": "already retired as duplicate_of its survivor; its images and links still sit on it"
+  }
+ ],
+ "wave": "2026-11-05"
+}

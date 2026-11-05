@@ -657,7 +657,25 @@ class TestTheProbes:
         hero = self.cases()["invariant-hero-cell"][2]
         assert len(hero) == 4 and not [r for r in hero if r.column == "is_hero"]
         alias = self.cases()["invariant-alias-cells"][2]
-        assert [r.table for r in alias] == ["wiki_images", "wiki_images", "site_content_links"]
+        assert [(r.table, r.column) for r in alias] == [
+            ("wiki_images", "site_id"),
+            ("wiki_images", "is_hero"),
+            ("site_content_links", "site_id"),
+            ("unified_site_names", "name_type"),
+        ]
+
+    def test_the_alias_probe_keeps_its_site_in_the_plan(self) -> None:
+        """A loser whose name is all it moves keeps its name_type cell; a loser with nothing else
+        to keep is not the probe's site, and a plan of only such losers leaves it unprobed."""
+        only_name = [
+            cell("unified_site_names", "5", "name_type", "label", "alias"),
+            cell("unified_site_names", "5", "site_id"),
+        ]
+        alias = self.cases(only_name)["invariant-alias-cells"][2]
+        assert [(r.table, r.column) for r in alias] == [("unified_site_names", "name_type")]
+        bare = [cell("unified_site_names", "5", "site_id")]
+        assert R.drop_alias_cells(bare, LANE) is None
+        assert "invariant-alias-cells" not in self.cases(bare)
 
     def test_a_plan_without_the_cells_a_probe_needs_names_the_invariants_it_cannot_probe(
         self,

@@ -7,8 +7,10 @@ Owner decision D14 of 2026-10-08: a duplicate is merged - "judged survivor, lose
 1. **`waves`** - the pairs in waves of at most `MAX_SITES` sites (a wave is a lane: its own stamp,
    its own directory, applied once), each wave's `PAIRS.json` in
    `output/remediation/mechanical_dup_merge/<wave>/`. A survivor that is itself merged into another
-   record (a chain across two decisions) is followed to the final survivor. Nothing is read from
-   production and nothing is written to it.
+   record (a chain across two decisions) is followed to the final survivor. `--exclude FILE`
+   leaves named losers out, each with its reason, recorded in the wave's `EXCLUDED.json` (O5 of
+   2026-11-05: Tarxien and Dodona wait for part B). Nothing is read from production and nothing is
+   written to it.
 2. **`plan-move`** - lane `dup-merge-move-<wave>` (a row lane, `rowlane.py`): the loser's images and
    content links go to the survivor, a collision stays on the loser, a moved hero that would be a
    second hero is demoted, and the loser's name row becomes an alias of the survivor - in one
@@ -81,6 +83,8 @@ ENWIKI = "enwiki_title"
 ALIAS = "alias"
 READ_FILE = "READ.jsonl"
 HELD_FILE = "HELD.jsonl"
+#: The decided pairs a `waves --exclude` left out, written beside each wave's `PAIRS.json`.
+EXCLUDED_FILE = "EXCLUDED.json"
 
 
 # ------------------------------------------------------------------------------------ the waves
@@ -190,6 +194,49 @@ def split_waves(pairs: Sequence[WavePair], max_sites: int = MAX_SITES) -> list[l
     if current:
         waves.append(current)
     return waves
+
+
+def exclude_pairs(
+    pairs: Sequence[WavePair], exclusions: Sequence[Mapping[str, Any]]
+) -> tuple[list[WavePair], list[dict[str, Any]]]:
+    """The pairs without the losers an exclusion names, and the excluded pairs with their reason.
+
+    An exclusion is `{"loser": <site id>, "reason": <why>}` (a decision of the owner or the
+    orchestrator, e.g. O5: Tarxien and Dodona wait for part B's survivor swap). An exclusion without
+    a reason, a loser named twice, or a loser no decided pair holds is refused: an exclusion that
+    excludes nothing is a typo, never a no-op."""
+    reasons: dict[str, str] = {}
+    for ex in exclusions:
+        loser, reason = ex.get("loser"), ex.get("reason")
+        if not isinstance(loser, str) or not isinstance(reason, str) or not reason.strip():
+            raise P.PlanError(f"an exclusion needs a loser id and a reason: {dict(ex)!r}")
+        if loser in reasons:
+            raise P.PlanError(f"{loser}: excluded twice")
+        reasons[loser] = reason
+    unknown = sorted(set(reasons) - {p.loser for p in pairs})
+    if unknown:
+        raise P.PlanError(
+            f"{', '.join(unknown)}: excluded, but no decided pair has it as its loser"
+        )
+    kept = [p for p in pairs if p.loser not in reasons]
+    excluded = [
+        {**p.to_json(), "excluded_because": reasons[p.loser]} for p in pairs if p.loser in reasons
+    ]
+    return kept, excluded
+
+
+def write_excluded(
+    wave: str, excluded: Sequence[Mapping[str, Any]], root: Path | None = None
+) -> Path:
+    """`EXCLUDED.json` beside the wave's `PAIRS.json`: what the waves of this run left out, and why."""
+    path = pairs_path(wave, root).with_name(EXCLUDED_FILE)
+    body = {"wave": wave, "excluded": list(excluded)}
+    path.write_text(
+        json.dumps(body, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return path
 
 
 def write_wave(wave: str, pairs: Sequence[WavePair], root: Path | None = None) -> Path:
@@ -909,15 +956,21 @@ def cmd_waves(args: argparse.Namespace) -> int:
     run = common.run_dir(args.root)
     decisions = common.read_jsonl(run / "DUP_DECISIONS.jsonl")
     pairs = decided_pairs(decisions)
+    excluded: list[dict[str, Any]] = []
+    if args.exclude is not None:
+        pairs, excluded = exclude_pairs(pairs, json.loads(args.exclude.read_text(encoding="utf-8")))
     if not pairs:
         raise P.PlanError("DUP_DECISIONS.jsonl holds no decided MERGE")
     waves = split_waves(pairs, args.max_sites)
     labels = wave_labels(args.date, len(waves))
-    summary = {}
+    summary: dict[str, Any] = {}
     for label, group in zip(labels, waves, strict=True):
         path = write_wave(label, group, args.out)
         summary[label] = {"pairs": len(group), "file": str(path)}
-    print(json.dumps(summary, indent=1))
+        if excluded:
+            summary[label]["excluded_file"] = str(write_excluded(label, excluded, args.out))
+    summary["excluded"] = [f"{e['loser_name']} ({e['loser']})" for e in excluded]
+    print(json.dumps(summary, ensure_ascii=False, indent=1))
     return 0
 
 
@@ -950,6 +1003,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     waves = sub.add_parser("waves", help="split DUP_DECISIONS.jsonl into waves (PAIRS.json each)")
     waves.add_argument("--date", required=True, help="the first wave's label, e.g. 2026-10-10")
     waves.add_argument("--max-sites", type=int, default=MAX_SITES)
+    waves.add_argument(
+        "--exclude", type=Path, default=None,
+        help='a JSON list of {"loser": id, "reason": why}: decided pairs left out of the waves',
+    )  # fmt: skip
     for name in ("plan-move", "plan-retire"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--wave", required=True)
