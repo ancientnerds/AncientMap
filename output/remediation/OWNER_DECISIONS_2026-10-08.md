@@ -176,3 +176,20 @@ decided or orchestrator calls, these were open.
 | D96 | Wikidata item "Ancient Nerds" | **Wait for an independent source** (rec). Training-data policy: rest (rec). |
 | D97 | Prospector queue (1,944 new, 361 needs_decision) | **Plan as its own lane after D70/D57** (rec); the owner rejects L'Anse aux Meadows (01e29c6e) in the Radar now. |
 | D98 | Housekeeping | Offsite sync task (D24) **registered Sun 08:00 + run once**; VPS leftovers **deleted except .env.bak-*** (owner handles those); merged branches deleted, the four unmerged ones (develop, feature/new-ingesters, worktree-phosphor-tinting, chore/2026-10-04-corrections-reversal) **archived as tags, then deleted**; studio Q3-Q17 confirmed; video/src/lyra-haiku/ stays local; NERV redesign rests. |
+
+## Orchestrator decisions under the owner's AFK mandate of 2026-11-05 ("soweit wie möglich autonom, Empfehlungen umsetzen")
+
+These were raised by the wave-1 scouts (output/remediation/final-2026-10-08/D70_EXTRACTOR_DESIGN.md, LANES_PLAN_2026-11-05.md) and decided by the orchestrator (Claude Opus 5.5), not by the owner; the owner may overturn any of them.
+
+| # | question | decision |
+| --- | --- | --- |
+| O1 | D70 range representation: period_end is NULL on all 5,004 curated rows, the page renders "start – end", and the D58 window tests period_end first | **Write only the start** (the earliest anchored start of the highest tier present); the source range with both quotes stays in the journal evidence. Reason: a disagreement about when a site began is not an end of occupation; writing max-start into period_end would tell visitors a wrong end. A cell whose start would move a site outside the D58 scope window is not written; it goes to the owner list. |
+| O2 | D69 vs D70 for the 105 adversarially rejected cells among the 615 | **D70 wins**: the extractor may write them under O1 with every conflicting quote in the evidence. |
+| O3 | D71 "30 cells shown to the owner before the wave" while the owner is AFK | The 30 cells (ranges and period words over-represented) are checked by three independent adversarial agents against the live sources instead, and saved to OWNER_SHOWN.json marked "owner AFK, autonomous mandate 2026-11-05"; the wave goes only if the sealed gold precision is >= 95 % and the spot check finds <= 1 wrong cell of 30. |
+| O4 | D57 insert while a thin-content action is suspected (D76/D89) | **Research and plan now, no insert write** until descriptions (WN) and images exist for the new sites. |
+| O5 | D14 part A scope | The model-free move of the 23 already-retired duplicate losers' images and links, **excluding Tarxien and Dodona** (part B may swap their survivors). |
+| O6 | D80 extent | Release wc-wv-1o; adjudicate the 6 pilot-judge disagreements first; sharpen CHECK/VERIFY/JUDGE briefs and re-seal all WC roles under new ids (~86 Opus answers). |
+| O7 | D81 timing for a1 | After D80 gives wc_web_verifier standing: the a1 defect sites are repaired through D25b, and their a1 cards are held from the first write step and rewritten after the repair. |
+| O8 | Image-role recalibration (image-roles-v1 failed; ~950 answers) | **Not started**: not covered by any release; blocks D15/D17/D59. Cost goes to the owner. |
+| O9 | Weekly backbone restart after the alt-history stories (D75) | A guarded weekly Monday 00:20 UTC cron start is added on the VPS. |
+| O10 | VPS leftovers beyond the listed ones (node_modules-bak-*, sites_dump.dump, 4 untracked scripts, tts_test/, pfps/) | **Left in place** (deletion outside the listed scope); listed for the owner. |
