@@ -81,9 +81,10 @@ export interface PageMeta {
   image?: string
   schema?: string
   /**
-   * Overrides the robots directive. Only speculative stories set it: they
+   * Overrides the robots directive. Speculative stories set it: they
    * have a page (people share and open them) but stay out of the index —
-   * "ancient astronauts" ranking under our name is not what we want.
+   * "ancient astronauts" ranking under our name is not what we want. So do
+   * the research briefings commissioned for a novel (D90, SEO audit E1b).
    */
   robots?: string
   /** Atom feeds of the page, as <link rel="alternate" type="application/atom+xml">. */
@@ -526,6 +527,7 @@ export function researchMeta(route: ResearchRoute): PageMeta {
     ogType: 'article',
     image: route.hero_image_url || undefined,
     schema,
+    robots: route.noindex ? ROBOTS_NOINDEX : undefined,
   }
 }
 

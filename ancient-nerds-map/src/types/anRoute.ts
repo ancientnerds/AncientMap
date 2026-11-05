@@ -296,6 +296,11 @@ export interface ResearchRoute {
    * links, migration 0031). Present only when the paper has one, like the parts above.
    */
   sites?: { name: string; path: string }[]
+  /**
+   * A research briefing commissioned for a novel (SEO audit 2026-10-08 E1b, owner
+   * decision D90): served, but kept out of the index. Present only then.
+   */
+  noindex?: true
 }
 
 /**

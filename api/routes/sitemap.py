@@ -24,6 +24,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from api.routes.articles_html import STORIES_PER_PAGE, public_stories_query
+from api.routes.public_v1 import NOVEL_BRIEFING_IDS
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.sites_html_renderer import country_path, encode_path, site_path
 from pipeline.utils.public_sites import curated_page, journal_join, last_change
@@ -146,11 +147,15 @@ PAPER_LASTMOD_SQL = """GREATEST(
                     COALESCE(result_json::jsonb->'videos', '[]'::jsonb)
                 ) v)
            )"""
+# The briefings commissioned for a novel are served noindex (D90, SEO audit E1b),
+# so they are not sitemap URLs. The ids are fixed constants, not user input.
+_NOVEL_BRIEFINGS_SQL = ", ".join(f"'{paper_id}'" for paper_id in sorted(NOVEL_BRIEFING_IDS))
 _RESEARCH_SQL = text(f"""
     SELECT slug,
            {PAPER_LASTMOD_SQL} AS lastmod
     FROM research_requests
     WHERE is_public = TRUE AND status = 'completed' AND slug IS NOT NULL
+      AND id::text NOT IN ({_NOVEL_BRIEFINGS_SQL})
     ORDER BY published_at DESC NULLS LAST
 """)
 

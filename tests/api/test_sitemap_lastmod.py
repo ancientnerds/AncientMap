@@ -254,3 +254,14 @@ def test_the_research_part_reads_the_paper_lastmod():
         "https://ancientnerds.com/research/obsidian-trade-networks-anatolia",
     ]
     assert [url.findtext(f"{NS}lastmod") for url in urls] == ["2026-10-04", "2026-10-04"]
+
+
+def test_the_novel_briefings_leave_the_research_part():
+    """Owner decision D90 / SEO audit 2026-10-08 E1b: the briefings commissioned for a
+    novel are served noindex, and a noindex page has no place in a sitemap."""
+    from api.routes.public_v1 import NOVEL_BRIEFING_IDS
+
+    sql = " ".join(str(sm._RESEARCH_SQL).split())
+    for paper_id in NOVEL_BRIEFING_IDS:
+        assert f"'{paper_id}'" in sql
+    assert "id::text NOT IN (" in sql

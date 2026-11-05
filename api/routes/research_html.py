@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from api.routes.public_v1 import PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
+from api.routes.public_v1 import NOVEL_BRIEFING_IDS, PAPER_SUMMARY_COLUMNS, paper_summary_kwargs
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
     markdown_to_html,
@@ -184,6 +184,9 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
             "body_html": body_html,
             **page_extras_payload(extras),
             **_sites_payload(row.paper_sites),
+            # D90 / SEO audit E1b: a briefing commissioned for a novel is served
+            # noindex; the key joins only then, so other payloads stay identical.
+            **({"noindex": True} if paper["id"] in NOVEL_BRIEFING_IDS else {}),
         },
         _HTML_HEADERS,
     )

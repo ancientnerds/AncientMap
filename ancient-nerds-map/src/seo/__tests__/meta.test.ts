@@ -452,3 +452,19 @@ describe('VideoObject uploadDate (tech-3, GSC 2026-10-19)', () => {
     expect(JSON.parse(storyMeta(FIXTURES.story).schema!).datePublished).toBe('2026-03-14')
   })
 })
+
+// D90 / SEO-Audit 2026-10-08 E1b: die fünf Auftrags-Briefings für einen Roman
+// bleiben erreichbar, aber aus dem Index (noindex, follow).
+describe('researchMeta: Roman-Briefings', () => {
+  it('noindex ⇒ noindex im Head', () => {
+    const m = researchMeta({ ...FIXTURES.research, noindex: true })
+    expect(m.robots).toBe('noindex, follow, max-image-preview:large')
+    expect(renderHead(m)).toContain('<meta name="robots" content="noindex, follow, max-image-preview:large">')
+  })
+
+  it('ein gewöhnliches Paper bleibt index', () => {
+    const m = researchMeta(FIXTURES.research)
+    expect(m.robots).toBeUndefined()
+    expect(renderHead(m)).toContain('<meta name="robots" content="index, follow, max-image-preview:large">')
+  })
+})

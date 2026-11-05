@@ -434,3 +434,35 @@ def test_fetch_paper_reads_only_curated_sites_of_the_reviewed_links():
     assert "u.source_id = 'ancient_nerds'" in sql
     assert "u.scope_status IS DISTINCT FROM 'retired'" in sql
     assert ") AS paper_sites" in sql
+
+
+# Owner decision D90 (2026-11-05) confirms the SEO audit 2026-10-08 E1b: the five
+# public research briefings commissioned for a novel stay served but leave the
+# index (noindex, follow) and the sitemap. Every other paper's payload carries
+# no noindex key at all, so it stays byte-identical.
+NOVEL_BRIEFING_ID = "b5bd37ec-b025-4b1c-927f-03fbae6f19b2"
+
+
+def test_a_novel_briefing_is_handed_as_noindex():
+    from api.routes.public_v1 import NOVEL_BRIEFING_IDS
+
+    assert NOVEL_BRIEFING_ID in NOVEL_BRIEFING_IDS
+    assert len(NOVEL_BRIEFING_IDS) == 5
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            research_paper_page(
+                "quartz-granite-and-the-hard-ceiling-on-tuned-stone",
+                db=FakeDb([_paper_row(id=NOVEL_BRIEFING_ID)]),
+            )
+        )
+    assert render_mock.call_args[0][0]["noindex"] is True
+
+
+def test_an_ordinary_paper_carries_no_noindex_key():
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            research_paper_page("obsidian-trade-networks-anatolia", db=FakeDb([_paper_row()]))
+        )
+    assert "noindex" not in render_mock.call_args[0][0]

@@ -93,6 +93,22 @@ KNOWLEDGE_RATE_LIMIT = 60
 RESEARCH_LICENSE = "CC BY 4.0"
 RESEARCH_ATTRIBUTION = "Ancient Nerds — https://ancientnerds.com"
 
+# The five public papers that are research briefings commissioned for a novel
+# ("For a cosmological novel I need a two-sided briefing ..."). SEO audit
+# 2026-10-08 E1b, confirmed by owner decision D90 (2026-11-05): they stay served
+# and listed in the library, but their pages are noindex and they leave
+# sitemap-research.xml. Request ids, because a slug is the paper's address and
+# the commission text is the one place the purpose is written down.
+NOVEL_BRIEFING_IDS = frozenset(
+    {
+        "6c639144-47b7-4c71-b9e3-912d00733306",  # sky-figures-in-rock-art-message-or-projection
+        "ad9fe380-706a-4d71-98b6-76e65a1c1447",  # the-witness-only-channel-and-what-physics-allows
+        "b5bd37ec-b025-4b1c-927f-03fbae6f19b2",  # quartz-granite-and-the-hard-ceiling-on-tuned-stone
+        "0a1ace5c-876b-437e-b8d1-1c122ba2cd00",  # the-watched-pot-and-the-willing-mind
+        "831af2e1-ae58-48af-bcc4-c5b0bb198ff2",  # the-loosened-mind-and-what-it-reports
+    }
+)
+
 # Shared row→dict mapping for research papers, used by the public JSON API
 # and the SEO HTML pages (api/routes/research_html.py).
 PAPER_SUMMARY_COLUMNS = """
