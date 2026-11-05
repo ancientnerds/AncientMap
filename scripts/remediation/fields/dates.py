@@ -505,6 +505,10 @@ class _Quote:
 
     # ---- the statements
     def statements(self) -> list[Statement]:
+        return [s for _, _, s in self.located()]
+
+    def located(self) -> list[_Raw]:
+        """Every statement with the tokens it spans: `(first, end, statement)`, `end` exclusive."""
         raw = sorted(self._unit_statements() + self._year_statements(), key=lambda r: r[0])
         # "the 8th century to the seventh century BC": a statement without a marker takes the next
         # one's when a range stands between them (`_only_joints`)
@@ -514,7 +518,7 @@ class _Quote:
                 width = s.hi - s.lo if s.kind == YEAR else 0
                 lo, hi = span(s.kind, s.number, nxt.era, width)
                 raw[i] = (first, end, replace(s, era=nxt.era, lo=lo, hi=hi))
-        return [s for _, _, s in raw if not (s.last_century and s.era != BC)]
+        return [r for r in raw if not (r[2].last_century and r[2].era != BC)]
 
     def _only_joints(self, statement: Statement, end: int, start: int) -> bool:
         """Whether the statement that ends at token `end` and the one that begins at token `start`
@@ -675,6 +679,32 @@ class _Quote:
 def statements(quote: str) -> list[Statement]:
     """Every year, century and millennium `quote` states, with the era it prints."""
     return _Quote(quote).statements()
+
+
+@dataclass(frozen=True)
+class Located:
+    """A statement and where it stands: `start`..`end` are character offsets into
+    `reading_text(quote)` (the quote with its thousands separators and accents removed), the text
+    the readers tokenise. The dating extractor (`dating.py`) reads its cues around them."""
+
+    statement: Statement
+    start: int
+    end: int
+
+
+def reading_text(quote: str) -> str:
+    """The text `located` offsets index: `quote` with its grouped numbers joined and its accents
+    removed."""
+    return plain_text(group_thousands(quote))
+
+
+def located(quote: str) -> list[Located]:
+    """`statements(quote)`, each with its character span in `reading_text(quote)`."""
+    parsed = _Quote(quote)
+    return [
+        Located(s, parsed.toks[first].start, parsed.toks[end - 1].end)
+        for first, end, s in parsed.located()
+    ]
 
 
 def states_year(quote: str, year: int) -> bool:

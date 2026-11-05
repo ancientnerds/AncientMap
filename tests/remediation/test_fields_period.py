@@ -81,7 +81,9 @@ class TestTheRule:
         assert R.TWO_FAMILIES.clearable and not R.TWO_FAMILIES.fill_only
         assert R.ONE_FAMILY.min_quotes == 1 and not R.ONE_FAMILY.clearable
         assert R.DEFAULT is R.TWO_FAMILIES
-        assert sorted(R.RULES) == ["one-family", "one-family-period", "recheck", "two-families"]
+        assert sorted(R.RULES) == [
+            "extract", "one-family", "one-family-period", "recheck", "two-families"
+        ]
 
     def test_the_run_pins_its_own_rule(self, tmp_path: Path) -> None:
         R.write_run(tmp_path, PERIOD, built_at="t")
@@ -308,8 +310,9 @@ class TestTheQuestion:
         assert "vocabulary" in problem
 
     def test_every_rule_has_its_own_texts_and_brief(self) -> None:
-        assert set(HO.TEXTS) == set(R.RULES)
-        assert set(HO.BRIEF_PARTS) == set(R.RULES)
+        # the dating extractor's rule asks no agent (D70): no question, no brief
+        assert set(HO.TEXTS) == set(R.RULES) - R.MACHINE_RULES
+        assert set(HO.BRIEF_PARTS) == set(R.RULES) - R.MACHINE_RULES
         assert HO.TEXTS[PERIOD.name].field_rules is HO.FIELD_RULES_WD4
         assert HO.TEXTS[R.ONE_FAMILY.name].field_rules is HO.FIELD_RULES_WD3
         assert HO.TEXTS[R.TWO_FAMILIES.name].field_rules is HO.FIELD_RULES

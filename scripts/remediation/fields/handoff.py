@@ -993,6 +993,7 @@ def _export_round(
     batch_size: int = BATCH_SIZE,
 ) -> dict[str, Any]:
     rule = R.read_rule(run)
+    _refuse_machine_rule(run, rule)
     answering = _answering_model(run, model)
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
@@ -1266,6 +1267,15 @@ BRIEF_PARTS = {
 }
 
 
+def _refuse_machine_rule(run: Path, rule: R.Rule) -> None:
+    """A run of a rule no agent answers (`rule.MACHINE_RULES`, the dating extractor's) is neither
+    exported nor imported: its DECISIONS.jsonl is `dating.py run`'s and an import would overwrite it."""
+    if rule.name in R.MACHINE_RULES:
+        raise HandoffStepError(
+            f"{run}: the {rule.name} rule asks no agent - its decisions are written by dating.py"
+        )
+
+
 def brief(run: Path, handoff: Path, batch_id: str) -> str:
     record = _round_of(run, handoff)
     if batch_id not in record["batches"]:
@@ -1401,6 +1411,7 @@ def import_rounds(
 ) -> dict[str, Any]:
     """Every round's answers: validated, parsed, quote-checked, decided."""
     rule = R.read_rule(run)
+    _refuse_machine_rule(run, rule)
     if (run / ADV_SELECTED).exists():
         raise HandoffStepError(
             f"{run / ADV_SELECTED} exists: the adversarial re-check was selected from this run's "

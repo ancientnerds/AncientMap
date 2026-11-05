@@ -77,6 +77,14 @@ a MiniMax model, and the question named the field open for a reason (`line["open
 * `keep` writes nothing: a MiniMax keep that Claude confirms stands on Claude's quote;
 * a period label is written beside the start the step writes, clears or restores, and only then.
 
+**Lane wd5x** (`rule.py`, the `extract` rule; D70-D73, O1-O3 of 2026-11-05) writes the starts the
+dating extractor (`dating.py`) read, as `fields-wd5x-<wave>-s<NNN>`: a fill-only rule, so only an empty
+`period_start` of the run's population with its label. `wave` refuses the run unless the extractor's
+current code passed a sealed gold (`_require_gold`: `dating_gold.require_passed`, D71 >= 95 %), the
+run's quotes were read at their permalinks (`dating.py verify`, VERIFIED.json pins DECISIONS.jsonl)
+and the shown cells were checked (`_require_owner_shown`: OWNER_SHOWN.json of the same file, at most
+one wrong cell of thirty - D71, O3) - instead of wd5's calibration and adversarial gates.
+
 **Undo**: each step's ROLLBACK.sql (written before its APPLY.sql, pinned to its PLAN.jsonl) restores
 every old value under the step's `-rollback` stamp - rehearse it with `apply.py --rehearse-rollback`
 before the apply; run it deliberately with `psql < ROLLBACK.sql` (FIELD_CONTRACT: reversal is a
@@ -218,6 +226,57 @@ def _require_adversarial(run: Path) -> None:
         )
 
 
+def _require_gold(run: Path) -> dict[str, Any]:
+    """Lane wd5x writes only what the dating extractor decided with code a sealed gold passed (D71):
+    the run's EXTRACT.json names the code it ran with, that code is the code as it is now, and a
+    round's VERDICT.json passes with exactly it (`dating_gold.require_passed`). The run's decisions
+    are the ones `dating.py verify` read at their permalinks (VERIFIED.json)."""
+    from fields import dating as DT
+    from fields import dating_gold as DG
+
+    extract = run / DT.EXTRACT_FILE
+    if not extract.exists():
+        raise PlanError(f"{extract} is missing: run `dating.py run` first")
+    record = json.loads(extract.read_text(encoding="utf-8"))
+    now = DT.code_hashes()
+    if record["code"] != now:
+        raise PlanError(
+            f"{run} was extracted with code {DT.code_stamp(record['code'])}, the code is "
+            f"{DT.code_stamp(now)} now: extract again with the measured code"
+        )
+    verified = run / DT.VERIFIED_FILE
+    if not verified.exists():
+        raise PlanError(f"{verified} is missing: every quote is read at its permalink first")
+    if _sha256_text(run / HO.DECISIONS_FILE) != json.loads(
+        verified.read_text(encoding="utf-8")
+    )["decisions_sha256"]:
+        raise PlanError(f"{run / HO.DECISIONS_FILE} is not the file `dating.py verify` pinned")
+    try:
+        return DG.require_passed(DG.GOLD_ROOT, now)
+    except DG.GoldError as exc:
+        raise PlanError(str(exc)) from exc
+
+
+def _require_owner_shown(run: Path) -> dict[str, Any]:
+    """D71/O3: the shown cells of this very DECISIONS.jsonl were checked - by the owner, or while he
+    is away by three independent adversarial checks - and at most `dating.SHOWN_MAX_WRONG` of at
+    least `dating.SHOWN_CELLS` were wrong (`go`)."""
+    from fields import dating as DT
+
+    path = run / DT.SHOWN_FILE
+    if not path.exists():
+        raise PlanError(f"{path} is missing: the cells are shown before the wave (D71, O3)")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if record["decisions_sha256"] != _sha256_text(run / HO.DECISIONS_FILE):
+        raise PlanError(f"{path} was recorded for another DECISIONS.jsonl")
+    if record["n"] < DT.SHOWN_CELLS or record["wrong"] > DT.SHOWN_MAX_WRONG or not record["go"]:
+        raise PlanError(
+            f"{path}: {record['wrong']} of {record['n']} shown cells wrong - the wave goes with at "
+            f"most {DT.SHOWN_MAX_WRONG} of at least {DT.SHOWN_CELLS}"
+        )
+    return {"shown_by": record["shown_by"], "n": record["n"], "wrong": record["wrong"]}
+
+
 def wants_write(
     decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any] | None, rule: R.Rule = R.DEFAULT
 ) -> bool:
@@ -261,9 +320,12 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     if not decisions:
         raise PlanError(f"{fields_fn} holds no decision - import the handoff first")
     calibrations: list[dict[str, str]] = []
+    gates: dict[str, Any] = {}
     if rule.recheck:
         calibrations = _require_calibrated()
         _require_adversarial(run)
+    if rule is R.EXTRACT:
+        gates = {"gold": _require_gold(run), "shown": _require_owner_shown(run)}
     derived_fn = run / DERIVED_FILE
     derived = HO._read_jsonl(derived_fn) if derived_fn.exists() else []
     decisions = [*decisions, *derived]
@@ -307,6 +369,8 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     result = {"wave": wave, "sites": len(sites), "steps": len(steps), "held": len(held)}
     if rule.recheck:  # the wave says how each calibration it stands on stands (a release: released)
         record["calibrations"] = result["calibrations"] = calibrations
+    if gates:  # the gold verdict and the shown cells the wave stands on
+        record["gates"] = result["gates"] = gates
     target.mkdir(parents=True, exist_ok=True)
     HO._write_jsonl(target / HELD_FILE, held)
     write_wave(wave, record, rule.stage)

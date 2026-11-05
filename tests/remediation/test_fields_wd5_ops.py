@@ -350,12 +350,16 @@ class TestTheSelectedReCheck:
 class TestTheWaveScript:
     SCRIPT = REPO / "scripts" / "remediation" / "wd5_wave.sh"
 
-    def test_it_runs_the_wd5_lane_and_no_other(self) -> None:
+    def test_it_runs_the_wd5_lanes_and_no_other(self) -> None:
         text = self.SCRIPT.read_text(encoding="utf-8")
-        assert "fields-wd5-$W-s$S" in text and "output/remediation/fields/wd5/write" in text
+        # the stage argument (D70, 2026-11-05): wd5 by default, wd5x for the dating extractor
+        assert "STAGE=${3:-wd5}" in text and "wd5|wd5x) ;;" in text
+        assert "fields-$STAGE-$W-s$S" in text and "output/remediation/fields/$STAGE/write" in text
         commands = re.findall(r"plan\.py (step|accept|status|wave)([^\n]*)", text)
         assert {name for name, _ in commands} == {"step", "accept", "status", "wave"}
-        assert all("--stage wd5" in rest for name, rest in commands if name != "wave")
+        assert all("--stage $STAGE" in rest for name, rest in commands if name != "wave")
+        # a run of another stage than the one named is refused before anything is planned
+        assert "is a $RULE_STAGE run, not $STAGE" in text
         assert "wd3" not in text.replace("wd3_wave.sh", "")
         for mode in ("emit", "verify", "rehearse", "probe-guards", "apply", "rehearse-rollback"):
             assert mode in text

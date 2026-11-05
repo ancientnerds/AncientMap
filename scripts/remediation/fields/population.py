@@ -51,6 +51,12 @@ without a source *behind a value the database holds*, not the empty ones (`reche
 
 A field whose newest journal row is another lane's sourced write is never asked, whatever else
 says so. The question shows the stored value, why it is asked and what stands (`open[field]["made"]`).
+
+**Lane wd5x** (`rule.EXTRACT`, D70-D73 of 2026-10-25/11-05) asks no agent: the dating extractor
+(`dating.py run`) reads the run's population. It is built from `--sites FILE` (the undated sites, each
+with the reason it is listed) and nothing else: `period_start` is the one open field of each, and a
+listed site that is dated, retired or whose period another lane's sourced write made is refused
+(`check_listed`), so the extractor can only ever fill an empty start.
 """
 
 from __future__ import annotations
@@ -783,6 +789,21 @@ def check_listed(
         raise PopulationError("the listed site(s) cannot be asked again: " + "; ".join(bad))
 
 
+def extract_fields(reason: str | None) -> dict[str, dict[str, Any]]:
+    """The one field a dating-extractor run asks of a listed site, `{"period_start": {"why",
+    "wd1", "made"}}`, or none for a site the list does not name. `check_listed` has refused every
+    listed site whose period is not empty and unsourced."""
+    if reason is None:
+        return {}
+    return {
+        "period_start": {
+            "why": WHY_EMPTY,
+            "wd1": None,
+            "made": f"the period is empty (Undated); listed for the dating extractor: {reason}",
+        }
+    }
+
+
 def decided_by_reask(fields_dir: Path = FIELDS_DIR) -> frozenset[str]:
     """The sites a reader-gap run of `REASK_RUN` decided a period of, once it has decisions: a site
     is asked by a reader-gap run once. No decisions file is a run not answered yet."""
@@ -817,6 +838,7 @@ def build(
     without: Path | None = None,
     history: Mapping[tuple[str, str], Mapping[str, Any]] | None = None,
     reask: Reask | None = None,
+    listed: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """RUN.json, CLASSIFIED.jsonl and COUNTS.json of the population (or of its pilot, or of the
     population less a pilot): every live curated site with an open field, each with exactly those.
@@ -828,10 +850,21 @@ def build(
     `reask` (stage wd5 only) makes the run a **reader-gap** run: it asks `period_start` and nothing
     else, of the empty periods a counted Claude answer left `unresolved` although it names a dated
     value (`reader_gap_fields`) and of the sites the orchestrator listed. It is one run: no pilot,
-    no `without`."""
+    no `without`.
+
+    `listed` (stage wd5x, and only there) is the population of a dating-extractor run: the listed
+    sites with their reasons, each asked `period_start` alone (`extract_fields`)."""
     rule = R.BY_STAGE.get(stage)
     if rule is None:
         raise R.RuleError(f"stage {stage!r} is not one of {sorted(R.BY_STAGE)}")
+    extract = rule is R.EXTRACT
+    if extract != (listed is not None):
+        raise PopulationError(
+            "a dating-extractor run (stage wd5x) is built from --sites, and --sites without "
+            "--reask-cleared builds no other stage's run but wd5's reader-gap run"
+        )
+    if extract and (pilot is not None or without is not None or reask is not None):
+        raise PopulationError("a dating-extractor run is one run of its own: no pilot, no --without")
     if rule.recheck and history is None:
         raise PopulationError(
             "a wd5 run is built from the decisions of WD1, WD3 and WD4: no history"
@@ -847,7 +880,9 @@ def build(
     stored_all = C.read_stored(out)  # refused here, before anything is pinned, when it is missing
     links = read_links(out)
     points = read_points(out)
-    made = read_made(out) if rule.recheck else {}
+    made = read_made(out) if rule.recheck or extract else {}
+    if listed is not None:
+        check_listed(listed, stored_all, made)
     if reask is not None:
         check_listed(reask.listed, stored_all, made)
         again = sorted(set(reask.listed) & reask.already)
@@ -864,7 +899,9 @@ def build(
 
     def refine(line: Mapping[str, Any], stored: Mapping[str, Any]) -> dict[str, Any] | None:
         site = str(line["site_id"])
-        if reask is not None:
+        if listed is not None:
+            opened, wrong = extract_fields(listed.get(site)), []
+        elif reask is not None:
             wrong = []
             if site in reask.already:
                 gap_skipped[SKIP_ALREADY] += 1
@@ -913,6 +950,7 @@ def build(
         },
         pilot=None if pilot is None else {"size": pilot[0], "seed": pilot[1]},
         without=None if without is None else _shown(without),
+        listed=None if listed is None else dict(sorted(listed.items())),
     )
     counts = C.classify_all(
         root, out, table=table, part="all", pilot=pilot, without=without, refine=refine
@@ -1016,7 +1054,8 @@ def main(argv: list[str] | None = None) -> int:
         "--sites",
         type=Path,
         help='stage wd5: a reader-gap run of the sites in FILE (JSON lines {"site_id", "reason"}); '
-        "with --reask-cleared, those sites are added to the detected ones",
+        "with --reask-cleared, those sites are added to the detected ones. Stage wd5x: the "
+        "dating extractor's population (the undated sites), required",
     )
     args = parser.parse_args(argv)
     try:
@@ -1025,12 +1064,17 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if (args.pilot is None) != (args.seed is None):
                 parser.error("--pilot and --seed go together")
-            if (args.reask_cleared or args.sites is not None) and args.stage != R.RECHECK.stage:
-                parser.error("--reask-cleared and --sites are for --stage wd5")
+            extract = args.stage == R.EXTRACT.stage
+            if args.reask_cleared and args.stage != R.RECHECK.stage:
+                parser.error("--reask-cleared is for --stage wd5")
+            if args.sites is not None and args.stage not in (R.RECHECK.stage, R.EXTRACT.stage):
+                parser.error("--sites is for --stage wd5 and --stage wd5x")
+            if extract and args.sites is None:
+                parser.error("--stage wd5x is built from --sites (the undated sites)")
             listed = {} if args.sites is None else read_listed(args.sites)
             wd1 = read_wd1(*wd1_files(args.wd1_dir))
             reask = None
-            if args.reask_cleared or args.sites is not None:
+            if not extract and (args.reask_cleared or args.sites is not None):
                 reask = Reask(
                     read_answers(wd1, args.wd1_dir, REASK_HISTORY_RUNS),
                     args.reask_cleared,
@@ -1047,6 +1091,7 @@ def main(argv: list[str] | None = None) -> int:
                 without=args.without,
                 history=read_history(wd1, args.wd1_dir) if args.stage == R.RECHECK.stage else None,
                 reask=reask,
+                listed=listed if extract else None,
             )
     except (PopulationError, R.RuleError, C.ClassifyError, H.HarvestError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)

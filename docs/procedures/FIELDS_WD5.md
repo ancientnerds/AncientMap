@@ -601,3 +601,118 @@ the marker lanes and the card waves) listed 18,044 rows over all 4,900 shown sit
 image-thumbnail-only 140, hero-small 433, hero-credit-missing 50, description-empty 28, card-empty 169, card-old-kept 4,672, Undated 619, site-type-empty 86, source-url-empty 47,
 wikidata-id-none 361, scope-pending 5, both markers absent on 4,900, open field rows 682 (899 superseded by later
 writes, 2 of a retired or deleted site; 3 open rows `pending`, so `--final` refuses).
+
+## 14. D70: the dating extractor (lane wd5x, built 2026-11-05/06; not fetched, not measured yet)
+
+Owner decision D70 (2026-10-25): before any further model research, a **deterministic** extractor reads a site's start
+from what its sources print, measured on a sealed gold set first. D71: written without a model check at >= 95 %
+bucket precision, every cell a verbatim quote and its URL, 30 cells shown before the wave. D72: only the 615 undated
+shown sites are filled; the dated ones give a conflict list, never written. D73: the rest stays `Undated` and goes to
+the owner. The orchestrator's O1 (owner AFK, 2026-11-05): **only the start is written**, the earliest anchored start of
+the highest tier present; the source range with all its quotes stays in the journal evidence; a start that would move
+the site out of the D58 window (or make it a label borderline case) is listed (`OWNER_SCOPE.jsonl`), not written. O2:
+the 105 adversarially rejected cells among the 615 enter like any other. O3: while the owner is away, the 30 shown cells
+are checked by three independent adversarial agents (Claude stamps only, D6) and the wave goes with at most one wrong.
+The design is `output/remediation/final-2026-10-08/D70_EXTRACTOR_DESIGN.md`.
+
+### 14.1 The pieces
+
+| piece | what |
+|---|---|
+| `fields/dating.py` | the extractor: readers, tiers, decision, the run's files, `verify`, `show`, `shown` |
+| `fields/dating_gold.py` | the gold: `build` (pool, draw, seal), `freeze`, `measure` (once), `verdict`, `conflicts` (D72) |
+| `fields/dates.py` | `located()` / `reading_text()`: each statement with its character span (`statements()` unchanged) |
+| `fields/harvest.py` | `fetch-dating`: `wikitext/<lang>/<revid>.json` (50 revisions a request), `wikis/<lang>/<QID>.json` (one extract a request), `ITEM_LABELS.json` (P2348/P793 items); `cited_page_refs` + `page_text` (tier 4) |
+| `fields/rule.py` | `EXTRACT = Rule("extract", "wd5x", 1, 1, FORBIDDEN_FAMILIES, clearable=False, fill_only=True)`; `MACHINE_RULES` (no agent, no brief; `handoff.py` export and import refuse such a run) |
+| `fields/population.py` | `build --stage wd5x --sites UNDATED.jsonl`: each listed site asked `period_start` alone (`extract_fields`); a dated, retired or sourced listed site is refused (`check_listed`) |
+| `fields/plan.py` | `wave` of an extract run: `_require_gold` and `_require_owner_shown` instead of wd5's calibration and adversarial gates |
+| `mechanical/lane.py` | stage `wd5x`: lanes `fields-wd5x-<wave>-sNNN`, test id `WD5X/dating-extractor`, confidence `one_source`, wd5's cells (the rollback restores `Undated`) |
+| `wd5_wave.sh W RUN [STAGE]` | the stage argument (`wd5` by default, `wd5x`); a run of another stage is refused |
+
+### 14.2 The tiers and the readers
+
+1. enwiki infobox (`Infobox ancient site`/`archaeological site`: built, founded, established, epochs, periods,
+   cultures; `Infobox settlement`: established_date; `Infobox historic site`, `military structure`: built), read from
+   the wikitext at the cached revision; the quote is the field as the wikitext prints it, the URL the `&action=raw`
+   permalink;
+2. enwiki prose: the lead and the sections `READ_SECTIONS` names (History, Archaeology, Description, Dating and their
+   equivalents in the readable languages); never Tourism, Geography, References;
+3. the item's other Wikipedias in `harvest.READ_LANGS` (the languages `dates.py` reads; the cache's own language is not
+   fetched twice), the quote in its language, the URL the `oldid` permalink;
+4. the non-Wikipedia pages the field runs' answers cited (`PAGES.jsonl` and `pages/`, status 200), never a forbidden
+   family (`rule.FORBIDDEN_FAMILIES`), never Wikipedia, Wikidata or Commons; HTML as visible text, PDF via pdftotext;
+5. Wikidata P571/P580/P1249 (precision millennium or finer; P571 vetoed when a P31 class is a park, museum, reserve or
+   the like), P2348 through `pipeline.periods`, P793 with P585 when the event is a construction or founding;
+6. Pleiades through P1584 only: the description's prose (anchored: it is about the place), then `minDate` with
+   `timePeriodsKeys` (attestation: never written alone, `CONFIG["solo"]["pleiades"] = False`).
+
+A prose sentence yields a start only when (`sentence_candidates`): it holds no hedge (`HEDGES`: abstained, not
+lowered); it is **anchored** (names the site - a Wikidata label or alias in any language, the article title, the stored
+name - or carries a deictic in a paragraph that named it) and no other capitalised proper name stands before the
+anchor (the sub-site trap; not read in German, which capitalises every noun); the statement carries an era marker, is a
+century or millennium, or is an unmarked three- or four-digit year right after a date preposition; no unit follows it
+(`UNITS`: "263 m", "1,200 ewes", "100 stadia"); and the cue that governs it - the nearest of its own clause - is a
+**start cue** (built, founded, settled, dates to, ... in the readable languages), not an event cue (excavated,
+destroyed, refounded, mentioned, ruled, ...). Two statements joined by a range word or a dash are one start (its low
+end). A period word needs no cue but is vetoed after a prefix or a negation ("pre-Inca", "not Roman"), inside a
+compound ("Roman Catholic"), inside the site's own name ("Inca Uyo"), before a find ("Roman coins"), and when it is too
+broad to bucket (`BROAD_PERIODS`: prehistoric, Middle Ages, classical antiquity, ...). Starts after 1500 AD are dropped.
+The sentence splitter does not stop after `_NO_STOP` abbreviations ("(r. 486-465 BC).", "pr. Kr.", "c.") or after a
+one- or two-digit ordinal ("5. Jahrhundert"), but does after an era marker ("300 B.C. The city").
+
+### 14.3 The decision (`decide`)
+
+Abstain (`REST.jsonl`, D73, with the reason): a collective entity (P31 village, reserve, region, park, ... with no
+ancient-site class; or `--collectives FILE`, the X8 list); no source; no candidate; only hedged sentences; two starts in
+two buckets in one sentence of a tier at or above the deciding one; a decision resting on a period word alone while
+`CONFIG["solo"]["period"]` is off, or on Pleiades' `minDate` alone. Otherwise the start is the earliest candidate of the
+highest tier; `single` when every candidate lies in one bucket, `range` when not (both ends quoted in the evidence;
+only the start is written, O1); `scope-hold` when `passes_date_cutoff` fails or `label_borderline` holds for it (O1).
+`CONFIG` (tiers, solo switches, the 1500 AD cap) is code: its sha256 is pinned with the modules.
+
+The DECISIONS.jsonl row has the shape of a DERIVED row with real quotes (design section 8): `decision` `replace`
+(value the start) or `unresolved`, `via: extracted`, `answered_by: extractor:dating@<stamp>`, `model: null`, every
+candidate a quote (`source` the permalink, `quote` verbatim, `outcome` `unverified` until `verify`, `detail` tier,
+reader, cue), and `extract` (`kind`, `lo`, `hi`, `tier`, `reason`, the notes of what was seen and not taken).
+
+### 14.4 The gold (D71)
+
+Pool: shown dated sites whose live start equals the latest Claude keep/replace decision of the field runs with a found
+quote (`GOLD_RUNS`); never a rule row, a MiniMax answer, a model-less WD1 row or an adversarial `unclear`/`reject`.
+Hard stratum: first `unresolved`, later dated (reader-gap re-asks, D68/D69 owner-accepts), measured apart, never gated.
+Draw: 400 gold and a disjoint DEV of 300, seeded, allocated over (region, article size) in the shape of the undated
+sites; era band and type group are reported in SEAL.json. The extractor is developed on DEV only. `freeze` pins the code
+(`dating.code_hashes`: `dating.py`, `dates.py`, `answers.py`, `pipeline/periods.py`, `CONFIG`); `measure` refuses other
+code and runs once (a gold's own cited pages are not read as tier 4 for its site); `verdict` passes at precision
+>= 0.95 with >= 200 gold and >= 100 emitted, and every deciding tier and the period-word-only decisions judged on their
+own (>= 20 cells, >= 0.95). A tier that fails is switched off in `CONFIG`, which is a new freeze and a **new round**
+(`build` again: the failed round's gold and hard become DEV). A passing verdict is the gate only for exactly its code.
+
+### 14.5 The run (nothing below has been run yet)
+
+```bash
+PY=./.venv/Scripts/python.exe; F=scripts/remediation/fields; X=output/remediation/fields/wd5x
+# 1. population and harvest (production read-only), then the extractor's sources (serial, pace >= 1 s)
+$PY $F/population.py --out $X export
+$PY $F/harvest.py --root $X/harvest export && $PY $F/harvest.py --root $X/harvest fetch
+$PY $F/harvest.py --root $X/harvest fetch-dating --sites $X/UNDATED.jsonl          # and GOLD/DEV/HARD.jsonl
+$PY $F/population.py --out $X build --root $X/harvest --stage wd5x --sites $X/UNDATED.jsonl
+# 2. the gold: build, develop on DEV, freeze, measure once, judge
+$PY $F/dating_gold.py build --stored $X/STORED.jsonl --harvest $X/harvest --undated $X/UNDATED.jsonl --seed S
+$PY $F/dating_gold.py freeze && $PY $F/dating_gold.py measure --harvest $X/harvest && $PY $F/dating_gold.py verdict
+$PY $F/dating_gold.py conflicts --stored $X/STORED.jsonl --harvest $X/harvest --out $X/CONFLICTS.jsonl   # D72
+# 3. the run, the quote check, the shown cells (O3)
+$PY $F/dating.py run --run $X --harvest $X/harvest [--collectives X8.jsonl]
+$PY $F/dating.py verify --run $X            # serial, >= 1 s apart; VERIFIED.json
+$PY $F/dating.py show --run $X --n 30 --seed S
+$PY $F/dating.py shown --run $X --checks CHECKS.jsonl --by "owner AFK, autonomous mandate 2026-11-05"
+# 4. the wave (gate: a passing verdict of the current code, VERIFIED.json, OWNER_SHOWN.json), then as section 7
+bash scripts/remediation/wd5_wave.sh W $X wd5x
+```
+
+`UNDATED.jsonl` is `{"site_id", "reason"}` per line. `harvest.py fetch` in a fresh root refreshes the entities (its
+cache is empty), so the Wikidata permalinks name the revision read. Known limits: other-language **period words** are
+not read (the vocabulary is English); German prose has no subject veto; a tier-4 page has no sections and anchors by
+name only; the scope hold uses the stored point and country. Tests: `tests/remediation/test_fields_dating.py`,
+`tests/remediation/test_fields_dating_gold.py`; mutation family `wd5x:` (`mutation_sweep.py wd5x:`, 16 cases, all
+fired 2026-11-06).
