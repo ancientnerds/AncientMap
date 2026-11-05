@@ -55,6 +55,7 @@ from pipeline.database import (
 )
 from pipeline.indexnow import page_url as indexnow_url
 from pipeline.indexnow import submit as indexnow_submit
+from pipeline.lyra.quality_gate import CLAIM_CHECKED_BADGE
 from pipeline.lyra.theo_publishing import (
     check_evidence_anchors,
     check_page,
@@ -1743,28 +1744,42 @@ async def get_public_research(slug: str):
     except (json.JSONDecodeError, TypeError):
         result = None
 
-    # Per-section approval workflow: swap in the assembled publication so the
-    # public view renders the reviewed version (rejected blocks hidden, edited
-    # content substituted) without the frontend having to know two fields.
-    # Legacy papers without `published_report` are unaffected.
-    if isinstance(result, dict):
-        if result.get("published_report"):
-            result = dict(result)
-            result["report"] = result["published_report"]
-            if "published_hero_image" in result:
-                result["hero_image"] = result["published_hero_image"]
-
     return {
         "id": row.id,
         "question": row.question,
         "slug": row.slug,
         "published_by": row.published_by,
         "published_at": row.published_at.isoformat() if row.published_at else None,
-        "result": result,
+        "result": public_result(result) if isinstance(result, dict) else result,
         "sites_found": row.sites_found,
         "tools_used": row.tools_used,
         "duration_ms": row.duration_ms,
     }
+
+
+def public_result(result: dict) -> dict:
+    """A public paper's stored result_json as the paper overlay may show it.
+
+    Per-section approval workflow: the assembled publication replaces the draft,
+    so the public view renders the reviewed version (rejected blocks hidden,
+    edited content substituted) without the frontend having to know two fields.
+    Legacy papers without `published_report` are unaffected.
+
+    Owner decision D86 (2026-11-05): the old M3 judge's score and tier
+    ("Platinum", "Gold", "Unverified" with x/100) stay stored, because a
+    journalled paper's result_json changes only through theo_publish, but are
+    not published. What leaves is the studio's "Claim-checked" badge, and only
+    where the studio claim check ran and passed.
+    """
+    out = dict(result)
+    if out.get("published_report"):
+        out["report"] = out["published_report"]
+        if "published_hero_image" in out:
+            out["hero_image"] = out["published_hero_image"]
+    quality = out.pop("quality_score", None)
+    if isinstance(quality, dict) and quality.get("badge") == CLAIM_CHECKED_BADGE:
+        out["quality_score"] = {"badge": CLAIM_CHECKED_BADGE}
+    return out
 
 
 # ---------------------------------------------------------------------------

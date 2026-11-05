@@ -559,11 +559,13 @@ class ResearchPaperSummary(BaseModel):
         json_schema_extra={"example": 3369},
     )
     word_count: int | None = Field(None, description="Paper word count")
-    quality_score: int | None = Field(
-        None, description="Mechanical quality score 0-100", json_schema_extra={"example": 98}
-    )
     quality_badge: str | None = Field(
-        None, description="Quality tier badge", json_schema_extra={"example": "Platinum"}
+        None,
+        description=(
+            "'Claim-checked' when the paper's claims were checked against the archived source "
+            "texts and every publication gate passed; null otherwise"
+        ),
+        json_schema_extra={"example": "Claim-checked"},
     )
     hero_image_url: str | None = Field(None, description="Cover image URL (absolute)")
     license: str = Field(

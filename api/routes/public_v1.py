@@ -66,6 +66,7 @@ from api.services.description_provenance import description_disclosure
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
 from pipeline.database import get_db
+from pipeline.lyra.quality_gate import CLAIM_CHECKED_BADGE
 from pipeline.research_html_renderer import PAPER_EXTRAS_COLUMNS, PaperExtras, paper_extras
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
 from pipeline.utils.slugs import BASE_URL
@@ -98,7 +99,6 @@ PAPER_SUMMARY_COLUMNS = """
     r.id::text AS id, r.slug, r.question, r.published_by, r.published_at, r.sites_found,
     r.result_json::jsonb->>'title' AS title,
     r.result_json::jsonb->>'card_description' AS card_description,
-    r.result_json::jsonb->'quality_score'->>'score' AS score,
     r.result_json::jsonb->'quality_score'->>'badge' AS badge,
     r.result_json::jsonb->'quality_score'->'meta'->>'word_count' AS word_count,
     r.result_json::jsonb->'hero_image'->>'src' AS hero_src
@@ -126,8 +126,8 @@ def paper_summary_kwargs(row) -> dict:
         "published_at": row.published_at.isoformat() if row.published_at else None,
         "sources_analyzed": row.sites_found or 0,
         "word_count": int(row.word_count) if row.word_count else None,
-        "quality_score": int(row.score) if row.score else None,
-        "quality_badge": row.badge,
+        # D86: only the studio's claim-check badge is published, never the M3 score or tier.
+        "quality_badge": row.badge if row.badge == CLAIM_CHECKED_BADGE else None,
         "hero_image_url": hero_url,
         "license": RESEARCH_LICENSE,
         "attribution": attribution,

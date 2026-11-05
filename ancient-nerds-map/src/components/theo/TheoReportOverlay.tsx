@@ -125,7 +125,6 @@ export default function TheoReportOverlay({
   initialEditing,
 }: TheoReportOverlayProps) {
   const [showTrace, setShowTrace] = useState(false)
-  const [showAudit, setShowAudit] = useState(false)
   const [showReferences, setShowReferences] = useState(true)
   const [editing, setEditing] = useState(initialEditing ?? false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -277,7 +276,6 @@ export default function TheoReportOverlay({
 
   const doneStages = pipelineTrace?.filter(e => e.status === 'done' && e.stage) ?? []
   const readingMinutes = Math.ceil(result.report.split(/\s+/).length / 200)
-  const qs = result.quality_score
 
   // Extract paper title from first # heading
   const paperTitle = useMemo(() => {
@@ -366,81 +364,8 @@ export default function TheoReportOverlay({
           />
         )}
 
-        {/* Quality Audit (collapsible) — shows dimension scores */}
-        {!editing && qs && typeof qs.total === 'number' && (
-          <>
-            <button
-              className="theo-trace-toggle"
-              onClick={() => setShowAudit(!showAudit)}
-            >
-              {showAudit ? '▾' : '▸'} Quality audit — {qs.total}/100 ({qs.badge})
-            </button>
-            {showAudit && (
-              <div className="theo-audit-body">
-                <div className="theo-audit-grid">
-                  {Object.entries(qs.dimensions).map(([dim, score]) => {
-                    const max = dim === 'citation_coverage' ? 20 : 10
-                    const pct = (score as number) / max * 100
-                    const label = dim.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                    return (
-                      <div key={dim} className="theo-audit-row">
-                        <span className="theo-audit-label">{label}</span>
-                        <div className="theo-audit-bar-bg">
-                          <div
-                            className="theo-audit-bar-fill"
-                            style={{
-                              width: `${pct}%`,
-                              background: pct >= 80 ? '#2e7d32' : pct >= 60 ? '#f57f17' : '#c62828',
-                            }}
-                          />
-                        </div>
-                        <span className="theo-audit-score">{score as number}/{max}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-                {qs.audit_gate_failures && (
-                  <div className="theo-audit-gates" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-muted, #2a2a2a)' }}>
-                    <div style={{ marginBottom: 8, fontSize: '0.85em', color: 'var(--text-dimmed)' }}>
-                      Audit gates — every gate must pass for a non-Unverified badge.
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {(Object.entries(qs.audit_gate_failures) as [string, number | boolean | undefined][]).map(([gate, val]) => {
-                        if (gate === 'audit_passed') return null
-                        const count = typeof val === 'number' ? val : 0
-                        const failed = count > 0
-                        const label = gate.replace(/_/g, ' ')
-                        return (
-                          <span
-                            key={gate}
-                            title={failed
-                              ? `${count} ${label} blocked a higher badge`
-                              : `${label}: clean`}
-                            style={{
-                              padding: '2px 8px',
-                              borderRadius: 4,
-                              fontSize: '0.78em',
-                              border: '1px solid',
-                              borderColor: failed ? '#c62828' : 'var(--border-muted, #2a2a2a)',
-                              color: failed ? '#ff8a80' : 'var(--text-dimmed)',
-                              background: failed ? 'rgba(198, 40, 40, 0.08)' : 'transparent',
-                            }}
-                          >
-                            {label}: {count}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* References (collapsible) — sits between Quality audit and Pipeline
-            trace so the citation list is right under the score the user just
-            read. Default-expanded because references are what most people
+        {/* References (collapsible) — sits before the Pipeline trace.
+            Default-expanded because references are what most people
             scroll down to verify. */}
         {!editing && referencesBlock && (
           <>

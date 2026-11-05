@@ -55,6 +55,7 @@ from pipeline.lyra.coherence_pass import undefined_title_terms
 from pipeline.lyra.hallucination_gate import extract_specifics, verify_against_pack
 from pipeline.lyra.hero_picker import HERO_MIN_WIDTH, pick_hero_image
 from pipeline.lyra.quality_gate import (
+    CLAIM_CHECKED_BADGE,
     citation_coverage_score,
     quality_gate_passed,
     reference_integrity_score,
@@ -93,7 +94,7 @@ TITLE_MAX_CHARS = 80
 TITLE_WORDS = (4, 12)
 CARD_MAX_CHARS = 400
 QUESTION_STEMS = ("what if", "could they", "are there", "is it possible")
-BADGE = "Claim-checked"
+BADGE = CLAIM_CHECKED_BADGE
 _CITATION_RE = re.compile(r"\[(\d+)\]")
 _H2_LINE_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _HEADING_LINE_RE = re.compile(r"#{1,6}\s")

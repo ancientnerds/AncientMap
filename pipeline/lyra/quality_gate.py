@@ -13,6 +13,13 @@ One function, two callers, so the rule cannot drift between them.
 
 from __future__ import annotations
 
+# The one quality badge the site publishes (owner decision D86, 2026-11-05): the
+# studio stores it when its claim check ran and every gate passed
+# (pipeline/studio/paper/gates.py). The old M3 judge's tiers ("Platinum", "Gold",
+# "Unverified" with a score out of 100) stay in the stored result_json of the
+# papers it judged and are no longer published anywhere.
+CLAIM_CHECKED_BADGE = "Claim-checked"
+
 
 def citation_coverage_score(audit_result: dict) -> int:
     """M1 (0-15): each uncited paragraph costs 3 points."""

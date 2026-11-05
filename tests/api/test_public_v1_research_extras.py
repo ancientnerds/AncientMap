@@ -157,3 +157,26 @@ def test_the_detail_query_selects_the_extras():
 def test_malformed_extras_are_a_server_error_not_a_silent_omission():
     resp, _ = _get(_row(writer={**WRITER, "human_review": "no"}))
     assert resp.status_code == 500
+
+
+# Owner decision D86 (2026-11-05): the old M3 quality score and its tiers
+# ("Platinum", "Gold", "Unverified" ... with x/100) are no longer published.
+# The one badge left is "Claim-checked", and only where the studio's claim
+# check ran and passed (pipeline/studio/paper/gates.py stores exactly that badge).
+
+
+def test_a_claim_checked_paper_carries_its_badge_and_no_score():
+    resp, _ = _get(_row(badge="Claim-checked", score="96"))
+    body = resp.json()
+    assert resp.status_code == 200
+    assert body["quality_badge"] == "Claim-checked"
+    assert "quality_score" not in body
+
+
+def test_an_m3_badge_is_not_published():
+    for badge in ("Platinum", "Gold", "Unverified"):
+        resp, _ = _get(_row(badge=badge, score="98"))
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["quality_badge"] is None, badge
+        assert "quality_score" not in body
