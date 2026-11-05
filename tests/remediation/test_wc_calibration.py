@@ -687,14 +687,21 @@ def test_a_fresh_judge_answer_to_another_prompt_is_stale(tmp_path: Path) -> None
         K.compare(root, calibration_id="c1")
 
 
-@pytest.mark.parametrize(("kind", "stands"), [("check", True), ("verify", True), ("judge", False)])
+@pytest.mark.parametrize(
+    ("kind", "moved_texts"),
+    [
+        ("check", ["CHECK_BRIEF"]),
+        ("verify", ["VERIFY_BRIEF"]),
+        ("judge", ["JUDGE_BRIEF", "JUDGE_QUESTION", "JUDGE_QUESTION_WN"]),
+    ],
+)
 def test_a_seal_made_before_the_texts_were_bound_binds_the_texts_of_its_day(
-    tmp_path: Path, kind: str, stands: bool
+    tmp_path: Path, kind: str, moved_texts: list[str]
 ) -> None:
     """Every lane WC seal of 2026-10-24 carries no `templates`: it binds `TEMPLATES_BEFORE_X15`. The
-    check and verify texts are unchanged, so wc-fc-*o and wc-wv-*o stand; the judge question and
-    brief were sharpened, so a pilot judge seal of that day (wc-pj-1/2) is refused - its agents
-    answered the old question. The re-run is sealed anew (wc-pj-1o/2o)."""
+    judge question and brief were sharpened by X15, the check and verify briefs by D80/O6
+    (2026-11-05), so a seal of that day is refused - its agents answered the old texts. The re-runs
+    are sealed anew (wc-pj-1o/2o, then wc-fc-*o2, wc-wv-*o2, wc-pj-*o2)."""
     run = _pilot(tmp_path)
     root = _seal(tmp_path, run, kind)
     path = root / CC.THRESHOLDS_FILE
@@ -706,14 +713,9 @@ def test_a_seal_made_before_the_texts_were_bound_binds_the_texts_of_its_day(
         for name, digest in K.TEMPLATES_BEFORE_X15[kind].items()
         if K.templates(kind)[name] != digest
     )
-    assert moved == ([] if stands else ["JUDGE_BRIEF", "JUDGE_QUESTION", "JUDGE_QUESTION_WN"])
-    if stands:
-        assert K.prepare(root, calibration_id="c1", run=run)["questions"] > 0
-    else:
-        with pytest.raises(
-            K.WcCalibrationError, match="JUDGE_BRIEF, JUDGE_QUESTION, JUDGE_QUESTION_WN changed"
-        ):
-            K.prepare(root, calibration_id="c1", run=run)
+    assert moved == moved_texts
+    with pytest.raises(K.WcCalibrationError, match=f"{', '.join(moved_texts)} changed"):
+        K.prepare(root, calibration_id="c1", run=run)
 
 
 def test_the_bound_texts_of_each_kind_are_its_question_its_brief_and_the_cache_note() -> None:

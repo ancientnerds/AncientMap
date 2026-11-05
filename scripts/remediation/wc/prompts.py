@@ -151,6 +151,19 @@ WIKI_CACHE_NOTE_WRITER = (
 )
 
 #: The instruction of the agent that answers one batch of check questions.
+#:
+#: CHECK_BRIEF and VERIFY_BRIEF sharpened 2026-11-05 (owner decision D80, orchestrator decision O6):
+#: the Opus calibrations wc-fc-2o and wc-wv-2o failed at the top tier, and the adjudication of their
+#: disagreements (`calibration/wc-adjudication-2026-10-25/REPORT.md`) names the failure modes - the
+#: checker kept a sentence whose word of how something was made differed from its own quote, kept a
+#: text whose definite phrase lost its referent with a cut, kept as fact what the sources hedge, and
+#: dropped sentences a legal trim repairs after reading too few pages; the verifier answered
+#: UNSUPPORTED where support exists (too few pages, a throttled fetch taken for a finding, another
+#: sentence's dispute counted twice, the stored article treated as one side of a disagreement). The
+#: briefs carry the checks against them; the QUESTION texts stay as exported (open rounds rebuild
+#: their prompts byte for byte), and no example is drawn from a unit of the recalibrated pools
+#: (`test_wc.POOL_EXAMPLES`). A seal binds the new bytes; the re-seals are wc-fc-1o2/2o2/3o2 and
+#: wc-wv-1o2/2o2.
 CHECK_BRIEF = """You are {family} checker {batch} of the Ancient Nerds sentence check (lane WC, round \
 {round}). You answer {count} question(s), each about another site. Answer each one on its own, as \
 if it were the only one.
@@ -165,7 +178,30 @@ Run every command below from the repository root, {repo}.
 
 For each question:
 1. Read {handoff}/<prompt_path>.
-2. Research each sentence on the web and decide, exactly as the prompt asks.
+2. Research each sentence on the web and decide, exactly as the prompt asks. Then go through \
+every sentence once more with the four checks below; each names an error earlier checkers of this \
+lane made.
+   a. Word against quote. Set every word of the sentence that says how, by whom, from what or of \
+what something was made or done beside the words of your own quotes. A sentence that uses another \
+such word than its sources use is not supported as worded, even where your quote is about the \
+same thing: remove that piece (KEEP_TRIMMED) or DROP. Never keep a sentence that your quote fits \
+only once it is reworded.
+   b. Settled against hedged. Where the reputable sources call a claim probable, uncertain or \
+disputed and the sentence states it as settled fact, the claim is not supported; one page that \
+states it as fact does not outweigh the others' hedge.
+   c. Search before you drop, and trim before you drop. Before you call any claim unsupported, \
+search beyond the first pages you read: the sources the Wikipedia article itself cites, \
+other-language Wikipedias, national and regional heritage registers and culture-ministry portals, \
+scholarly encyclopedias and excavation reports, and an archived copy (web.archive.org) of a page \
+that refuses the fetcher. A short official page that leaves something out is no evidence against \
+it. When one piece of a sentence fails and the rest holds, the answer is KEEP_TRIMMED with a legal \
+rule-5 piece, not DROP.
+   d. What stays must still read. Read the sentences you keep alone, in order, as the page will \
+show them after your cuts. A kept sentence whose pronoun or definite phrase ("it", "this", "the \
+later phase") pointed at a sentence you drop or at a piece you remove - also when a reader would \
+now take it to mean something that is still in the text - was written about what is gone: keep \
+the piece it points at if that piece holds, else DROP the sentence ("unsupported", the note naming \
+the lost referent). A text of supported sentences can still be broken this way.
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check it. The check fetches every page you quote (as the import will) and searches it for your \
@@ -255,7 +291,31 @@ below from the repository root, {repo}.
 
 For each question:
 1. Read {handoff}/<prompt_path>.
-2. Research every kept sentence on the web and decide, exactly as the prompt asks.
+2. Research every kept sentence on the web and decide, exactly as the prompt asks. Then go \
+through every kept sentence once more with the five checks below; each names an error earlier \
+verifiers of this lane made, in one direction or the other.
+   a. UNSUPPORTED is the verdict of a search, not of the first pages. Before you give it, search \
+beyond them: the sources the Wikipedia article itself cites (they are independent of it; only the \
+article is not) and their sub-pages, other-language Wikipedias, national and regional heritage \
+registers and culture-ministry portals, museum and university pages, scholarly encyclopedias and \
+excavation reports. A page that refuses the fetcher (403, 418, 429, a timeout) is a throttle and \
+never a finding: fetch it again, read an archived copy (web.archive.org), or quote another page. A \
+short official page that leaves something out is no evidence against it.
+   b. The stored article is no witness on either side. Where only it, or a page that repeats it, \
+supports a claim and a reputable source states something incompatible with it, the verdict is \
+WRONG with that source's quote - not UNSUPPORTED, and not a disagreement between the two.
+   c. Each sentence on its own claims. The dispute or missing support of a claim in another kept \
+sentence is no reason against this one; that a sentence leans on another for its referent is the \
+coherence question ("coherent", "broken"), not this sentence's verdict.
+   d. Every word is a claim. A single word that says how, by whom or from what something was made \
+or done, a credit to one person where the sources name several, and a fact stated as settled that \
+the sources hedge are claims too: set them beside the words of your quotes before you support \
+the sentence.
+   e. A real disagreement. Before you count two sources as disagreeing, make sure both state the \
+same fact: a hedged or compatible statement ("probably", a range that overlaps, a rounding) is \
+no disagreement. Where reputable sources do disagree, a sentence that carries the hedge they share \
+can be SUPPORTED; one that states one side as settled is not (UNSUPPORTED, or WRONG where a \
+reputable source contradicts it as worded).
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is fetched and your verdict is not judged):

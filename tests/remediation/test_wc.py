@@ -830,12 +830,18 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: that match no unit of the pools wc-pj-1o/2o re-run (a recalibration on those pools must not hand
 #: the judge their known errors), and the contradiction rule's DISPUTED is mapped onto this answer
 #: format, which has none.
+#: CHECK_BRIEF and VERIFY_BRIEF re-pinned 2026-11-05 (owner decision D80, orchestrator decision O6):
+#: the Opus calibrations wc-fc-2o and wc-wv-2o failed at the top tier; the briefs carry checks against
+#: the failure modes the adjudication of 2026-10-25 named (word against quote, settled against hedged,
+#: search and trim before a drop, a lost referent; for the verifier UNSUPPORTED only after a wide
+#: search, the stored article no witness, each sentence on its own claims, a real disagreement). A
+#: brief is no part of an exported prompt: no answer goes stale. The re-seals bind the new bytes.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
-    "CHECK_BRIEF": "df2eaa3e04a08c70a223f04e54eb8b5164e895c86c134e1badb12b54d69e7b55",
+    "CHECK_BRIEF": "8a779ead21e737b91aad81e15cf4853a9f23f86f050c118f5221626aa62466dc",
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
-    "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
+    "VERIFY_BRIEF": "a74b7213caceb2cbcc373429dad4f6a1ec42a0e89d1acce8773ceac7f7c06d0d",
     "JUDGE_QUESTION": "cfedf7e933a6a7ab7214e71ac7597049dd006c5e5e5dbe0f62dc064666baefdb",
     "JUDGE_BRIEF": "22fa321b6141187955c07d0beb2b650e940a2e3e9d4be2a3a25ae06abe6b4296",
     "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
@@ -1373,6 +1379,42 @@ def test_the_judge_question_points_at_no_unit_of_the_recalibrated_pools() -> Non
         "make sure they state the same fact",
     ):
         assert rule in " ".join(text.split()), rule
+
+
+#: The checks each sharpened brief must carry (D80/O6): one phrase per failure mode the adjudication
+#: of wc-fc-2o and wc-wv-1o/2o named.
+BRIEF_CHECKS = {
+    "CHECK_BRIEF": (
+        "Word against quote.",
+        "A sentence that uses another such word than its sources use is not supported as worded",
+        "Settled against hedged.",
+        "Search before you drop, and trim before you drop.",
+        "the answer is KEEP_TRIMMED with a legal rule-5 piece, not DROP",
+        "What stays must still read.",
+        "was written about what is gone",
+    ),
+    "VERIFY_BRIEF": (
+        "UNSUPPORTED is the verdict of a search, not of the first pages.",
+        "is a throttle and never a finding",
+        "The stored article is no witness on either side.",
+        "WRONG with that source's quote - not UNSUPPORTED, and not a disagreement between the two",
+        "Each sentence on its own claims.",
+        "Every word is a claim.",
+        "A real disagreement.",
+        "make sure both state the same fact",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(BRIEF_CHECKS))
+def test_the_check_and_verify_briefs_carry_the_calibrations_failure_modes(name: str) -> None:
+    """D80/O6: the briefs of the re-sealed fact checker and web verifier name the checks against the
+    errors the adjudicated Opus calibrations made, without the recalibrated pools' own wording."""
+    text = " ".join(getattr(P, name).split())
+    for check in BRIEF_CHECKS[name]:
+        assert check in text, check
+    for example in POOL_EXAMPLES:
+        assert example not in text, example
 
 
 def test_the_pilot_passes_only_below_every_threshold(tmp_path: Path) -> None:

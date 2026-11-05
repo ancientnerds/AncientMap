@@ -108,8 +108,10 @@ KIND_TEMPLATES = {
 TEMPLATE_MODULES = {"JUDGE_QUESTION_WN": P2, "JUDGE_QUESTION_ENRICH": PE}
 #: What a seal made before the templates were bound carries none of: the texts in force when every
 #: such seal was made (2026-10-24, the pins of `tests/remediation/test_wc.py` since 2026-10-09). Such
-#: a seal binds these, so the judge question sharpened by X15 refuses wc-pj-1/2's agents while the
-#: check and verify seals of 2026-10-24 (wc-fc-*o, wc-wv-*o) stand on unchanged texts.
+#: a seal binds these, so the judge question sharpened by X15 refuses wc-pj-1/2's agents. The check
+#: and verify seals of 2026-10-24 (wc-fc-*o, wc-wv-*o) were compared on these texts; since the
+#: briefs were sharpened by D80/O6 (2026-11-05) such a seal is refused too, and the re-runs are
+#: sealed anew (wc-fc-*o2, wc-wv-*o2). A verdict already written stays as it is.
 TEMPLATES_BEFORE_X15 = {
     "check": {
         "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
