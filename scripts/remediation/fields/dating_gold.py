@@ -7,12 +7,15 @@ extractor is no role, so that module is not reused (design section 3).
 
 **The pool** (`gold_pool`): shown curated sites whose live `period_start` equals a Claude keep or
 replace decision of the field lanes that a found quote stands behind. Excluded: rule rows
-(`answered_by` "rule:..."), MiniMax answers, an answer without a model (WD1's rows: no census proves
-them Claude), an adversarial `unclear` or `reject` (unless the owner accepted it - then the site is a
-`hard` one), a retired site, an undated one. **The hard stratum** (`hard`): sites whose period was
-first left `unresolved` and later dated (the reader-gap re-asks, the D68/D69 owner-accepted cells) -
-measured and reported apart, never gated (the 615 are the hard cases; the gold is easier, design
-section 6 and the owner item).
+(`answered_by` "rule:..."), MiniMax answers, an answer without a model that the model census
+(`model_census/ANSWERS_TRUE_MODEL.jsonl`, read through `carry.read_census`) does not prove Claude -
+WD1's rows name no model, the census holds every one of their settled answers -, an adversarial
+`unclear` or `reject` (unless the owner accepted it - then the site is a `hard` one), a retired site,
+an undated one. **The hard stratum** (`hard`): sites whose period was first left `unresolved` and
+later dated (WD3's unresolved re-researched by WD5, the reader-gap re-asks, the D68/D69
+owner-accepted cells) - measured and reported apart, never gated (the 615 are the hard cases; the
+gold is easier, design section 6 and the owner item). The first round halves it, seeded
+(`split_hard`): one half is sealed beside the gold, the other is DEV data (`dev-hard`).
 
 **The draw** (`draw`): 400 gold sites and a disjoint DEV set of 300, seeded, stratified by region and
 article size in the shape of the undated sites (stubs and the Americas are what the 615 are), with
@@ -78,6 +81,8 @@ GOLD_ROOT = REPO / "output" / "remediation" / "fields" / "wd5x" / "gold"
 #: the one that stands.
 GOLD_RUNS = ("wd1-pilot", "wd1", "wd1-rest-pilot", "wd1-rest", "wd3-pilot", "wd3", "wd4",
              "wd5-pilot", "wd5", "wd5-reask")  # fmt: skip
+#: The model census (2026-10-01): which model wrote each recorded answer - WD1's rows name none.
+CENSUS = REPO / "output" / "remediation" / "model_census" / "ANSWERS_TRUE_MODEL.jsonl"
 GOLD_FILE, DEV_FILE, HARD_FILE = "GOLD.jsonl", "DEV.jsonl", "HARD.jsonl"
 PIN_FILE, SEAL_FILE, FROZEN_FILE = "GOLD.sha256", "SEAL.json", "FROZEN.json"
 RESULTS_FILE, MEASURE_FILE, VERDICT_FILE = "RESULTS.jsonl", "MEASURE.json", "VERDICT.json"
@@ -162,15 +167,23 @@ def _int(value: Any) -> int | None:
 
 
 def _is_claude(decision: Mapping[str, Any]) -> bool:
-    return "claude" in str(decision.get("model") or "").casefold()
+    """A Claude answer: the row's own model (WD3 on), else the model the census proved (WD1)."""
+    model = decision.get("model") if "model" in decision else decision.get("_census_model")
+    return "claude" in str(model or "").casefold()
 
 
 def _quoted(decision: Mapping[str, Any]) -> bool:
     return any(q.get("outcome") == "found" for q in decision.get("quotes") or ())
 
 
-def period_histories(fields_dir: Path, runs: Sequence[str] = GOLD_RUNS) -> dict[str, list[dict]]:
-    """Every `period_start` decision of `runs` per site, oldest run first (a missing run is none)."""
+def period_histories(
+    fields_dir: Path,
+    runs: Sequence[str] = GOLD_RUNS,
+    census: Mapping[tuple[str, str], str] | None = None,
+) -> dict[str, list[dict]]:
+    """Every `period_start` decision of `runs` per site, oldest run first (a missing run is none).
+    A row without a `model` (WD1's) gets `_census_model`: the model the census (`carry.read_census`,
+    `{(answered_by, answer file name): model}`) proves wrote its answer, None when it holds none."""
     out: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for run in runs:
         path = fields_dir / run / "DECISIONS.jsonl"
@@ -178,7 +191,11 @@ def period_histories(fields_dir: Path, runs: Sequence[str] = GOLD_RUNS) -> dict[
             continue
         for row in _read_jsonl(path):
             if row["field"] == "period_start":
-                out[str(row["site_id"])].append({**row, "_run": run})
+                line = {**row, "_run": run}
+                if "model" not in row and census is not None:
+                    key = (str(row.get("answered_by")), f"{row['site_id']}.answer.json")
+                    line["_census_model"] = census.get(key)
+                out[str(row["site_id"])].append(line)
     return out
 
 
@@ -193,7 +210,8 @@ def provenance(decision: Mapping[str, Any]) -> dict[str, Any]:
         "run": decision["_run"],
         "decision": decision["decision"],
         "answered_by": decision.get("answered_by"),
-        "model": decision.get("model"),
+        "model": decision.get("model") if "model" in decision else decision.get("_census_model"),
+        "model_from": "row" if "model" in decision else "census",
         "adversarial": (decision.get("adversarial") or {}).get("verdict")
         if isinstance(decision.get("adversarial"), dict)
         else None,
@@ -281,6 +299,16 @@ def draw(
     return sorted((dict(r) for r in chosen), key=lambda r: r["site_id"])
 
 
+def split_hard(hard: Sequence[Mapping[str, Any]], seed: int) -> tuple[list[dict], list[dict]]:
+    """`(test, dev)`: the hard stratum halved, seeded - the sealed half is measured beside the gold,
+    the other half is development data, so the extractor is tuned on hard cases too (the 615 are
+    hard cases) without ever seeing the hard sites it is measured on."""
+    rows = sorted((dict(r) for r in hard), key=lambda r: r["site_id"])
+    random.Random(seed).shuffle(rows)  # noqa: S311 - a seeded split, not a key
+    half = (len(rows) + 1) // 2
+    return sorted(rows[:half], key=lambda r: r["site_id"]), sorted(rows[half:], key=lambda r: r["site_id"])
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
@@ -363,9 +391,12 @@ def build(
         dev = sorted(dev_carried, key=lambda r: r["site_id"])
         hard_now: list[dict[str, Any]] = []
     else:
-        hard_now = [r for r in hard if r["site_id"] not in used]
+        hard_test, hard_dev = split_hard([r for r in hard if r["site_id"] not in used], seed + 2)
+        hard_now = hard_test
         dev_pool = [r for r in free if r["site_id"] not in taken]
         dev = [{**r, "stratum": "dev"} for r in draw(dev_pool, cells, shape, dev_n, seed + 1)]
+        dev = sorted(dev + [{**r, "stratum": "dev-hard"} for r in hard_dev],
+                     key=lambda r: r["site_id"])  # fmt: skip
     number = len(earlier) + 1
     target = gold_root / f"round-{number:02d}"
     target.mkdir(parents=True, exist_ok=False)
@@ -387,6 +418,7 @@ def build(
         "hard_sha256": _sha256(target / HARD_FILE),
         "gold": len(gold),
         "dev": len(dev),
+        "dev_hard": sum(1 for r in dev if r["stratum"] == "dev-hard"),
         "hard": len(hard_now),
         "pool": len(pool),
         "pool_free": len(free),
@@ -470,6 +502,23 @@ def result_row(gold: Mapping[str, Any], decision: DT.Decision) -> dict[str, Any]
         and decision.lo <= int(gold["gold_year"]) <= int(decision.hi),
         "quote": decision.decisive.quote[:400] if emitted and decision.decisive else None,
         "url": decision.decisive.url if emitted and decision.decisive else None,
+        "withheld": withheld(gold, decision),
+    }
+
+
+def withheld(gold: Mapping[str, Any], decision: DT.Decision) -> dict[str, Any] | None:
+    """What a decision the switches withhold (a range, a period word or Pleiades alone) would have
+    written, and whether it is in the gold's bucket - reported per kind beside the gate, never part
+    of it (the gold is measured once, with the frozen switches)."""
+    if decision.kind != DT.ABSTAIN or decision.decisive is None:
+        return None
+    start = decision.decisive.start
+    return {
+        "why": str(decision.reason).split(":")[0],
+        "kind": decision.decisive.kind,
+        "tier": decision.tier,
+        "start": start,
+        "correct": categorize_period(start) == gold["gold_bucket"],
     }
 
 
@@ -511,7 +560,24 @@ def metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         },
         "abstain_reasons": dict(sorted(Counter(
             str(r["reason"]).split(":")[0] for r in rows if r["kind"] == DT.ABSTAIN).items())),
+        "withheld": _withheld_metrics(rows),
     }  # fmt: skip
+
+
+def _withheld_metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Per withholding reason and decisive kind: how many, and how many would have been right."""
+    out: dict[str, Any] = {}
+    for row in rows:
+        held = row.get("withheld")
+        if not held:
+            continue
+        part = out.setdefault(f"{held['why']}/{held['kind']}", {"n": 0, "would_be_correct": 0})
+        part["n"] += 1
+        part["would_be_correct"] += bool(held["correct"])
+    for part in out.values():
+        part["precision_if_written"] = round(part["would_be_correct"] / part["n"], 4)
+        part["wilson"] = wilson(part["would_be_correct"], part["n"])
+    return dict(sorted(out.items()))
 
 
 def gold_skip_urls(row: Mapping[str, Any]) -> frozenset[str]:
@@ -681,19 +747,21 @@ def main(argv: list[str] | None = None) -> int:
                                     default=REPO / "output" / "remediation" / "fields")  # fmt: skip
     commands["build"].add_argument("--undated", type=Path, required=True)
     commands["build"].add_argument("--seed", type=int, required=True)
+    commands["build"].add_argument("--census", type=Path, default=CENSUS)
     commands["conflicts"].add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "build":
             from fields import harvest as H
             from fields import wiki as W
+            from fields.carry import read_census
 
             stored = _read_jsonl(args.stored)
             sites = {s["site_id"]: s for s in H.read_sites(args.harvest)}
             result: Any = build(
                 args.gold,
                 stored=stored,
-                histories=period_histories(args.fields_dir),
+                histories=period_histories(args.fields_dir, census=read_census(args.census)),
                 sites=sites,
                 sizes=article_sizes(W.WikiCache(), sites),
                 undated=[str(r["site_id"]) for r in _read_jsonl(args.undated)],

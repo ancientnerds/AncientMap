@@ -602,7 +602,7 @@ image-thumbnail-only 140, hero-small 433, hero-credit-missing 50, description-em
 wikidata-id-none 361, scope-pending 5, both markers absent on 4,900, open field rows 682 (899 superseded by later
 writes, 2 of a retired or deleted site; 3 open rows `pending`, so `--final` refuses).
 
-## 14. D70: the dating extractor (lane wd5x, built 2026-11-05/06; not fetched, not measured yet)
+## 14. D70: the dating extractor (lane wd5x, built 2026-11-05/06; gold round 1 measured 2026-11-06)
 
 Owner decision D70 (2026-10-25): before any further model research, a **deterministic** extractor reads a site's start
 from what its sources print, measured on a sealed gold set first. D71: written without a model check at >= 95 %
@@ -688,7 +688,25 @@ code and runs once (a gold's own cited pages are not read as tier 4 for its site
 own (>= 20 cells, >= 0.95). A tier that fails is switched off in `CONFIG`, which is a new freeze and a **new round**
 (`build` again: the failed round's gold and hard become DEV). A passing verdict is the gate only for exactly its code.
 
-### 14.5 The run (nothing below has been run yet)
+### 14.4a Gold round 1 and DEV round 1 (2026-11-06)
+
+- **The census** (`dating_gold.py build --census`, default `model_census/ANSWERS_TRUE_MODEL.jsonl` through
+  `carry.read_census`): WD1's rows name no model; every settled WD1 answer is in the census (all Claude), so they
+  enter the pool. Pool 3,219 (was 791 without it), hard 824 (WD3 `unresolved` later dated by WD5: 765; wd5-pilot 31;
+  wd5-reask 28). Round 1 (seed 20261106): 400 gold, 300 DEV, and the hard stratum halved (`split_hard`): 412 sealed
+  beside the gold (`HARD.jsonl`), 412 DEV (`dev-hard`).
+- **DEV round 1** (DEV only; `gold/round-01/DEV_TUNING_RESULTS.jsonl`): period words in English only; a sentence or
+  infobox field naming periods in two buckets is no start (`several-periods`); a period word governed by an event cue
+  (peak, invasion, ...) is none; a period word inside a given name ("known as the Inca Gallows") is none; "the city of
+  Rhodes" is no deictic; a start cue in a clause about another named place is not the site's (`cue_owner`; the builder
+  after "by" is exempt); "about 100 images" is a count; a round year on a bucket edge ("c. 3000 BC") decides no bucket
+  (`bucket-edge`); a cached page that is a period's article is skipped; more hedges and event cues.
+  `CONFIG` v2: **tiers 1 and 2 only** (tiers 3-6 decided 11/15, 20/28, 6/9, 1/3 on DEV; a disabled tier is not read)
+  and **`write_ranges: False`** (ranges 24/40 on DEV; a range goes to REST.jsonl as `sources-disagree`).
+  The withheld decisions (ranges, solo kinds) are reported per kind in MEASURE.json (`withheld`), never gated.
+- DEV with the shipped switches: dev 82/104 (0.789), dev-hard 164/181 (0.906) - below 0.95 before the seal.
+
+### 14.5 The run
 
 ```bash
 PY=./.venv/Scripts/python.exe; F=scripts/remediation/fields; X=output/remediation/fields/wd5x

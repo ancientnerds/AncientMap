@@ -309,3 +309,55 @@ class TestConflicts:
         assert G.conflicts(loaded, rows, out) == {"dated_sites": 4, "conflicts": 2}
         listed = [json.loads(r) for r in out.read_text().splitlines()]
         assert [r["extracted"] for r in listed] == [-1500, -1500]
+
+
+class TestTheCensusAndTheHardHalves:
+    """Gold round 1 (2026-11-06): WD1's model-less rows enter the pool when the model census proves
+    their answer Claude's, and the hard stratum is halved between the seal and DEV."""
+
+    def test_a_wd1_row_is_gold_when_the_census_proves_it_claude(self, tmp_path: Path) -> None:
+        run = tmp_path / "wd1"
+        run.mkdir()
+        rows = []
+        for n in (1, 2, 3):
+            row = decision(n, "wd1", answered_by="wd1-r0-b0001")
+            del row["model"], row["_run"]
+            rows.append(row)
+        (run / "DECISIONS.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), "utf-8")
+        census = {("wd1-r0-b0001", f"{sid(1)}.answer.json"): "claude-opus-5-5",
+                  ("wd1-r0-b0001", f"{sid(2)}.answer.json"): "MiniMax-M3"}  # fmt: skip
+        histories = G.period_histories(tmp_path, runs=("wd1",), census=census)
+        pool, hard = G.gold_pool([stored(1), stored(2), stored(3)], histories)
+        assert [r["site_id"] for r in pool] == [sid(1)] and hard == []
+        assert pool[0]["provenance"]["model"] == "claude-opus-5-5"
+        assert pool[0]["provenance"]["model_from"] == "census"
+        without = G.period_histories(tmp_path, runs=("wd1",))
+        assert G.gold_pool([stored(1)], without) == ([], [])
+
+    def test_the_hard_stratum_is_halved_between_the_seal_and_dev(self, tmp_path: Path) -> None:
+        w = world()
+        for n in range(1, 41):  # first unresolved, later dated: hard
+            w["histories"][sid(n)] = [decision(n, "wd3", verdict="unresolved", value=None),
+                                      decision(n, "wd5")]  # fmt: skip
+        result = G.build(tmp_path, seed=7, **w)
+        round_dir = tmp_path / "round-01"
+        hard = {r["site_id"] for r in G._read_jsonl(round_dir / G.HARD_FILE)}
+        dev = G._read_jsonl(round_dir / G.DEV_FILE)
+        dev_hard = {r["site_id"] for r in dev if r["stratum"] == "dev-hard"}
+        assert result["hard"] == 20 and len(dev_hard) == 20 and not hard & dev_hard
+        assert hard | dev_hard == {sid(n) for n in range(1, 41)}
+        seal = G._read_json(round_dir / G.SEAL_FILE)
+        assert seal["dev_hard"] == 20 and seal["dev"] == 320
+
+    def test_a_withheld_decision_is_reported_never_gated(self) -> None:
+        gold = {"site_id": sid(1), "stratum": "gold", "gold_year": -300,
+                "gold_bucket": "500 BC - 1 AD"}  # fmt: skip
+        found = X.Found([X.Candidate(-300, -300, -300, X.YEAR, 2, "t", "u", "q", 1, "built", ""),
+                         X.Candidate(-900, -900, -900, X.YEAR, 2, "t", "v", "q", 1, "built", "")])  # fmt: skip
+        site = {"site_id": sid(1), "name": "A", "lat": 42.0, "lon": -4.5, "country": "Spain"}
+        row = G.result_row(gold, X.decide(site, found))
+        assert row["kind"] == X.ABSTAIN and row["withheld"]["why"] == X.SOURCES_DISAGREE
+        assert row["withheld"]["start"] == -900 and row["withheld"]["correct"] is False
+        metrics = G.metrics([row])
+        assert metrics["emitted"] == 0
+        assert metrics["withheld"][f"{X.SOURCES_DISAGREE}/year"]["n"] == 1

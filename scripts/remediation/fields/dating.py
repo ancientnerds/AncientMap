@@ -87,20 +87,28 @@ from fields import dates as D  # noqa: E402
 from fields import rule as R  # noqa: E402
 from pipeline import periods as P  # noqa: E402
 from pipeline.normalizers.dates import label_borderline, passes_date_cutoff  # noqa: E402
-from pipeline.utils.text import categorize_period  # noqa: E402
+from pipeline.utils.text import PERIOD_BUCKETS, categorize_period  # noqa: E402
 
 # ------------------------------------------------------------------------------ the configuration
 #: The extractor's switches. Part of the code: its sha256 is pinned beside the modules' by the gold
 #: seal (`dating_gold.py freeze`), so a switch turned on after a measurement needs a new gold round.
 CONFIG: Mapping[str, Any] = {
-    "version": 1,
+    "version": 2,
     #: the latest start the extractor writes (the scope rule: nothing after 1500 AD is a start)
     "year_cap": 1500,
-    #: the tiers that yield candidates; a tier the gold measures below 0.95 is taken out here
-    "tiers": [1, 2, 3, 4, 5, 6],
+    #: the tiers that yield candidates; a tier the gold measures below 0.95 is taken out here.
+    #: DEV round 1 (2026-11-06, gold round-01's DEV: 300 dev + 412 dev-hard sites): tier 3 decided
+    #: 11 of 15 in the gold's bucket, tier 4 20 of 28, tier 5 6 of 9, tier 6 1 of 3 - taken out
+    #: (a disabled tier is not read at all); tier 1 23 of 27 and tier 2 206 of 232 stay, the best
+    #: the extractor has, and the sealed gold judges them
+    "tiers": [1, 2],
     #: whether a decision may rest on this kind alone (design section 5): a period word, Pleiades'
     #: minDate. Pleiades' minDate is attestation, not a dated statement: off until a gold passes it.
     "solo": {"period": True, "pleiades": False},
+    #: whether a decision whose candidates lie in two or more buckets (a `range`, O1) is written:
+    #: off - on DEV round 1 (2026-11-06) the earliest start of a range was in the gold's bucket in
+    #: 24 of 40 decisions (0.60); a range goes to the rest list with its candidates (D73)
+    "write_ranges": False,
 }
 TIERS = {
     1: "enwiki infobox",
@@ -124,6 +132,9 @@ SINGLE, RANGE, ABSTAIN, SCOPE_HOLD = "single", "range", "abstain", "scope-hold"
 # why a site abstains (REST.jsonl, the D73 list)
 NO_SOURCE, NO_CANDIDATE, HEDGED_ONLY = "no-source", "no-candidate", "hedged-only"
 COLLECTIVE, TWO_STARTS, SOLO_REFUSED = "collective-entity", "two-starts-in-one-sentence", "solo-kind"
+# why a statement is seen and not taken (a note, not an abstention)
+SEVERAL_PERIODS, BUCKET_EDGE = "several-periods", "bucket-edge"
+SOURCES_DISAGREE = "sources-disagree"
 DECISIONS_FILE, REASK_FILE, EXTRACT_FILE = "DECISIONS.jsonl", "REASK.json", "EXTRACT.json"
 REST_FILE, SCOPE_FILE = "REST.jsonl", "OWNER_SCOPE.jsonl"
 VERIFIED_FILE, SHOW_MD, SHOW_JSON, SHOWN_FILE = (
@@ -224,6 +235,9 @@ EVENT_CUES = _words_re(
         "opened", "mentioned", "attested", "recorded", "visited", "described", "surveyed",
         "conquered", "captured", "burned", "burnt", "damaged", "acquired", "purchased", "died",
         "reign*", "ruled",
+        # DEV round 1 (2026-11-06): a capture, a siege, a heyday - the date is the event's
+        "taken", "besieged", "siege", "battle", "invaded", "peak", "flourished", "heyday",
+        "zenith", "apogee", "invasion",
         "ausgegraben", "entdeckt", "zerstort", "verlassen", "restauriert", "erwahnt",
         "fouille*", "decouvert*", "detruit*", "abandonne*", "restaure*", "mentionne*",
         "excavad*", "descubiert*", "destruid*", "abandonad*", "restaurad*", "mencionad*",
@@ -240,6 +254,8 @@ HEDGES = _words_re(
         "resemblance", "resembles", "resembling", "presumably", "probably", "likely", "unclear",
         "uncertain", "unknown", "legend", "legendary", "traditionally", "tradition holds",
         "speculated", "conjectured", "suggested", "suggests", "perhaps",
+        "possible", "suggest", "suggesting", "apparently", "appears to", "appear to", "seems",
+        "seem to", "would have",
         "wahrscheinlich", "vermutlich", "moglicherweise", "vielleicht", "soll", "sollen", "angeblich",
         "peut etre", "probablement", "sans doute", "suppose*", "aurait", "auraient", "legende",
         "posiblemente", "probablemente", "quizas", "quiza", "se cree", "supuestamente", "leyenda",
@@ -285,6 +301,8 @@ PERIOD_COMPOUNDS = re.compile(
             "roman catholic", "holy roman", "roman numeral", "roman numerals", "greek orthodox",
             "byzantine rite", "classical music", "classic example", "neo classical",
             "victorian era", "georgian era", "romanesque",
+            # DEV round 1 (2026-11-06): an administration or an event, not the site's start
+            "roman province", "roman invasion", "roman conquest",
         )
     )
 )  # fmt: skip
@@ -492,6 +510,22 @@ def names_site(sentence: str, forms: Sequence[str]) -> bool:
     return any(f" {form} " in words for form in forms)
 
 
+#: "the city of Rhodes": a deictic followed by a named thing is that thing, not the site.
+_NAMED_AFTER = re.compile(r"\s+(?:of|de|del|della|di|du|des|von|van)\s+(?:the\s+|la\s+|le\s+)?[A-ZÀ-Þ]")
+
+
+def deictic_match(norm: str) -> re.Match[str] | None:
+    """The first deictic of the reading text `norm` that stands for the site: one followed by "of"
+    and a capitalised name ("the city of Rhodes") names that other place (DEV round 1, 2026-11-06:
+    Lindus's "when the city of Rhodes was built")."""
+    low = norm.casefold()
+    for match in DEICTICS.finditer(low):
+        if _NAMED_AFTER.match(norm, match.end()):
+            continue
+        return match
+    return None
+
+
 def _anchor_offset(norm: str, forms: Sequence[str]) -> int | None:
     """Where in the reading text the sentence first names the site or a deictic stands."""
     low = norm.casefold()
@@ -501,15 +535,18 @@ def _anchor_offset(norm: str, forms: Sequence[str]) -> int | None:
         found = re.search(pattern, low)
         if found and (best is None or found.start() < best):
             best = found.start()
-    deictic = DEICTICS.search(low)
+    deictic = deictic_match(norm)
     if deictic and (best is None or deictic.start() < best):
         best = deictic.start()
     return best
 
 
-def other_subject(norm: str, forms: Sequence[str], anchor: int | None) -> str | None:
+def other_subject(
+    norm: str, forms: Sequence[str], anchor: int | None, *, sentence_start: bool = True
+) -> str | None:
     """A capitalised proper name standing before the anchor that is not the site: the sentence is
-    about something else (a sub-site, a neighbour) - or None."""
+    about something else (a sub-site, a neighbour) - or None. `sentence_start`: `norm` begins a
+    sentence (its first word is capitalised anyway)."""
     head = norm if anchor is None else norm[:anchor]
     name_words = {w for form in forms for w in form.split()}
     for index, match in enumerate(re.finditer(r"[^\W\d_]+", head)):
@@ -517,7 +554,7 @@ def other_subject(norm: str, forms: Sequence[str], anchor: int | None) -> str | 
         if not word[0].isupper() or len(word) < 3 or word.isupper():
             continue
         low = word.casefold()
-        if index == 0 and not re.match(r"[^\W\d_]+\s+[A-Z]", head):
+        if index == 0 and sentence_start and not re.match(r"[^\W\d_]+\s+[A-Z]", head):
             continue  # a sentence's first word is capitalised anyway: a name only before a capital
         if low in _SUBJECT_EXEMPT or low in name_words or low.rstrip("s") in name_words:
             continue
@@ -529,15 +566,63 @@ def other_subject(norm: str, forms: Sequence[str], anchor: int | None) -> str | 
     return None
 
 
+def _anchors(norm: str, forms: Sequence[str]) -> list[int]:
+    """Every offset of the reading text where the site is named or a deictic stands for it."""
+    low = norm.casefold()
+    out = []
+    for form in forms:
+        pattern = r"(?<!\w)" + r"[\W_]+".join(re.escape(w) for w in form.split()) + r"(?!\w)"
+        out += [m.start() for m in re.finditer(pattern, low)]
+    out += [m.start() for m in DEICTICS.finditer(low) if not _NAMED_AFTER.match(norm, m.end())]
+    return sorted(out)
+
+
+def cue_owner(norm: str, forms: Sequence[str], cue: int) -> str | None:
+    """The other proper name a start cue belongs to, or None. The cue's clause - reaching back over
+    a relative pronoun to the noun it refers to - names a capitalised name that is not the site,
+    and neither that stretch nor the rest of the cue's clause names the site ("Previous to 408 BCE,
+    when the city of Rhodes was built, Lindus ...", "... de la ciudad de Rodas, que fue fundada en
+    el 408 a. C.": the founding is Rhodes's - DEV round 1, 2026-11-06). A name after "by" is the
+    builder, not the thing built ("built by Augustus")."""
+    low = norm.casefold()
+    bounds = [m.end() for m in _CLAUSE.finditer(low[:cue])]
+    begin = bounds[-1] if bounds else 0
+    if _RELATIVE.match(low, begin) and len(bounds) > 1:
+        begin = bounds[-2]
+    elif _RELATIVE.match(low, begin):
+        begin = 0
+    tail = _CLAUSE.search(low, cue + 1)
+    end = tail.start() if tail else len(norm)
+    anchors = _anchors(norm, forms)
+    if any(cue <= a < end for a in anchors):
+        return None
+    before = [a for a in anchors if begin <= a < cue]
+    if before:  # the name search starts after the site's last naming before the cue
+        named = re.match(r"[^\W\d_]+", norm[before[-1] :])
+        begin = before[-1] + (named.end() if named else 0)
+    segment = _AGENT.sub(lambda m: " " * len(m.group(0)), norm[begin:cue])
+    return other_subject(segment, forms, None, sentence_start=begin == 0)
+
+
+#: A relative pronoun opening a clause: the clause is about the noun before it.
+_RELATIVE = re.compile(
+    r"[\W_]*(?:que|which|who|whose|that|where|qui|dont|ou|che|cui|dove|donde|die|der|das|"
+    r"welche\w*|wo|ktor\w*|kde|koji\w*|ktery\w*)(?!\w)"
+)
+#: The agent of a passive ("built by Augustus", "fondee par ...", "erbaut von ..."): a builder.
+_AGENT = re.compile(r"(?<!\w)(?:by|par|por|von|da|door|przez|od)\s+(?:[A-Z][\w'’-]*\s*)+")
+
+
 #: What separates two clauses: a cue beyond one governs another statement ("settled in the 4th
 #: century BC and refounded in AD 35").
 _CLAUSE = re.compile(r"[,;:()]|(?<!\w)(?:and|but|while|whereas|und|aber|et|mais|y|pero|e|ma|i|a)(?!\w)")
 
 
-def _nearest_cue(low: str, start: int, end: int) -> tuple[str, str] | None:
-    """The cue that governs the span `start`..`end` of the folded reading text, as `(kind, word)`:
+def _nearest_cue(low: str, start: int, end: int) -> tuple[str, str, int] | None:
+    """The cue that governs the span `start`..`end` of the folded reading text, as `(kind, word,
+    offset)`:
     the nearest cue of the same clause (one before the span wins a tie), else the nearest at all."""
-    best: tuple[tuple[bool, int, bool], str, str] | None = None
+    best: tuple[tuple[bool, int, bool], str, str, int] | None = None
     for kind, pattern in (("start", START_CUES), ("event", EVENT_CUES)):
         for match in pattern.finditer(low):
             if match.end() <= start:
@@ -548,8 +633,8 @@ def _nearest_cue(low: str, start: int, end: int) -> tuple[str, str] | None:
                 between, after = "", False
             score = (_CLAUSE.search(between) is not None, len(between), after)
             if best is None or score < best[0]:
-                best = (score, kind, match.group(0))
-    return None if best is None else (best[1], best[2])
+                best = (score, kind, match.group(0), match.start())
+    return None if best is None else (best[1], best[2], best[3])
 
 
 def _word_before(low: str, offset: int) -> str:
@@ -560,6 +645,10 @@ def _word_before(low: str, offset: int) -> str:
 def _word_after(low: str, offset: int) -> str:
     found = re.match(r"[\s ]*([^\W\d_]+\d?)", low[offset:])
     return found.group(1) if found else ""
+
+
+#: The word after an unmarked number that makes it a count: an English plural noun.
+_COUNTED = re.compile(r"(?!(?:this|thus|does|goes|whereas|perhaps)\Z)[a-z]{2,}[^s\W]s")
 
 
 def acceptable(located: D.Located, low: str, *, date_field: bool = False) -> str | None:
@@ -573,6 +662,9 @@ def acceptable(located: D.Located, low: str, *, date_field: bool = False) -> str
         return None
     if not 100 <= s.number <= 9999:
         return "unmarked-number"
+    if _COUNTED.fullmatch(_word_after(low, located.end)):
+        # "about 100 images", "around 300 houses": a count of things (DEV round 1, 2026-11-06)
+        return "count"
     if date_field or _word_before(low, located.start) in DATE_PREPOSITIONS:
         return None
     return "unmarked-number"
@@ -619,7 +711,9 @@ def sentence_candidates(
     low = norm.casefold()
     located = D.located(sentence)
     bps = [(y, t) for y, t in A.bp_dates(sentence)]
-    periods = _period_mentions(sentence, forms)
+    # the period vocabulary is English: read in another language it matches words that are no
+    # periods (Turkish "Han ilcesi", Catalan "s'han", Finnish "silla") - DEV round 1, 2026-11-06
+    periods = _period_mentions(sentence, forms) if lang == "en" else []
     if not located and not bps and not periods:
         return found
     if HEDGES.search(low):
@@ -627,7 +721,7 @@ def sentence_candidates(
         return found
     named = names_site(sentence, forms)
     anchor = _anchor_offset(norm, forms)
-    deictic = DEICTICS.search(low) is not None
+    deictic = deictic_match(norm) is not None
     if not (named or anchored_doc or (context_named and deictic)):
         found.notes.append(Note(tier, url, sentence, "no-anchor"))
         return found
@@ -644,6 +738,11 @@ def sentence_candidates(
         cue = _nearest_cue(low, item.start, item.end)
         if cue is None or cue[0] != "start":
             continue
+        if lang in SUBJECT_VETO_LANGS and not anchored_doc:
+            owner = cue_owner(norm, forms, cue[2])
+            if owner is not None:
+                found.notes.append(Note(tier, url, sentence, f"cue-of-other: {owner}"))
+                continue
         taken.append((item, cue[1]))
     cues = {id(item): cue for item, cue in taken}
     out: list[Candidate] = []
@@ -667,12 +766,22 @@ def sentence_candidates(
                               sentence, revision, start_cue.group(0),
                               f"bp {1950 - year} years before present", sentence_id)  # fmt: skip
                 )
+    named_periods = [k for k, offset, end in periods if not FINDS.match(low, end)]
+    if len({categorize_period(P.PERIODS[k][0]) for k in named_periods}) > 1:
+        # "a Bronze Age and Iron Age hillfort", "used in the Hellenistic, Roman and Byzantine
+        # periods": a list of periods is a history, not a start (DEV round 1, 2026-11-06)
+        found.notes.append(Note(tier, url, sentence, SEVERAL_PERIODS))
+        periods = []
     seen: set[str] = set()
     for key, offset, end in periods:
         if key in seen or FINDS.match(low, end):
             continue  # "Roman coins were found": the period of a find, not of the site
         seen.add(key)
         cue = _nearest_cue(low, offset, end)
+        if cue is not None and cue[0] == "event":
+            # "at its peak in the Late Classic", "the Roman invasion": the period of an event
+            found.notes.append(Note(tier, url, sentence, f"event-cue: {cue[1]}"))
+            continue
         lo, hi = P.PERIODS[key]
         if lo > cap:
             continue
@@ -691,6 +800,13 @@ def sentence_candidates(
     return found
 
 
+#: A name the sentence gives ("commonly known as the Inca Gallows", "called Roman Camp"): a period
+#: word inside it names the thing, not its period (DEV round 1, 2026-11-06: Pachat'aqa).
+_GIVEN_NAME = re.compile(
+    r"(?:known as|called|named|nicknamed)\s+(?:the\s+)?((?:[A-Z][\w'’-]*\s*)+)"
+)
+
+
 def _period_mentions(sentence: str, forms: Sequence[str] = ()) -> list[tuple[str, int, int]]:
     """The periods `sentence` names as the site's (`pipeline.periods.states_period`), each with its
     span in the case-folded reading text (`dates.reading_text`, where the cues are found): none
@@ -701,6 +817,7 @@ def _period_mentions(sentence: str, forms: Sequence[str] = ()) -> list[tuple[str
     low = D.reading_text(sentence).casefold()
     compounds = [m.span() for m in PERIOD_COMPOUNDS.finditer(low)]
     compounds += [m.span() for form in forms for m in re.finditer(_flexible(form), low)]
+    compounds += [m.span(1) for m in _GIVEN_NAME.finditer(D.reading_text(sentence))]
     hits: list[tuple[str, int, int]] = []
     for key in P.PERIODS:
         if key in BROAD_PERIODS or not P.states_period(sentence, key):
@@ -856,6 +973,9 @@ def from_infobox(wikitext: str, *, url: str, revision: Any) -> Found:
         if name in _PERIOD_FIELDS:
             spans = [P.PERIODS[k] for k, _, _ in _period_mentions(value)]
             spans = [s for s in spans if s[0] <= cap]
+            if len({categorize_period(s[0]) for s in spans}) > 1:
+                found.notes.append(Note(1, url, raw, SEVERAL_PERIODS))
+                continue
             if spans:
                 lo = min(s[0] for s in spans)
                 found.candidates.append(
@@ -1087,6 +1207,18 @@ class Decision:
     reason: str = ""
 
 
+#: The years where one period bucket ends and the next begins (`PERIOD_BUCKETS`).
+BUCKET_EDGES = frozenset(lo for _label, lo, _hi in PERIOD_BUCKETS[1:])
+
+
+def on_bucket_edge(c: Candidate) -> bool:
+    """A round year exactly on a bucket edge ("c. 3000 BC", "built 1000"): a round number is an
+    approximation, and on the edge it cannot say which of the two buckets the start lies in (DEV
+    round 1, 2026-11-06: three Neolithic tombs "c. 3000 BC" whose start lies before 3000 BC). A
+    century or millennium is a span inside one bucket and stays."""
+    return c.kind == YEAR and c.lo == c.hi and c.start in BUCKET_EDGES and c.start % 100 == 0
+
+
 def scope_problem(site: Mapping[str, Any], start: int) -> str | None:
     """Why a start would take the site out of the D58 window or make it a label borderline case
     (O1: listed for the owner, not written) - None when it stays in."""
@@ -1114,8 +1246,15 @@ def decide(
     """The site's start (module docstring: D70 and O1)."""
     sid = str(site["site_id"])
     enabled = set(CONFIG["tiers"])
-    candidates = [c for c in found.candidates if c.tier in enabled]
     notes = list(found.notes)
+    candidates = []
+    for c in found.candidates:
+        if c.tier not in enabled:
+            continue
+        if on_bucket_edge(c):
+            notes.append(Note(c.tier, c.url, c.quote, BUCKET_EDGE))
+            continue
+        candidates.append(c)
     if collective is not None:
         return Decision(sid, ABSTAIN, candidates=candidates, notes=notes, reason=f"{COLLECTIVE}: {collective}")
     if not candidates:
@@ -1135,14 +1274,17 @@ def decide(
     solo = CONFIG["solo"]
     if decisive.kind == PLEIADES and not solo["pleiades"]:
         return Decision(sid, ABSTAIN, candidates=candidates, notes=notes, tier=tier,
-                        reason=f"{SOLO_REFUSED}: pleiades minDate alone")  # fmt: skip
+                        decisive=decisive, reason=f"{SOLO_REFUSED}: pleiades minDate alone")  # fmt: skip
     if all(c.kind in (PERIOD, PLEIADES) for c in candidates) and not solo["period"]:
         return Decision(sid, ABSTAIN, candidates=candidates, notes=notes, tier=tier,
-                        reason=f"{SOLO_REFUSED}: a period word alone")  # fmt: skip
+                        decisive=decisive, reason=f"{SOLO_REFUSED}: a period word alone")  # fmt: skip
     starts = [c.start for c in candidates if not (c.kind == PLEIADES and c is not decisive)]
     lo, hi = min(starts), max(starts)
     buckets = {categorize_period(s) for s in starts}
     kind = SINGLE if len(buckets) == 1 else RANGE
+    if kind == RANGE and not CONFIG["write_ranges"]:
+        return Decision(sid, ABSTAIN, None, lo, hi, tier, decisive, candidates, notes,
+                        reason=f"{SOURCES_DISAGREE}: {len(buckets)} buckets")  # fmt: skip
     decision = Decision(sid, kind, decisive.start, lo, hi, tier, decisive, candidates, notes)
     problem = scope_problem(site, decisive.start)
     if problem is not None:
@@ -1203,7 +1345,8 @@ class _Loaded:
 
     def found(self, site_id: str, *, skip_urls: frozenset[str] = frozenset()) -> tuple[Found, str | None, bool]:
         """Every candidate of the site's sources, the collective reason of its item, and whether it
-        has any source at all. `skip_urls`: cited pages not to read (the gold's own citations)."""
+        has any source the enabled tiers read (`CONFIG["tiers"]`: a disabled tier's source is not
+        read at all). `skip_urls`: cited pages not to read (the gold's own citations)."""
         from fields import harvest as H
 
         site = self.sites.get(site_id)
@@ -1216,26 +1359,34 @@ class _Loaded:
             for value in (entity.get(block) or {}).values():
                 for item in value if isinstance(value, list) else [value]:
                     names.append(item.get("value"))
-        forms = name_forms(names)
+        forms = [f for f in name_forms(names) if not is_period_name(f)]
         found = Found()
         has_source = False
+        enabled = set(CONFIG["tiers"])
         for page in self.wiki.pages(site_id):
             if page.get("missing"):
                 continue
-            has_source = True
+            if is_period_name(str(page.get("resolved_title") or page["title"])):
+                # the cache holds a period's article for the site ("Iron Age" for Yarrows Broch,
+                # DEV round 1, 2026-11-06): it dates the period, not the site
+                found.notes.append(Note(2, str(page.get("title")), "", "period-article"))
+                continue
             lang, revid = str(page["lang"]), page.get("revid")
             title = str(page.get("resolved_title") or page["title"])
-            forms_here = name_forms([*forms, title])
             tier = 2 if lang == "en" else 3
-            found.extend(from_prose(str(page["text"]), lang=lang, forms=forms_here, tier=tier,
-                                    source=f"{lang}wiki prose", url=permalink(lang, title, revid),
-                                    revision=revid))  # fmt: skip
-            if lang == "en":
+            if tier in enabled:
+                has_source = True
+                found.extend(from_prose(str(page["text"]), lang=lang,
+                                        forms=name_forms([*forms, title]), tier=tier,
+                                        source=f"{lang}wiki prose",
+                                        url=permalink(lang, title, revid), revision=revid))  # fmt: skip
+            if lang == "en" and 1 in enabled:
                 text = H.load_wikitext(self.sources.harvest, lang, revid)
                 if text is not None:
+                    has_source = True
                     found.extend(from_infobox(text, url=raw_permalink(lang, title, revid),
                                               revision=revid))  # fmt: skip
-        if qid:
+        if qid and 3 in enabled:
             cached = frozenset(str(p["lang"]) for p in self.wiki.pages(site_id))
             for lang, record in H.load_wikis(self.sources.harvest, qid, entity, skip=cached):
                 if record.get("missing"):
@@ -1247,14 +1398,16 @@ class _Loaded:
                                         source=f"{lang}wiki prose",
                                         url=permalink(lang, title, record["revid"]),
                                         revision=record["revid"]))  # fmt: skip
+        if qid and 5 in enabled:
             has_source = has_source or bool(entity)
             found.extend(from_wikidata(qid, entity, classes=self.classes, item_labels=self.item_labels))
+        if qid and 6 in enabled:
             for pid in _string_values(entity, "P1584"):
                 row = self.pleiades.get(pid)
                 if row is not None:
                     has_source = True
                     found.extend(from_pleiades(row, forms=forms))
-        for page in self.pages.get(site_id, ()):
+        for page in self.pages.get(site_id, ()) if 4 in enabled else ():
             if page["url"] in skip_urls:
                 continue
             text = H.page_text(page)
@@ -1274,6 +1427,11 @@ class _Loaded:
         if collectives and site_id in collectives:
             collective = collectives[site_id]
         return decide(self.sites[site_id], found, collective=collective, has_source=has_source)
+
+
+def is_period_name(name: str) -> bool:
+    """Whether `name` is a period of the vocabulary ("Iron Age"), not a site's name."""
+    return P.fold_name(name) in P.PERIODS or P.fold_name(name) + " period" in P.PERIODS
 
 
 def _string_values(entity: Mapping[str, Any], prop: str) -> list[str]:

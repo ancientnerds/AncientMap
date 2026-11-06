@@ -32,6 +32,16 @@ from fields import rule as R  # noqa: E402
 from mechanical import lane as LANE  # noqa: E402
 
 SITE = "11111111-0000-4000-8000-000000000001"
+#: The switches as DEV round 1 shipped them (2026-11-06): tiers 1 and 2, no range written.
+SHIPPED = {"tiers": [1, 2], "write_ranges": False}
+AS_SHIPPED = json.loads(json.dumps(X.CONFIG))  # read before any test patches it
+
+
+@pytest.fixture(autouse=True)
+def every_tier(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The readers and the decision are tested with every tier on; the shipped switches have a
+    test of their own (`TestDevRoundOne.test_the_shipped_switches`)."""
+    monkeypatch.setitem(X.CONFIG, "tiers", [1, 2, 3, 4, 5, 6])
 
 
 def cands(
@@ -258,7 +268,9 @@ class TestTheInfobox:
             ("epochs", "| epochs = [[Bronze Age]], [[Iron Age]]"),
         ]
         found = X.from_infobox(WIKITEXT, url="u&action=raw", revision=5)
-        assert sorted(starts(found)) == [("period", -2500), ("year", -3000)]
+        # "Bronze Age, Iron Age": a list of periods in two buckets is a history, not a start
+        assert sorted(starts(found)) == [("year", -3000)]
+        assert reasons(found) == [X.SEVERAL_PERIODS]
         assert {c.tier for c in found.candidates} == {1}
 
     def test_a_date_field_reads_an_unmarked_year_and_templates(self) -> None:
@@ -344,7 +356,10 @@ SPAIN = {"site_id": SITE, "name": "Alpha", "lat": 42.0, "lon": -4.5, "country": 
 
 
 class TestTheDecision:
-    def test_the_earliest_start_of_the_highest_tier_is_written(self) -> None:
+    def test_the_earliest_start_of_the_highest_tier_is_written(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(X.CONFIG, "write_ranges", True)
         found = X.Found([cand(-200, 2), cand(-300, 2), cand(-900, 3), cand(-50, 5)])
         decision = X.decide(SPAIN, found)
         assert (decision.kind, decision.start, decision.tier) == (X.RANGE, -300, 2)
@@ -393,7 +408,10 @@ class TestTheDecision:
 
 
 class TestTheRow:
-    def test_a_written_start_is_a_replace_with_every_candidate_quoted(self) -> None:
+    def test_a_written_start_is_a_replace_with_every_candidate_quoted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(X.CONFIG, "write_ranges", True)
         decision = X.decide(SPAIN, X.Found([cand(-200, 2), cand(-900, 3)]))
         row = X.decision_row(SPAIN, decision, "abc123def456")
         assert (row["decision"], row["value"], row["stored"], row["via"]) == (
@@ -697,7 +715,10 @@ class TestOneSiteEndToEnd:
                        "123,A Roman town.,-30,roman,2024\n", encoding="utf-8")  # fmt: skip
         return X.Sources(harvest, cache, fields, csv)
 
-    def test_every_tier_is_read_and_the_infobox_decides(self, tmp_path: Path) -> None:
+    def test_every_tier_is_read_and_the_infobox_decides(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(X.CONFIG, "write_ranges", True)
         loaded = self._sources(tmp_path).load()
         found, collective, has_source = loaded.found(SITE)
         assert collective is None and has_source
@@ -840,3 +861,78 @@ class TestFetchDating:
         assert set(steps) == {"dating_item_labels", "dating_wikitext", "dating_wikis"}
         with pytest.raises(H.HarvestError, match="not in"):
             H.fetch_dating(tmp_path, net=net, site_ids=["nope"], wiki_cache=Cache())
+
+
+# ------------------------------------------------------------------------------ DEV round 1
+class TestDevRoundOne:
+    """The rules DEV round 1 (2026-11-06, gold round-01's DEV and dev-hard sites only) added: each
+    from a DEV error, none from the sealed gold."""
+
+    def test_a_period_word_is_read_in_english_only(self) -> None:
+        found = cands("Midas Anıtı, Han ilçesinin Yazılıkaya Mahallesi'ndeki anıt.", ["Midas Anıtı"],
+                      lang="tr")  # fmt: skip
+        assert starts(found) == []
+
+    def test_a_list_of_periods_in_two_buckets_is_no_start(self) -> None:
+        found = cands("Pen y Gaer is a Bronze Age and Iron Age hillfort in Wales.", ["Pen y Gaer"])
+        assert starts(found) == [] and reasons(found) == [X.SEVERAL_PERIODS]
+
+    def test_a_period_word_governed_by_an_event_cue_is_no_start(self) -> None:
+        found = cands("Hormiguero was a Mayan city at its peak in the Late Classic Period.",
+                      ["Hormiguero"])  # fmt: skip
+        assert starts(found) == [] and reasons(found)[0].startswith("event-cue")
+
+    def test_a_period_word_inside_a_given_name_dates_nothing(self) -> None:
+        found = cands("Pachataka, commonly known as the Inca Gallows, is an archaeological site.",
+                      ["Pachataka"])  # fmt: skip
+        assert starts(found) == []
+
+    @pytest.mark.parametrize(
+        ("sentence", "names", "lang"),
+        [
+            ("Previous to the year 408 BCE, when the city of Rhodes was built, Lindus formed a "
+             "little state by itself.", ["Lindus"], "en"),
+            ("Ialisos estaba al sudoeste de la ciudad de Rodas, que fue fundada en el 408 a. C.",
+             ["Ialisos"], "es"),
+        ],
+    )  # fmt: skip
+    def test_a_start_cue_of_another_named_place_is_not_the_site_s(
+        self, sentence: str, names: list[str], lang: str
+    ) -> None:
+        found = cands(sentence, names, lang=lang)
+        assert starts(found) == []
+        assert any(r.startswith(("cue-of-other", "other-subject")) for r in reasons(found))
+
+    def test_the_builder_is_no_other_subject(self) -> None:
+        found = cands("Palazzo a Mare was built by Augustus in 27 BC.", ["Palazzo a Mare"])
+        assert starts(found) == [("year", -27)]
+
+    def test_a_count_of_things_is_no_year(self) -> None:
+        found = cands("The Trialeti petroglyphs include about 100 images, carved on basalt.",
+                      ["Trialeti petroglyphs"])  # fmt: skip
+        assert starts(found) == []
+
+    def test_a_round_year_on_a_bucket_edge_decides_nothing(self) -> None:
+        decision = X.decide(SPAIN, X.Found([cand(-3000, 1)]))
+        assert decision.kind == X.ABSTAIN and X.BUCKET_EDGE in [n.reason for n in decision.notes]
+        assert X.decide(SPAIN, X.Found([cand(-2900, 1)])).start == -2900
+
+    def test_a_range_is_not_written_by_default(self) -> None:
+        decision = X.decide(SPAIN, X.Found([cand(-200, 2), cand(-900, 2)]))
+        assert decision.kind == X.ABSTAIN and decision.reason.startswith(X.SOURCES_DISAGREE)
+
+    def test_a_period_s_own_article_is_no_site_article(self) -> None:
+        assert X.is_period_name("Iron Age") and X.is_period_name("Hellenistic")
+        assert not X.is_period_name("Yarrows Broch")
+
+    def test_the_shipped_switches(self) -> None:
+        assert {k: AS_SHIPPED[k] for k in SHIPPED} == SHIPPED
+        assert AS_SHIPPED["solo"] == {"period": True, "pleiades": False}
+
+    def test_a_disabled_tier_is_not_read(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        loaded = TestOneSiteEndToEnd()._sources(tmp_path).load()
+        for wikis in (tmp_path / "harvest" / "wikis").glob("*/*.json"):
+            wikis.unlink()  # tier 3's extracts never fetched: read, they would stop the extractor
+        monkeypatch.setitem(X.CONFIG, "tiers", [1, 2])
+        found, _collective, _has = loaded.found(SITE)
+        assert {c.tier for c in found.candidates} <= {1, 2}
