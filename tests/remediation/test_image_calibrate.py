@@ -97,7 +97,10 @@ class TestTheSeal:
             roles["web_verifier"]["wrong_links"] == 5 and roles["web_verifier"]["good_links"] == 20
         )
         assert set(document["role_registry"]) == set(roles)
-        assert document["role_registry"]["image_prefilter"]["model"] == "claude-haiku-5-5"
+        # D103: the prefilter is on Sonnet, the re-check slot is answered by image_adversarial
+        assert document["role_registry"]["image_prefilter"]["model"] == "claude-sonnet-5-5"
+        assert document["role_registry"]["adversarial"]["role"] == "image_adversarial"
+        assert document["role_registry"]["adversarial"]["model"] == "claude-opus-5-5"
         assert document["interval"].startswith("Clopper-Pearson")
 
     def test_a_seal_is_written_once_and_logged(self, tmp_path: Path) -> None:
@@ -757,20 +760,20 @@ class TestEvaluating:
         assert (
             verdict["passed"]
             and verdict["tier_move"] is None
-            and verdict["model"] == "claude-haiku-5-5"
+            and verdict["model"] == "claude-sonnet-5-5"
         )
         assert json.loads((directory / "verdicts" / "image_prefilter.json").read_text())["passed"]
         with pytest.raises(CAL.CalibrationError, match="written once"):
             CAL.evaluate(directory, "image_prefilter", cp=cp)
 
-    def test_a_failing_haiku_moves_up_to_sonnet(self, tmp_path: Path) -> None:
+    def test_a_failing_prefilter_moves_up_one_tier(self, tmp_path: Path) -> None:
         directory = self._prepared(tmp_path)
         self._answer(directory, {c["case_id"]: "people" for c in self.cases})
         verdict = CAL.evaluate(directory, "image_prefilter", cp=cp)
         assert not verdict["passed"]
         assert (
-            verdict["tier_move"]["from"] == "claude-haiku-5-5"
-            and verdict["tier_move"]["to"] == "claude-sonnet-5-5"
+            verdict["tier_move"]["from"] == "claude-sonnet-5-5"
+            and verdict["tier_move"]["to"] == "claude-opus-5-5"
         )
         assert verdict["failures"]
 
@@ -812,9 +815,10 @@ class TestEvaluating:
         answer(handoff, spec, {q.label: wrong for q in questions})
         SG.import_answers(directory, handoff, spec)
         verdict = CAL.evaluate(directory, "adversarial", cp=cp)
-        # the adversarial role is Sonnet since D36: a failing role moves up one tier, to Opus
-        assert not verdict["passed"] and verdict["tier_move"]["to"] == "claude-opus-5-5"
-        assert "held" not in verdict
+        # the re-check slot is answered by image_adversarial on Opus since D103: no tier above it
+        assert verdict["role"] == "image_adversarial" and verdict["slot"] == "adversarial"
+        assert not verdict["passed"] and verdict["tier_move"] is None
+        assert "the owner decides" in verdict["held"]
 
 
 class TestTheProductionQuestions:
@@ -1067,3 +1071,197 @@ class TestTheAdjudicationChain:
         adjudication = SG.read_results(directory, CAL.ADJUDICATE_SPEC)
         got = CAL.measure_adversarial(recheck, results, adjudication, cp)
         assert got["agreement"]["k"] == 1 and got["agreement"]["n"] == 2
+
+
+# ======================================================================= calibrating again (D103)
+class TestTheReseal:
+    """`reseal`: the failed slots of a finished calibration, sealed again one tier up beside it, on
+    the same gold byte for byte, measured against the old directory's adjudication."""
+
+    def _finished(
+        self, tmp_path: Path, failed: tuple[str, ...]
+    ) -> tuple[Path, list[dict[str, Any]]]:
+        """An old calibration (sealed, gold fixed, adjudicated) whose `failed` slots carry the tier
+        moves of image-roles-v1 and whose other measured slots passed."""
+        old = tmp_path / "image-roles-v1"
+        CAL.seal(old, now=lambda: "2026-10-09T00:00:00Z")
+        cases = [case("k1", "image_prefilter", "kind", "site_photo", "k1.jpg")]
+        cases += [
+            case(f"p{i}", "image_depicts", "positive", "depicts", f"p{i}.jpg") for i in range(3)
+        ]
+        cases += [case("f1", "image_depicts", "foreign", "not_depicts", "f1.jpg")]
+        cases += [
+            case("adj-1", "image_depicts", "adjudicated", None, "a1.jpg", site_id="s2"),
+            case("adj-2", "image_depicts", "adjudicated", None, "a2.jpg", site_id="s2"),
+        ]
+        cases += [
+            {**case("adj-1", "image_depicts", "adjudicated", None, "a1.jpg", site_id="s2"),
+             "case_id": "rck-adj-1", "role": "adversarial"},
+            case("rck-p0", "adversarial", "positive", "depicts", "p0.jpg"),
+        ]  # fmt: skip
+        CAL.fix_gold(old, cases, now=lambda: FIXED)
+        spec = CAL.ADJUDICATE_SPEC
+        questions, pictures = CAL.questions_for("pilot_judge", cases, read)
+        handoff = tmp_path / "h-adj"
+        SG.export(old, handoff, spec, questions, pictures)
+        url = "https://commons.wikimedia.org/wiki/File:X.jpg"
+        texts = {
+            q.label: json.dumps({"candidates": {
+                i["label"]: (
+                    {"verdict": "depicts", "quality": 3, "note": f"the tomb, {url}"}
+                    if i["file"] == "a1.jpg"
+                    else {"verdict": "region_or_type", "quality": None, "note": f"a hill, {url}"}
+                )
+                for i in q.meta["items"]
+            }})
+            for q in questions
+        }  # fmt: skip
+        answer(handoff, spec, texts)
+        SG.import_answers(old, handoff, spec)
+        moves = {
+            "image_prefilter": ("image_prefilter", "claude-haiku-5-5", "claude-sonnet-5-5"),
+            "image_depicts": ("image_depicts", "claude-sonnet-5-5", "claude-opus-5-5"),
+            "adversarial": ("adversarial", "claude-sonnet-5-5", "claude-opus-5-5"),
+        }
+        (old / CAL.VERDICTS_DIR).mkdir()
+        for slot in CAL.MEASURED:
+            verdict: dict[str, Any] = {"passed": slot not in failed, "tier_move": None}
+            if slot in failed:
+                role, start, end = moves[slot]
+                verdict["tier_move"] = {
+                    "role": role, "from": start, "to": end, "calibration_id": old.name,
+                    "reason": "failed",
+                }  # fmt: skip
+            (old / CAL.VERDICTS_DIR / f"{slot}.json").write_text(json.dumps(verdict), "utf-8")
+        return old, cases
+
+    def test_the_failed_slots_are_sealed_again_on_the_same_gold(self, tmp_path: Path) -> None:
+        old, _ = self._finished(tmp_path, ("image_prefilter", "image_depicts", "adversarial"))
+        new = tmp_path / "image-roles-v2"
+        got = CAL.reseal(old, new, now=lambda: "2026-11-06T00:00:00Z")
+        assert got["measured"] == ["image_prefilter", "image_depicts", "adversarial"]
+        assert (new / CAL.GOLD_FILE).read_bytes() == (old / CAL.GOLD_FILE).read_bytes()
+        assert (new / CAL.JOBS_FILE).read_bytes() == (old / CAL.JOBS_FILE).read_bytes()
+        document, _, _ = CAL.sealed(new)
+        assert document["roles"] == json.loads((old / CAL.THRESHOLDS_FILE).read_text())["roles"]
+        assert document["version"] == "image-roles-v2"
+        assert document["rests_on"]["calibration_id"] == "image-roles-v1"
+        registry = document["role_registry"]
+        assert set(registry) == {"image_prefilter", "image_depicts", "adversarial", "pilot_judge"}
+        assert registry["image_prefilter"]["model"] == "claude-sonnet-5-5"
+        assert registry["image_depicts"]["model"] == "claude-opus-5-5"
+        assert (registry["adversarial"]["role"], registry["adversarial"]["model"]) == (
+            "image_adversarial",
+            "claude-opus-5-5",
+        )
+        _, fixed_at = CAL.fixed_gold(new)
+        assert fixed_at == "2026-11-06T00:00:00Z"
+        with pytest.raises(CAL.CalibrationError, match="sealed already"):
+            CAL.reseal(old, new)
+
+    def test_only_the_failed_slots_are_asked_and_the_pilot_judge_is_not_asked_again(
+        self, tmp_path: Path
+    ) -> None:
+        old, _ = self._finished(tmp_path, ("image_depicts",))
+        new = tmp_path / "image-roles-v2"
+        CAL.reseal(old, new)
+        with pytest.raises(CAL.CalibrationError, match="not asked in image-roles-v2"):
+            CAL.cmd_export(new, "image_prefilter", tmp_path / "h")
+        with pytest.raises(CAL.CalibrationError, match="not asked again"):
+            CAL.cmd_export(new, "pilot_judge", tmp_path / "h")
+        with pytest.raises(CAL.CalibrationError, match="not measured in image-roles-v2"):
+            CAL.evaluate(new, "web_verifier", cp=cp)
+
+    def test_the_depicts_slot_is_measured_against_the_old_adjudication(
+        self, tmp_path: Path
+    ) -> None:
+        old, _ = self._finished(tmp_path, ("image_depicts", "adversarial"))
+        new = tmp_path / "image-roles-v2"
+        CAL.reseal(old, new, now=lambda: FIXED)
+        spec = CAL.ROLE_SPECS["image_depicts"]
+        cases, _ = CAL.fixed_gold(new)
+        questions, pictures = CAL.questions_for("image_depicts", cases, read)
+        handoff = tmp_path / "h-dep"
+        SG.export(new, handoff, spec, questions, pictures)
+        called = {"p0.jpg", "p1.jpg", "p2.jpg", "a1.jpg"}
+        texts = {
+            q.label: json.dumps({"candidates": {
+                i["label"]: (
+                    {"verdict": "depicts", "quality": 4, "note": "the tomb"}
+                    if i["file"] in called
+                    else {"verdict": "other_site", "quality": None, "note": "elsewhere"}
+                )
+                for i in q.meta["items"]
+            }})
+            for q in questions
+        }  # fmt: skip
+        answer(handoff, spec, texts)  # in Opus's stamp: the depicts role is registered there now
+        SG.import_answers(new, handoff, spec)
+        verdict = CAL.evaluate(new, "image_depicts", cp=cp)
+        assert verdict["passed"] and verdict["model"] == "claude-opus-5-5"
+        assert verdict["metrics"]["false_depicts"] == {
+            "k": 0, "n": 2, "rate": 0.0, "ci95": [0.0, 0.05],
+        }  # fmt: skip
+
+    def test_a_changed_old_adjudication_or_gold_is_no_truth(self, tmp_path: Path) -> None:
+        old, _ = self._finished(tmp_path, ("image_depicts",))
+        new = tmp_path / "image-roles-v2"
+        CAL.reseal(old, new)
+        document, _, _ = CAL.sealed(new)
+        assert len(CAL.adjudication_of(new, document)) == 1
+        path = old / CAL.ADJUDICATE_SPEC.result_file
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        path.write_text(
+            "".join(json.dumps({**r, "answered_by": f"image_depicts:{r['batch_id']}"}) + "\n"
+                    for r in rows),
+            encoding="utf-8",
+        )  # fmt: skip
+        with pytest.raises(CAL.CalibrationError, match="not the pilot judge"):
+            CAL.adjudication_of(new, document)
+        gold = old / CAL.GOLD_FILE
+        gold.write_text(gold.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        with pytest.raises(CAL.CalibrationError, match="changed after it was fixed|not the one"):
+            CAL.adjudication_of(new, document)
+
+    def test_a_slot_whose_role_did_not_move_up_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        old, _ = self._finished(tmp_path, ("image_prefilter",))
+        monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", RO.APPLIED_ESCALATIONS[:-2])
+        with pytest.raises(CAL.CalibrationError, match="is not applied to role image_prefilter"):
+            CAL.reseal(old, tmp_path / "image-roles-v2")
+        assert not (tmp_path / "image-roles-v2" / CAL.SEAL_LOG).exists()
+
+    def test_a_re_check_slot_not_taken_over_by_its_new_role_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        old, _ = self._finished(tmp_path, ("adversarial",))
+        monkeypatch.setattr(RO, "SETTLED_TIER_MOVES", RO.SETTLED_TIER_MOVES[:-1])
+        with pytest.raises(CAL.CalibrationError, match="did not take over the tier move"):
+            CAL.reseal(old, tmp_path / "image-roles-v2")
+
+    def test_a_held_slot_or_a_calibration_without_failures_is_refused(self, tmp_path: Path) -> None:
+        old, _ = self._finished(tmp_path, ())
+        with pytest.raises(CAL.CalibrationError, match="no slot failed"):
+            CAL.reseal(old, tmp_path / "image-roles-v2")
+        (old / CAL.VERDICTS_DIR / "image_depicts.json").write_text(
+            json.dumps({"passed": False, "tier_move": None, "held": "no higher tier"}), "utf-8"
+        )
+        with pytest.raises(CAL.CalibrationError, match="the owner decides"):
+            CAL.reseal(old, tmp_path / "image-roles-v2")
+
+    def test_a_re_seal_sits_beside_the_calibration_it_rests_on(self, tmp_path: Path) -> None:
+        old, _ = self._finished(tmp_path, ("image_depicts",))
+        with pytest.raises(CAL.CalibrationError, match="beside the calibration"):
+            CAL.reseal(old, tmp_path / "elsewhere" / "image-roles-v2")
+
+    def test_a_moved_pilot_judge_voids_the_old_adjudication(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        old, _ = self._finished(tmp_path, ("image_depicts",))
+        real = RO.role_sha256
+        monkeypatch.setattr(
+            RO, "role_sha256", lambda name, **kw: "0" * 64 if name == "pilot_judge" else real(name)
+        )
+        with pytest.raises(CAL.CalibrationError, match="pilot judge's registry entry"):
+            CAL.reseal(old, tmp_path / "image-roles-v2")

@@ -14375,3 +14375,30 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   verify/rehearse-rollback/accept 0 deviations; journal recounted 2/90/6. Only 4 of the 49 period starts were empty
   before; 45 replaced a stored value with the researcher's sourced one. Shown curated sites without a period start:
   618 -> 615. Static export rebuilt, IndexNow 135 URLs. The 128 rejected cells stay unwritten.
+
+## 2026-11-06 - Lane d103-images: the image roles one tier up (D103)
+
+- **Recorded late:** the image-role calibration `image-roles-v1` (sealed 2026-10-24 13:12, gold fixed 18:03,
+  972 cases, gold sha256 edd21357...) was evaluated on 2026-10-25 04:49 UTC and **failed three slots**:
+  `image_prefilter` (Haiku low: photo agreement 0.9167 of 0.92, depicts-capable recall 0.9265 of 0.98),
+  `image_depicts` (Sonnet medium: sensitivity 0.7267 of 0.9, precision 0.843 of 0.95, false depicts 0.1116 of
+  at most 0.03, 25 foreign rows called depicts) and `adversarial` (Sonnet high: agreement 0.86 of 0.95, 172/200);
+  `web_verifier` passed (23/23, all wrong links flagged). The verdicts named tier moves Haiku->Sonnet,
+  Sonnet->Opus, Sonnet->Opus. Not logged here then; the moves were not applied (O8: not started, cost to the owner).
+- **Owner decision D103 (2026-11-06):** re-test one tier up. Applied in `roles.py`: `image_prefilter` Sonnet low
+  and `image_depicts` Opus medium as `APPLIED_ESCALATIONS` (copied from the verdicts); the shared `adversarial`
+  stays on Sonnet (D45: WD5/D99 and identity use it) and the image lane's hero re-check gets the new role
+  `image_adversarial` (Opus high), recorded as a `SETTLED_TIER_MOVES` entry of image-roles-v1
+  (precedent `card_adversarial`, `wc_web_verifier`). `served_image/vision.RECHECK_ROLE` and
+  `hero_recheck.SPEC` bind to it, `web_rules` classifies it. `image_roles/calibrate.py` gained `reseal`
+  (the failed slots of a finished calibration sealed again beside it on the same gold byte for byte, the old
+  pilot-judge adjudication as truth) and slot -> role binding in the seal; 12 new mutation-sweep cases
+  (`img d103`), 2 re-anchored, all 345 needles present once and every mutant compiles (the sweep itself was
+  not run: it rewrites files in place and another workflow shares this checkout). Runbook:
+  `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` 3.8.5.
+- **image-roles-v2 sealed** (`reseal --from image-roles-v1`): thresholds sha256 7f6fa3ca..., gold sha256
+  edd21357... (identical to v1), measured slots image_prefilter / image_depicts / adversarial (role
+  image_adversarial). Exported: prefilter 5 questions (300 pictures), depicts 344 questions in 58 batches (449
+  candidates), re-check 200 questions in 17 batches; every questions_sha256 equals v1's (same prompts, same
+  pictures). Answers: by agents through `opus_handoff.py answer` (Sonnet for the prefilter, Opus for the other
+  two), then import, evaluate, a spot check of every disagreement.

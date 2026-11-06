@@ -1617,6 +1617,45 @@ $PY $CAL evaluate --dir $D --role image_depicts
 $PY $CAL evaluate --dir $D --role adversarial                     # after image-recheck is imported
 ```
 
+#### 3.8.5 D103 - the re-test one tier up (`image-roles-v2`, 2026-11-06)
+
+`image-roles-v1` failed three slots on 2026-10-25 (04:49 UTC): `image_prefilter` on Haiku low (photo
+agreement 0.9167 of 0.92, depicts-capable recall 0.9265 of 0.98), `image_depicts` on Sonnet medium
+(sensitivity 0.7267, precision 0.843, false depicts 0.1116 of at most 0.03, 25 foreign rows called
+depicts) and `adversarial` on Sonnet high (agreement 0.86 of 0.95); `web_verifier` passed (23/23).
+Owner decision D103 (2026-11-06): re-test one tier up. Applied in `roles.py`:
+
+* `image_prefilter` -> Sonnet low and `image_depicts` -> Opus medium: tier moves copied from the
+  verdicts into `APPLIED_ESCALATIONS` (both roles answer the image lanes only).
+* The re-check: `adversarial` is shared (WD5, identity), so under D45 it stays on Sonnet and the image
+  lane gets `image_adversarial` (Opus high), a new role that settles the move
+  (`SETTLED_TIER_MOVES`, as `card_adversarial` and `wc_web_verifier` did). `served_image/vision.RECHECK_ROLE`
+  and `hero_recheck.SPEC` bind to it; `web_rules` classifies it as a verifier. The calibration keeps
+  its slot name `adversarial`; `calibrate.slot_role` names the role that answers it, and a seal binds
+  the slot to that role (`role` in `role_registry`).
+
+`calibrate.py reseal --from <old> --dir <new>` seals only the failed slots again, beside the old
+directory, with the same threshold numbers and the old GOLD.jsonl/JOBS.jsonl byte for byte (refused
+unless each failed slot's role stands where its verdict's tier move pointed, and unless the pilot
+judge's registry entry is the one that adjudicated). The pilot judge is not asked again: `evaluate`
+takes the old directory's `ADJUDICATE.jsonl` as the truth, read under the old seal and gold. A slot
+that fails at Opus is held (`held`, no tier move): the owner decides; it is not escalated.
+
+```bash
+D2=output/remediation/calibration/image-roles-v2
+$PY $CAL reseal --from $D --dir $D2      # thresholds 7f6fa3ca..., gold edd21357... (= v1's)
+for role in image_prefilter image_depicts adversarial; do
+    $PY $CAL export --dir $D2 --role $role --handoff output/remediation/handoff/image-cal2-$role
+done
+#   5 prefilter questions (300 pictures, Sonnet), 344 depicts questions in 58 batches (449 candidates,
+#   Opus), 200 re-check questions in 17 batches (Opus, web) - the questions' sha256 are v1's.
+#   Briefs: output/remediation/handoff/image-cal2-<role>-briefs/<batch>.txt (run.py brief).
+$PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output/remediation/handoff/image-cal2-image_prefilter --stage image-prefilter
+$PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output/remediation/handoff/image-cal2-image_depicts --stage image-depicts-calibration
+$PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output/remediation/handoff/image-cal2-adversarial --stage image-recheck --round 1
+for role in image_prefilter image_depicts adversarial; do $PY $CAL evaluate --dir $D2 --role $role; done
+```
+
 ---
 
 ## 4. Tests and the mutation sweep

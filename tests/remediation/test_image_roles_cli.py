@@ -86,7 +86,7 @@ class TestTheStageCommands:
         run, handoff = _exported(tmp_path)
         OH.write_answer(
             handoff, batch_id="pre-0001", stage="image-prefilter", label="pre-0001", text=GOOD,
-            answered_by="image_prefilter:pre-0001", model=OH.HAIKU_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
+            answered_by="image_prefilter:pre-0001", model=OH.SONNET_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
         )  # fmt: skip
         assert CLI.main(["import", *_args(run, handoff)]) == 0
         assert json.loads(capsys.readouterr().out)["answers"] == 1
@@ -104,7 +104,7 @@ class TestTheStageCommands:
             "identity-research": "web_verifier",
             "image-prefilter": "image_prefilter",
             "image-depicts": "image_depicts",
-            "image-recheck": "adversarial",
+            "image-recheck": "image_adversarial",
             "image-depicts-calibration": "image_depicts",
             "image-adjudicate": "pilot_judge",
         }

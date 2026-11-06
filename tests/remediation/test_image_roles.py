@@ -134,8 +134,9 @@ class TestTheTransport:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
         text = SG.brief(run, handoff, spec, "b-001")
-        assert "running as claude-haiku-5-5 in the role image_prefilter at effort low" in text
-        assert "--model claude-haiku-5-5 --role image_prefilter" in text
+        # Sonnet since D103 (the tier move of image-roles-v1)
+        assert "running as claude-sonnet-5-5 in the role image_prefilter at effort low" in text
+        assert "--model claude-sonnet-5-5 --role image_prefilter" in text
         assert "check-answer --run-dir" in text and "--stage tiny-stage" in text
         assert "Do not use the web" in text
         with pytest.raises(SG.StageError, match="no batch"):
@@ -181,7 +182,7 @@ class TestTheTransport:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
         answer_all(handoff, spec, {"q1": '{"ok": true}'}, model=OH.OPUS_MODEL)
-        with pytest.raises(SG.StageError, match="registered to claude-haiku-5-5"):
+        with pytest.raises(SG.StageError, match="registered to claude-sonnet-5-5"):
             SG.import_answers(run, handoff, spec)
 
     def test_an_answer_that_names_no_role_is_refused(self, tmp_path: Path) -> None:
@@ -383,7 +384,7 @@ class TestThePrefilter:
         assert [(r["file"], r["survives"]) for r in got] == [("a", True), ("b", False)]
         assert got[0]["answered_by"] == "image_prefilter:pre-0001"
 
-    def test_the_stage_runs_end_to_end_in_the_haiku_role(self, tmp_path: Path) -> None:
+    def test_the_stage_runs_end_to_end_in_the_prefilter_role(self, tmp_path: Path) -> None:
         run, handoff = tmp_path / "run", tmp_path / "handoff"
         questions, pictures = PF.build_questions(_candidates(2), lambda c: jpeg())
         SG.export(run, handoff, PF.SPEC, questions, pictures)
@@ -399,7 +400,7 @@ class TestThePrefilter:
         SG.import_answers(run, handoff, PF.SPEC)
         got = PF.judged(SG.read_results(run, PF.SPEC))
         assert [r["survives"] for r in got] == [True, False]
-        assert RO.role(PF.SPEC.role).model == "claude-haiku-5-5"
+        assert RO.role(PF.SPEC.role).model == "claude-sonnet-5-5"  # D103: one tier up from Haiku
 
 
 # ========================================================================== depicts
@@ -543,9 +544,10 @@ class TestTheDepictsRole:
         with pytest.raises(SG.StageError, match="no size recorded"):
             DP.verdict_rows([result], {})
 
-    def test_the_role_is_sonnet_at_medium_effort(self) -> None:
+    def test_the_role_is_opus_at_medium_effort(self) -> None:
+        # D103: the tier move of image-roles-v1 (Sonnet failed every depicts threshold)
         assert (RO.role(DP.SPEC.role).model, RO.role(DP.SPEC.role).effort) == (
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
             "medium",
         )
 
@@ -608,9 +610,11 @@ class TestTheHeroRecheck:
             == "depicts"
         )
 
-    def test_the_role_is_the_adversarial_one_and_each_round_has_its_own_files(self) -> None:
+    def test_the_role_is_the_image_lane_s_own_and_each_round_has_its_own_files(self) -> None:
+        # D45/D103: the image lane's re-check is image_adversarial on Opus, not the shared role
+        assert HR.SPEC.role == "image_adversarial"
         assert (RO.role(HR.SPEC.role).model, RO.role(HR.SPEC.role).effort) == (
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
             "high",
         )
         one, two = HR.spec_for_round(1), HR.spec_for_round(2)

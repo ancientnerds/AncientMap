@@ -103,7 +103,7 @@ POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
 #: `image-roles-v1` and moved up only if that fails (D45/D51). The export records it; `brief`,
 #: the import and the plan hold the run to it, so an answer by another model cannot drive the swap
 #: of an owner-linked hero.
-RECHECK_ROLE = "adversarial"
+RECHECK_ROLE = "image_adversarial"
 
 QUESTIONS_CHECK = "QUESTIONS_CHECK.jsonl"
 QUESTIONS_REPLACE = "QUESTIONS_REPLACE.jsonl"

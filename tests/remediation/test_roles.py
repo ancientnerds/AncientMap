@@ -33,7 +33,10 @@ import roles as RO  # noqa: E402
 #: 2026-10-24) settles the shared role's failed card calibration (`SETTLED_TIER_MOVES`). Lane WC's
 #: calibrations of 2026-10-24 (D51): `fact_checker`, which answers lane WC only, moved on to Opus by the
 #: tier move of wc-fc-1; lane WC's verification got a role of its own, `wc_web_verifier` (Opus), which
-#: settles the failed wc-wv-1/2 of the shared `web_verifier` (D45).
+#: settles the failed wc-wv-1/2 of the shared `web_verifier` (D45). D103 (2026-11-06) applied the
+#: tier moves of the failed image calibration image-roles-v1: `image_prefilter` Haiku to Sonnet,
+#: `image_depicts` Sonnet to Opus, and the image lane's re-check got a role of its own,
+#: `image_adversarial` (Opus), which settles the shared `adversarial`'s failed move (D45).
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "medium"),
@@ -46,8 +49,9 @@ D6 = {
     "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-sonnet-5-5", "high"),
     "card_adversarial": ("claude-opus-5-5", "high"),
-    "image_prefilter": ("claude-haiku-5-5", "low"),
-    "image_depicts": ("claude-sonnet-5-5", "medium"),
+    "image_prefilter": ("claude-sonnet-5-5", "low"),
+    "image_depicts": ("claude-opus-5-5", "medium"),
+    "image_adversarial": ("claude-opus-5-5", "high"),
     "code_builder": ("claude-sonnet-5-5", "high"),
     "code_review": ("claude-sonnet-5-5", "high"),
     "pilot_judge": ("claude-opus-5-5", "xhigh"),
@@ -158,16 +162,16 @@ def test_the_escalation_path_is_haiku_sonnet_opus_and_ends_there() -> None:
 
 
 def test_an_escalation_is_a_record_never_a_silent_change() -> None:
-    record = RO.escalation("image_prefilter", calibration_id="cal-img-1", reason="agreement 0.71")
+    record = RO.escalation("operator", calibration_id="cal-op-1", reason="agreement 0.71")
     assert record == {
-        "role": "image_prefilter",
+        "role": "operator",
         "from": "claude-haiku-5-5",
         "to": "claude-sonnet-5-5",
-        "calibration_id": "cal-img-1",
+        "calibration_id": "cal-op-1",
         "reason": "agreement 0.71",
     }
     # the registry itself did not move
-    assert RO.ROLES["image_prefilter"].model == "claude-haiku-5-5"
+    assert RO.ROLES["operator"].model == "claude-haiku-5-5"
 
 
 def test_an_escalation_needs_its_reason_and_its_calibration() -> None:
@@ -181,8 +185,9 @@ def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() 
     """Three tier moves, oldest first, each copied from the failed verdict that named it
     (`verdicts/fr-general-001.json`, `VERDICT-fact_checker.json` and `VERDICT-web_verifier.json` of
     teaser-2026-10-09b), then the seven owner moves of D36 (`test_the_owner_moves_of_d36...`), then the
-    hook rater's tier move of teaser-2026-10-10 (`VERDICT-hook_rater.json`), the owner move of D46 and
-    the fact checker's tier move of lane WC's calibration wc-fc-1 (`verdicts/wc-fc-1.json`)."""
+    hook rater's tier move of teaser-2026-10-10 (`VERDICT-hook_rater.json`), the owner move of D46,
+    the fact checker's tier move of lane WC's calibration wc-fc-1 (`verdicts/wc-fc-1.json`) and the
+    two image tier moves of image-roles-v1 that D103 applied (`image-roles-v1/verdicts/`)."""
     moves = [dict(move) for move in RO.APPLIED_ESCALATIONS[:3]]
     assert moves == [
         {
@@ -208,16 +213,20 @@ def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() 
         },
     ]
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
-    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-3])
-    assert dict(RO.APPLIED_ESCALATIONS[-3]) == {
+    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-5])
+    assert dict(RO.APPLIED_ESCALATIONS[-5]) == {
         "role": "hook_rater",
         "from": "claude-sonnet-5-5",
         "to": "claude-opus-5-5",
         "calibration_id": "teaser-2026-10-10",
         "reason": "failed: hook_pairs",
     }
-    assert RO.APPLIED_ESCALATIONS[-2] == RO.owner_move("card_writer", "D46")
-    assert dict(RO.APPLIED_ESCALATIONS[-1]) == WC_FC_1_TIER_MOVE
+    assert RO.APPLIED_ESCALATIONS[-4] == RO.owner_move("card_writer", "D46")
+    assert dict(RO.APPLIED_ESCALATIONS[-3]) == WC_FC_1_TIER_MOVE
+    assert [dict(m) for m in RO.APPLIED_ESCALATIONS[-2:]] == [
+        IMAGE_ROLES_V1_TIER_MOVES["image_prefilter"],
+        IMAGE_ROLES_V1_TIER_MOVES["image_depicts"],
+    ]
 
 
 #: The `tier_move` of `verdicts/wc-fc-1.json` (2026-10-24, fact_checker on Sonnet), as written there.
@@ -242,6 +251,70 @@ WC_WV_TIER_MOVES = {
 }
 #: The calibration root the verdicts live in (not versioned: present in the main checkout only).
 VERDICTS = REPO / "output" / "remediation" / "calibration" / "verdicts"
+#: The `tier_move`s of `image-roles-v1/verdicts/<slot>.json` (2026-10-25), as written there.
+IMAGE_ROLES_V1 = REPO / "output" / "remediation" / "calibration" / "image-roles-v1" / "verdicts"
+IMAGE_ROLES_V1_TIER_MOVES = {
+    "image_prefilter": {
+        "role": "image_prefilter",
+        "from": "claude-haiku-5-5",
+        "to": "claude-sonnet-5-5",
+        "calibration_id": "image-roles-v1",
+        "reason": "photo_agreement 0.9167 is below 0.92; depicts_capable_recall 0.9265 is below 0.98",
+    },
+    "image_depicts": {
+        "role": "image_depicts",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": "image-roles-v1",
+        "reason": "sensitivity 0.7267 is below 0.9; precision 0.843 is below 0.95; false_depicts "
+        "0.1116 is above 0.03; 25 foreign row(s) called depicts",
+    },
+    "adversarial": {
+        "role": "adversarial",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": "image-roles-v1",
+        "reason": "agreement 0.86 is below 0.95",
+    },
+}
+
+
+@pytest.mark.parametrize("slot", sorted(IMAGE_ROLES_V1_TIER_MOVES))
+def test_the_image_records_are_the_verdicts_tier_moves_as_written(slot: str) -> None:
+    """Where the calibration root is at hand, each image record is the failed verdict's `tier_move`
+    exactly as `image_roles/calibrate.py evaluate` wrote it."""
+    path = IMAGE_ROLES_V1 / f"{slot}.json"
+    if not path.is_file():
+        pytest.skip(f"{path} is not in this checkout (the calibration root is not versioned)")
+    verdict = json.loads(path.read_text(encoding="utf-8"))
+    assert verdict["passed"] is False
+    assert verdict["tier_move"] == IMAGE_ROLES_V1_TIER_MOVES[slot]
+
+
+def test_d103_moves_the_image_roles_one_tier_up_and_settles_the_shared_re_check() -> None:
+    """D103 (2026-11-06): the prefilter and the depicts judge move (applied tier moves, effort
+    unchanged); the shared `adversarial` stays on Sonnet and the image lane's re-check is the new
+    role `image_adversarial` on Opus, which settles the shared role's failed move (D45)."""
+    for name in ("image_prefilter", "image_depicts"):
+        assert dict(RO.last_move(name)) == IMAGE_ROLES_V1_TIER_MOVES[name]
+    assert (RO.ROLES["image_prefilter"].model, RO.ROLES["image_prefilter"].effort) == (
+        "claude-sonnet-5-5",
+        "low",
+    )
+    assert (RO.ROLES["image_depicts"].model, RO.ROLES["image_depicts"].effort) == (
+        "claude-opus-5-5",
+        "medium",
+    )
+    settled = RO.settled_tier_move("adversarial", "image-roles-v1")
+    assert settled is not None
+    assert {k: settled[k] for k in IMAGE_ROLES_V1_TIER_MOVES["adversarial"]} == (
+        IMAGE_ROLES_V1_TIER_MOVES["adversarial"]
+    )
+    assert settled["settled_by"] == "image_adversarial" and settled["decision"] == "D45"
+    assert RO.ROLES["adversarial"].model == "claude-sonnet-5-5"
+    entry = RO.ROLES["image_adversarial"]
+    assert (entry.model, entry.effort) == ("claude-opus-5-5", "high")
+    assert RO.last_move("image_adversarial") is None  # a new role, not a move
 
 
 def test_the_fact_checkers_tier_move_of_lane_wc_is_applied_and_it_stands_at_opus_high() -> None:
@@ -801,7 +874,7 @@ def settled_move(**over: object) -> dict[str, object]:
         ({"role": "writer"}, "unregistered role"),
         ({"from": "claude-haiku-5-5"}, "not one tier up"),
         ({"settled_by": "adversarial"}, "not another role registered to claude-opus-5-5"),
-        ({"settled_by": "image_depicts"}, "not another role registered to claude-opus-5-5"),
+        ({"settled_by": "image_prefilter"}, "not another role registered to claude-opus-5-5"),
     ],
 )
 def test_a_thin_or_unjoined_settlement_is_refused(over: dict[str, object], message: str) -> None:

@@ -112,7 +112,7 @@ def parse(meta: Mapping[str, Any], text: str) -> dict[str, Any]:
 
 SPEC = SG.Spec(
     name="image-recheck",
-    role="adversarial",
+    role="image_adversarial",
     prompt_id=PROMPT_ID,
     questions_file="QUESTIONS_RECHECK.jsonl",
     export_file="EXPORT_RECHECK.json",

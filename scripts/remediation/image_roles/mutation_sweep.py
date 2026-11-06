@@ -1175,7 +1175,7 @@ CAL_CASES: list[Case] = [
     g(
         "cal: a moved role invalidates the seal",
         CALIBRATE,
-        '        if RO.role_sha256(name) != entry["role_sha256"]:',
+        '        if name != slot_role(slot) or RO.role_sha256(name) != entry["role_sha256"]:',
         "test_a_role_that_moved_after_the_seal_invalidates_it",
         T_CAL,
     ),
@@ -1383,7 +1383,8 @@ CAL_CASES: list[Case] = [
     g(
         "cal: an adjudication before the sample is refused",
         CALIBRATE,
-        '            if row["answered_at"] < fixed_at:',
+        '        if row["answered_at"] < fixed_at:\n            raise CalibrationError(\n'
+        "                f\"{row['batch_id']}/{row['label']}: adjudicated before",
         "test_an_adjudication_older_than_the_sample_is_refused",
         T_CAL,
     ),
@@ -2006,12 +2007,53 @@ CLOSEOUT_CASES: list[Case] = [
       "                old_thumbnail=str(thumb) if thumb else None,",
       "test_an_empty_thumbnail_is_planned_as_the_empty_string_it_is", T_INSERT),
     # ---------------------------------------------------------------- gap 3: the re-check's role
-    c("gap3: the served-image recheck is the adversarial role's", V_PY,
-      'RECHECK_ROLE = "adversarial"', 'RECHECK_ROLE = "pilot_judge"',
-      "test_every_image_hero_recheck_is_the_shared_adversarial_role", T_BIND),
-    g("gap3: a moved role voids the image seal", CALIBRATE,
-      '        if RO.role_sha256(name) != entry["role_sha256"]:',
-      "test_a_move_of_the_shared_role_voids_the_image_seal", T_BIND),
+    c("gap3: the served-image recheck is the image lane's re-check role", V_PY,
+      'RECHECK_ROLE = "image_adversarial"', 'RECHECK_ROLE = "pilot_judge"',
+      "test_every_image_hero_recheck_is_the_image_lane_s_own_role", T_BIND),
+    c("gap3: a moved role voids the image seal", CALIBRATE,
+      '        if name != slot_role(slot) or RO.role_sha256(name) != entry["role_sha256"]:',
+      '        if name != slot_role(slot):',
+      "test_a_move_of_the_image_role_voids_the_image_seal", T_BIND),
+]  # fmt: skip
+
+# D103 (2026-11-06): the failed slots of image-roles-v1 sealed again one tier up on the same gold.
+D103_CASES: list[Case] = [
+    g("d103: a re-seal is never written over a seal", CALIBRATE,
+      "    if (directory / SEAL_LOG).exists() or (directory / GOLD_FILE).exists():",
+      "test_the_failed_slots_are_sealed_again_on_the_same_gold", T_CAL),
+    g("d103: a re-seal sits beside its calibration", CALIBRATE,
+      "    if directory.resolve().parent != previous.resolve().parent:",
+      "test_a_re_seal_sits_beside_the_calibration_it_rests_on", T_CAL),
+    g("d103: nothing failed, nothing to seal", CALIBRATE,
+      "    if not failed:\n        raise CalibrationError(f\"{previous.name}: no slot failed",
+      "test_a_held_slot_or_a_calibration_without_failures_is_refused", T_CAL),
+    g("d103: a held slot is the owner's", CALIBRATE,
+      "    if not move:\n        raise CalibrationError(\n            f\"{slot}: the failed verdict",
+      "test_a_held_slot_or_a_calibration_without_failures_is_refused", T_CAL),
+    g("d103: an unapplied tier move is refused", CALIBRATE,
+      '        if not applied or RO.role(name).model != move["to"]:',
+      "test_a_slot_whose_role_did_not_move_up_is_refused", T_CAL),
+    g("d103: a re-check slot needs the role that settled its move", CALIBRATE,
+      '    if settled is None or settled["settled_by"] != name or RO.role(name).model != move["to"]:',
+      "test_a_re_check_slot_not_taken_over_by_its_new_role_is_refused", T_CAL),
+    g("d103: the pilot judge that adjudicated", CALIBRATE,
+      '    if judge is None or judge["role_sha256"] != RO.role_sha256(slot_role("pilot_judge")):',
+      "test_a_moved_pilot_judge_voids_the_old_adjudication", T_CAL),
+    g("d103: the old gold as the re-seal copied it", CALIBRATE,
+      '        if _sha((source / GOLD_FILE).read_text(encoding="utf-8")) != rests["gold_sha256"]:',
+      "test_a_changed_old_adjudication_or_gold_is_no_truth", T_CAL),
+    g("d103: the old adjudication is the pilot judge's", CALIBRATE,
+      '        if RO.role_of(row["answered_by"]) != slot_role("pilot_judge"):',
+      "test_a_changed_old_adjudication_or_gold_is_no_truth", T_CAL),
+    g("d103: only the re-sealed slots are asked", CALIBRATE,
+      '    if role not in measured_slots(document) and role != "pilot_judge":',
+      "test_only_the_failed_slots_are_asked_and_the_pilot_judge_is_not_asked_again", T_CAL),
+    g("d103: the pilot judge is not asked again", CALIBRATE,
+      '    if role == "pilot_judge" and "rests_on" in document:',
+      "test_only_the_failed_slots_are_asked_and_the_pilot_judge_is_not_asked_again", T_CAL),
+    g("d103: only the re-sealed slots are measured", CALIBRATE,
+      "    if role not in measured_slots(thresholds):",
+      "test_only_the_failed_slots_are_asked_and_the_pilot_judge_is_not_asked_again", T_CAL),
 ]  # fmt: skip
 
 CASES: list[Case] = [
@@ -2022,6 +2064,7 @@ CASES: list[Case] = [
     *CAL_CASES,
     *FIX_CASES,
     *CLOSEOUT_CASES,
+    *D103_CASES,
 ]
 
 

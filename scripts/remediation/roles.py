@@ -149,8 +149,20 @@ ROLES: Mapping[str, Role] = _registry(
     # a role of its own on Opus (D51/D6: a failing role moves up) instead of moving the shared one; a
     # new role, not a move: it is calibrated on the 50 card cases before its first answer.
     Role("card_adversarial", "claude-opus-5-5", "high", "wb_check_verify_opus"),
-    Role("image_prefilter", "claude-haiku-5-5", "low", "image_kind_135"),
-    Role("image_depicts", "claude-sonnet-5-5", "medium", "gallery_audit_calibration_opus"),
+    # Owner decision D103 (2026-11-06) applies the tier moves of the failed image calibration
+    # image-roles-v1 (2026-10-25): the prefilter moves from Haiku to Sonnet (photo agreement 0.9167
+    # of 0.92, depicts-capable recall 0.9265 of 0.98), the depicts judge from Sonnet to Opus
+    # (sensitivity 0.7267, precision 0.843, false depicts 0.1116, 25 foreign rows called depicts).
+    # Both are calibrated again one tier up on the same sealed gold (image-roles-v2) before use.
+    Role("image_prefilter", "claude-sonnet-5-5", "low", "image_kind_135"),
+    Role("image_depicts", "claude-opus-5-5", "medium", "gallery_audit_calibration_opus"),
+    # The image lane's own hero re-check (D15's served-image recheck, D17 C3, the D10 re-check of the
+    # MiniMax picks). As the shared `adversarial` it failed image-roles-v1 on Sonnet (agreement 0.86
+    # of 0.95, tier move to Opus); following D45 the image context gets a role of its own on Opus
+    # (D51/D103: a failing role moves up) instead of moving the shared one, which stays on Sonnet for
+    # the fields and identity lanes. A new role, not a move: it is calibrated on the 200 re-check
+    # cases of image-roles-v1 (image-roles-v2) before its first answer.
+    Role("image_adversarial", "claude-opus-5-5", "high", "image_roles_recheck_200"),
     Role("code_builder", "claude-sonnet-5-5", "high", None),
     Role("code_review", "claude-sonnet-5-5", "high", None),
     Role("pilot_judge", "claude-opus-5-5", "xhigh", "canaries_10"),
@@ -294,6 +306,30 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
             "fresh answer says 'KEEP', expected not ['KEEP', 'KEEP_TRIMMED']",
         }
     ),
+    MappingProxyType(
+        {
+            # `image-roles-v1/verdicts/image_prefilter.json` (2026-10-25, Haiku low); applied under
+            # owner decision D103 of 2026-11-06.
+            "role": "image_prefilter",
+            "from": "claude-haiku-5-5",
+            "to": "claude-sonnet-5-5",
+            "calibration_id": "image-roles-v1",
+            "reason": "photo_agreement 0.9167 is below 0.92; depicts_capable_recall 0.9265 is "
+            "below 0.98",
+        }
+    ),
+    MappingProxyType(
+        {
+            # `image-roles-v1/verdicts/image_depicts.json` (2026-10-25, Sonnet medium); applied
+            # under owner decision D103 of 2026-11-06.
+            "role": "image_depicts",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "image-roles-v1",
+            "reason": "sensitivity 0.7267 is below 0.9; precision 0.843 is below 0.95; "
+            "false_depicts 0.1116 is above 0.03; 25 foreign row(s) called depicts",
+        }
+    ),
 )
 _ESCALATION_KEYS = frozenset({"role", "from", "to", "calibration_id", "reason"})
 _OWNER_KEYS = frozenset({"kind", "role", "from", "to", "effort", "decision", "reason", "evidence"})
@@ -355,6 +391,25 @@ SETTLED_TIER_MOVES: tuple[Mapping[str, Any], ...] = (
             "settled_by": "wc_web_verifier",
             "decision": "D45",
             "how": _WC_VERIFY_SETTLED,
+        }
+    ),
+    MappingProxyType(
+        {
+            # `image-roles-v1/verdicts/adversarial.json` (2026-10-25, Sonnet high: the 200 hero
+            # re-check cases, 172 agreed).
+            "role": "adversarial",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "image-roles-v1",
+            "reason": "agreement 0.86 is below 0.95",
+            "settled_by": "image_adversarial",
+            "decision": "D45",
+            "how": "the failure is the image lane's: its hero re-checks (served_image recheck, "
+            "hero_recheck, the calibration's re-check slot) moved to the new role "
+            "image_adversarial on Opus (D45: a shared role is not moved for one lane; D51 and D103 "
+            "of 2026-11-06: a failing role moves up one tier), calibrated on the same 200 cases in "
+            "image-roles-v2; the shared adversarial stays on Sonnet for the fields and identity "
+            "lanes, where it passed adv-truth-002",
         }
     ),
 )
