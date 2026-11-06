@@ -352,3 +352,56 @@ class TestTheJudgeGatesEveryCard:
     def test_the_gate_holds_only_for_accepted_version_3_cards(self) -> None:
         kept = outcome(status=W.KEPT, reason="thin-declined", card=None, provenance=None)
         assert W.classify(kept, live(), {}, "wb-test", None).reason == W.KEPT
+
+
+class TestADescriptionDefectHoldsTheCard:
+    """Owner decisions D81/O7: a card checked against a description its run found a contradicted
+    sentence in is held; lane WC repairs the description, then a new run writes the card."""
+
+    def test_an_accepted_card_on_its_defective_description_is_held(self) -> None:
+        row = shorts_outcome()
+        defects = {row["site_id"]: frozenset({row["desc_sha256"]})}
+        held = W.classify(
+            row, live(country="Scotland"), {}, "wb-shorts-test", clean_judge(row), defects
+        )
+        assert held.reason == W.DESCRIPTION_DEFECT_HELD and not held.ok
+        assert W.REFUSAL_MEANING[W.DESCRIPTION_DEFECT_HELD]
+
+    def test_the_hold_comes_before_the_judge(self) -> None:
+        row = shorts_outcome()
+        defects = {row["site_id"]: frozenset({row["desc_sha256"]})}
+        held = W.classify(row, live(country="Scotland"), {}, "wb-shorts-test", {}, defects)
+        assert held.reason == W.DESCRIPTION_DEFECT_HELD
+
+    def test_a_defect_on_another_description_holds_nothing(self) -> None:
+        row = shorts_outcome()
+        defects = {row["site_id"]: frozenset({"f" * 64})}
+        prov, card = W.classify(
+            row, live(country="Scotland"), {}, "wb-shorts-test", clean_judge(row), defects
+        )
+        assert card.new_value == NAMELESS and prov is not None
+
+    def test_a_kept_site_stays_kept(self) -> None:
+        kept = outcome(status=W.KEPT, reason="thin-declined", card=None, provenance=None)
+        defects = {kept["site_id"]: frozenset({kept["desc_sha256"]})}
+        assert W.classify(kept, live(), {}, "wb-test", None, defects).reason == W.KEPT
+
+    def test_the_planner_reads_the_run_s_defect_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run = tmp_path / "wb-shorts-test"
+        run.mkdir()
+        lines = [
+            {"site_id": "a", "desc_sha256": "1" * 64},
+            {"site_id": "a", "desc_sha256": "2" * 64},
+            {"site_id": "b", "desc_sha256": "1" * 64},
+        ]
+        (run / "DESCRIPTION_DEFECTS.jsonl").write_text(
+            "".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8"
+        )
+        monkeypatch.setattr(W, "RUNS", tmp_path)
+        assert W._read_defects("wb-shorts-test") == {
+            "a": frozenset({"1" * 64, "2" * 64}),
+            "b": frozenset({"1" * 64}),
+        }
+        assert W._read_defects("no-such-run") == {}
