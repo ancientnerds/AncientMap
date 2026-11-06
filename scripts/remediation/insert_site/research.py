@@ -16,6 +16,10 @@ high, calibrated on the WD1/WD3 rounds and the BP set) and recorded with `opus_h
                                                  decide: ATTEMPTS.jsonl, DECISIONS.jsonl, REASK.json
     $I export-reask --run $R --handoff $H-r1     the fields without a counted answer, to new agents
                                                  (at most `MAX_ROUND` re-asks; answer, validate, import)
+    $I export-reask --run $R --handoff $H-r2 --review A
+                                                 the same, plus the counted fields the plan's D8
+                                                 review A vetoed (D104): their old answers no
+                                                 longer count (`read_review`, `decide`)
 
 (`I="./.venv/Scripts/python.exe scripts/remediation/insert_site/run.py research"`.)
 
@@ -52,6 +56,7 @@ inserted; a start nobody can source is written `Undated`).
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import re
 import sys
@@ -239,6 +244,11 @@ RETRY_NOTE = (
     "An earlier answer to this field did not count: {why}. Answer it again from a source the "
     "checker can read - or answer unresolved when none can be quoted."
 )
+VETO_NOTE = (
+    "An earlier answer to this field counted, but the plan's review (the pilot judge) vetoed its "
+    "value: {why} Research the field again on your own. The review is a lead to check, not a "
+    "source: decide from the source you quote - or answer unresolved when none can be quoted."
+)
 
 RESEARCH_TEXT = (
     "## How to research\n"
@@ -298,12 +308,15 @@ def render_prompt(
     vocabulary: Mapping[str, int],
     notes: Mapping[str, str] | None = None,
     period_rule: str | None = None,
+    vetoes: Mapping[str, str] | None = None,
 ) -> str:
     """The exact question for one candidate - a pure function of the candidate line, the fields
     and sources asked, the run's country vocabulary, the round's `period_rule` (D101, or None for a
     round exported before it: `fields.handoff.period_rule_text`) and, in a re-ask, why each field's
-    last answer did not count. Import renders it again and refuses an answer to any other text."""
+    last answer did not count or why the plan's review vetoed it (D104). Import renders it again and
+    refuses an answer to any other text."""
     notes = notes or {}
+    vetoes = vetoes or {}
     fields = [f for f in FIELDS if f in asked]
     sources = SOURCES in asked
     if not fields and not sources:
@@ -344,6 +357,8 @@ def render_prompt(
         )
         if field in notes:
             out.append(RETRY_NOTE.format(why=notes[field]))
+        if field in vetoes:
+            out.append(VETO_NOTE.format(why=vetoes[field]))
         out.append("")
         out.append(HO.period_rule_text(FIELD_RULES[field], period_rule))
         vocabulary_text = _vocabulary_line(vocabulary) if field == "country" else definitions(field)
@@ -517,6 +532,7 @@ def _export_round(
     asked_of: Mapping[str, Sequence[str]],
     notes: Mapping[str, Mapping[str, str]],
     batch_size: int,
+    vetoes: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict[str, Any]:
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
@@ -535,7 +551,12 @@ def _export_round(
                 label=qid,
                 field="+".join(asked_of[qid]),
                 prompt=render_prompt(
-                    candidates[qid], asked_of[qid], vocabulary, notes.get(qid), HO.D101
+                    candidates[qid],
+                    asked_of[qid],
+                    vocabulary,
+                    notes.get(qid),
+                    HO.D101,
+                    (vetoes or {}).get(qid),
                 ),
             )
     record = {
@@ -547,6 +568,7 @@ def _export_round(
         "batches": dict(groups),
         "asked": {qid: list(asked_of[qid]) for qid in sorted(asked_of)},
         "notes": {qid: dict(notes[qid]) for qid in sorted(notes)},
+        "vetoes": {qid: dict(v) for qid, v in sorted((vetoes or {}).items())},
         HO.PERIOD_RULE_KEY: HO.D101,
         "exported_at": FH.now(),
     }
@@ -569,8 +591,11 @@ def export(run: Path, handoff: Path, batch_size: int = BATCH_SIZE) -> dict[str, 
     return _export_round(run, handoff, 0, dict.fromkeys(candidates, list(ASKABLE)), {}, batch_size)
 
 
-def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
-    """The next round: every field the last import left without a counted answer."""
+def export_reask(
+    run: Path, handoff: Path, *, vetoes: Mapping[str, Mapping[str, str]] | None = None
+) -> dict[str, Any]:
+    """The next round: every field the last import left without a counted answer, and every
+    counted field the plan's review vetoed (`read_review`), asked with the review's reason."""
     rounds = read_rounds(run)
     if not rounds:
         raise ResearchError("nothing was exported")
@@ -583,11 +608,66 @@ def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
     if last >= MAX_ROUND:
         raise ResearchError(f"round {last} was the last re-ask (MAX_ROUND {MAX_ROUND})")
     waiting = reask["fields"]
-    if not waiting:
+    vetoes = dict(vetoes or {})
+    if not waiting and not vetoes:
         raise ResearchError("every field has a counted answer or is exhausted: nothing to ask")
-    asked = {qid: [f for f in ASKABLE if f in waiting[qid]] for qid in waiting}
+    decisions = read_decisions(run) if vetoes else {}
+    for qid, fields in vetoes.items():
+        for field in fields:
+            row = decisions.get(qid, {}).get(field)
+            if row is None or row["status"] != COUNTED:
+                raise ResearchError(f"{qid} {field}: vetoed, but no counted decision to veto")
+            if field in waiting.get(qid, {}):
+                raise ResearchError(f"{qid} {field}: vetoed and waiting at once")
+    asked = {
+        qid: [f for f in ASKABLE if f in waiting.get(qid, {}) or f in vetoes.get(qid, {})]
+        for qid in sorted({*waiting, *vetoes})
+    }
     notes = {qid: dict(waiting[qid]) for qid in waiting}
-    return _export_round(run, handoff, last + 1, asked, notes, rounds[0]["batch_size"])
+    return _export_round(run, handoff, last + 1, asked, notes, rounds[0]["batch_size"], vetoes)
+
+
+REVIEW_ROLE = "pilot_judge"
+REVIEW_KEYS = frozenset({"plan_sha256", "verdict", "sites", "proposals", "notes"})
+
+
+def read_review(answer_path: Path, plan_md: Path) -> dict[str, dict[str, str]]:
+    """`{qid: {field: reason}}` of the fields a D8 plan review vetoed (D104). The review is the
+    `opus_handoff` answer at `answer_path`, to the prompt beside it, by the `pilot_judge` role in
+    its registered model, about exactly the plan `plan_md` (its `plan_sha256`)."""
+    if not answer_path.name.endswith(OH.ANSWER_SUFFIX):
+        raise ResearchError(f"{answer_path} is no opus_handoff answer ({OH.ANSWER_SUFFIX})")
+    prompt_path = answer_path.with_name(
+        answer_path.name.removesuffix(OH.ANSWER_SUFFIX) + OH.PROMPT_SUFFIX
+    )
+    data = json.loads(answer_path.read_text(encoding="utf-8"))
+    problem = OH._answer_problem(data, OH.prompt_sha256(prompt_path.read_text(encoding="utf-8")))
+    if problem is not None:
+        raise ResearchError(f"{answer_path}: {problem}")
+    if RO.role_of(data["answered_by"]) != REVIEW_ROLE:
+        raise ResearchError(
+            f"{answer_path}: answered by {data['answered_by']!r}, not {REVIEW_ROLE}"
+        )
+    role_problem = RO.answer_problem(data["answered_by"], data["model"])
+    if role_problem is not None:
+        raise ResearchError(f"{answer_path}: {role_problem}")
+    review = load_object(data["text"], REVIEW_KEYS)
+    plan_sha = hashlib.sha256(plan_md.read_bytes()).hexdigest()
+    if review["plan_sha256"] != plan_sha:
+        raise ResearchError(
+            f"{answer_path} reviewed another plan ({review['plan_sha256'][:16]}), "
+            f"not {plan_md} ({plan_sha[:16]})"
+        )
+    vetoes: dict[str, dict[str, str]] = {}
+    for site in review["sites"]:
+        if site["verdict"] != "veto":
+            continue
+        unknown = sorted(set(site["fields"]) - set(FIELDS))
+        if not site["fields"] or unknown:
+            raise ResearchError(f"{site['qid']}: the veto names no field of {FIELDS}: {unknown}")
+        for field in site["fields"]:
+            vetoes.setdefault(str(site["qid"]), {})[field] = str(site["reason"])
+    return vetoes
 
 
 def _round_of(run: Path, handoff: Path) -> dict[str, Any]:
@@ -695,6 +775,7 @@ def _read_attempts(run: Path) -> list[dict[str, Any]]:
                     record["notes"].get(qid),
                     # a round exported before D101 carries no key: it was asked the old text
                     record.get(HO.PERIOD_RULE_KEY),
+                    record.get("vetoes", {}).get(qid),
                 )
                 answer = OH.read_answer(
                     handoff, batch_id=batch_id, stage=STAGE, label=qid, prompt=prompt
@@ -816,17 +897,22 @@ def check_pages(
 
 
 def decide(
-    attempts: Sequence[Mapping[str, Any]], last_round: int
+    attempts: Sequence[Mapping[str, Any]],
+    last_round: int,
+    vetoed: Mapping[tuple[str, str], int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
     """One decision per asked (candidate, field): its latest counted answer, else - after the last
     re-ask - exhausted (or held, when the last answer failed only on unreadable pages). The fields
-    still open are the next re-ask's, each with why its last answer did not count."""
+    still open are the next re-ask's, each with why its last answer did not count. `vetoed` maps a
+    (candidate, field) to the round that asked it again after the plan's review vetoed it (D104):
+    no answer of an earlier round counts for it."""
+    vetoed = vetoed or {}
     latest: dict[tuple[str, str], Mapping[str, Any]] = {}
     counted: dict[tuple[str, str], Mapping[str, Any]] = {}
     for attempt in sorted(attempts, key=lambda a: a["round"]):
         key = (str(attempt["qid"]), str(attempt["field"]))
         latest[key] = attempt
-        if attempt["counted"]:
+        if attempt["counted"] and attempt["round"] >= vetoed.get(key, 0):
             counted[key] = attempt
     decisions: list[dict[str, Any]] = []
     waiting: dict[str, dict[str, str]] = {}
@@ -878,7 +964,13 @@ def import_rounds(
         raise ResearchError("nothing was exported")
     attempts = _read_attempts(run)
     pages = check_pages(attempts, run, client=client, net=net, pace=pace)
-    decisions, waiting = decide(attempts, rounds[-1]["round"])
+    vetoed = {
+        (qid, field): record["round"]
+        for record in rounds
+        for qid, fields in record.get("vetoes", {}).items()
+        for field in fields
+    }
+    decisions, waiting = decide(attempts, rounds[-1]["round"], vetoed)
     C.write_jsonl(run / ATTEMPTS_FILE, attempts)
     C.write_jsonl(run / DECISIONS_FILE, decisions)
     C.write_json(run / REASK_FILE, {"after_round": rounds[-1]["round"], "fields": waiting})

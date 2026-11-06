@@ -11,6 +11,7 @@ every guard, journals every write, and its undo retires - never deletes.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import sys
@@ -500,6 +501,107 @@ class TestTheRounds:
         assert decision["status"] == RS.EXHAUSTED and RS.waiting(run) == {}
         with pytest.raises(RS.ResearchError, match="last re-ask"):
             RS.export_reask(run, tmp_path / "h-r9")
+
+    @staticmethod
+    def _review(tmp_path: Path, plan_md: Path, vetoes: list[dict[str, Any]]) -> Path:
+        """A pilot_judge plan review recorded through opus_handoff, as the D8 review is."""
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+        if not plan_md.exists():
+            plan_md.write_text("# the plan\n", encoding="utf-8")
+        handoff = tmp_path / "review"
+        OH.export(handoff, batch_id="rv", stage="plan-review", label="s001", field="plan",
+                  prompt="review the plan")  # fmt: skip
+        text = {
+            "plan_sha256": hashlib.sha256(plan_md.read_bytes()).hexdigest(),
+            "verdict": "veto" if vetoes else "accept",
+            "sites": vetoes,
+            "proposals": [],
+            "notes": "",
+        }
+        OH.write_answer(
+            handoff, batch_id="rv", stage="plan-review", label="s001", text=json.dumps(text),
+            answered_by=RO.answered_by("pilot_judge", "rv"), model=OH.OPUS_MODEL,
+        )  # fmt: skip
+        return handoff / OH.answer_relpath("rv", "plan-review", "s001")
+
+    VETO = {
+        "qid": COLOSSEUM,
+        "name": "Colosseum",
+        "verdict": "veto",
+        "fields": ["period_start"],
+        "reason": "72 is the start of the building work of Vespasian; the review says 70.",
+        "fix": {"period_start": "70"},
+        "fix_sources": [],
+        "note": None,
+    }
+
+    def test_a_vetoed_field_is_asked_again_and_its_old_answer_no_longer_counts(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        """D104: the plan review vetoed counted values. A round asks those fields again, with the
+        review's reason; the vetoed answer never counts again, whatever the new one does."""
+        handoff, batch = self._export(run, tmp_path)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        plan_md = tmp_path / "step" / "PLAN.md"
+        review = self._review(tmp_path, plan_md, [self.VETO])
+        vetoes = RS.read_review(review, plan_md)
+        assert vetoes == {COLOSSEUM: {"period_start": self.VETO["reason"]}}
+        RS.export_reask(run, tmp_path / "h-r1", vetoes=vetoes)
+        r1 = RS.read_rounds(run)[1]
+        assert r1["asked"] == {COLOSSEUM: ["period_start"]} and r1["notes"] == {}
+        assert r1["vetoes"] == vetoes
+        [line_] = OH.manifest(tmp_path / "h-r1")
+        prompt = (tmp_path / "h-r1" / line_["prompt_path"]).read_text(encoding="utf-8")
+        assert (
+            "vetoed" in prompt and "the review says 70" in prompt and "did not count" not in prompt
+        )
+        batch1 = next(iter(r1["batches"]))
+        # a new answer whose quote the page does not hold: the vetoed 72 does not come back
+        bad = block("replace", "70", [(WIKI, "begun in 70 X")])
+        record(tmp_path / "h-r1", batch1, COLOSSEUM, json.dumps({"fields": {"period_start": bad}}))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        assert set(RS.waiting(run)[COLOSSEUM]) == {"period_start"}
+        assert "period_start" not in {
+            f for f, d in RS.read_decisions(run)[COLOSSEUM].items() if d["status"] == RS.COUNTED
+        }
+
+    def test_the_new_round_s_counted_answer_is_the_decision(self, run: Path, tmp_path) -> None:
+        handoff, batch = self._export(run, tmp_path)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        plan_md = tmp_path / "step" / "PLAN.md"
+        vetoes = RS.read_review(self._review(tmp_path, plan_md, [self.VETO]), plan_md)
+        RS.export_reask(run, tmp_path / "h-r1", vetoes=vetoes)
+        batch1 = next(iter(RS.read_rounds(run)[1]["batches"]))
+        again = block(
+            "replace", "72", [(WIKI, "Construction began under the emperor Vespasian in 72 AD")]
+        )
+        record(
+            tmp_path / "h-r1", batch1, COLOSSEUM, json.dumps({"fields": {"period_start": again}})
+        )
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        decision = RS.read_decisions(run)[COLOSSEUM]["period_start"]
+        assert decision["status"] == RS.COUNTED and decision["round"] == 1
+        assert RS.waiting(run) == {}
+
+    def test_a_review_of_another_plan_or_not_by_the_pilot_judge_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        plan_md = tmp_path / "step" / "PLAN.md"
+        review = self._review(tmp_path, plan_md, [self.VETO])
+        plan_md.write_text("# a newer plan\n", encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match="another plan"):
+            RS.read_review(review, plan_md)
+        unknown = {**self.VETO, "fields": ["description"]}
+        plan_md.write_text("# the plan\n", encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match="no field"):
+            RS.read_review(self._review(tmp_path / "b", plan_md, [unknown]), plan_md)
+        data = json.loads(review.read_text(encoding="utf-8"))
+        data["answered_by"] = "field_researcher:rv"
+        review.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match="pilot_judge"):
+            RS.read_review(review, plan_md)
 
     def test_an_answer_without_the_role_is_refused(self, run: Path, tmp_path: Path) -> None:
         handoff, batch = self._export(run, tmp_path)
@@ -1413,9 +1515,12 @@ class TestThePeriodWordIsRegional:
             }
         }
         decided_syria = RS.question_line(candidate(), country="Syria")
-        assert RS.check_shape(json.dumps(answer), ["period_start"], decided_syria)[
-            "period_start"
-        ].value == "-10000"
+        assert (
+            RS.check_shape(json.dumps(answer), ["period_start"], decided_syria)[
+                "period_start"
+            ].value
+            == "-10000"
+        )
         # no country counted and none given: the regional word has no year
         problem = RS.check_shape(json.dumps(answer), ["period_start"], line())["period_start"]
         assert "needs the site's country" in problem

@@ -10,6 +10,7 @@
     $PY scripts/remediation/opus_handoff.py validate --dir $H-r0
     $I research import       --run $R
     $I research export-reask --run $R --handoff $H-r1        (while REASK.json names fields)
+    $I research export-reask --run $R --handoff $H-r2 --review A  (+ the fields the D8 review vetoed)
     $I plan              --run $R --step 1      (read-only: PLAN.jsonl, PLAN.md, ROLLBACK.sql)
     $I emit              --run $R --step 1      (APPLY.sql)
     $I rehearse          --run $R --step 1
@@ -142,6 +143,13 @@ def main(argv: list[str] | None = None) -> int:
             cmd.add_argument("--text-file", required=True, type=Path)
         if name == "export":
             cmd.add_argument("--batch-size", type=int, default=RS.BATCH_SIZE)
+        if name == "export-reask":
+            cmd.add_argument(
+                "--review",
+                type=Path,
+                help="the pilot_judge's plan review (an opus_handoff answer file) of step 1: its "
+                "vetoed fields are asked again (D104)",
+            )
     for name in ("plan", *WRITER_COMMANDS, "accept"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--run", required=True)
@@ -186,7 +194,10 @@ def _research(args: argparse.Namespace, run: Path) -> Any:
     if args.stage == "export":
         return RS.export(run, _resolve(args.handoff), args.batch_size)
     if args.stage == "export-reask":
-        return RS.export_reask(run, _resolve(args.handoff))
+        vetoes = None
+        if args.review is not None:
+            vetoes = RS.read_review(_resolve(args.review), P.step_dir(run, 1) / P.PLAN_MD)
+        return RS.export_reask(run, _resolve(args.handoff), vetoes=vetoes)
     if args.stage == "brief":
         return RS.brief(run, _resolve(args.handoff), args.batch_id)
     if args.stage == "check-answer":
