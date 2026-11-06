@@ -205,7 +205,7 @@ For each question:
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is judged):
-   ./.venv/Scripts/python.exe scripts/remediation/image_roles/run.py check-answer --run-dir {run} --handoff {handoff} --stage {stage} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
+   ./.venv/Scripts/python.exe scripts/remediation/image_roles/run.py check-answer --run-dir {run} --handoff {handoff} --stage {stage}{round} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} --model {model} --role {role} --text-file {scratch}/<label>.json
@@ -222,8 +222,14 @@ def _shown(path: Path) -> str:
     return path.resolve().as_posix()
 
 
-def brief(run: Path, handoff: Path, spec: Spec, batch_id: str) -> str:
-    """The instruction of one batch's agent, running as the stage's role (`roles.ROLES`)."""
+def brief(
+    run: Path, handoff: Path, spec: Spec, batch_id: str, round_number: int | None = None
+) -> str:
+    """The instruction of one batch's agent, running as the stage's role (`roles.ROLES`).
+
+    `round_number` is the round of a stage with one file set per round (the re-check): its
+    check-answer command must name it, or the check reads the unrounded export record and refuses
+    every answer (image-roles-v2, 2026-11-06: 17 re-check briefs without `--round 1`)."""
     _record(run, spec)
     labels = [label for batch, label in load_questions(run, spec) if batch == batch_id]
     if not labels:
@@ -241,6 +247,7 @@ def brief(run: Path, handoff: Path, spec: Spec, batch_id: str) -> str:
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
+        round="" if round_number is None else f" --round {round_number}",
         web=f"{WEB_ALLOWED} {WR.rule_for_role(spec.role)}" if spec.web else NO_WEB,
         named=CACHE_FILES if spec.web else "",
     )

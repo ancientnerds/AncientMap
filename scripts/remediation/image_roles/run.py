@@ -286,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         elif command == "recheck-export":
             _print(cmd_recheck_export(run, args))
         elif command == "brief":
-            print(SG.brief(run, args.handoff, _spec(args), args.batch_id))
+            print(SG.brief(run, args.handoff, _spec(args), args.batch_id, args.round))
         elif command == "check-answer":
             text = args.text_file.read_bytes().decode("utf-8")
             problem = SG.check_answer(

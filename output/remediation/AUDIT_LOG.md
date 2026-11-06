@@ -14402,3 +14402,32 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   candidates), re-check 200 questions in 17 batches; every questions_sha256 equals v1's (same prompts, same
   pictures). Answers: by agents through `opus_handoff.py answer` (Sonnet for the prefilter, Opus for the other
   two), then import, evaluate, a spot check of every disagreement.
+- **image-roles-v2 measured (2026-11-06): all three slots fail again.** 949 answers imported (prefilter 5,
+  depicts 344, re-check 200; 2 re-check answers of rck-01-017 refused at import - an `other_site` basis without a
+  commons.wikimedia.org URL - kept in `image-roles-v2/refused-2026-11-06/` and re-asked once). Root cause: the
+  re-check brief's `check-answer` command lacked `--round 1`, so every re-check agent's shape check failed and the
+  defect surfaced only at import; fixed in `image_roles/stage.py` + `run.py` with 2 CLI tests. Verdicts
+  (`image-roles-v2/verdicts/`, written once):
+  - `image_prefilter` (Sonnet low): photo agreement 0.9033 (>= 0.92), depicts-capable recall 0.848 (>= 0.98) -
+    worse than Haiku in v1. Spot check: mostly real errors (plain site photos and landscapes set unusable /
+    `other`: Scafell Pike, The Wrekin, Mughal Minar, an Olmec head). Tier move recorded: Sonnet -> Opus (not
+    applied: D103 covered one tier, the owner decides).
+  - `image_depicts` (Opus medium): sensitivity 0.7667 (>= 0.9), precision 0.9042 (>= 0.95), false depicts
+    0.0661 (<= 0.03), 13 foreign rows called depicts. Held at the top tier. Spot check of every disagreement: ~26
+    of the 35 missed owner-linked heroes show no site (quinoa plants, a beach, village churches, a manor, a park
+    garden) - the gold is wrong there; 10 of the 13 foreign rows are museum objects of the site itself (Ishtar
+    Gate bricks in Berlin/Istanbul, the Kalabsha Gate in Berlin) - a rule conflict: the depicts prompt counts an
+    object found at the site, the 2026-09-19 labels call it a foreign place; Woodhenge (frn-95516: the concrete
+    post markers are Woodhenge) and the Senegambian circles (frn-63784) are gold errors; real Opus errors: the
+    Stonehenge lidar called Woodhenge, Tiwanaku blocks called Puma Punku, Khapra Kodiya, a few earthworks too
+    strict.
+  - re-check slot `adversarial` (role `image_adversarial`, Opus high): agreement 0.885 (177/200, >= 0.95). Held
+    at the top tier. The 23 disagreements: 7 owner-linked "positives" showing no ancient remains (Carmona and
+    Egtved churches, the Mezquita mihrab for ancient Cordoba, Antibes beach, Klopot village aerial, a cattle
+    photo for Adam's Grave, the Inti Punku trail view of Machu Picchu) - Opus right; 10 museum objects (the same
+    rule conflict); 3 gold errors where Opus is right (Woodhenge markers, Senegambian circles, the 1878 drawing
+    of the Roman baths of Khenchela = Hammam Essalihine); 3 against the pilot judge: Lefke Gate (the photo is the
+    aqueduct wall beside it - a real Opus error), Kinver Edge path and Merano street photo (borderline).
+  - With the gold corrected and the museum-object rule decided as "counts", the re-check would reach 197-199/200
+    and the depicts role would fail only the zero-tolerance foreign rule (2 real errors). Not applied: the gold is
+    sealed byte for byte; a correction is a new calibration. Owner questions O-D103a..d (lane report).

@@ -172,3 +172,34 @@ class TestTheCalibrationCommands:
 
 def test_the_flow_module_names_every_file_of_the_run() -> None:
     assert FL.PICTURES == "PICTURES.jsonl" and FL.POPULATION_2 == "POPULATION_2.jsonl"
+
+
+class TestTheBriefOfARoundedStage:
+    """A stage with one file set per round (the re-check) is checked with `--round N`: the brief's
+    check-answer command must carry it, or every agent's check is refused for a missing export
+    record (image-roles-v2, 2026-11-06)."""
+
+    def _rounded(self, tmp_path: Path) -> tuple[Path, Path]:
+        from image_roles import hero_recheck as HR
+
+        run, handoff = tmp_path / "run", tmp_path / "handoff"
+        flat = [{"site_id": "s", "file": "a.jpg", "path": "/x"}]
+        questions, pictures = PF.build_questions(flat, lambda c: jpeg())
+        SG.export(run, handoff, HR.spec_for_round(1), questions, pictures)
+        return run, handoff
+
+    def test_the_brief_of_a_round_names_the_round_in_its_check_command(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        run, handoff = self._rounded(tmp_path)
+        argv = ["brief", "--run-dir", str(run), "--handoff", str(handoff)]
+        argv += ["--stage", "image-recheck", "--round", "1", "--batch-id", "pre-0001"]
+        assert CLI.main(argv) == 0
+        text = capsys.readouterr().out
+        assert "--stage image-recheck --round 1 --batch-id pre-0001" in text
+
+    def test_a_brief_without_a_round_names_none(self, tmp_path: Path, capsys) -> None:
+        run, handoff = _exported(tmp_path)
+        assert CLI.main(["brief", *_args(run, handoff, "--batch-id", "pre-0001")]) == 0
+        text = capsys.readouterr().out
+        assert "--stage image-prefilter --batch-id pre-0001" in text and "--round" not in text
