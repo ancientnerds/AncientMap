@@ -498,7 +498,9 @@ class TestTheRegionalStarts:
         assert P.start_year("neolithic", country="Greece") == -6500
         assert P.start_year("neolithic", country="Germany") == -5500
         assert P.start_year("neolithic", country="Denmark") == -4000
-        assert P.start_year("bronze age", country="Greece") == -3200
+        # a bare "Bronze Age" in Greece is too coarse since D111 (see TestTheCoarseWords); its
+        # early phase starts where the Bronze Age does
+        assert P.start_year("early bronze age", country="Greece") == -3200
         assert P.start_year("bronze age", country="Denmark") == -2000
         assert P.start_year("iron age", country="Italy") == -900
         assert P.start_year("iron age", country="Sweden") == -500
@@ -566,3 +568,123 @@ class TestTheRegionalStarts:
         # the ingester maps a Scottish SITETYPE period on PERIODS, which D101 leaves alone
         assert P.PERIODS["neolithic"] == (-4000, -2500)
         assert P.period_of("roman") == (43, 410)
+
+
+class TestTheCoarseWords:
+    """Owner decision D111 (2026-11-06, the D99 pilot): a coarse period word gives no year. "Stone
+    Age" and "Palaeolithic" were the table edge -3,000,000 (Čertova pec was confirmed at it, Rock
+    Carvings at Åsli in ice-covered Arctic Norway were proposed at it), "prehistoric", "ancient" and
+    "antiquity" name no start a site has, and a bare "Bronze Age" in a country whose table divides
+    it into phases took the start of two millennia for a site of one phase (Bant's Carn, "built =
+    Middle Bronze Age")."""
+
+    COARSE = (
+        "stone age", "Stone Age", "palaeolithic", "Paleolithic", "the Palaeolithic period",
+        "prehistoric", "Prehistory", "ancient history", "Classical Antiquity",
+    )  # fmt: skip
+
+    @pytest.mark.parametrize("name", COARSE)
+    def test_a_coarse_word_gives_no_year(self, name: str) -> None:
+        for country in (None, "England", "Czechia", "Norway", "Peru"):
+            with pytest.raises(P.PeriodError, match="too coarse"):
+                P.start_year(name, country=country)
+        # the span stays in the vocabulary: Canmore and the span readers read it
+        assert P.period_of(name)
+
+    def test_a_named_phase_of_the_palaeolithic_keeps_its_year(self) -> None:
+        assert P.start_year("lower palaeolithic", country=None) == -3000000
+        assert P.start_year("Middle Paleolithic", country="Czechia") == -300000
+        assert P.start_year("upper palaeolithic", country="England") == -50000
+
+    def test_a_bare_bronze_age_needs_its_phase_where_the_table_divides_it(self) -> None:
+        for country in ("England", "Wales", "Ireland", "Greece", "Türkiye", "Jordan", "France",
+                        "Italy"):  # fmt: skip
+            with pytest.raises(P.PeriodError, match="sub-phase"):
+                P.start_year("bronze age", country=country)
+        assert P.start_year("middle bronze age", country="England") == -1500
+        assert P.start_year("early bronze age", country="Türkiye") == -3300
+        # one undivided Bronze Age keeps its start
+        assert P.start_year("bronze age", country="Denmark") == -2000
+        assert P.start_year("bronze age", country="Spain") == -1900
+        assert P.start_year("bronze age", country="Germany") == -2300
+        assert P.start_year("bronze age", country="Egypt") == -3150
+
+    def test_a_bare_iron_age_keeps_its_year(self) -> None:
+        # D112 writes Moel y Gest at Wales' Iron Age start: the British Iron Age (800 BC - AD 43)
+        # is a precise enough epoch, its middle/late phases keep their own years (D113 item 5)
+        assert P.start_year("iron age", country="Wales") == -800
+        assert P.start_year("late iron age", country="England") == -100
+
+    def test_the_coarse_words_are_names_of_the_vocabulary(self) -> None:
+        for key in P.COARSE:
+            assert key in P.PERIODS, key
+        for key, countries in P.SUBPHASE_REQUIRED.items():
+            assert key in P.REGIONAL_STARTS, key
+            assert countries <= set(P.REGIONAL_STARTS[key]), key
+
+
+class TestTheD113Fills:
+    """Owner decision D113 item 3 (2026-11-06): the country and epoch starts the dating lanes hit
+    without one, each cited from the English Wikipedia article its comment in `pipeline/periods.py`
+    names. A country whose articles give no single start, or contradict each other, stays without
+    a year: Italy and Germany/Netherlands/Switzerland "Roman" (D113 items 1-2), and the others
+    below, each for the reason its comment gives."""
+
+    FILLED = (
+        ("neolithic", "Finland", -5300),
+        ("neolithic", "Estonia", -5300),
+        ("neolithic", "Latvia", -5300),
+        ("neolithic", "Lithuania", -5300),
+        ("neolithic", "Morocco", -5500),
+        ("neolithic", "Algeria", -5500),
+        ("neolithic", "Tunisia", -5500),
+        ("neolithic", "Taiwan", -4000),
+        ("bronze age", "Finland", -1500),
+        ("bronze age", "Netherlands", -2000),
+        ("bronze age", "Malta", -2350),
+        ("iron age", "Finland", -500),
+        ("iron age", "China", -900),
+        ("roman", "Albania", -168),
+    )
+
+    @pytest.mark.parametrize(("name", "country", "year"), FILLED)
+    def test_a_filled_country_gets_its_cited_start(
+        self, name: str, country: str, year: int
+    ) -> None:
+        assert P.start_year(name, country=country) == year
+
+    UNFILLED = (
+        ("roman", "Italy"), ("roman", "Germany"), ("roman", "Netherlands"),
+        ("roman", "Switzerland"), ("roman", "Serbia"), ("roman", "Croatia"), ("roman", "Bulgaria"),
+        ("roman", "Bosnia and Herzegovina"), ("roman", "North Macedonia"), ("roman", "Slovakia"),
+        ("bronze age", "China"), ("bronze age", "Serbia"), ("bronze age", "Bulgaria"),
+        ("bronze age", "Croatia"), ("bronze age", "South Korea"), ("bronze age", "Belgium"),
+        ("neolithic", "India"), ("iron age", "Egypt"), ("chalcolithic", "Italy"),
+    )  # fmt: skip
+
+    @pytest.mark.parametrize(("name", "country"), UNFILLED)
+    def test_a_country_without_one_cited_start_stays_without_a_year(
+        self, name: str, country: str
+    ) -> None:
+        with pytest.raises(P.PeriodError, match="no cited start"):
+            P.start_year(name, country=country)
+
+    def test_italy_roman_imperial_starts_with_the_empire(self) -> None:
+        assert P.start_year("roman imperial", country="Italy") == -27
+
+    EPOCHS = (
+        ("Chimú", (900, 1470), "the first stage of the Chimú culture"),
+        ("late Roman", (284, 641), "catacombs of the late Roman to Byzantine period"),
+        ("Vinča", (-5400, -4500), "a tell of the Vinča culture"),
+    )
+
+    @pytest.mark.parametrize(("name", "span", "quote"), EPOCHS)
+    def test_a_missing_epoch_gets_its_cited_span(
+        self, name: str, span: tuple[int, int], quote: str
+    ) -> None:
+        assert P.period_of(name) == span
+        assert P.start_year(name, country="Peru") == span[0]  # one start everywhere
+        assert P.states_period(quote, name)
+
+    def test_the_new_epochs_leave_canmore_s_old_mapping_alone(self) -> None:
+        assert mapped("LATE ROMAN") == (43, 410)  # `roman` still comes first

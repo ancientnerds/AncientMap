@@ -39,6 +39,12 @@ different regions - the Neolithic, the Chalcolithic, the Bronze and Iron Ages an
 Roman period of each province - writes its start in the site's own country (`REGIONAL_STARTS`,
 `start_year(name, country=...)`), each value cited where it is defined; a country without a cited
 start gets no year. `PERIODS` keeps the conventional ranges the ingesters and span readers use.
+
+**Coarse words (owner decision D111, 2026-11-06).** "Stone Age", a "Palaeolithic" without its
+phase, "prehistoric", "ancient history", "classical antiquity" and a bare "Bronze Age" where the
+table divides it give no year (`COARSE`, `SUBPHASE_REQUIRED`). D113 added the country and epoch
+starts the D99 pilot's sources needed, and names in comments the ones Wikipedia gives no single
+start for.
 """
 
 from __future__ import annotations
@@ -47,8 +53,10 @@ import re
 import unicodedata
 
 __all__ = [
+    "COARSE",
     "PERIODS",
     "REGIONAL_STARTS",
+    "SUBPHASE_REQUIRED",
     "PeriodError",
     "century_range",
     "country_key",
@@ -314,6 +322,22 @@ PERIODS: dict[str, tuple[int, int]] = {
     "roman republic": (-509, -27),
     "augustan": (-27, 14),
     "flavian": (69, 96),
+    # --- the epochs the D99 pilot's sources named without a row (owner decision D113 item 3,
+    # 2026-11-06): each span is the English Wikipedia article's own, read through the MediaWiki API
+    # on 2026-11-06 (the words in quotes are the article's). Read in the cached sources of the 615
+    # undated sites (`output/remediation/fields/wd5x/`) and left out: `talaiotic` (the article gives
+    # "around 1500 BCE" and "around 1000 BCE" for its first manifestations), `orientalizing` (its
+    # start is "the later part of the 8th century BC", no year), `gojoseon` (2333 BCE is the
+    # Samguk yusa's legend), `mousterian` and `dilmun` (see `REFUSED` in the tests).
+    # `Chimor`: "The culture arose about 900 CE ... conquered by the Inca emperor Topa Inca Yupanqui
+    # around 1470"
+    "chimu": (900, 1470),
+    # `Later Roman Empire`: "traditionally covering the period from 284 CE to 641 CE" - the span of
+    # `late antiquity` above, under the name the Italian and Maltese sources use
+    "late roman": (284, 641),
+    # `Vinča culture`: "a Neolithic archaeological culture of Southeast Europe, dated to the period
+    # 5400-4500 BC"
+    "vinca": (-5400, -4500),
 }
 
 
@@ -402,6 +426,22 @@ _NEOLITHIC: dict[str, int] = {
     "china": -7000,
     # `Mehrgarh`: "a small farming village dated from 7000 BCE"
     "pakistan": -7000,
+    # D113 item 3 (2026-11-06), the same reading:
+    # `History of Finland`: "By 5300 BC, pottery was present in Finland. ... This marks the
+    # beginning of the Neolithic period for Finland"
+    "finland": -5300,
+    # `Narva culture`: "a European Neolithic archaeological culture in present-day Estonia, Latvia,
+    # Lithuania ... The culture spanned from c. 5300 to 1750 BC."
+    **_each(("estonia", "latvia", "lithuania"), -5300),
+    # `Neolithic`, "Northwestern Africa": "The neolithization of Northwestern Africa was initiated
+    # by Iberian, Levantine (and perhaps Sicilian) migrants around 5500-5300 BC."
+    **_each(("morocco", "algeria", "tunisia"), -5500),
+    # `Dapenkeng culture`: "an early Neolithic culture that appeared in northern Taiwan between 4000
+    # and 3000 BC"
+    "taiwan": -4000,
+    # Left without a year: India - `South Asian Stone Age` gives c. 7000 BCE in the north-west
+    # (Mehrgarh, Pakistan), "after 3000 BCE" in South India and "after mid-3rd millennium BCE" in the
+    # Ganges Plain, so one country holds starts four millennia apart.
     # `Funnelbeaker culture` (4100-2800 BCE) and `Archaeology of Northern Europe`: "The transition
     # to the Neolithic is characterized by the Funnelbeaker culture in the 4th millennium BC."
     **_each(_SCANDINAVIA, -4000),
@@ -458,6 +498,23 @@ _BRONZE_AGE: dict[str, int] = {
     **_each(_IBERIA, -1900),
     # `Nordic Bronze Age`: "a period of Scandinavian prehistory from c. 2000/1750-500 BC"
     **_each(_SCANDINAVIA, -2000),
+    # D113 item 3 (2026-11-06), the same reading:
+    # `History of Finland`: "The Finnish Bronze Age started in approximately 1500 BC"
+    "finland": -1500,
+    # `Prehistory of the Netherlands`: "The Bronze Age probably started somewhere around 2000 BC
+    # and lasted until around 800 BC." (Belgium and Luxembourg are not in the article)
+    "netherlands": -2000,
+    # `History of Malta`: "Their civilization collapsed in around 2350 BC; the islands were
+    # repopulated by Bronze Age people soon afterwards." and its section "Bronze Age (2350 BC-700 BC)"
+    "malta": -2350,
+    # Left without a year: China - `Bronze Age`: "there is no universally accepted definition or
+    # chronological boundary for the Bronze Age in the context of Chinese prehistory"; Korea -
+    # `Bronze Age` says "began c. 1000-800 BC", `Mumun pottery period` that "local bronze production
+    # is not proven to have occurred until approximately the 13th century BCE" and the term "may be
+    # misleading"; Serbia, Bulgaria, Croatia and the other Balkan countries - `Prehistory of
+    # Southeast Europe` heads its Bronze Age "3,500 - 1,100 BCE", starts its Early Bronze Age in the
+    # "20th ... centuries BCE" and says it "begins late, around 1800 BCE" in the central and eastern
+    # part: three starts, 1,700 years apart.
 }
 
 #: The start of the Middle Bronze Age per country.
@@ -516,6 +573,15 @@ _IRON_AGE: dict[str, int] = {
     "india": -1200,
     # `Iron Age in India`: "The protohistoric Early Iron Age in Sri Lanka lasted from 1000 BC"
     "sri lanka": -1000,
+    # D113 item 3 (2026-11-06), the same reading:
+    # `History of Finland`: "The Iron Age in Finland is considered to have lasted from c. 500 BC
+    # until c. 1300 AD."
+    "finland": -500,
+    # `Iron Age`: '"Iron Age" in the context of China is used sometimes for the transitional period
+    # of c. 900 BC to 100 BC during which ferrous metallurgy was present even if not dominant.'
+    "china": -900,
+    # Left without a year: Egypt - neither `Iron Age` (its "Egypt" section dates no start) nor
+    # `Ancient Egypt` gives one.
 }
 
 #: The year Roman rule begins in the province a country lay in: the invasion or annexation the
@@ -568,6 +634,20 @@ _ROMAN: dict[str, int] = {
     "romania": 106,
     # `Pannonia`: "Illyricum was divided into Dalmatia ... and Pannonia ... in 8 or 9 AD"
     "hungary": 9,
+    # D113 item 3 (2026-11-06): `History of Albania`: the Illyrian Wars "eventually resulted in
+    # defeat for the Illyrians by 168 BC and the end of Illyrian independence"; "In the early 2nd
+    # century BC, the area was annexed by Rome"
+    "albania": -168,
+    # Left without a year, like Germany, the Netherlands and Switzerland (owner decision D113): a
+    # country Rome reached at very different times. Serbia - `History of Serbia`: "conquered parts
+    # of modern-day Serbia in the 2nd century BC, in 167 BC ... the rest of Central Serbia in 75 BC
+    # ... Srem was conquered by 9 BC and Bačka and Banat in 106 AD". Croatia - `History of Croatia`:
+    # "In 168 BC, the Roman Republic established a protectorate south of the Neretva river. The area
+    # north of the Neretva was slowly incorporated ... c. 32-27 BC". Bulgaria - `History of
+    # Bulgaria`: "In 188 BC, the Romans invaded Thrace, and warfare continued until 46 AD", its
+    # north in Moesia. Bosnia and Herzegovina and North Macedonia lay in two provinces each
+    # (Dalmatia and Pannonia; Macedonia, created "in 146 BC", and Moesia Superior). Slovakia lay
+    # beyond the frontier.
 }
 
 #: The Roman eras whose start is a fixed year in Rome itself: in a province they begin when that
@@ -605,6 +685,30 @@ REGIONAL_STARTS: dict[str, dict[str, int]] = {
     "roman empire": _ROMAN_EMPIRE,
     "roman imperial": _ROMAN_EMPIRE,
     "roman republic": _ROMAN_REPUBLIC,
+}
+
+#: Owner decision D111 (2026-11-06, the D99 pilot): the period words too coarse to date a site.
+#: "Stone Age" and "Palaeolithic" span three million years and wrote the table's edge (Čertova pec,
+#: confirmed at -3,000,000; Rock Carvings at Åsli, proposed at it for ice-covered Arctic Norway);
+#: "prehistoric", "prehistory", "ancient history" and "classical antiquity" name no start a site
+#: has. They stay names of `PERIODS` - Canmore and the span readers read their ranges - but a
+#: period-word answer that names one gets no year (`start_year`); its named phases ("lower",
+#: "middle", "upper palaeolithic") keep theirs. "ancient" and "antiquity" alone are no names of
+#: the table at all and stay refused by name.
+COARSE: frozenset[str] = frozenset(
+    {"stone age", "palaeolithic", "paleolithic", "prehistoric", "prehistory", "ancient history",
+     "classical antiquity"}
+)  # fmt: skip
+
+#: Owner decision D111: "Bronze Age without a sub-phase where the table needs one" gives no year.
+#: The table needs one where it divides the period for the country - where it holds a middle or a
+#: late Bronze Age start of its own (Britain and Ireland, Türkiye and the Levant, Greece, France,
+#: Italy): there the bare word is the start of 1,400 to 2,100 years, and a site of one phase was
+#: written at the first (Bant's Carn, "built = Middle Bronze Age", proposed at -2500). The Iron Age
+#: is divided only for Britain, where it runs from 800 BC to the Roman conquest, and owner decision
+#: D112 writes a bare British Iron Age (Moel y Gest, Wales, -800): it needs no sub-phase anywhere.
+SUBPHASE_REQUIRED: dict[str, frozenset[str]] = {
+    "bronze age": frozenset({*_MIDDLE_BRONZE_AGE, *_LATE_BRONZE_AGE}),
 }
 
 #: A name is read as its folded words: every run of punctuation or whitespace a space, accents
@@ -751,9 +855,15 @@ def start_year(name: str, *, country: str | None) -> int:
     `country`; `PeriodError` when the country is not given or the table has no start for it - a
     Neolithic site in a country without a cited Neolithic start gets no year, never Britain's. A
     period that starts at one year everywhere ("victorian", "hellenistic period") ignores
-    `country`."""
+    `country`. A coarse word (`COARSE`) gives no year anywhere, and a bare Bronze Age none in a
+    country whose table divides it (`SUBPHASE_REQUIRED`) - owner decision D111."""
     start = period_of(name)[0]
     key = _key_of(name)
+    if key in COARSE:
+        raise PeriodError(
+            f"{name!r} is too coarse a period word to date a site (D111): only a named phase "
+            '("Middle Palaeolithic", "Late Neolithic") or a year from a source answers'
+        )
     regional = REGIONAL_STARTS.get(key) if key is not None else None
     if regional is None:
         return start
@@ -761,6 +871,11 @@ def start_year(name: str, *, country: str | None) -> int:
         raise PeriodError(
             f"{name!r} began at different times in different regions (D101): its start needs the "
             "site's country"
+        )
+    if country_key(country) in SUBPHASE_REQUIRED.get(key, frozenset()):
+        raise PeriodError(
+            f"{name!r} in {country!r} needs its sub-phase (D111): the table divides it there, so "
+            "only the early, middle or late phase a source names, or a year, answers"
         )
     found = regional.get(country_key(country))
     if found is None:

@@ -111,11 +111,26 @@ class TestTheAnswerShape:
         quotes = {
             "neolithic": [(WIKI, "a Neolithic causeway enclosure")],
             "Victorian": [(WIKI, "built in the Victorian era")],
-            "the Prehistory": [(WIKI, "a site of the Prehistory")],
+            "the Roman period": [(WIKI, "a villa of the Roman period")],
         }
         for name, said in quotes.items():
             answer = checked(period_answer(name, said), period_start=None)
             assert answer.value == str(P.start_year(name, country="England")), name
+
+    def test_a_coarse_period_word_is_no_answer(self) -> None:
+        # owner decision D111: "the Prehistory", "Stone Age", a bare "Palaeolithic" and an England
+        # "Bronze Age" without its phase name no start a site has
+        for name, said in (
+            ("the Prehistory", "a site of the Prehistory"),
+            ("Stone Age", "a Stone Age rock carving"),
+            ("Palaeolithic", "multiple habitation phases during the Palaeolithic period"),
+        ):
+            problem = checked(period_answer(name, [(WIKI, said)]), period_start=None)
+            assert isinstance(problem, str) and "too coarse" in problem, name
+        problem = checked(
+            period_answer("bronze age", [(WIKI, "a Bronze Age entrance grave")]), period_start=None
+        )
+        assert isinstance(problem, str) and "needs its sub-phase" in problem
 
     def test_an_invented_year_for_a_period_word_is_refused(self) -> None:
         # the table is the authority: one year for one name, so an agent's own is never read
