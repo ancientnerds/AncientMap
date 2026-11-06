@@ -22,7 +22,7 @@ import pytest
 
 from pipeline import periods as P
 from pipeline.ingesters import canmore_scotland as CS
-from pipeline.utils.text import PERIOD_BUCKETS
+from pipeline.utils.text import PERIOD_BUCKETS, categorize_period
 
 #: The 34 P2348 labels measured 2026-10-04, as the labels are spelled in Wikidata.
 WIKIDATA_LABELS = (
@@ -158,7 +158,7 @@ class TestTheTolerantLookup:
     @pytest.mark.parametrize(("sent", "key"), BARE)
     def test_the_bare_word_and_the_keyed_name_are_one_period(self, sent: str, key: str) -> None:
         assert P.period_of(sent) == P.period_of(key)
-        assert P.start_year(sent) == P.period_of(key)[0]
+        assert P.start_year(sent, country=None) == P.period_of(key)[0]
 
     def test_a_quote_may_state_the_period_the_bare_name_names(self) -> None:
         # the one reader that decides a period answer: a bare name that resolves to years but is
@@ -184,7 +184,7 @@ class TestTheNamesTheRunUsed:
         self, name: str, span: tuple[int, int], mentions: int
     ) -> None:
         assert P.period_of(name) == span, name
-        assert P.start_year(name) == span[0], name
+        assert P.start_year(name, country=None) == span[0], name
         assert mentions > 0  # the count the run's own 1,849 answers gave the name
 
     def test_a_new_name_does_not_disturb_a_name_it_shares_a_range_with(self) -> None:
@@ -235,9 +235,11 @@ class TestTheTable:
             assert -3_000_000 <= start and end <= 2026, name  # answers.YEARS' own bounds
 
     def test_the_start_is_the_year_a_period_word_writes(self) -> None:
-        assert P.start_year("iron age") == -800
-        assert P.start_year("neolithic") == -4000
-        assert P.start_year("victorian") == 1837
+        # a period of one start everywhere ignores the country; a regional one reads it (D101)
+        assert P.start_year("victorian", country=None) == 1837
+        assert P.start_year("victorian", country="Wales") == 1837
+        assert P.start_year("iron age", country="England") == -800
+        assert P.start_year("neolithic", country="England") == -4000
 
     def test_no_bucket_label_is_a_period_name(self) -> None:
         # `period_name` is an archaeological or geological word, never one of the nine bands the
@@ -396,14 +398,15 @@ class TestTheRegionalChronologies:
         self, name: str, span: tuple[int, int], quote: str
     ) -> None:
         assert P.period_of(name) == span, name
-        assert P.start_year(name) == span[0]
+        if not P.is_regional(name):  # a regional start needs the country (D101): see below
+            assert P.start_year(name, country=None) == span[0]
         # the quote of a source names the period; the name an agent sends may be the bare word
         assert P.states_period(quote, name), (name, quote)
 
     def test_the_chitinamit_sentence_is_a_period_the_table_reads(self) -> None:
         # the WD5 pilot's 'Chitinamit': three Wikipedias said it, and the table did not hold the name
         quote = "Chitinamit dates from the Early Classic through to the Late Postclassic periods"
-        assert P.start_year("Early Classic") == 250
+        assert P.start_year("Early Classic", country=None) == 250
         assert P.states_period(quote, "Early Classic period")
         assert P.states_period(quote, "late postclassic")
         assert not P.states_period(quote, "late classic")  # a neighbour is not named
@@ -470,3 +473,96 @@ class TestTheOrdinaryWordsThatAreAlsoNames:
     def test_the_whole_of_the_name_is_needed_for_the_initial_period(self) -> None:
         assert not P.states_period("an Initial design", "initial period")
         assert not P.states_period("an Initial Perio", "initial period")
+
+
+class TestTheRegionalStarts:
+    """Owner decision D101 (2026-11-06): a bare period word maps to the start of that period in the
+    site's own region, never to one fixed year. "Neolithic" was -4000 - Britain's start - for every
+    site, so a Neolithic settlement in Jordan or Syria (Palmyra, D57) was written six millennia late
+    and into the wrong band."""
+
+    def test_the_near_eastern_neolithic_begins_with_the_pre_pottery_neolithic_a(self) -> None:
+        for country in ("Jordan", "Syria", "Israel", "Iraq", "Türkiye", "Turkey", "Lebanon"):
+            assert P.start_year("neolithic", country=country) == -10000, country
+        assert P.start_year("Neolithic", country="Iran") == -8200
+        assert P.start_year("early neolithic", country="Jordan") == -10000
+        # a bucket the map shows: "< 4500 BC", not Britain's "4500 - 3000 BC"
+        assert categorize_period(P.start_year("neolithic", country="Jordan")) == "< 4500 BC"
+
+    def test_the_british_neolithic_keeps_its_start(self) -> None:
+        for country in ("England", "Scotland", "Wales", "Northern Ireland", "Ireland"):
+            assert P.start_year("neolithic", country=country) == -4000, country
+        assert categorize_period(-4000) == "4500 - 3000 BC"
+
+    def test_europe_is_read_country_by_country(self) -> None:
+        assert P.start_year("neolithic", country="Greece") == -6500
+        assert P.start_year("neolithic", country="Germany") == -5500
+        assert P.start_year("neolithic", country="Denmark") == -4000
+        assert P.start_year("bronze age", country="Greece") == -3200
+        assert P.start_year("bronze age", country="Denmark") == -2000
+        assert P.start_year("iron age", country="Italy") == -900
+        assert P.start_year("iron age", country="Sweden") == -500
+        assert P.start_year("chalcolithic", country="Bulgaria") == -5000
+        assert P.start_year("copper age", country="Spain") == P.start_year(
+            "chalcolithic", country="Spain"
+        )
+
+    def test_roman_is_the_roman_period_of_the_province(self) -> None:
+        assert P.start_year("roman", country="England") == 43
+        assert P.start_year("roman", country="Wales") == 48
+        assert P.start_year("roman", country="Scotland") == 71
+        assert P.start_year("Roman", country="Spain") == -218
+        assert P.start_year("roman", country="Portugal") == -218
+        assert P.start_year("roman", country="Egypt") == -30
+        # Roman Britain and Roman Hispania lie in different bands of the map
+        assert categorize_period(43) == "1 - 500 AD"
+        assert categorize_period(-218) == "500 BC - 1 AD"
+
+    def test_the_roman_eras_follow_the_province(self) -> None:
+        # the Empire begins in 27 BC, in a later province when that province's Roman period does
+        assert P.start_year("roman empire", country="Italy") == -27
+        assert P.start_year("roman empire", country="Spain") == -27
+        assert P.start_year("roman imperial", country="England") == 43
+        # a province annexed after the Republic ended has no Republican period
+        assert P.start_year("roman republic", country="Spain") == -218
+        with pytest.raises(P.PeriodError, match="no cited start for 'England'"):
+            P.start_year("roman republic", country="England")
+
+    def test_a_regional_period_needs_the_country(self) -> None:
+        for country in (None, "", "  "):
+            with pytest.raises(P.PeriodError, match="needs the site's country"):
+                P.start_year("neolithic", country=country)
+
+    def test_a_country_without_a_cited_start_gets_no_year(self) -> None:
+        # never another region's year: Italy was Rome's own land, not a province; Ireland was
+        # never Roman; Peru has no Neolithic in this sense
+        for name, country in (("roman", "Italy"), ("roman", "Ireland"), ("neolithic", "Peru")):
+            with pytest.raises(P.PeriodError, match=f"no cited start for '{country}'"):
+                P.start_year(name, country=country)
+        # the British sub-phases are British
+        with pytest.raises(P.PeriodError, match="no cited start"):
+            P.start_year("late neolithic", country="Jordan")
+        assert P.start_year("late neolithic", country="England") == -2900
+
+    def test_a_country_is_read_as_its_last_comma_part_folded(self) -> None:
+        assert P.country_key("Cusco, Peru") == "peru"
+        assert P.country_key("Türkiye") == "turkiye"
+        assert P.start_year("neolithic", country="The Netherlands") == -5200
+
+    def test_a_non_regional_period_is_one_year_everywhere(self) -> None:
+        assert not P.is_regional("victorian")
+        assert P.is_regional("Neolithic") and P.is_regional("roman")
+        assert P.start_year("hellenistic", country="Peru") == -323
+
+    def test_the_regional_table_is_part_of_the_vocabulary(self) -> None:
+        for key, table in P.REGIONAL_STARTS.items():
+            assert key in P.PERIODS, key
+            assert table, key
+            for country, year in table.items():
+                assert P.fold_name(country) == country, (key, country)
+                assert -3_000_000 <= year <= 2026, (key, country)
+
+    def test_canmore_still_reads_the_conventional_ranges(self) -> None:
+        # the ingester maps a Scottish SITETYPE period on PERIODS, which D101 leaves alone
+        assert P.PERIODS["neolithic"] == (-4000, -2500)
+        assert P.period_of("roman") == (43, 410)

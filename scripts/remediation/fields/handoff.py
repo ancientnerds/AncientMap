@@ -629,6 +629,42 @@ RESEARCH_WD5 = _swap(
 
 ANSWER_FORMAT_WD5 = ANSWER_FORMAT_WD4
 
+#: Owner decision D101 (2026-11-06): a period word writes the start of that period in the site's own
+#: country (`pipeline.periods.REGIONAL_STARTS`), and a year the source states beats the period word
+#: (`answers.date_stated`). A round exported from now on records `PERIOD_RULE_KEY: D101` and is asked
+#: the sentence below in place of the fixed-table one; a round exported before records no key and
+#: keeps the text it was asked, because import renders every prompt again and compares its hash.
+PERIOD_RULE_KEY = "period_rule"
+D101 = "D101"
+_FIXED_TABLE_SENTENCE = (
+    "The year is then read from a fixed table, not from you: the one start the vocabulary "
+    'holds for that name ("iron age" -> -800, "neolithic" -> -4000, "victorian" -> 1837). '
+)
+_D101_SENTENCE = (
+    "The year is then read from a fixed table, not from you, and it is the start of that period in "
+    'the site\'s own country (owner decision D101): "neolithic" is -10000 in Syria or Jordan and '
+    '-4000 in England, "roman" is 43 in England and -218 in Spain, "victorian" is 1837 everywhere. '
+    "A period that began at different times in different regions is refused for a country the table "
+    "holds no start for: then only a year from a source answers, or unresolved. A year beats a "
+    "period word: when a page you quote states a year, century, millennium or BP age for the START "
+    "of this site, answer with that year and no period_name - a period-word answer whose quote "
+    "states a date is refused (leave out a quote whose date is not the start). "
+)
+
+
+def period_rule_text(text: str, period_rule: str | None) -> str:
+    """A field rule's text as a round with `period_rule` asks it: the D101 sentence in place of the
+    fixed-table one for a D101 round, the text unchanged for a round exported before D101 (None).
+    Any other value is refused: a round names the rule it was asked under or none."""
+    if period_rule is None:
+        return text
+    if period_rule != D101:
+        raise HandoffStepError(f"a round's {PERIOD_RULE_KEY} {period_rule!r} is not {D101!r}")
+    if _FIXED_TABLE_SENTENCE not in text:
+        return text
+    return _swap(text, _FIXED_TABLE_SENTENCE, _D101_SENTENCE)
+
+
 #: A field of a WD3 question is open for one of these reasons (`population.py`).
 OPEN_TEXT = {
     "empty": "the field is empty",
@@ -884,10 +920,12 @@ def render_prompt(
     notes: Mapping[str, str] | None = None,
     rule: R.Rule = R.DEFAULT,
     hint: Mapping[str, Any] | None = None,
+    period_rule: str | None = None,
 ) -> str:
     """The exact question for one site and `fields` - a pure function of the classified line, of
     the rule the run decides under, of the site's original-import claim (`hint`, `read_hints`, WD4
-    only) and, in a re-ask, of why each field's last answer did not count (`notes`, kept in the
+    only), of the round's `period_rule` (`period_rule_text`: D101 or, for a round exported before
+    it, None) and, in a re-ask, of why each field's last answer did not count (`notes`, kept in the
     round's record)."""
     notes = notes or {}
     fields = [f for f in C.FIELDS if f in fields]
@@ -931,7 +969,7 @@ def render_prompt(
         if field in notes:
             out.append(texts.retry_note.format(why=notes[field]))
         out.append("")
-        out.append(texts.field_rules[field])
+        out.append(period_rule_text(texts.field_rules[field], period_rule))
         vocabulary = definitions(field)
         if vocabulary:
             out.append("")
@@ -1013,7 +1051,12 @@ def _export_round(
                 label=label,
                 field="+".join(fields_of[label]),
                 prompt=render_prompt(
-                    classified[label], fields_of[label], notes.get(label), rule, hints.get(label)
+                    classified[label],
+                    fields_of[label],
+                    notes.get(label),
+                    rule,
+                    hints.get(label),
+                    D101,
                 ),
             )
     record = {
@@ -1024,6 +1067,7 @@ def _export_round(
         "batches": dict(groups),
         "fields": {label: list(fields_of[label]) for label in sorted(fields_of)},
         "notes": {label: dict(notes[label]) for label in sorted(notes)},
+        PERIOD_RULE_KEY: D101,
         "exported_at": H.now(),
     }
     _write_jsonl(run / ROUNDS_FILE, [*rounds, record])
@@ -1440,7 +1484,13 @@ def import_rounds(
         for (batch_id, label), line in sorted(manifest.items()):
             fields = record["fields"][label]
             prompt = render_prompt(
-                classified[label], fields, record["notes"].get(label), rule, hints.get(label)
+                classified[label],
+                fields,
+                record["notes"].get(label),
+                rule,
+                hints.get(label),
+                # a round exported before D101 carries no key: it was asked the fixed-table text
+                record.get(PERIOD_RULE_KEY),
             )
             if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
                 raise HandoffStepError(

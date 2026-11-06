@@ -40,7 +40,10 @@ Per field, beyond the shape (every rule here needs no page - `check_shape`):
   quote must carry a date - a digit, or a century or millennium word (`DATE_WORDS`) - and at
   least one must state the value itself (`states_year`: its year, or its century or millennium).
   Under **one-family-period** (lane WD4) an answer may rest on a period word instead: it carries
-  `PERIOD_KEY` and no value, and the year is the vocabulary's (`_check_period`).
+  `PERIOD_KEY` and no value, and the year is the vocabulary's (`_check_period`) - since owner
+  decision D101 (2026-11-06) the period's start in the site's country (`line["country"]`,
+  `pipeline.periods.REGIONAL_STARTS`), and refused when a quote of the answer states a date
+  (`date_stated`): a year the source states beats the period word.
 * **site_type** - one canonical type (`CANONICAL_TYPES`, a fixed point of `normalize_site_type`).
   keep: the stored type; replace: another. At least one quote must hold a word of the type
   (`type_stems`: each word of the type cut to its stem, found where a word of the folded quote
@@ -168,7 +171,9 @@ def decisions_of(field: str, rule: R.Rule) -> tuple[str, ...]:
     return DECISIONS[field] if rule.clearable else FILL_DECISIONS
 
 
-def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
+def _block(field: str, data: Any, rule: R.Rule, *, country: str | None = None) -> FieldAnswer:
+    """One field's answer in shape. `country` is the site's, which a period-word answer's year
+    depends on (D101, `pipeline.periods.start_year`); no other field reads it."""
     if not isinstance(data, dict) or not FIELD_KEYS <= set(data) <= (FIELD_KEYS | {PERIOD_KEY}):
         shown = sorted(data) if isinstance(data, dict) else type(data).__name__
         raise AnswerError(f"{field}: carries {shown}, not {sorted(FIELD_KEYS)}")
@@ -197,7 +202,7 @@ def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
                 f"{field}: {decision} names a period: it carries no value and no quote"
             )
         return FieldAnswer(field, decision, None, (), reasoning)
-    period = _period_of_answer(named, value, field, decision)
+    period = _period_of_answer(named, value, field, decision, country)
     if period is None and (
         not isinstance(value, str) or not value.strip() or value != value.strip()
     ):
@@ -217,19 +222,24 @@ def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
     return FieldAnswer(field, decision, value, tuple((q.url, q.quote) for q in quotes), reasoning)
 
 
-def _period_of_answer(named: Any, value: Any, field: str, decision: str) -> int | None:
+def _period_of_answer(
+    named: Any, value: Any, field: str, decision: str, country: str | None
+) -> int | None:
     """The vocabulary's year for the period a period-word answer names, or None for a year answer.
 
     The contract (owner decision of 2026-10-04, a named period IS a value): the agent sends
     `period_name` and its quotes and **no** value - the table holds the one year for the one name,
-    so an invented year is refused here rather than read (`pipeline.periods.period_of`).
+    so an invented year is refused here rather than read (`pipeline.periods.period_of`). Since
+    owner decision D101 (2026-11-06) that year is the period's start in the site's `country` for a
+    period that began at different times in different regions ("neolithic" is -10000 in Jordan and
+    -4000 in England); a country the table holds no start for refuses the answer.
     """
     if named is None:
         return None
     if not isinstance(named, str) or not named.strip() or named != named.strip():
         raise AnswerError(f"{field}: {decision} needs {PERIOD_KEY} as a trimmed, non-empty string")
     try:
-        year = P.start_year(named)
+        year = P.start_year(named, country=country)
     except P.PeriodError as exc:
         raise AnswerError(f"{field}: {exc}") from exc
     if value is not None:
@@ -241,10 +251,10 @@ def _period_of_answer(named: Any, value: Any, field: str, decision: str) -> int 
 
 
 def parse(
-    text: str, fields: Sequence[str], rule: R.Rule = R.DEFAULT
+    text: str, fields: Sequence[str], rule: R.Rule = R.DEFAULT, *, country: str | None = None
 ) -> dict[str, FieldAnswer | str]:
     """Each asked field's answer, or the problem that makes it not one. A text that is not the
-    answer object at all raises `AnswerError`."""
+    answer object at all raises `AnswerError`. `country` is the site's (`_block`)."""
     data = load_object(text, ANSWER_KEYS)["fields"]
     if not isinstance(data, dict) or set(data) != set(fields):
         shown = sorted(data) if isinstance(data, dict) else type(data).__name__
@@ -252,7 +262,7 @@ def parse(
     out: dict[str, FieldAnswer | str] = {}
     for field in fields:
         try:
-            out[field] = _block(field, data[field], rule)
+            out[field] = _block(field, data[field], rule, country=country)
         except AnswerError as exc:
             out[field] = str(exc)
     return out
@@ -296,6 +306,25 @@ def dated_period(quote: str, name: str) -> bool:
     is the sentence 792 of WD3's 1,338 dropped answers were made of (measured 2026-10-04) - so the
     period is a dating quote beside the year, never instead of it."""
     return dated(quote) or P.states_period(quote, name)
+
+
+def date_stated(quote: str) -> str | None:
+    """The date `quote` states, as words, or None: a year with its era marker ("c. 800 BC", "AD
+    122"), a century or a millennium ("the 2nd century", "the 4th millennium BC") or an age before
+    the present ("12,000 BP"). Owner decision D101 (2026-11-06): a year the same source states wins
+    over a bare period word, so a period-word answer may not rest on a quote that dates.
+
+    A bare number without an era marker is not read as a date here: "excavated in 1923" or "Site 3"
+    states nothing about an ancient start, and `dates.statements` reads such a number as a modern
+    year."""
+    for statement in D.statements(quote):
+        if statement.era is not None or statement.kind != D.YEAR:
+            era = f" {statement.era}" if statement.era else ""
+            return f"the {statement.kind} {statement.number}{era}"
+    bp = bp_dates(quote)
+    if bp:
+        return f"an age before the present ({bp[0][0]})"
+    return None
 
 
 #: Years before the present are counted from 1950 ("BP" is "before present", the present being 1950
@@ -443,7 +472,15 @@ def _check_period(answer: FieldAnswer, line: Mapping[str, Any], rule: R.Rule) ->
                 f"period_start: no quote names {name} - a period answer rests on the page saying "
                 'so ("an Iron Age hillfort")'
             )
-        _period_decision(answer, line, P.start_year(name))
+        for url, quote in answer.quotes:
+            stated = date_stated(quote)
+            if stated is not None:
+                raise AnswerError(
+                    f"period_start: the quote on {url} states {stated} - a year the source states "
+                    f"beats the period word (D101): when it is the site's start, answer with that "
+                    f"year and no {PERIOD_KEY}; when it dates something else, leave the quote out"
+                )
+        _period_decision(answer, line, int(str(answer.value)))
         return
     year = _year(str(answer.value))
     _period_decision(answer, line, year)
@@ -553,9 +590,10 @@ def check_shape(
     text: str, fields: Sequence[str], line: Mapping[str, Any], rule: R.Rule = R.DEFAULT
 ) -> dict[str, Any]:
     """Every field's answer after every check that needs no page: `{field: FieldAnswer | problem}`.
-    A text that is not the answer object raises `AnswerError`."""
+    A text that is not the answer object raises `AnswerError`. `line["country"]` is the site's
+    country, which a period-word answer's year depends on (D101)."""
     out: dict[str, Any] = {}
-    for field, answer in parse(text, fields, rule).items():
+    for field, answer in parse(text, fields, rule, country=line["country"]).items():
         if isinstance(answer, str) or answer.decision in (CLEAR, UNRESOLVED):
             out[field] = answer
             continue

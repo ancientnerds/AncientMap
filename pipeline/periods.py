@@ -33,6 +33,12 @@ leading article gone. "Prehistory", "prehistory" and "the Prehistory" are one en
 "post medieval" and "post-medieval" - two spellings may not drift into two ranges. One word more is
 read, on the name as well as on the quote: a trailing " period" is added and removed, so a bare
 "Hellenistic" is the era the key `hellenistic period` holds and the era keeps one key (see `_key_of`).
+
+**Regional starts (owner decision D101, 2026-11-06).** A period that began at different times in
+different regions - the Neolithic, the Chalcolithic, the Bronze and Iron Ages and their phases, the
+Roman period of each province - writes its start in the site's own country (`REGIONAL_STARTS`,
+`start_year(name, country=...)`), each value cited where it is defined; a country without a cited
+start gets no year. `PERIODS` keeps the conventional ranges the ingesters and span readers use.
 """
 
 from __future__ import annotations
@@ -42,9 +48,12 @@ import unicodedata
 
 __all__ = [
     "PERIODS",
+    "REGIONAL_STARTS",
     "PeriodError",
     "century_range",
+    "country_key",
     "fold_name",
+    "is_regional",
     "period_of",
     "start_year",
     "states_period",
@@ -307,6 +316,297 @@ PERIODS: dict[str, tuple[int, int]] = {
     "flavian": (69, 96),
 }
 
+
+# ------------------------------------------------------------------------- the regional starts
+# Owner decision D101 (2026-11-06): a period word that began at different times in different parts
+# of the world is no one year. "Neolithic" was -4000 for every site - Britain's start - so a
+# Neolithic tell in Jordan, begun some six thousand years earlier, was written into the wrong
+# band. For the names below, the year a period-word answer writes is the start of that period in
+# the site's own country; a country this table gives no start for is refused by name, never
+# given another country's year. A year the same source states for the site beats the period word
+# altogether (the answer checks of `scripts/remediation/fields/answers.py` hold that rule).
+#
+# `PERIODS` keeps its conventional ranges: Canmore's ingester and the readers that compare spans
+# use them, and a name absent below starts at the same year everywhere.
+#
+# Every value is the start the cited English Wikipedia article states for that region (each
+# article's text read through the MediaWiki API on 2026-11-06; the words in quotes are the
+# article's own). Where an article gives the region's own scheme it is used as a whole (Iberia,
+# the Near East, Britain); where it gives a range, its first year. A country is keyed by its
+# folded spelling (`country_key`), every spelling the curated rows use or a researcher may send.
+
+_BRITAIN = ("england", "scotland", "wales", "northern ireland", "united kingdom",
+            "great britain", "isle of man")  # fmt: skip
+_IRELAND = ("ireland", "republic of ireland")
+_TURKIYE = ("turkiye", "turkey")
+_LEVANT = ("syria", "syrian arab republic", "lebanon", "israel", "palestine", "state of palestine",
+           "palestinian territories", "jordan")  # fmt: skip
+_IRAN = ("iran", "islamic republic of iran")
+_CAUCASUS = ("georgia", "armenia", "azerbaijan")
+_SCANDINAVIA = ("denmark", "sweden", "norway")
+_CENTRAL_EUROPE = ("germany", "austria", "switzerland", "czechia", "czech republic", "slovakia",
+                   "poland")  # fmt: skip
+_LOW_COUNTRIES = ("netherlands", "belgium", "luxembourg")
+_IBERIA = ("spain", "portugal")
+#: The Starcevo-Koros-Cris complex: "an archaeological culture of Southeastern Europe", with sites
+#: and samples from Serbia, Croatia, Romania and Hungary (`Starčevo culture`).
+_STARCEVO = ("serbia", "republic of serbia", "kosovo", "croatia", "romania", "hungary",
+             "bosnia and herzegovina", "north macedonia", "macedonia", "bulgaria")  # fmt: skip
+#: Southeastern Europe in the sense of `Iron Age` ("In Anatolia and the Caucasus, or Southeast
+#: Europe, the Iron Age began c. 1300 BC") - Greece has a start of its own (`_GREEK_IRON_AGE`).
+_SOUTHEAST_EUROPE = ("bulgaria", "romania", "serbia", "republic of serbia", "kosovo",
+                     "north macedonia", "macedonia", "albania", "montenegro",
+                     "bosnia and herzegovina")  # fmt: skip
+
+
+def _each(countries: tuple[str, ...], year: int) -> dict[str, int]:
+    return dict.fromkeys(countries, year)
+
+
+#: The start of the Neolithic per country.
+_NEOLITHIC: dict[str, int] = {
+    # `Pre-Pottery Neolithic A`: "c. 12,000 - c. 10,800 years ago, that is, 10,000-8800 BCE" - the
+    # Levant, Anatolia and upper Mesopotamia
+    **_each((*_TURKIYE, *_LEVANT, "iraq"), -10000),
+    # `Ganj Dareh` (Zagros): "c. 8200 BC, and have yielded the earliest evidence for goat
+    # domestication in the world"
+    **_each(_IRAN, -8200),
+    # `Prehistoric Cyprus`: "The oldest evidence of Neolithic settlement is dated to 8800-8600 BC."
+    "cyprus": -8800,
+    # `Prehistoric Egypt`: "Neolithic (c. 6000-4000 BC)"
+    "egypt": -6000,
+    # `Neolithic Europe`: farming from "6500 BCE at Knossos, Franchthi Cave, and a number of
+    # mainland sites in Thessaly"
+    "greece": -6500,
+    # `Starčevo culture`: "dating to the Neolithic period between c. 6200 and 4500 BCE"
+    **_each(_STARCEVO, -6200),
+    # `Cardium pottery`: "Settlements then appear in Albania and Dalmatia on the eastern Adriatic
+    # coast dating to between 6100 and 5900 BC."
+    **_each(("albania", "montenegro"), -6100),
+    # `Cardium pottery`: "The earliest date in Italy comes from Coppa Nevigata ... perhaps as early
+    # as 6000 cal B.C."
+    "italy": -6000,
+    # `History of Malta`: "Neolithic farmers from Sicily around 5400 BC"
+    "malta": -5400,
+    # `Prehistoric Iberia`: "Neolithic (c. 5.6 - 3.2 ka BC)"
+    **_each(_IBERIA, -5600),
+    # `Linear Pottery culture`: "began conventionally at 5500 BC"; `Prehistoric France`: "the
+    # Linear Pottery culture (c. 5500 - c. 4500 BC)"
+    **_each((*_CENTRAL_EUROPE, "france"), -5500),
+    # `Linear Pottery culture`: "its arrival in the Netherlands at about 5200 BC" (the Belgian
+    # sites Darion and Remicourt belong to the same spread)
+    **_each(_LOW_COUNTRIES, -5200),
+    # `Shulaveri-Shomu culture`: "from around the end of the seventh millennium BC"
+    **_each(_CAUCASUS, -6000),
+    # `Neolithic in China`: "Neolithization ... mainly occurred between 7000 and 5000 BCE"
+    "china": -7000,
+    # `Mehrgarh`: "a small farming village dated from 7000 BCE"
+    "pakistan": -7000,
+    # `Funnelbeaker culture` (4100-2800 BCE) and `Archaeology of Northern Europe`: "The transition
+    # to the Neolithic is characterized by the Funnelbeaker culture in the 4th millennium BC."
+    **_each(_SCANDINAVIA, -4000),
+    # `Neolithic British Isles`: "Around 4000 BC, migrants began arriving from Central Europe";
+    # `Prehistoric Ireland`: "Neolithic (4000-2500 BC)"
+    **_each((*_BRITAIN, *_IRELAND), -4000),
+}
+
+#: The start of the Chalcolithic (Copper Age) per country.
+_CHALCOLITHIC: dict[str, int] = {
+    # `Neolithic`: "It lasted in West Asia until the transitional period of the Chalcolithic (Copper
+    # Age) from about 6,500 years ago (4500 BC)"
+    **_each((*_TURKIYE, *_LEVANT, "iraq", *_IRAN), -4500),
+    # `Prehistoric Cyprus`: "around 3500 BC with appearance of the first metalwork and the beginning
+    # of the Chalcolithic"
+    "cyprus": -3500,
+    # `Chalcolithic Europe`: "5000 BC to 3000 BC, copper started being used first in Southeast
+    # Europe" - Varna, Gumelnita and Vinca
+    **_each(("bulgaria", "romania", "serbia", "republic of serbia"), -5000),
+    # `Prehistoric Iberia`: "Chalcolithic or Copper Age (c. 3.2 - 1.9 ka BC)"
+    **_each(_IBERIA, -3200),
+    # `Bronze Age Britain`: "The period from 2500 BC to 2000 BC has been called the 'Late
+    # Neolithic/Early Bronze Age'" - the Beaker copper phase of Great Britain and Ireland
+    **_each((*_BRITAIN, *_IRELAND), -2500),
+}
+
+#: The start of the Bronze Age per country.
+_BRONZE_AGE: dict[str, int] = {
+    # `Bronze Age`, "Near East Bronze Age divisions": "Early Bronze Age (EBA or EB): 3300-2100 BC"
+    **_each((*_TURKIYE, *_LEVANT), -3300),
+    # `Bronze Age`: "The Mesopotamian Bronze Age began c. 3500 BC"
+    "iraq": -3500,
+    # `Bronze Age`: "In Ancient Egypt, the Bronze Age began in the Protodynastic Period c. 3150 BC."
+    "egypt": -3150,
+    # `Bronze Age`: "The Aegean Bronze Age began c. 3200 BC"
+    "greece": -3200,
+    # `Prehistoric Cyprus`: "The new era was introduced by people from Anatolia who came to Cyprus
+    # around 2400 BC."
+    "cyprus": -2400,
+    # `Bronze Age`: "The Bronze Age on the Indian subcontinent began c. 3300 BC with the beginning
+    # of the Indus Valley Civilization."
+    **_each(("pakistan", "india"), -3300),
+    # `Kura-Araxes culture`: "existed from about 4000 BC until about 2000 BC"
+    **_each(_CAUCASUS, -4000),
+    # `Bronze Age Britain`: "Early Bronze Age (EBA), c. 2500-1500 BC" - Great Britain and Ireland
+    **_each((*_BRITAIN, *_IRELAND), -2500),
+    # `Bronze Age Europe`: "In Central Europe, the early Bronze Age Unetice culture (2300-1600 BC)"
+    **_each(_CENTRAL_EUROPE, -2300),
+    # `Prehistoric France`: "the Early Bronze Age Rhone culture (c. 2300-1600 BC)"
+    "france": -2300,
+    # `Bronze Age Europe`: "The Early Bronze Age (2300-1700 BC)" of Italy
+    "italy": -2300,
+    # `Prehistoric Iberia`: "Bronze Age (c. 1.9 ka - 750 BC)"
+    **_each(_IBERIA, -1900),
+    # `Nordic Bronze Age`: "a period of Scandinavian prehistory from c. 2000/1750-500 BC"
+    **_each(_SCANDINAVIA, -2000),
+}
+
+#: The start of the Middle Bronze Age per country.
+_MIDDLE_BRONZE_AGE: dict[str, int] = {
+    # `Bronze Age`: "Middle Bronze Age (MBA or MB) or Intermediate Bronze Age (IBA or IB): 2100-1550
+    # BC"
+    **_each((*_TURKIYE, *_LEVANT), -2100),
+    # `Helladic chronology`: the Early Helladic III ends "c.2200-2000 BC"
+    "greece": -2000,
+    # `Bronze Age Britain`: "Middle Bronze Age (MBA), 1500-1000 BC"
+    **_each((*_BRITAIN, *_IRELAND), -1500),
+    # `Prehistoric France`: "the Middle Bronze Age Tumulus culture (c. 1600-1200 BC)"
+    "france": -1600,
+    # `Bronze Age Europe`: Italy's "Middle Bronze Age (1700-1350 BC)"
+    "italy": -1700,
+}
+
+#: The start of the Late Bronze Age per country.
+_LATE_BRONZE_AGE: dict[str, int] = {
+    # `Bronze Age`: "Late Bronze Age (LBA or LB): 1550-1200 BC"
+    **_each((*_TURKIYE, *_LEVANT), -1550),
+    # `Helladic chronology`: "The Late Helladic (c. 1550 - c. 1050 BC)"
+    "greece": -1550,
+    # `Bronze Age Britain`: "Late Bronze Age (LBA), 1000-700 BC"
+    **_each((*_BRITAIN, *_IRELAND), -1000),
+    # `Bronze Age Europe`: Italy's "Recent Bronze Age (1350-1150 BC)", the first of its two late
+    # phases
+    "italy": -1350,
+}
+
+#: The start of the Iron Age per country.
+_IRON_AGE: dict[str, int] = {
+    # `Iron Age`: "In Anatolia and the Caucasus, or Southeast Europe, the Iron Age began c. 1300 BC."
+    **_each((*_TURKIYE, *_CAUCASUS, *_SOUTHEAST_EUROPE), -1300),
+    # `Iron Age`: "In the ancient Near East, this transition occurred simultaneously with the Late
+    # Bronze Age collapse, during the 12th century BC."
+    **_each((*_LEVANT, "iraq", *_IRAN), -1200),
+    # `Helladic chronology`: the Bronze Age of Greece ends with the Late Helladic, "c. 1050 BC";
+    # `Prehistoric Cyprus`: "The Iron Age follows the Submycenean period (1125-1050 BC)"
+    **_each(("greece", "cyprus"), -1050),
+    # `Villanovan culture`: "(c. 900-700 BCE) ... the earliest Iron Age culture of Italy"
+    "italy": -900,
+    # `Prehistoric Iberia`: "Iron Age (c. 750 - 218 BC)"
+    **_each(_IBERIA, -750),
+    # `Iron Age`: "In Central and Western Europe, the Iron Age lasted from c. 800 BC to c. 1 BC"
+    **_each((*_CENTRAL_EUROPE, "hungary", "france", *_LOW_COUNTRIES), -800),
+    # `Nordic Bronze Age`: "Around the 5th century BC, the Nordic Bronze Age was succeeded by the
+    # Pre-Roman Iron Age"
+    **_each(_SCANDINAVIA, -500),
+    # `British Iron Age`: "The Iron Age in Great Britain spanned from c. 800 BC"
+    **_each(_BRITAIN, -800),
+    # `Bronze Age Britain`: "In Ireland ... iron metallurgy does not appear until about 550 BC."
+    **_each(_IRELAND, -550),
+    # `Iron Age`: "The Iron Age in India is stated as beginning with the ironworking Painted Grey
+    # Ware culture, dating from c. 1200 BC"
+    "india": -1200,
+    # `Iron Age in India`: "The protohistoric Early Iron Age in Sri Lanka lasted from 1000 BC"
+    "sri lanka": -1000,
+}
+
+#: The year Roman rule begins in the province a country lay in: the invasion or annexation the
+#: cited article dates. Italy has none - it was Rome's own land, conquered over centuries, not a
+#: province - and neither have Ireland, Northern Ireland and Scandinavia, which Rome never ruled.
+_ROMAN: dict[str, int] = {
+    # `Roman Britain`: "The occupation lasted from 43 AD to 410 AD."
+    "england": 43,
+    # `Wales in the Roman era`: "The Roman era in the area of modern Wales began in 48 AD"
+    "wales": 48,
+    # `Scotland during the Roman Empire`: "Roman legions arrived in the territory of modern Scotland
+    # around AD 71"
+    "scotland": 71,
+    # `Hispania`: "Roman armies invaded the Iberian Peninsula in 218 BC"
+    **_each(_IBERIA, -218),
+    # `History of Malta`: the Carthaginians "ruled the islands until they fell in 218 BC to the
+    # Roman Republic"
+    "malta": -218,
+    # `Gallia Narbonensis`: "The area became a Roman province in 121 BC."
+    "france": -121,
+    # `Gallia Belgica`: "In 57 BC, Julius Caesar led the conquest of northern Gaul"
+    **_each(("belgium", "luxembourg"), -57),
+    # `Raetia`: the Raetians "retained their independence until their subjugation in 15 BC by
+    # Tiberius and Drusus"
+    "austria": -15,
+    # `Achaia (Roman province)`: "annexed by the Roman Republic in 146 BC following the sack of
+    # Corinth"
+    "greece": -146,
+    # `Asia (Roman province)`: "created following the Roman Republic's annexation of the Attalid
+    # Kingdom in 133 BC"
+    **_each(_TURKIYE, -133),
+    # `Roman Syria`: "annexed to the Roman Republic in 64 BCE by Pompey"
+    **_each(("syria", "syrian arab republic", "lebanon"), -64),
+    # `Siege of Jerusalem (63 BC)`: Pompey "had spent the years of 64 and 63 BC in bringing Roman
+    # law and order to the region"; Jerusalem fell in 63 BC
+    **_each(
+        ("israel", "palestine", "state of palestine", "palestinian territories", "jordan"), -63
+    ),
+    # `Roman Egypt`: "from the time it was conquered by Roman forces in 30 BC"
+    "egypt": -30,
+    # `Africa (Roman province)`: "It was established in 146 BC"
+    "tunisia": -146,
+    # `Numidia`: "Caesar annexed eastern Numidia into the Roman province of Africa Nova" (46 BC)
+    "algeria": -46,
+    # `Mauretania Tingitana`: "in about 44 AD Roman Emperor Claudius annexed the kingdom"
+    "morocco": 44,
+    # `Roman Cyprus`: "Cyprus was annexed by the Romans in 58 BC"
+    "cyprus": -58,
+    # `Roman Dacia`: "a province of the Roman Empire from 106"
+    "romania": 106,
+    # `Pannonia`: "Illyricum was divided into Dalmatia ... and Pannonia ... in 8 or 9 AD"
+    "hungary": 9,
+}
+
+#: The Roman eras whose start is a fixed year in Rome itself: in a province they begin when that
+#: province's Roman period does, if later. Rome's own Italy is in the Empire from 27 BC
+#: (`Roman Republic`: "ending in 27 BC with the establishment of the Roman Empire").
+_EMPIRE_START = -27
+_ROMAN_EMPIRE = {"italy": _EMPIRE_START, **{c: max(_EMPIRE_START, y) for c, y in _ROMAN.items()}}
+#: A province annexed after 27 BC has no Republican period: it is absent, not given a year.
+_ROMAN_REPUBLIC = {c: y for c, y in _ROMAN.items() if y < _EMPIRE_START}
+
+#: `{period key: {folded country: start year}}`. A key here is a key of `PERIODS`; `start_year`
+#: reads this table for it and refuses a country it does not list. The early phase of a period
+#: starts with the period. The middle and late phases of the British Neolithic and Iron Age keep
+#: the years this vocabulary held before D101 (the British sequence they were written for) and are
+#: refused elsewhere, where the same words name other centuries.
+REGIONAL_STARTS: dict[str, dict[str, int]] = {
+    "neolithic": _NEOLITHIC,
+    "early neolithic": _NEOLITHIC,
+    "middle neolithic": _each(_BRITAIN, PERIODS["middle neolithic"][0]),
+    "late neolithic": _each(_BRITAIN, PERIODS["late neolithic"][0]),
+    "chalcolithic": _CHALCOLITHIC,
+    "copper age": _CHALCOLITHIC,
+    "bronze age": _BRONZE_AGE,
+    "early bronze age": _BRONZE_AGE,
+    "middle bronze age": _MIDDLE_BRONZE_AGE,
+    "late bronze age": _LATE_BRONZE_AGE,
+    "iron age": _IRON_AGE,
+    "early iron age": _IRON_AGE,
+    "middle iron age": _each(_BRITAIN, PERIODS["middle iron age"][0]),
+    "late iron age": _each(_BRITAIN, PERIODS["late iron age"][0]),
+    # the Neolithic-to-Iron-Age span of British usage ("late prehistoric" -4000 to -800)
+    "late prehistoric": _each(_BRITAIN, PERIODS["late prehistoric"][0]),
+    "roman": _ROMAN,
+    "ancient rome": _ROMAN,
+    "roman empire": _ROMAN_EMPIRE,
+    "roman imperial": _ROMAN_EMPIRE,
+    "roman republic": _ROMAN_REPUBLIC,
+}
+
 #: A name is read as its folded words: every run of punctuation or whitespace a space, accents
 #: removed, one leading article gone. `Prehistory`, `prehistory` and "the  Prehistory " reach one
 #: entry; so do "Romano-British period", "romano british period" and "La Tène"/"la tene".
@@ -430,9 +730,45 @@ def period_of(name: str) -> tuple[int, int]:
     return PERIODS[key]
 
 
-def start_year(name: str) -> int:
-    """The year a period-word answer writes: the period's own start, never an invented one."""
-    return period_of(name)[0]
+def country_key(country: str) -> str:
+    """`country` as `REGIONAL_STARTS` keys it: the text after its last comma ("Cusco, Peru" is
+    Peru, as `pipeline.normalizers.dates.country_key` reads a country), folded like a period name -
+    "Türkiye" and "turkiye" are one key."""
+    return fold_name(str(country).rsplit(",", 1)[-1])
+
+
+def is_regional(name: str) -> bool:
+    """Whether the period `name` names starts at a different year in different countries (D101), so
+    that its start needs the site's country. `PeriodError` for a name the vocabulary does not know."""
+    period_of(name)
+    return _key_of(name) in REGIONAL_STARTS
+
+
+def start_year(name: str, *, country: str | None) -> int:
+    """The year a period-word answer writes: the period's own start, never an invented one.
+
+    For a period of `REGIONAL_STARTS` (owner decision D101) that is its start in the site's
+    `country`; `PeriodError` when the country is not given or the table has no start for it - a
+    Neolithic site in a country without a cited Neolithic start gets no year, never Britain's. A
+    period that starts at one year everywhere ("victorian", "hellenistic period") ignores
+    `country`."""
+    start = period_of(name)[0]
+    key = _key_of(name)
+    regional = REGIONAL_STARTS.get(key) if key is not None else None
+    if regional is None:
+        return start
+    if country is None or not country_key(country):
+        raise PeriodError(
+            f"{name!r} began at different times in different regions (D101): its start needs the "
+            "site's country"
+        )
+    found = regional.get(country_key(country))
+    if found is None:
+        raise PeriodError(
+            f"{name!r} has no cited start for {country!r} (D101): the regional table holds it for "
+            f"{len(regional)} country spellings, and another region's year is never used"
+        )
+    return found
 
 
 def states_period(quote: str, name: str) -> bool:

@@ -124,13 +124,16 @@ class ResearchError(ValueError):
 
 
 # ------------------------------------------------------------------------------------ the question
-def question_line(candidate: Mapping[str, Any]) -> dict[str, Any]:
-    """The candidate as `fields/answers.check_shape` reads a site: its name and each field's
-    "stored" value - the seed the candidate list read (no seed for the type and the start)."""
+def question_line(candidate: Mapping[str, Any], *, country: str | None) -> dict[str, Any]:
+    """The candidate as `fields/answers.check_shape` reads a site: its name, each field's "stored"
+    value - the seed the candidate list read (no seed for the type and the start) - and `country`,
+    the country an earlier round counted for it (`decided_countries`) or None. A period word's
+    year depends on it (D101); `check_shape` puts the country this very answer gives in its place."""
     point = candidate["p625"]
     return {
         "site_id": candidate["qid"],
         "name": candidate["label_en"],
+        "country": country,
         "fields": {
             "name": {"stored": candidate["label_en"]},
             "coordinates": {"stored": f"{point['lat']}, {point['lon']}"},
@@ -294,16 +297,18 @@ def render_prompt(
     asked: Sequence[str],
     vocabulary: Mapping[str, int],
     notes: Mapping[str, str] | None = None,
+    period_rule: str | None = None,
 ) -> str:
     """The exact question for one candidate - a pure function of the candidate line, the fields
-    and sources asked, the run's country vocabulary and, in a re-ask, why each field's last answer
-    did not count. Import renders it again and refuses an answer to any other text."""
+    and sources asked, the run's country vocabulary, the round's `period_rule` (D101, or None for a
+    round exported before it: `fields.handoff.period_rule_text`) and, in a re-ask, why each field's
+    last answer did not count. Import renders it again and refuses an answer to any other text."""
     notes = notes or {}
     fields = [f for f in FIELDS if f in asked]
     sources = SOURCES in asked
     if not fields and not sources:
         raise ResearchError(f"{candidate['qid']}: a question needs at least one field")
-    line = question_line(candidate)
+    line = question_line(candidate, country=None)  # the seeds only: the prompt shows no country
     point = candidate["p625"]
     out = [
         INTRO,
@@ -340,7 +345,7 @@ def render_prompt(
         if field in notes:
             out.append(RETRY_NOTE.format(why=notes[field]))
         out.append("")
-        out.append(FIELD_RULES[field])
+        out.append(HO.period_rule_text(FIELD_RULES[field], period_rule))
         vocabulary_text = _vocabulary_line(vocabulary) if field == "country" else definitions(field)
         if vocabulary_text:
             out.append("")
@@ -456,10 +461,6 @@ def check_shape(text: str, asked: Sequence[str], line: Mapping[str, Any]) -> dic
         shown = sorted(block) if isinstance(block, dict) else type(block).__name__
         raise AnswerError(f"`fields` carries {shown}, not the asked {sorted(fields)}")
     out: dict[str, Any] = {}
-    shared = [f for f in SHARED_FIELDS if f in fields]
-    if shared:
-        payload = json.dumps({"fields": {f: block[f] for f in shared}}, ensure_ascii=False)
-        out.update(A.check_shape(payload, shared, line, RULE))
     for field in (f for f in OWN_FIELDS if f in fields):
         try:
             parsed = A._block(field, block[field], RULE)
@@ -469,6 +470,15 @@ def check_shape(text: str, asked: Sequence[str], line: Mapping[str, Any]) -> dic
             out[field] = str(exc)
         else:
             out[field] = parsed
+    # A period word's year is its start in the site's country (D101): the country this answer
+    # gives when it passed its checks, else the one an earlier round counted (`question_line`).
+    answered = out.get("country")
+    if isinstance(answered, A.FieldAnswer) and answered.decision == A.REPLACE:
+        line = {**line, "country": answered.value}
+    shared = [f for f in SHARED_FIELDS if f in fields]
+    if shared:
+        payload = json.dumps({"fields": {f: block[f] for f in shared}}, ensure_ascii=False)
+        out.update(A.check_shape(payload, shared, line, RULE))
     if SOURCES in asked:
         out[SOURCES] = _sources(data[SOURCES])
     return out
@@ -524,7 +534,9 @@ def _export_round(
                 stage=STAGE,
                 label=qid,
                 field="+".join(asked_of[qid]),
-                prompt=render_prompt(candidates[qid], asked_of[qid], vocabulary, notes.get(qid)),
+                prompt=render_prompt(
+                    candidates[qid], asked_of[qid], vocabulary, notes.get(qid), HO.D101
+                ),
             )
     record = {
         "round": round_no,
@@ -535,6 +547,7 @@ def _export_round(
         "batches": dict(groups),
         "asked": {qid: list(asked_of[qid]) for qid in sorted(asked_of)},
         "notes": {qid: dict(notes[qid]) for qid in sorted(notes)},
+        HO.PERIOD_RULE_KEY: HO.D101,
         "exported_at": FH.now(),
     }
     C.write_jsonl(run / ROUNDS_FILE, [*rounds, record])
@@ -592,7 +605,11 @@ def check_answer(run: Path, handoff: Path, batch_id: str, label: str, text: str)
         raise ResearchError(f"{label} is not a question of {batch_id}")
     candidate = _by_qid(run)[label]
     try:
-        checked = check_shape(text, record["asked"][label], question_line(candidate))
+        checked = check_shape(
+            text,
+            record["asked"][label],
+            question_line(candidate, country=decided_countries(run).get(label)),
+        )
     except AnswerError as exc:
         return {"ok": False, "problems": {"answer": str(exc)}}
     problems = {f: v for f, v in checked.items() if isinstance(v, str)}
@@ -657,6 +674,7 @@ def _read_attempts(run: Path) -> list[dict[str, Any]]:
     """Every answer of every round, as parsed (no page read yet)."""
     candidates = _by_qid(run)
     vocabulary = C.read_vocabulary(run)
+    countries = decided_countries(run)
     attempts: list[dict[str, Any]] = []
     for record in read_rounds(run):
         handoff = Path(record["handoff"])
@@ -670,7 +688,14 @@ def _read_attempts(run: Path) -> list[dict[str, Any]]:
         for batch_id, labels in sorted(record["batches"].items()):
             for qid in labels:
                 asked = record["asked"][qid]
-                prompt = render_prompt(candidates[qid], asked, vocabulary, record["notes"].get(qid))
+                prompt = render_prompt(
+                    candidates[qid],
+                    asked,
+                    vocabulary,
+                    record["notes"].get(qid),
+                    # a round exported before D101 carries no key: it was asked the old text
+                    record.get(HO.PERIOD_RULE_KEY),
+                )
                 answer = OH.read_answer(
                     handoff, batch_id=batch_id, stage=STAGE, label=qid, prompt=prompt
                 )
@@ -678,7 +703,11 @@ def _read_attempts(run: Path) -> list[dict[str, Any]]:
                 if problem is not None:
                     raise ResearchError(f"{batch_id}/{qid}: {problem}")
                 try:
-                    checked = check_shape(answer.text, asked, question_line(candidates[qid]))
+                    checked = check_shape(
+                        answer.text,
+                        asked,
+                        question_line(candidates[qid], country=countries.get(qid)),
+                    )
                 except AnswerError as exc:
                     checked = dict.fromkeys(asked, f"malformed answer: {exc}")
                 for field in asked:
@@ -869,6 +898,19 @@ def import_rounds(
         ),
         "waiting_questions": len(waiting),
         **pages,
+    }
+
+
+def decided_countries(run: Path) -> dict[str, str]:
+    """`{qid: country}` of every country the last import counted - what a re-ask round's answer
+    that does not ask the country again is checked against (a period word's year, D101). Before the
+    first import there is none: round 0 asks every field, the country with it."""
+    return {
+        str(row["qid"]): str(row["value"])
+        for row in _read_jsonl(run / DECISIONS_FILE)
+        if row["field"] == "country"
+        and row["status"] == COUNTED
+        and row["decision"] in (A.KEEP, A.REPLACE)
     }
 
 

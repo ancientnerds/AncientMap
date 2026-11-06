@@ -28,6 +28,7 @@ for _p in (REPO, REPO / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 from census.fetch import Fetcher  # noqa: E402
+from fields import handoff as HO  # noqa: E402
 from identity.wiki import article_url  # noqa: E402
 from insert_site import candidates as C  # noqa: E402
 from insert_site import plan as P  # noqa: E402
@@ -163,7 +164,7 @@ def record(handoff: Path, batch: str, label: str, text: str, *, role: bool = Tru
 
 
 def line() -> dict[str, Any]:
-    return RS.question_line(candidate())
+    return RS.question_line(candidate(), country=None)
 
 
 # ------------------------------------------------------------------------------------ candidates
@@ -1382,3 +1383,97 @@ class TestTheCommandLine:
 
     def test_a_run_name_lives_under_the_lane_root(self) -> None:
         assert RUN.run_dir("d57-2026-10-24") == C.ROOT / "d57-2026-10-24"
+
+
+# ------------------------------------------------------------------------------------ D101
+class TestThePeriodWordIsRegional:
+    """Owner decision D101 (2026-11-06): a period word's year is its start in the site's country,
+    and a year the source states beats the word. Palmyra (Q5747, Syria) was decided as "neolithic"
+    and written -4000, Britain's start; Syria's Neolithic begins with the PPNA, -10000."""
+
+    PALMYRA = [(WIKI, "Palmyra began as a small Neolithic settlement near the Efqa spring")]
+
+    @staticmethod
+    def anywhere(country: str, lat: float, lon: float) -> dict[str, Any]:
+        return {"agrees": True, "polygon": country}  # the test's point is Rome's, not Palmyra's
+
+    def test_the_country_of_the_same_answer_decides_the_year(self) -> None:
+        answer = full_answer(
+            country=block("replace", "Syria", [(WIKI, "an ancient city in Syria")]),
+            period_start=block("replace", None, self.PALMYRA, period_name="neolithic"),
+        )
+        checked = RS.check_shape(json.dumps(answer), RS.ASKABLE, line())
+        assert checked["period_start"].value == "-10000"
+        assert checked["period_start"].period_name == "neolithic"
+
+    def test_a_reask_reads_the_country_an_earlier_round_counted(self) -> None:
+        answer = {
+            "fields": {
+                "period_start": block("replace", None, self.PALMYRA, period_name="neolithic")
+            }
+        }
+        decided_syria = RS.question_line(candidate(), country="Syria")
+        assert RS.check_shape(json.dumps(answer), ["period_start"], decided_syria)[
+            "period_start"
+        ].value == "-10000"
+        # no country counted and none given: the regional word has no year
+        problem = RS.check_shape(json.dumps(answer), ["period_start"], line())["period_start"]
+        assert "needs the site's country" in problem
+
+    def test_a_stated_year_beats_the_period_word(self) -> None:
+        quotes = [(WIKI, "the largest amphitheatre of the Roman Empire, begun in 72 AD")]
+        answer = full_answer(
+            period_start=block("replace", None, quotes, period_name="roman empire"),
+        )
+        problem = RS.check_shape(json.dumps(answer), RS.ASKABLE, line())["period_start"]
+        assert "beats the period word (D101)" in problem
+
+    def test_the_decided_countries_are_the_counted_ones(self, tmp_path: Path) -> None:
+        rows = [
+            {"qid": "Q1", "field": "country", "status": RS.COUNTED, "decision": "replace",
+             "value": "Syria"},
+            {"qid": "Q2", "field": "country", "status": RS.EXHAUSTED, "decision": None,
+             "value": None},
+            {"qid": "Q3", "field": "country", "status": RS.COUNTED, "decision": "unresolved",
+             "value": None},
+            {"qid": "Q1", "field": "name", "status": RS.COUNTED, "decision": "keep",
+             "value": "Palmyra"},
+        ]  # fmt: skip
+        assert RS.decided_countries(tmp_path) == {}
+        C.write_jsonl(tmp_path / RS.DECISIONS_FILE, rows)
+        assert RS.decided_countries(tmp_path) == {"Q1": "Syria"}
+
+    def test_a_new_round_asks_the_d101_text_and_an_old_one_keeps_its_own(self) -> None:
+        fields = ["period_start"]
+        old = RS.render_prompt(candidate(), fields, VOCABULARY)
+        new = RS.render_prompt(candidate(), fields, VOCABULARY, None, HO.D101)
+        assert '"neolithic" -> -4000' in old and "D101" not in old
+        assert "-10000 in Syria or Jordan" in new and "A year beats a period word" in new
+        assert '"neolithic" -> -4000' not in new
+
+    def test_the_plan_writes_the_year_of_the_country_it_writes(self) -> None:
+        syria = decided(
+            country=("country", "replace", "Syria"),
+            period_start=("period_start", "replace", "-10000", None, RS.COUNTED),
+        )
+        syria["period_start"]["period_name"] = "neolithic"
+        [row] = build(decisions=syria, check=self.anywhere).inserts
+        assert row.period_start == -10000 and row.period_name == "< 4500 BC"
+
+    def test_the_plan_refuses_a_year_read_for_another_country(self) -> None:
+        # a value decided before D101 (Britain's -4000) or for a country that did not count
+        stale = decided(
+            country=("country", "replace", "Syria"),
+            period_start=("period_start", "replace", "-4000", None, RS.COUNTED),
+        )
+        stale["period_start"]["period_name"] = "neolithic"
+        step = build(decisions=stale, check=self.anywhere)
+        assert not step.inserts
+        [refusal] = step.refusals
+        assert refusal.reason == "period-country" and "import again" in refusal.detail
+        no_start = decided(
+            period_start=("period_start", "replace", "43", None, RS.COUNTED),
+        )
+        no_start["period_start"]["period_name"] = "roman"  # Italy: Rome's own land, no province
+        [refusal] = build(decisions=no_start).refusals
+        assert refusal.reason == "period-country" and "no cited start for 'Italy'" in refusal.detail

@@ -88,6 +88,7 @@ from mechanical.plan import parse_tagged_export, write_tagged_export  # noqa: E4
 
 from insert_site import candidates as C  # noqa: E402
 from insert_site import research as RS  # noqa: E402
+from pipeline import periods as PV  # noqa: E402
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402
 from pipeline.normalizers.dates import AMERICAS, OCEANIA, e3_region  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
@@ -667,6 +668,22 @@ def build_inserts(
             continue
         start_text = _value(mine, "period_start")
         start = None if start_text is None else int(str(start_text))
+        named = mine["period_start"].get("period_name") if start is not None else None
+        if named is not None:
+            # D101: a period word's year is its start in the site's country - the country this
+            # row is written with, which must be the one the year was read for
+            try:
+                regional = PV.start_year(str(named), country=country)
+            except PV.PeriodError as exc:
+                refuse("period-country", str(exc))
+                continue
+            if regional != start:
+                refuse(
+                    "period-country",
+                    f"{named!r} starts at {regional} in {country}, not at the decided {start}: "
+                    "import again",
+                )
+                continue
         out_of_scope = scope_refusal(start, country, lat, lon)
         if out_of_scope is not None:
             refuse(out_of_scope, f"period_start {start}, {country}")

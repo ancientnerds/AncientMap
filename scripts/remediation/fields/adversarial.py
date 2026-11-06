@@ -287,7 +287,10 @@ def select(
     wanted = math.ceil(round(keep_share * len(keeps), 6))
     sampled = draw.sample(keeps, wanted)
     cells = [
-        packet(d, classified[d["site_id"]], Q.Library(REPO, pages_dir(d, run)), wiki)
+        {
+            **packet(d, classified[d["site_id"]], Q.Library(REPO, pages_dir(d, run)), wiki),
+            HO.PERIOD_RULE_KEY: HO.D101,
+        }
         for d in sorted([*replaces, *sampled], key=key)
     ]
     record = {
@@ -346,6 +349,31 @@ CRITERIA = {
         "hill it lies in, not a list, not a namesake - and be the article's own address."
     ),
 }
+
+#: Owner decision D101 (2026-11-06): the period-word clause of `CRITERIA["period_start"]` as a cell
+#: selected from now on is asked it (`HO.PERIOD_RULE_KEY` in the cell). A cell selected before
+#: carries no key and keeps its text: import renders the prompt again and compares its hash.
+_FIXED_TABLE_CLAUSE = (
+    'a period word (the value is then the year the fixed table gives that period: "iron age" -800, '
+    '"neolithic" -4000)'
+)
+_D101_CLAUSE = (
+    "a period word (the value is then the start the fixed table gives that period in the site's "
+    'country, D101: "neolithic" -10000 in Syria, -4000 in England; "roman" 43 in England, -218 in '
+    "Spain) - and a period word is no answer where the page states a year, century or BP age for "
+    "the site's start: that date is the value"
+)
+
+
+def criteria(field: str, period_rule: str | None) -> str:
+    """What to check of `field`, as a cell selected under `period_rule` (D101 or None) is asked it."""
+    text = CRITERIA[field]
+    if field != "period_start" or period_rule is None:
+        return text
+    if period_rule != HO.D101:
+        raise AdversarialError(f"a cell's {HO.PERIOD_RULE_KEY} {period_rule!r} is not {HO.D101!r}")
+    return HO._swap(text, _FIXED_TABLE_CLAUSE, _D101_CLAUSE)
+
 
 QUESTION = """\
 You are the adversarial checker (lane wd5, the re-check) of a curated database of ancient sites. A \
@@ -431,7 +459,8 @@ def render_prompt(cell: Mapping[str, Any], note: str | None = None) -> str:
         ]
     if cell["value_page"]:
         out += ["", f"The page the value names was served: {json.dumps(cell['value_page'])}"]
-    out += ["", "## What to check", "", CRITERIA[field], ""]
+    # a cell selected before D101 carries no key: it was asked the fixed-table clause
+    out += ["", "## What to check", "", criteria(field, cell.get(HO.PERIOD_RULE_KEY)), ""]
     if cell["decision"] == A.KEEP:
         out += [
             "This is a keep: the stored value stands on the quote(s). Check the same things "
