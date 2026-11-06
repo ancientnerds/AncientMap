@@ -5,11 +5,11 @@ Run on the workstation (Windows Task Scheduler, weekly, Sunday about 06:00 UTC, 
 
 * **VPS -> workstation.** The newest `database_*.dump` under `/var/www/ancientnerds/backups/<dir>/`
   is copied to `<offsite>/db/`. sha256 is taken on the VPS (`sha256sum` over ssh) and on the
-  workstation (hashlib) and must be equal; a `SHA256SUMS` file is written on both sides. The newest
-  2 dumps stay locally (each about 0.9 GB).
+  workstation (hashlib) and must be equal; a `SHA256SUMS` file is written on both sides. Only the
+  newest dump stays locally (about 0.9 GB; owner D106, 2026-11-06).
 * **Workstation -> VPS.** `output/remediation` of the main checkout is packed (no `*.env`, no
   `handoff/`, `pages/`, `cache/`), pushed to `/var/www/ancientnerds/backups/remediation-evidence/`
-  and verified the same way. The newest 2 tars stay locally, the newest 4 on the VPS.
+  and verified the same way. The newest tar stays locally (D106), the newest 4 on the VPS.
 
 A copy lands under its final name only after its sha256 matched. A mismatch, a failed ssh/scp or a
 missing dump stops the run with one line (exit 2); nothing is retried or substituted. The VPS cron
@@ -39,7 +39,7 @@ REMOTE_EVIDENCE = f"{REMOTE_BACKUPS}/remediation-evidence"
 DEFAULT_OFFSITE = Path("C:/PythonProjects/AncientMap-Offsite")
 DEFAULT_CHECKOUT = Path("C:/PythonProjects/AncientMap")
 MAX_AGE_HOURS = 26
-KEEP_LOCAL = 2
+KEEP_LOCAL = 1  # owner D106 (2026-11-06): C: is nearly full; the VPS keeps 4 evidence tars
 KEEP_REMOTE_EVIDENCE = 4
 SUMS = "SHA256SUMS"
 EVIDENCE_PREFIX = "remediation-evidence_"

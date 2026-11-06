@@ -1,0 +1,47 @@
+2026-11-06T11:14:09Z
+# single files: bytes sha256 path
+100829979	0be0ee731a8df575af2512fe422ea4472a20c4fcb03b24e582333b6496858d10  sites_dump.dump
+2542	4ffa631ea0f660bb55c0466a2f97ffa012f5e59508198294df3fd7abbf3eba79  scripts/auto_publish_batch.py
+4080	1f162f4d4ccfe42db39b39be8b6e955722c9c5a6dd12a9f38241452d164579a1  scripts/remediation_00.sh
+566	4cc33ca3f4204c16ee7fc23f3ddf2652010e6c7b6987d3a698394bbbd88963a3  scripts/test_qdrant.py
+1968	571fc8124a596ac217d19894fc54d687a2dd2d924cd65ad1486e5d35fa3e150c  scripts/wait_backfill_entities.py
+646	8d7cb343688530f663300919de10191cef01234ac9f81c5c1c9f09efb6ec02d4  backups/2026-11-05_d14a-pre-move/DRILL_REPORT.txt
+0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  backups/2026-11-05_d14a-pre-move/DRILL_RESTORE.log
+547940	407377d913efc1b270c3c8ee6ca98ae345a6fc9002e3c5fbb5963a0b03493d81  backups/2026-11-05_d14a-pre-move/card_stats.csv.gz
+899092542	750c2e8ef16597d71873ae8e31dbdbefc59b86ab981a51403d05a0c80d4cb3b6  backups/2026-11-05_d14a-pre-move/database_2026-11-05_d14a-pre-move.dump
+1201833	cb53caaa9f2a31c290b7cc83407c880b0a6a6fd3a9236a114054036cf4538ba1  backups/2026-11-05_d14a-pre-move/site_content_links.csv.gz
+211591	2d58167e95de53059374c0b787973f50fa16c054e66e507e0aa530f175a79ec3  backups/2026-11-05_d14a-pre-move/site_external_ids.csv.gz
+4224962	2976c2a18cc074549d06addc0617be0c15a2dd812273fe1c914a021eda65ca57  backups/2026-11-05_d14a-pre-move/site_name_token_df.csv.gz
+12491339	df6bc9eaeeee3404f5ab6dcf5c786db5b9b7e2daa52ca4a6b9b36f7745df48ca  backups/2026-11-05_d14a-pre-move/snapshot_rows.csv.gz
+1274770	ef6466486d829429585c1627ea4f8da0165c8369410b7445fdbcb0bf9d4ede3f  backups/2026-11-05_d14a-pre-move/unified_site_names.csv.gz
+3931719	c208197ed976ecece4442f51b23b6c4886740b83ff903e8f0b3345a3f27cf8d3  backups/2026-11-05_d14a-pre-move/unified_sites.csv.gz
+4563065	b8836c36b4a0439402345d5130025ee8d55d1703083c136bcfd63be3e30c904b  backups/2026-11-05_d14a-pre-move/wiki_images.csv.gz
+651	834ee845376d4bcf4f78e5fb62210fa924be70ae2b5a5fa506899f52f5788786  backups/2026-11-05_d14a-pre-cardstats/DRILL_REPORT.txt
+0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  backups/2026-11-05_d14a-pre-cardstats/DRILL_RESTORE.log
+547940	407377d913efc1b270c3c8ee6ca98ae345a6fc9002e3c5fbb5963a0b03493d81  backups/2026-11-05_d14a-pre-cardstats/card_stats.csv.gz
+899101252	45c2e0caa6115f49050f2211c4cada73bcf1d90666a964ec50bccbbca4f9a77d  backups/2026-11-05_d14a-pre-cardstats/database_2026-11-05_d14a-pre-cardstats.dump
+1202478	7a0c57e8f8ac988dd54926d8857c7e2f4159f9c4cdb7ec4ee901d331d1a7bde3  backups/2026-11-05_d14a-pre-cardstats/site_content_links.csv.gz
+211591	2d58167e95de53059374c0b787973f50fa16c054e66e507e0aa530f175a79ec3  backups/2026-11-05_d14a-pre-cardstats/site_external_ids.csv.gz
+4224962	2976c2a18cc074549d06addc0617be0c15a2dd812273fe1c914a021eda65ca57  backups/2026-11-05_d14a-pre-cardstats/site_name_token_df.csv.gz
+12491339	df6bc9eaeeee3404f5ab6dcf5c786db5b9b7e2daa52ca4a6b9b36f7745df48ca  backups/2026-11-05_d14a-pre-cardstats/snapshot_rows.csv.gz
+1274347	4e86ab7c701258d1dc18a5447611731dfbca8b39ff5133e3c087d0c9ab1599b4  backups/2026-11-05_d14a-pre-cardstats/unified_site_names.csv.gz
+3931719	c208197ed976ecece4442f51b23b6c4886740b83ff903e8f0b3345a3f27cf8d3  backups/2026-11-05_d14a-pre-cardstats/unified_sites.csv.gz
+4563065	b8836c36b4a0439402345d5130025ee8d55d1703083c136bcfd63be3e30c904b  backups/2026-11-05_d14a-pre-cardstats/wiki_images.csv.gz
+# directories: bytes files manifest_sha256(sorted sha256sum of all files) path
+357328191	20156	8bf16544f8b548da4ea0a00d55f74a95ed2b587e58f95c27dddc82605a62f9d6	ancient-nerds-map/node_modules-bak-1772656741
+374640968	20571	5c1f16ac04b5d180e7d348b04c5ea318f1360693b4fcc9443ae8a924898dcdc0	ancient-nerds-map/node_modules-bak-1772752406
+374640968	20571	5c1f16ac04b5d180e7d348b04c5ea318f1360693b4fcc9443ae8a924898dcdc0	ancient-nerds-map/node_modules-bak-1772754905
+399387368	20726	3da52797c628f536f5ecada46592d86bf29b1a5e38a6dc7f58fa3ae524cca625	ancient-nerds-map/node_modules-bak-1773529711
+399387368	20726	3da52797c628f536f5ecada46592d86bf29b1a5e38a6dc7f58fa3ae524cca625	ancient-nerds-map/node_modules-bak-1773685597
+# non-deploy-owned entries:
+114838
+# Deleted 2026-11-06 ~11:20 UTC (owner D107), all verified untracked (git ls-files 0, git status ?? or !!) and not referenced
+# in /etc/nginx, docker-compose*.yml, /etc/cron*, /var/spool/cron, deploy crontab.
+# The 5 node_modules-bak-* dirs held ~22-23k root-owned entries each: removed via throwaway alpine container --network none
+# (same method as D98). scripts/test_qdrant.py was root-owned (removable, scripts/ is deploy-owned).
+# The two d14a backups live under backups/ (gitignored, .gitignore:43); 2,091,446,734 bytes together.
+# NOT deleted: pfps/ (301 files, 1,578,766,642 bytes) and tts_test/ (46 files, 8,082,059 bytes) are TRACKED in git
+# (git ls-files 301 / 46, last commit 515d2af), so not leftovers: a VPS delete would be restored by the next deploy's
+# git checkout -- . ; removing them needs a git rm on main -> owner question.
+# Kept as decided: .env.bak-2026-07-31, .env.bak-2026-09-26, .env.bak-2026-10-07-haiku55, .env.bak-theostop-20261005-165605.
+# VPS disk: 125G used / 69G free before -> 121G used / 72G free after.

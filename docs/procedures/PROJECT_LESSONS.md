@@ -131,14 +131,16 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   verworfen. `scripts/remediation/offsite_sync.py` läuft auf der **Workstation**:
   (1) der neueste `database_*.dump` unter `/var/www/ancientnerds/backups/<dir>/` kommt per scp
   nach `C:/PythonProjects/AncientMap-Offsite/db/` (sha256 per `sha256sum` über ssh und per
-  hashlib, gleich oder Abbruch; `SHA256SUMS` auf beiden Seiten; lokal bleiben die neuesten 2,
-  je 0,9 GB); (2) `output/remediation` des Hauptcheckouts (ohne `*.env`, `handoff/`, `pages/`,
+  hashlib, gleich oder Abbruch; `SHA256SUMS` auf beiden Seiten; lokal bleibt nur der neueste,
+  0,9 GB); (2) `output/remediation` des Hauptcheckouts (ohne `*.env`, `handoff/`, `pages/`,
   `cache/`) geht als `remediation-evidence_<Datum>.tar.gz` nach
-  `backups/remediation-evidence/` (gleiche Prüfung; lokal in `AncientMap-Offsite/evidence/` die
-  neuesten 2, auf dem VPS die neuesten 4). Gemessen 2026-10-08: das Tar war **2,4 GB** (5,0 GB
+  `backups/remediation-evidence/` (gleiche Prüfung; lokal in `AncientMap-Offsite/evidence/` nur
+  das neueste, auf dem VPS die neuesten 4; Owner D106, 2026-11-06: `KEEP_LOCAL = 1`, weil C: zu
+  96 % voll war). Gemessen 2026-10-08: das Tar war **2,4 GB** (5,0 GB
   roh, davon `served_image` 2,0 GB), Bauen 4,4 min; gemessen 2026-11-05 ist es **~6,7 GB**
-  (`remediation-evidence_2026-11-05.tar.gz`, 6.719.861.161 Byte), mit zwei lokalen Kopien
-  belegt `AncientMap-Offsite/evidence/` also ~13,4 GB auf dem knappen C:. Eine Kopie erscheint erst nach bestandener
+  (`remediation-evidence_2026-11-05.tar.gz`, 6.719.861.161 Byte); mit einer lokalen Kopie
+  belegt `AncientMap-Offsite/evidence/` ~6,7 GB, während eines Laufs kurz ~13,4 GB (das neue Tar
+  wird gebaut und geprüft, bevor das alte gelöscht wird), also vor dem Lauf ≥ 10 GB frei halten. Eine Kopie erscheint erst nach bestandener
   Prüfung unter ihrem Namen (`.part` davor). Ist der neueste Dump **älter als 26 h**, kopiert der
   Lauf trotzdem, schreibt dann **eine** Zeile `OFFSITE-SYNC STALE: …` nach stderr und endet mit
   Exit 1; der VPS-Cron hat kein `MAILTO`, diese Zeile ist der Alarm für ein ausgefallenes
