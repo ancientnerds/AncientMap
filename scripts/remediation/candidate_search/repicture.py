@@ -16,6 +16,8 @@ The needs, each the question the consuming step itself asks:
 * `calibration` - the pilot judge's adjudication sample of the image calibration
   (`image_roles/calibrate.adjudication_sample`, the sealed seed and count), `--calibration-dir D
   --read READ.json`;
+* `gold` - the pool pictures a clean-gold draw of D117 holds (`image_roles/clean_gold.py`, its
+  `DRAW.jsonl`: every case with a `picture_url`), `--calibration-dir D`;
 * `pool` - the whole pool of the population's sites, for a separate pool re-judge (D10 C4), `--run-dir
   C`. The D17 search re-finds these sites' candidates anyway (a MiniMax verdict excludes no file,
   `flow.MINIMAX_WORD`), so this need is optional.
@@ -34,6 +36,7 @@ the pictures never asked, before it exits - the manifest always describes the di
     repicture.py --old-run OLD --need recheck     --run-dir C --served-run S   [--dry-run]
     repicture.py --old-run OLD --need credit      --sites CREDIT_SITES_CLAUDE.txt [--dry-run]
     repicture.py --old-run OLD --need calibration --calibration-dir D --read READ.json [--dry-run]
+    repicture.py --old-run OLD --need gold        --calibration-dir D [--dry-run]
     repicture.py --old-run OLD --need pool        --run-dir C [--dry-run]
 
 The re-fetched bytes are not provably the bytes MiniMax judged (Commons may re-render a thumbnail);
@@ -68,7 +71,7 @@ from candidate_search import judge as CJ  # noqa: E402
 from candidate_search import pool as PL  # noqa: E402
 from candidate_search import search as CS  # noqa: E402
 
-NEEDS = ("recheck", "credit", "calibration", "pool")
+NEEDS = ("recheck", "credit", "calibration", "gold", "pool")
 HOSTS = frozenset({"upload.wikimedia.org", "thumb.wikimedia.org"})
 #: The renderings Commons serves for a still picture (an SVG or TIFF original renders as PNG/JPEG).
 RENDER_MIMES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
@@ -141,6 +144,23 @@ def need_calibration(
         per_class=int(thresholds["roles"]["pilot_judge"]["per_class"]),
         seed=int(thresholds["seed"]),
     )
+
+
+def need_gold(old_run: Path, calibration_dir: Path) -> list[tuple[str, dict[str, Any]]]:
+    """The pool pictures of a clean-gold draw (D117): its cases that carry a `picture_url`, each
+    under the old run's picture name - the path the draw recorded."""
+    from image_roles import clean_gold as CG
+
+    cases, _ = CG.drawn(calibration_dir)
+    out = []
+    for case in cases:
+        if not case.get("picture_url"):
+            continue
+        candidate = {"file": case["file"], "picture_url": case["picture_url"]}
+        if Path(case["path"]).resolve() != PL.picture_path(old_run, candidate).resolve():
+            raise RepictureError(f"{case['case_id']}: its path is not {old_run.name}'s picture")
+        out.append((str(case["site"]["site_id"]), candidate))
+    return out
 
 
 def need_pool(old_run: Path, run: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -264,7 +284,7 @@ def repicture(
     The manifest describes the need as it stands after this run - one line per needed picture -
     and is rewritten by every run of the same need, because it is a statement about the disk, not
     a record of an answer. A picture needed twice (one candidate of two needs) is one line."""
-    if need not in NEEDS:
+    if need not in NEEDS and not need.startswith("gold-"):
         raise RepictureError(f"need {need!r} is not one of {NEEDS}")
     if not needed:
         raise RepictureError(f"the need {need!r} names no picture")
@@ -328,6 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "recheck": ("run_dir", "served_run"),
         "credit": ("sites",),
         "calibration": ("calibration_dir", "read"),
+        "gold": ("calibration_dir",),
         "pool": ("run_dir",),
     }[args.need]
     try:
@@ -340,10 +361,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             needed = need_credit(args.old_run, args.sites)
         elif args.need == "calibration":
             needed = need_calibration(args.old_run, args.calibration_dir, args.read)
+        elif args.need == "gold":
+            needed = need_gold(args.old_run, args.calibration_dir)
         else:
             needed = need_pool(args.old_run, args.run_dir)
         commons = CM.Commons(args.old_run / "commons", research_web.client(), pace=CM.PACE_SECONDS)
-        payload = repicture(args.old_run, args.need, needed, commons, dry_run=args.dry_run)
+        # a clean gold's manifest is its directory's, so the two directories of D117 keep both
+        label = f"gold-{args.calibration_dir.name}" if args.need == "gold" else args.need
+        payload = repicture(args.old_run, label, needed, commons, dry_run=args.dry_run)
     except (ST.StateError, CM.CommonsError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1

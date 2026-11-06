@@ -297,7 +297,7 @@ class TestThePrompt:
     def test_the_recheck_carries_the_context_the_first_check_lacked(self) -> None:
         q = _question(context=_context(THASOS))
         prompt = q.prompt()
-        assert q.prompt_id == "served-check-v2"
+        assert q.prompt_id == "served-check-v3"
         for part in (
             "re-check a verdict",
             "other_site: a view of a different island",
@@ -311,8 +311,9 @@ class TestThePrompt:
             "commons.wikimedia.org/...",
         ):
             assert part in prompt, part
-        # the verdict terms are the same words as the first check's
-        assert V._VERDICT_TERMS in prompt
+        # the verdict terms are D116's: a genuine part of the site in a museum depicts it
+        assert V._VERDICT_TERMS_D116 in prompt and V._VERDICT_TERMS not in prompt
+        assert "the Ishtar Gate in Berlin for Babylon" in prompt
 
     def test_a_missing_part_of_the_context_reads_none(self) -> None:
         q = _question(
@@ -445,7 +446,7 @@ class TestTheRestrictedStages:
         assert set(rows) == set(SITES)
         assert rows[THASOS]["context"]["earlier_verdict"] == "other_site"
         checks = {r["site_id"]: r for r in V.read_jsonl(run / V.CHECK)}
-        assert {r["prompt_id"] for r in checks.values() if r["prompt_id"]} == {"served-check-v2"}
+        assert {r["prompt_id"] for r in checks.values() if r["prompt_id"]} == {"served-check-v3"}
         assert checks[THASOS]["answered_by"].startswith("image_adversarial:")
 
     def test_only_a_confirmed_other_site_goes_on_to_the_replacement_stage(

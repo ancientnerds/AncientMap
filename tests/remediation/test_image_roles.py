@@ -462,6 +462,16 @@ class TestTheDepictsRole:
         assert "street" in line and "Museum objects" in line and "generic" in line
         assert "legible sign" in line
 
+    def test_a_genuine_part_of_the_site_in_a_museum_depicts_it(self) -> None:
+        # D116 (2026-11-06): the verdict terms and the judge line say the same about museum pieces
+        assert DP.PROMPT_ID == "image-depicts-v2"
+        assert "a genuine part of this site or a find from it" in DP.VERDICT_TERMS
+        assert "a museum included" in DP.VERDICT_TERMS
+        line = DP.JUDGE_LINE
+        assert "the Ishtar Gate in Berlin for Babylon" in line and "shows the site: depicts" in line
+        assert "nothing in the picture ties to this site" in line and "is other_site" in line
+        assert "with no find context are not the site" not in line
+
     def test_a_site_without_an_article_says_so(self) -> None:
         (q,), _, _ = DP.build_questions(
             [_site("a", ["1.jpg"], wikipedia_lead=None)], lambda c: jpeg()
@@ -1060,7 +1070,7 @@ class TestTheWikiCache:
 
 def test_the_hero_recheck_shares_the_served_image_question_and_its_strict_parser() -> None:
     """One re-check, two lanes: the D15 prompt and the D17 prompt are the same text."""
-    assert HR.PROMPT_ID == V.CHECK_PROMPT_V2_ID
+    assert HR.PROMPT_ID == V.CHECK_PROMPT_V3_ID
     assert (
         V.parse_check(
             json.dumps(

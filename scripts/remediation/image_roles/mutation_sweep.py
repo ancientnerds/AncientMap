@@ -2056,6 +2056,28 @@ D103_CASES: list[Case] = [
       "test_only_the_failed_slots_are_asked_and_the_pilot_judge_is_not_asked_again", T_CAL),
 ]  # fmt: skip
 
+CLEAN_GOLD = ROLES_DIR / "clean_gold.py"
+T_GOLD = "tests/remediation/test_image_clean_gold.py"
+#: D117 (2026-11-06): the clean gold's own guards.
+D117_CASES = [
+    g("d117: a moved prompt is refused", CLEAN_GOLD, "    if moved:",
+      "test_a_moved_prompt_is_refused", T_GOLD),
+    g("d117: no void after the first label", CLEAN_GOLD,
+      "    if any((directory / s.export_file).is_file() for s in _specs(document).values()):",
+      "test_a_case_whose_picture_is_not_served_is_voided_before_the_labels", T_GOLD),
+    g("d117: a shown case is never voided", CLEAN_GOLD,
+      '    if Path(found[0]["path"]).is_file():',
+      "test_a_case_whose_picture_is_not_served_is_voided_before_the_labels", T_GOLD),
+    g("d117: each labeller its own handoff", CLEAN_GOLD,
+      "    if any(o.resolve() == handoff.resolve() for o in others):",
+      "test_a_labeller_shares_no_handoff", T_GOLD),
+    g("d117: two labellers are two agents", CLEAN_GOLD, "    if agents_a & agents_b:",
+      "test_one_agent_cannot_be_both_labellers", T_GOLD),
+    g("d117: the orchestrator's override", CLEAN_GOLD,
+      '        if check is not None and not check["agrees"]:',
+      "test_the_fixed_gold_takes_the_check_and_draws_the_re_check", T_GOLD),
+]  # fmt: skip
+
 CASES: list[Case] = [
     *D18_CASES,
     *D15_CASES,
@@ -2065,6 +2087,7 @@ CASES: list[Case] = [
     *FIX_CASES,
     *CLOSEOUT_CASES,
     *D103_CASES,
+    *D117_CASES,
 ]
 
 

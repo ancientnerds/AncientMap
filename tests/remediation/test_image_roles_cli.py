@@ -107,6 +107,9 @@ class TestTheStageCommands:
             "image-recheck": "image_adversarial",
             "image-depicts-calibration": "image_depicts",
             "image-adjudicate": "pilot_judge",
+            # D117: the clean gold's labellers (two independent, a third on the disputes)
+            **{f"image-gold-label-{w}": "pilot_judge" for w in "abc"},
+            **{f"image-kind-label-{w}": "pilot_judge" for w in "abc"},
         }
 
     def test_a_recheck_round_selects_its_own_files(self, tmp_path: Path) -> None:

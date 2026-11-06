@@ -14431,3 +14431,25 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   - With the gold corrected and the museum-object rule decided as "counts", the re-check would reach 197-199/200
     and the depicts role would fail only the zero-tolerance foreign rule (2 real errors). Not applied: the gold is
     sealed byte for byte; a correction is a new calibration. Owner questions O-D103a..d (lane report).
+
+## 2026-11-06 - Lane d117-images, iteration 1: D116 rule, D118 probe exported, D117 clean gold drawn
+
+- **D116 applied (code, no answers):** one museum rule in the depicts prompt (`image-depicts-v2`: the verdict
+  terms count "a genuine part of this site or a find from it, also where it is kept now"; the judge line's
+  museum clause says the same, with the Ishtar Gate in Berlin as its example; a museum object nothing in the
+  picture ties to the site stays `other_site`) and in the re-check (`served-check-v3`, `_VERDICT_TERMS_D116`).
+  `served-check-v1/v2` keep their frozen text. Runbook WD2 3.8.6.
+- **D118 probe exported, not answered:** `prefilter_probe.py export --source image-roles-v2` ->
+  `calibration/prefilter-probe-d118`, handoff `handoff/image-probe-d118-prefilter`: v2's 5 questions
+  (questions_sha256 777a7a73..., equal to v2's), a candidate-model trial of Opus for `image_prefilter`
+  (role stays on Sonnet until the evidence is in).
+- **image-roles-v3 sealed** (thresholds sha256 83f90099..., D119 false_depicts_max 0.02, no zero-foreign
+  rule; prompts and 8 modules pinned) **and drawn** from a fresh read (2026-11-06T15:57:33Z, 4,909 sites,
+  48,918 image rows; read sha256 58f8b4d4...): 418 cases at 130 sites (hero 70, gallery 126, gallery_trap 14,
+  neighbour 51, pair_own 30, pair_other 30 incl. Stonehenge/Woodhenge and Avebury/Silbury Hill, museum 29,
+  pool 68), none of them in image-roles-v1/v2. The 68 pool pictures re-fetched serially at 1 s
+  (`repicture.py --need gold`): 67 on disk, 1 refused (Qasr Qaroun, the search recorded a 960 px URL) and
+  voided with its reason before any label (case pool-e3c855d49896): 417 cases.
+- **Labels exported:** two independent rounds, 129 questions each in 22 batches (handoffs
+  `image-gold3-label-a`, `-b`, role pilot_judge Opus xhigh, web). No answer yet.
+- Mutation sweep: 6 new cases (`img d117`); all 351 needles present once and every mutant compiles.

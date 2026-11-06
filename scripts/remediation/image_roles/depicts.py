@@ -43,17 +43,21 @@ QUALITIES = (1, 2, 3, 4, 5)
 #: The most candidates of one site that one question holds (`judge.IMAGES_PER_BATCH`).
 MAX_PER_SITE = CJ.IMAGES_PER_BATCH
 
-PROMPT_ID = "image-depicts-v1"
+#: v2 (owner decision D116, 2026-11-06): a genuine part of the site now in a museum shows the site.
+#: v1 contradicted itself there - its verdict terms counted "an object found at this site", its
+#: judge line called every museum object `other_site` - and the 2026-09-19 labels called the
+#: Ishtar Gate in Berlin a foreign place (image-roles-v2: 10 of 13 "foreign" rows called depicts).
+PROMPT_ID = "image-depicts-v2"
 JUDGE_LINE = """How to judge:
 - The picture decides, never the file name or the title: a name often promises more than the picture shows (low rubble under a name that claims tall towers).
 - A refusal is better than a wrong depicts. A wrong picture on a site's page costs credibility; a missing picture costs nothing. When the picture does not make this site recognisable, answer region_or_type and say why in the note.
 - A site named for a street or a road: a modern street scene is not evidence. Without a legible sign of this site the answer is region_or_type ("sign not legible"); a legible sign of another place makes it other_site; only a sign or feature of this site itself is evidence for depicts.
-- Museum objects (coins, vases, statues photographed on a white or neutral ground) with no find context are not the site: other_site. An inscription that names a mint or a workshop names where the object was made, not where it was found.
+- Museum objects: a genuine part of this site now kept in a museum or elsewhere - a gate, a relief, a wall, a mosaic, a sculpture or a find taken from this site (the Ishtar Gate in Berlin for Babylon) - shows the site: depicts, when the picture lets you recognise it as from this site. A museum object that nothing in the picture ties to this site (a coin, a vase or a statue on a white or neutral ground) is other_site. An inscription that names a mint or a workshop names where the object was made, not where it was found.
 - A site whose name is generic (a type such as "Roman Walls" or "Stone Circle") names no place: a picture of one example is not this site unless the picture shows something that identifies it (a sign, a caption, a landmark in view). Otherwise region_or_type.
 - A geotag is a hint, not proof: a file geotagged near the point can show a modern building, a view or a neighbouring monument.
 - A drawing, plan or reconstruction counts as depicts when it is clearly of this site."""
 
-VERDICT_TERMS = """depicts: the picture shows this site itself - its remains, structures, excavation or rock art, or a setting in which the site is recognisable - or an object found at this site.
+VERDICT_TERMS = """depicts: the picture shows this site itself - its remains, structures, excavation or rock art, or a setting in which the site is recognisable - or a genuine part of this site or a find from it, also where it is kept now (a museum included).
 region_or_type: the picture shows only the region, the landscape, a town or village around the site, a view from it, a map, a generic example of the site's type, an information panel, plants or animals, or anything else in which this site is not what is shown; also a picture that does not make the site recognisable.
 other_site: the picture shows another archaeological site or monument, an object from elsewhere, a person, a coin or a modern scene unrelated to this site."""
 

@@ -7,7 +7,7 @@ the registry (`roles.ROLES`) names the model, this module only names the role.
 The page's picture is the one candidate the depicts role called `depicts` with the best quality - and
 the one whose mistake the page shows to everybody. Before it is written, a second judge looks at it
 alone, with the context the first one had and the first one's verdict: the same question and the same
-stricter answer shape as the D15 re-check of the 47 heroes (`served_image.vision.CHECK_PROMPT_V2`,
+stricter answer shape as the D15 re-check of the 47 heroes (`served_image.vision.CHECK_PROMPT_V3`, D116,
 `parse_check`), so the two re-checks cannot drift apart. An `other_site` verdict must name what the
 picture shows and cite its Commons page.
 
@@ -35,7 +35,7 @@ from served_image import vision as V  # noqa: E402
 from image_roles import pictures as PX  # noqa: E402
 from image_roles import stage as SG  # noqa: E402
 
-PROMPT_ID = V.CHECK_PROMPT_V2_ID
+PROMPT_ID = V.CHECK_PROMPT_V3_ID
 PER_BATCH = V.CHECK_PER_BATCH
 #: The earlier stage the context names: the depicts role's verdict is what is re-checked.
 EARLIER_STAGE = "image-depicts"

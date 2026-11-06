@@ -1656,6 +1656,56 @@ $PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output
 for role in image_prefilter image_depicts adversarial; do $PY $CAL evaluate --dir $D2 --role $role; done
 ```
 
+#### 3.8.6 D116-D119 - the museum rule, the prefilter probe and the clean gold (`image-roles-v3`, 2026-11-06)
+
+Owner answers of 2026-11-06 evening to the image-roles-v2 report:
+
+* **D116 (museum pieces):** a genuine part of the site now in a museum (the Ishtar Gate in Berlin)
+  shows the site. v1 contradicted itself: its depicts terms counted "an object found at this site",
+  its judge line called every museum object `other_site`, and the 2026-09-19 labels called the
+  Ishtar Gate in Berlin a foreign place. Now one rule in both places: the depicts prompt
+  (`image-depicts-v2`: verdict terms and judge line) and the re-check (`served-check-v3`,
+  `vision._VERDICT_TERMS_D116`, `CHECK_PROMPT_V3`; `hero_recheck.PROMPT_ID` and D15's re-check bind
+  to it). A museum object that nothing in the picture ties to the site stays `other_site`. The first
+  check's frozen prompt (`served-check-v1`) and `served-check-v2` keep their text: their recorded
+  questions are read back against it.
+* **D118 (prefilter at Opus first):** `image_roles/prefilter_probe.py` asks v2's five prefilter
+  questions (300 pictures, byte for byte) of Opus as a candidate-model trial (`--candidate-model
+  claude-opus-5-5`; `stage.brief`/`stage.import_answers` take `candidate_model`), measured against
+  v2's gold beside Sonnet's answers, with the 44 cases Sonnet failed listed one by one. The tier
+  move v2 named (Sonnet -> Opus) is applied only on that evidence; the prefilter is then measured on
+  its own clean gold (`image-roles-v3p`).
+* **D117 (clean gold):** `image_roles/clean_gold.py` - module docstring for the strata and the
+  order. Thresholds and pins (prompt texts strict, module files recorded) sealed before the draw;
+  the draw (no truth) logged before the first label; two Opus xhigh labellers (`pilot_judge`, stages
+  `image-gold-label-a|b`, each its own handoff and agent names) and a third (`-c`) on the binary
+  disputes only; the majority is the truth; 30 labels checked by the orchestrator against the
+  pictures (`SPOTCHECK.jsonl`, an override only with its note); `fix` writes GOLD.jsonl/JOBS.jsonl
+  and draws the 200 re-check cases (100 depicting, 100 not, stratified by group) from the labelled
+  ones. A drawn case whose picture Commons does not serve at 1280 px is voided before the labels,
+  with its reason (`void`; a case on disk is never voided).
+* **D119 (wrong site):** `false_depicts_max` 0.02 (was 0.03), no zero-tolerance foreign rule
+  (`every_foreign_not_depicts` false); the other thresholds as before.
+
+```bash
+CG=scripts/remediation/image_roles/clean_gold.py
+D3=output/remediation/calibration/image-roles-v3
+$PY scripts/remediation/served_image/run.py read --run-dir output/remediation/calibration/image-roles-v3-inputs
+$PY $CG seal --dir $D3 --kind depicts
+$PY $CG draw --dir $D3 --read output/remediation/calibration/image-roles-v3-inputs/READ.json     --wiki-cache output/remediation/final-2026-10-08/wiki_cache     --pool-run output/remediation/candidate_search/candidates-2026-10-06     --exclude-gold output/remediation/calibration/image-roles-v1/GOLD.jsonl     --exclude-heroes output/remediation/calibration/image-roles-v1-inputs/OTHER_SITE_HEROES.jsonl     --insert-root output/remediation/import_hero
+$PY scripts/remediation/candidate_search/repicture.py --old-run output/remediation/candidate_search/candidates-2026-10-06     --need gold --calibration-dir $D3                    # -> REPICTURE_gold-image-roles-v3.jsonl
+$PY $CG void --dir $D3 --case <id> --reason "<why it cannot be shown>"   # only a picture not served
+for w in a b; do $PY $CG label-export --dir $D3 --labeller $w --handoff output/remediation/handoff/image-gold3-label-$w; done
+#   one Opus xhigh agent per batch and labeller (run.py brief --stage image-gold-label-<w>), then
+#   run.py import --run-dir $D3 --handoff ... --stage image-gold-label-<w>
+$PY $CG disputes --dir $D3
+$PY $CG label-export --dir $D3 --labeller c --handoff output/remediation/handoff/image-gold3-label-c
+$PY $CG spotcheck --dir $D3          # the orchestrator writes $D3/SPOTCHECK.jsonl
+$PY $CG fix --dir $D3
+for role in image_depicts adversarial; do $PY $CG export --dir $D3 --role $role --handoff output/remediation/handoff/image-cal3-$role; done
+$PY $CG evaluate --dir $D3 --role image_depicts; $PY $CG disagreements --dir $D3 --role image_depicts
+```
+
 ---
 
 ## 4. Tests and the mutation sweep

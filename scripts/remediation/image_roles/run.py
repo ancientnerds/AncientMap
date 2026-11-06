@@ -65,6 +65,7 @@ from served_image import recheck as RC  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
 from image_roles import calibrate as CAL  # noqa: E402
+from image_roles import clean_gold as CG  # noqa: E402
 from image_roles import depicts as DP  # noqa: E402
 from image_roles import flow as FL  # noqa: E402
 from image_roles import hero_recheck as HR  # noqa: E402
@@ -81,6 +82,7 @@ STAGES = {
     PF.SPEC.name: PF.SPEC,
     DP.SPEC.name: DP.SPEC,
     HR.SPEC.name: HR.SPEC,
+    **CG.STAGES,
 }
 #: The shared Wikipedia cache, relative to the main checkout (run data is gitignored, a worktree has none).
 WIKI_CACHE = Path("output") / "remediation" / "final-2026-10-08" / "wiki_cache"
@@ -286,7 +288,10 @@ def main(argv: list[str] | None = None) -> int:
         elif command == "recheck-export":
             _print(cmd_recheck_export(run, args))
         elif command == "brief":
-            print(SG.brief(run, args.handoff, _spec(args), args.batch_id, args.round))
+            spec = _spec(args)
+            # two labellers answer the same batches of a clean gold (D117): each its own name
+            agent = f"{spec.name}-{args.batch_id}" if spec.name in CG.STAGES else None
+            print(SG.brief(run, args.handoff, spec, args.batch_id, args.round, agent=agent))
         elif command == "check-answer":
             text = args.text_file.read_bytes().decode("utf-8")
             problem = SG.check_answer(
