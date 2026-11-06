@@ -632,16 +632,11 @@ ANSWER_FORMAT_WD5 = ANSWER_FORMAT_WD4
 
 #: Owner decision D101 (2026-11-06): a period word writes the start of that period in the site's own
 #: country (`pipeline.periods.REGIONAL_STARTS`), and a year the source states beats the period word
-#: (`answers.date_stated`). A round exported since records `PERIOD_RULE_KEY: D101` (D111 from 2026-11-06 on) and is asked
+#: (`answers.date_stated`). A round exported from now on records `PERIOD_RULE_KEY: D101` and is asked
 #: the sentence below in place of the fixed-table one; a round exported before records no key and
 #: keeps the text it was asked, because import renders every prompt again and compares its hash.
 PERIOD_RULE_KEY = "period_rule"
 D101 = "D101"
-#: Owner decision D111 (2026-11-06, after the D99 pilot dated 7 of 50 sites and 2 of those wrongly):
-#: the D101 sentence plus `_D111_SENTENCE`. A round exported from now on records D111; a D101 round
-#: keeps the text it was asked.
-D111 = "D111"
-PERIOD_RULES = (D101, D111)
 _FIXED_TABLE_SENTENCE = (
     "The year is then read from a fixed table, not from you: the one start the vocabulary "
     'holds for that name ("iron age" -> -800, "neolithic" -> -4000, "victorian" -> 1837). '
@@ -655,29 +650,6 @@ _D101_SENTENCE = (
     "period word: when a page you quote states a year, century, millennium or BP age for the START "
     "of this site, answer with that year and no period_name - a period-word answer whose quote "
     "states a date is refused (leave out a quote whose date is not the start). "
-)
-#: What D111 adds to the D101 sentence. The four mistakes are the D99 pilot's (PILOT_REPORT.md of
-#: output/remediation/fields/wd5r): Čertova pec and Rock Carvings at Åsli at the Palaeolithic or
-#: Stone Age edge -3,000,000, Bant's Carn at the bare Bronze Age where the infobox says Middle Bronze
-#: Age, Round Loaf from an uncited Russian stub and Tiverton from a community timeline, Petrovaradin
-#: from "the territory of", Port Way from a sentence that only classifies the road. The coarse words
-#: and the countries are `pipeline.periods.COARSE` and `SUBPHASE_REQUIRED`.
-_D111_SENTENCE = (
-    "Owner decision D111 adds four rules. (1) A coarse period word gives no year and is refused: "
-    '"stone age", "palaeolithic" or "paleolithic" without lower, middle or upper, "prehistoric", '
-    '"prehistory", "ancient history", "classical antiquity" (and "ancient" or "antiquity" are no '
-    'names at all); a bare "bronze age" is refused in Britain, Ireland, Türkiye, the Levant, Greece, '
-    "France and Italy, where only the early, middle or late Bronze Age a source names answers. (2) "
-    "Answer the most precise epoch the source gives for the site's own beginning: where the page "
-    "names a phase (Middle Bronze Age, Late Iron Age, Upper Palaeolithic, Late Roman, Chimu), answer "
-    "that phase and never the wider word above it. (3) A weak source alone does not count: a "
-    "Wikipedia stub in any language that cites no publication for the date, or a travel, tourism, "
-    "community, personal or blog page. Read it as a lead and answer from a referenced article, a "
-    "heritage register, a museum or a public body, or a scholarly publication that states the "
-    "start - or answer unresolved. (4) The start is the beginning of THE SITE ITSELF: not of the "
-    "territory, area, parish or modern town it lies in, not of a culture in general, not a first "
-    "mention; and a sentence that only classifies the site (a road in the Roman road numbering "
-    "system, a type of monument) dates nothing when the same source says the site may be older. "
 )
 
 
@@ -710,8 +682,7 @@ def _as_listed(text: str, asked_at: str) -> str:
 
 def period_rule_text(text: str, period_rule: str | None, asked_at: str | None = None) -> str:
     """A field rule's text as a round with `period_rule` asks it: the D101 sentence in place of the
-    fixed-table one for a D101 round, the D101 and the D111 sentence for a D111 round, the text
-    unchanged for a round exported before D101 (None).
+    fixed-table one for a D101 round, the text unchanged for a round exported before D101 (None).
     Any other value is refused: a round names the rule it was asked under or none. `asked_at` is
     the round's `exported_at` when an import renders the round again (the period list as it was
     then, `PERIOD_NAMES_ADDED`); None renders the list of now, as an export does."""
@@ -719,14 +690,11 @@ def period_rule_text(text: str, period_rule: str | None, asked_at: str | None = 
         text = _as_listed(text, asked_at)
     if period_rule is None:
         return text
-    if period_rule not in PERIOD_RULES:
-        raise HandoffStepError(
-            f"a round's {PERIOD_RULE_KEY} {period_rule!r} is not {D101!r} or {D111!r}"
-        )
+    if period_rule != D101:
+        raise HandoffStepError(f"a round's {PERIOD_RULE_KEY} {period_rule!r} is not {D101!r}")
     if _FIXED_TABLE_SENTENCE not in text:
         return text
-    sentence = _D101_SENTENCE + (_D111_SENTENCE if period_rule == D111 else "")
-    return _swap(text, _FIXED_TABLE_SENTENCE, sentence)
+    return _swap(text, _FIXED_TABLE_SENTENCE, _D101_SENTENCE)
 
 
 #: What a D99 question tells the researcher about its empty start (`OPEN_TEXT["d99-undated"]`). The
@@ -1028,8 +996,8 @@ def render_prompt(
 ) -> str:
     """The exact question for one site and `fields` - a pure function of the classified line, of
     the rule the run decides under, of the site's original-import claim (`hint`, `read_hints`, WD4
-    only), of the round's `period_rule` (`period_rule_text`: D111, D101 or, for a round exported
-    before D101, None), of when the round was asked (`asked_at`: its `exported_at` on import, None on
+    only), of the round's `period_rule` (`period_rule_text`: D101 or, for a round exported before
+    it, None), of when the round was asked (`asked_at`: its `exported_at` on import, None on
     export) and, in a re-ask, of why each field's last answer did not count (`notes`, kept in the
     round's record)."""
     notes = notes or {}
@@ -1161,7 +1129,7 @@ def _export_round(
                     notes.get(label),
                     rule,
                     hints.get(label),
-                    D111,
+                    D101,
                 ),
             )
     record = {
@@ -1172,7 +1140,7 @@ def _export_round(
         "batches": dict(groups),
         "fields": {label: list(fields_of[label]) for label in sorted(fields_of)},
         "notes": {label: dict(notes[label]) for label in sorted(notes)},
-        PERIOD_RULE_KEY: D111,
+        PERIOD_RULE_KEY: D101,
         "exported_at": H.now(),
     }
     _write_jsonl(run / ROUNDS_FILE, [*rounds, record])
