@@ -46,6 +46,33 @@ ALIASES: dict[str, str] = {
     "usa": "united states of america",
     "united states": "united states of america",
     "republic of the gambia": "gambia",
+    # The spellings a new row may take (the frontend's flag map, `countryFlags.ts`, which the
+    # insert lane's T05 check accepts) where the boundary file names the same ISO code otherwise.
+    # Measured 2026-11-06 after D57's plan refused Nan Madol: "Micronesia" (the flag map's only
+    # spelling of FM) never matched "Federated States of Micronesia", so the coast tolerance had no
+    # polygon to measure against. `test_country_census_aliases` keeps the two files in step.
+    "uk": "united kingdom",
+    "czech republic": "czechia",
+    "macedonia": "north macedonia",
+    "vatican city": "vatican",
+    "korea": "south korea",
+    "burma": "myanmar",
+    "timor leste": "east timor",
+    "georgia (country)": "georgia",
+    "tanzania": "united republic of tanzania",
+    "drc": "democratic republic of the congo",
+    "congo": "republic of the congo",
+    "the gambia": "gambia",
+    "cape verde": "cabo verde",
+    "swaziland": "eswatini",
+    "bahamas": "the bahamas",
+    "micronesia": "federated states of micronesia",
+    "easter island": "chile",
+    "us virgin islands": "united states virgin islands",
+    "south georgia": "south georgia and the islands",
+    "aland islands": "aland",
+    "hong kong": "hong kong s.a.r.",
+    "macau": "macao s.a.r",
 }
 
 
