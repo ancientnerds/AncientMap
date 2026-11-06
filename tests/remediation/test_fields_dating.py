@@ -638,6 +638,22 @@ class TestTheHarvestSources:
         assert [r["url"] for r in refs[SITE]] == ["https://vici.org/vici/1"]
         assert H.page_text(refs[SITE][0]) == "Alpha was built in 300 BC."
 
+    def test_a_rejected_cell_keeps_the_researchers_cited_pages(self, tmp_path: Path) -> None:
+        """`adversarial.apply` moves a rejected answer's quotes into `adversarial.original`: the page
+        it cited is still a page an earlier pass read for the site (D99 shows it to the agent)."""
+        run = tmp_path / "wd5"
+        (run / "pages").mkdir(parents=True)
+        (run / "pages" / "a.body").write_bytes(b"<p>Alpha is an Iron Age cliff castle.</p>")
+        write_jsonl(run / "PAGES.jsonl", [{"url": "https://her.example/1", "key": "a",
+                                           "status": 200, "content_type": "text/html"}])  # fmt: skip
+        write_jsonl(run / "DECISIONS.jsonl", [{
+            "site_id": SITE, "field": "period_start", "decision": "unresolved", "quotes": [],
+            "adversarial": {"verdict": "reject",
+                            "original": {"quotes": [{"source": "https://her.example/1"}]}},
+        }])  # fmt: skip
+        refs = H.cited_page_refs(tmp_path)
+        assert [r["url"] for r in refs[SITE]] == ["https://her.example/1"]
+
 
 # ------------------------------------------------------------------------------ the lane's wiring
 class TestTheWiring:

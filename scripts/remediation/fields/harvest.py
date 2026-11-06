@@ -846,6 +846,10 @@ def cited_page_refs(fields_dir: Path) -> dict[str, list[dict[str, Any]]]:
             adversarial = row.get("adversarial")
             if isinstance(adversarial, dict):
                 quotes += list(adversarial.get("quotes") or ())
+                # a rejected cell keeps the researcher's answer, quotes and all, in `original`
+                original = adversarial.get("original")
+                if isinstance(original, dict):
+                    quotes += list(original.get("quotes") or ())
             for quote in quotes:
                 url = str(quote.get("source") or "").replace("&amp;", "&")
                 host = (urlsplit(url).hostname or "").lower()

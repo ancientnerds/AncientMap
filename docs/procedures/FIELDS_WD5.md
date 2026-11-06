@@ -745,3 +745,35 @@ not read (the vocabulary is English); German prose has no subject veto; a tier-4
 name only; the scope hold uses the stored point and country. Tests: `tests/remediation/test_fields_dating.py`,
 `tests/remediation/test_fields_dating_gold.py`; mutation family `wd5x:` (`mutation_sweep.py wd5x:`, 16 cases, all
 fired 2026-11-06).
+
+## 15. D99: the undated sites, dated by a Claude researcher (pilot built 2026-11-06)
+
+Owner decision D99 (2026-11-06) replaces the failed extractor of section 14 with agents: a Sonnet
+`field_researcher` proposes a quoted start per undated site, the calibrated `adversarial` role checks
+it; D101 (regional period starts, a stated year beats a period word) is in force; O1 (start only) and
+the D58 window stay. **Pilot of 50 first; nothing is written until the owner has seen it.** The lane
+is a wd5 run, not a new system:
+
+| piece | what |
+|---|---|
+| `population.py build --stage wd5 --sites FILE --d99` | a reader-gap-shaped run whose listed sites are asked under the reason `d99-undated` (`WHY_D99`); no detection, no `already-reasked` skip; RUN.json `reask.why` records it |
+| `handoff.D99_OPEN_TEXT` | the question's "Open because": the start of the site itself, not discovery/excavation/mention/neighbour/sub-site/modern town/upper bound, and the six mistakes the three wd5x spot checkers found |
+| `handoff.brief` of a D99 run | the re-check's "the cached article is never your confirmation" gives way to `D99_EVIDENCE` (the start is empty; read `d99.py sources` first) |
+| `fields/d99.py draw` | the seeded, stratified pilot (10 each: earlier adversarial conflicts, Peru, England, Greece/Türkiye, others) |
+| `fields/d99.py sources --label ID` | what is on disk for a site: the Wikipedia cache, the other-language articles and Wikidata claims of the wd5x harvest, Pleiades (P1584), the pages earlier field runs cited (now also a rejected cell's original quotes) |
+| `p31_site_types.json` | cirque (Q184368) and street (Q79007), both `container`, added so the wd5x harvest classifies (775 classes) |
+
+```bash
+F=scripts/remediation/fields; X=output/remediation/fields/wd5x; P=output/remediation/fields/wd5r/pilot
+$PY $F/d99.py draw --undated $X/UNDATED_ASKABLE.jsonl --seed 20261106 --out output/remediation/fields/wd5r/PILOT_SITES.jsonl
+cp $X/STORED.jsonl $X/LINKS.jsonl $X/POINTS.jsonl $X/MADE.jsonl $X/SEEDS.jsonl $P/
+$PY $F/population.py --out $P build --root $X/harvest --stage wd5 --sites output/remediation/fields/wd5r/PILOT_SITES.jsonl --d99
+$PY $F/handoff.py copy-hints --run $P --from output/remediation/fields/wd4/ORIGINAL_PERIODS.jsonl
+$PY $F/handoff.py export --run $P --handoff output/remediation/handoff/fields-d99-pilot-r0 --batch-size 10
+# answer (5 batches, Sonnet high), validate, import, re-asks, then adversarial.py select/export/import/apply (5.3)
+```
+
+Known limits: the 83 undated sites whose period's newest journal row is another lane's sourced write
+(`wd5x/UNDATED_REFUSED_SOURCED_WRITE.jsonl`) are refused by `check_listed` and are not in the pilot;
+the adversarial calibration `adv-truth-002` stands for the role, but its cells were framed before
+D101 (no regional period wording). Tests: `tests/remediation/test_fields_d99.py`.

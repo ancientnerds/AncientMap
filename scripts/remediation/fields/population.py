@@ -93,9 +93,13 @@ WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT = "rule-made", "minimax-answered
 #: The reason of a wd5 run built with `--reask-cleared` / `--sites` (`reader_gap_fields`): an empty
 #: period a counted Claude answer left `unresolved` although its reasoning names a dated value.
 WHY_READER_GAP = "reader-gap"
+#: The reason of a D99 dating run (`build --stage wd5 --sites FILE --d99`, owner decision D99 of
+#: 2026-11-06): an undated shown site asked for its start by a Claude researcher, after the
+#: deterministic extractor of D70 failed its gold (0.7034).
+WHY_D99 = "d99-undated"
 WHYS = (
     WHY_EMPTY, WHY_UNRESOLVED, WHY_HELD, WHY_UNSOURCED,
-    WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT, WHY_READER_GAP,
+    WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT, WHY_READER_GAP, WHY_D99,
 )  # fmt: skip
 HELD = "held"  # `handoff.HELD`, the import's decision for a field whose pages could not be read
 
@@ -620,6 +624,8 @@ REASK_RUN = "wd5-reask"
 READER_GAP_LATEST_YEAR = 1500
 READER_GAP_BP, READER_GAP_STATEMENT = "bp-age", "dated-statement"
 READER_GAP_PERIOD, READER_GAP_LISTED = "period-name", "listed"
+#: The kind a D99 run records for each of its listed sites.
+READER_GAP_D99 = "d99"
 #: What an answer says when a machine reader, not the sources, is why it gave up: "none states it
 #: in a form the check reads", "the checker cannot read ...", "not a period name this lane's table
 #: holds". The three periods wd5's pilot cleared to Undated (2026-10-09) said it in these words.
@@ -701,12 +707,16 @@ def reader_gap_fields(
     *,
     listed: str | None,
     detect: bool,
+    listed_why: str = WHY_READER_GAP,
 ) -> tuple[dict[str, dict[str, Any]], str | None]:
     """The one field a reader-gap run asks of a site, `{"period_start": {"why", "wd1", "made"}}`
     (empty when the site is not one), and the reason it is left alone (`SKIP_NOT_EMPTY`: a period is
     stored now; `SKIP_SOURCED`: the newest journal row of the period is another lane's sourced
     write), or None. A site is asked when `listed` names it (the orchestrator's reason) or, with
-    `detect`, when its period answers are a reader gap (`reader_gap_reading`)."""
+    `detect`, when its period answers are a reader gap (`reader_gap_reading`). `listed_why` is the
+    reason a listed site is asked under: `WHY_READER_GAP`, or `WHY_D99` for a D99 dating run."""
+    if listed_why not in (WHY_READER_GAP, WHY_D99):
+        raise PopulationError(f"a listed site is asked as {WHY_READER_GAP!r} or {WHY_D99!r}")
     site = str(line["site_id"])
     reading = reader_gap_reading(answers) if detect else None
     if listed is None and reading is None:
@@ -715,7 +725,11 @@ def reader_gap_fields(
         return {}, SKIP_NOT_EMPTY
     if column_kind("period_start", stored, made, site) == SOURCED:
         return {}, SKIP_SOURCED
-    if listed is not None:
+    why = WHY_READER_GAP
+    if listed is not None and listed_why == WHY_D99:
+        kind, why = READER_GAP_D99, WHY_D99
+        note = f"the period is empty (Undated); owner decision D99 asks for its start: {listed}"
+    elif listed is not None:
         kind = READER_GAP_LISTED
         note = f"the orchestrator listed this site for a second look: {listed}"
     else:
@@ -726,7 +740,7 @@ def reader_gap_fields(
             f"about this site names a dated value - {what} - that the readers of that day could "
             "not read and today's read. A source may state the start: look for it, quote it"
         )
-    opened = {"why": WHY_READER_GAP, "wd1": None, "made": note, "reader_gap": kind}
+    opened = {"why": why, "wd1": None, "made": note, "reader_gap": kind}
     return {"period_start": opened}, None
 
 
@@ -758,12 +772,15 @@ class Reask:
     """What a reader-gap build is: the period answers it reads (`read_answers` over
     `REASK_HISTORY_RUNS`), whether it detects the sites (`--reask-cleared`), the sites the
     orchestrator listed with their reasons (`--sites`) and the sites an earlier reader-gap run
-    decided (`already`, never asked twice)."""
+    decided (`already`, never asked twice). `why` is the reason the listed sites are asked under:
+    `WHY_READER_GAP`, or `WHY_D99` for a D99 dating run (no detection, nothing skipped as already
+    re-asked: D99 asks every undated site afresh)."""
 
     answers: Mapping[tuple[str, str], Sequence[tuple[str, Mapping[str, Any]]]]
     detect: bool
     listed: Mapping[str, str]
     already: frozenset[str]
+    why: str = WHY_READER_GAP
 
 
 def check_listed(
@@ -875,6 +892,10 @@ def build(
         raise PopulationError("a reader-gap run is one run of its own: no pilot, no --without")
     if reask is not None and not (reask.detect or reask.listed):
         raise PopulationError("a reader-gap run needs --reask-cleared or --sites")
+    if reask is not None and reask.why == WHY_D99 and (reask.detect or reask.already):
+        raise PopulationError(
+            "a D99 run asks its listed sites only: no --reask-cleared, no sites skipped as re-asked"
+        )
     if (out / "ROUNDS.jsonl").exists():
         raise PopulationError(f"{out} was asked already (ROUNDS.jsonl): a run is built once")
     stored_all = C.read_stored(out)  # refused here, before anything is pinned, when it is missing
@@ -908,7 +929,7 @@ def build(
                 return None
             opened, skipped = reader_gap_fields(
                 line, stored, reask.answers.get((site, "period_start"), ()), made,
-                listed=reask.listed.get(site), detect=reask.detect,
+                listed=reask.listed.get(site), detect=reask.detect, listed_why=reask.why,
             )  # fmt: skip
             if skipped is not None:
                 gap_skipped[skipped] += 1
@@ -947,6 +968,7 @@ def build(
             "detect": reask.detect,
             "listed": dict(sorted(reask.listed.items())),
             "reads": list(REASK_HISTORY_RUNS),
+            **({"why": WHY_D99} if reask.why == WHY_D99 else {}),
         },
         pilot=None if pilot is None else {"size": pilot[0], "seed": pilot[1]},
         without=None if without is None else _shown(without),
@@ -1057,6 +1079,12 @@ def main(argv: list[str] | None = None) -> int:
         "with --reask-cleared, those sites are added to the detected ones. Stage wd5x: the "
         "dating extractor's population (the undated sites), required",
     )
+    run.add_argument(
+        "--d99",
+        action="store_true",
+        help="stage wd5 with --sites: a D99 dating run (owner decision D99) - each listed undated "
+        "site is asked its start afresh, under the reason d99-undated; no --reask-cleared",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
@@ -1071,6 +1099,10 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--sites is for --stage wd5 and --stage wd5x")
             if extract and args.sites is None:
                 parser.error("--stage wd5x is built from --sites (the undated sites)")
+            if args.d99 and (
+                args.stage != R.RECHECK.stage or args.sites is None or args.reask_cleared
+            ):
+                parser.error("--d99 is a stage wd5 run of --sites, without --reask-cleared")
             listed = {} if args.sites is None else read_listed(args.sites)
             wd1 = read_wd1(*wd1_files(args.wd1_dir))
             reask = None
@@ -1079,7 +1111,8 @@ def main(argv: list[str] | None = None) -> int:
                     read_answers(wd1, args.wd1_dir, REASK_HISTORY_RUNS),
                     args.reask_cleared,
                     listed,
-                    decided_by_reask(args.wd1_dir),
+                    frozenset() if args.d99 else decided_by_reask(args.wd1_dir),
+                    WHY_D99 if args.d99 else WHY_READER_GAP,
                 )
             result = build(
                 args.root,

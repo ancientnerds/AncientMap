@@ -665,6 +665,42 @@ def period_rule_text(text: str, period_rule: str | None) -> str:
     return _swap(text, _FIXED_TABLE_SENTENCE, _D101_SENTENCE)
 
 
+#: What a D99 question tells the researcher about its empty start (`OPEN_TEXT["d99-undated"]`). The
+#: mistakes it names are the ones the three independent checkers of the D70 extractor found
+#: (`output/remediation/fields/wd5x/spotcheck-{1,2,3}.json`, 2026-11-06).
+D99_OPEN_TEXT = (
+    "the start is empty (Undated). Owner decision D99 asks you for the START of this site, after a "
+    "machine extractor that read the same sources failed. FIRST run\n"
+    "   ./.venv/Scripts/python.exe scripts/remediation/fields/d99.py sources --label <the label>\n"
+    "It prints what is already on disk for the site, each with the URL to cite: the cached English "
+    "Wikipedia article, the item's articles in other languages, its Wikidata date claims, its "
+    "Pleiades record and the register and other pages earlier passes cited. Read all of it, then "
+    "the web if it states no start. Quote the article as a reader sees it (its prose), never its "
+    "wikitext or infobox source, and never Wikidata: a Wikidata claim is a lead to a page that "
+    "states it.\n"
+    "The start is when THE SITE ITSELF was built, founded, first settled or first used. It is "
+    "never: when it was discovered, excavated, surveyed or first mentioned in a text; a later event "
+    "(a conquest, a Roman colony or refoundation, a mint, a destruction, a peak or 'main period' "
+    "of occupation, 'flourished', 'important in Roman times'); a neighbouring site, a sub-site, a "
+    "find, or a modern town or village of the same name; an upper bound ('4th century AD or "
+    "earlier').\n"
+    "The machine extractor was judged 26 of 30 wrong for these mistakes - do not repeat them: "
+    "(1) 'Roman' written as AD 43 for a site outside Britain (Siponto, Thibilis, Asseria, "
+    "Tilurium, Pompeii); (2) a period word taken from a sentence about something else - a find, "
+    "a neighbour, flint knapping at the spot rather than the monument, or the site's own name "
+    "('Wari Willka'); (3) a hedged pair ('Late Neolithic or Bronze Age') taken as a date; (4) a "
+    "period's edge year written where the source dates the site otherwise (a bowl barrow the "
+    "article dates to 2400-1500 BC is not -2900); (5) a collective entity - a village, parish, "
+    "nature reserve, region or park - dated by a monument inside it; (6) a later phase taken as "
+    "the start where the same article says the place existed earlier (pre-Roman Asseria, the "
+    "Illyrian hill-fort under Roman Tilurium, Palaeolithic Perrin).\n"
+    "Read the WHOLE article for an earlier start before you answer. When the sources give several "
+    "starts of the site itself, answer the earliest one a source states for it and name in your "
+    "reasoning the later dates you set aside. When no source states a start of the site itself, "
+    "answer unresolved and say 'no dating stated' - that is an answer, not a failure"
+)
+
+
 #: A field of a WD3 question is open for one of these reasons (`population.py`).
 OPEN_TEXT = {
     "empty": "the field is empty",
@@ -690,6 +726,9 @@ OPEN_TEXT = {
     "sentence (another language, a period name, a BP age); they read it now. A source that states "
     "the start is an answer - quote it in its own language; the empty field stays empty only when "
     "none can be quoted",
+    # owner decision D99 (2026-11-06): the undated shown sites, asked by a Claude researcher after
+    # the deterministic extractor of D70 failed (gold 0.7034, three spot checks 26-29 of 30 wrong)
+    "d99-undated": D99_OPEN_TEXT,
 }
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).
@@ -1311,6 +1350,38 @@ BRIEF_PARTS = {
 }
 
 
+#: A D99 run asks an EMPTY start (no stored value to confirm), so the re-check's warning about the
+#: cached article gives way to what D99 asks: the site's own sources first (`d99.py sources`).
+D99_REPLACED_EVIDENCE = (
+    "This is a re-check of a stored value, so the cached article is never your confirmation of it. "
+    + WR.VERIFIER_RULE
+)
+D99_EVIDENCE = (
+    "This is a D99 dating question (owner decision D99): the start is EMPTY, there is no stored value "
+    "to confirm. Run `./.venv/Scripts/python.exe scripts/remediation/fields/d99.py sources --label "
+    "<label>` first - it prints the site's cached Wikipedia articles, its other-language articles, "
+    "its Wikidata claims, its Pleiades record and the pages earlier passes cited - and read it all. "
+    "The site's own article in any language is a source you may quote for its start; read the WHOLE "
+    "article and its other-language versions for an earlier start before you answer, and where "
+    "reputable sources give different starts for the site itself, answer the earliest one a source "
+    "states and name the others in your reasoning. Request pages one at a time, with the project's "
+    "User-Agent (curl -A 'AncientMapRemediation/1.0 (research; https://ancientnerds.com)'). An HTTP "
+    "403 or 429 is a throttle and NEVER a finding: fetch the page again yourself with curl, or quote "
+    "another page, before you call a source unreachable."
+)
+
+
+def is_d99_run(run: Path) -> bool:
+    """Whether the run was built as a D99 dating run (`population.py build --d99`). A run without
+    RUN.json is a WD1 run (`rule.read_rule`), never a D99 one."""
+    path = run / R.RUN_FILE
+    if not path.exists():
+        return False
+    facts = json.loads(path.read_text(encoding="utf-8"))
+    reask = facts.get("reask")
+    return isinstance(reask, dict) and reask.get("why") == "d99-undated"
+
+
 def _refuse_machine_rule(run: Path, rule: R.Rule) -> None:
     """A run of a rule no agent answers (`rule.MACHINE_RULES`, the dating extractor's) is neither
     exported nor imported: its DECISIONS.jsonl is `dating.py run`'s and an import would overwrite it."""
@@ -1336,6 +1407,8 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     if record.get("model"):
         # the round names the model, so the role must not claim to be another one
         parts["role"] = "researcher"
+    if is_d99_run(run):
+        parts["evidence"] = _swap(parts["evidence"], D99_REPLACED_EVIDENCE, D99_EVIDENCE)
     return BRIEF.format(
         batch=batch_id,
         count=len(record["batches"][batch_id]),
