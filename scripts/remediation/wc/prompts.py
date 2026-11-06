@@ -441,6 +441,16 @@ need at least one quote; every "note" is a short plain sentence, at most 600 cha
 )
 
 #: The instruction of the agent that judges one batch of the pilot.
+#:
+#: JUDGE_BRIEF sharpened 2026-11-06 (owner decision D80, orchestrator decision O6): the six
+#: disagreements of the Opus calibrations wc-pj-1o/2o were adjudicated
+#: (`calibration/wc-pj-adjudication-2026-11-05/REPORT.md`). The recorded judge supported a present
+#: state the excavators record as long destroyed, an unhedged figure peer-reviewed sources measure
+#: otherwise, and a text whose definite phrase had lost its antecedent; the fresh judge supported a
+#: style attribution the scholarly literature qualifies (the seeded known error) and answered
+#: UNSUPPORTED twice after too narrow a search. The brief carries the checks against them; the
+#: QUESTION stays as exported, and no example is drawn from a unit of the pools (`test_wc.POOL_EXAMPLES`).
+#: A seal binds the new bytes; the re-seals are wc-pj-1o2/2o2.
 JUDGE_BRIEF = """You are {family} judge {batch} of the pilot of the Ancient Nerds sentence check (lane \
 WC). You judge {count} site(s), each on its own. You are a fresh agent: you checked and verified \
 none of this run's sites and answered no other batch of lane WC - if you did, stop here and report \
@@ -457,7 +467,31 @@ For each question:
 1. Read {handoff}/<prompt_path>.
 2. Research on the web and decide, exactly as the prompt asks, every point in the order the \
 prompt gives, the coherence of the text included: for each kept sentence search for what \
-contradicts it as well as for what supports it.
+contradicts it as well as for what supports it. Then go through every kept sentence and the \
+coherence once more with the five checks below; each names an error earlier judges of this lane \
+made, in one direction or the other.
+   a. A present state is a claim that it still holds. Where a sentence says in the present that a \
+structure is there, survives, can be seen or is preserved, search excavation reports, heritage \
+registers and protection decisions for its destruction, removal or collapse before you support it. \
+A page that uses the same present tense does not settle it.
+   b. A figure against other measures. For every number, length, area, height, count and date, look \
+for another measurement of the same quantity in a scholarly or official source. Where a reputable \
+source gives an incompatible value and the sentence states its figure without the hedge the \
+sources share, the sentence is WRONG, even when an official page and the stored article agree \
+with it.
+   c. An attribution against the literature. For a style, cultural, functional or chronological \
+attribution, search the scholarly literature for a qualification. An enthusiast, travel or \
+photography page does not outweigh a scholarly source that calls it something else, and an \
+attribution the sources dispute, stated without their hedge, is WRONG.
+   d. UNSUPPORTED is the verdict of a search, not of the first pages. Before you give it, search \
+other-language Wikipedias on the site and on its parts, national registers and gazetteers (for a \
+place name, the national directory of populated places under every spelling), the bodies that own \
+or manage the site, and archived copies (web.archive.org). A page that refuses the fetcher (403, \
+418, 429, 503, a timeout) is a throttle and never a finding, and pages that are silent about a \
+claim are no evidence against it.
+   e. Trace every referent. For coherence condition (a), take each pronoun and definite phrase of \
+each kept sentence and find what it referred to in the old text. If that stood in a dropped \
+sentence or in a cut piece, "coherent" is false, however naturally the phrase still reads.
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is fetched and your verdict is not judged):

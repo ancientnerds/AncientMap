@@ -341,6 +341,11 @@ def test_a_check_calibration_is_registered_in_rounds_jsonl_too(tmp_path: Path) -
     # the answer check of a check round reads the run's sites: the calibration brings its own and
     # nothing else
     assert sorted(C.read_sites(cal_run)) == ["wc-0001-site-0", "wc-0001-site-1"]
+    # ... and the round's asked sentences and shown failures of its own labels: without them the
+    # answer check crashed on every calibration check (measured 2026-11-06, wc-fc-1o2)
+    assert record["asked"] == {"wc-0001-site-0": [1, 2], "wc-0001-site-1": [1, 2]}
+    assert record["failures"] == {}
+    assert C._asked(C.round_of(cal_run, out), "wc-0001-site-0") == [1, 2]
 
 
 def test_a_calibration_run_counts_as_ready_in_either_layout(tmp_path: Path) -> None:

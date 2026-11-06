@@ -836,6 +836,11 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: search and trim before a drop, a lost referent; for the verifier UNSUPPORTED only after a wide
 #: search, the stored article no witness, each sentence on its own claims, a real disagreement). A
 #: brief is no part of an exported prompt: no answer goes stale. The re-seals bind the new bytes.
+#: JUDGE_BRIEF re-pinned 2026-11-06 (D80, O6): the adjudication of the six disagreements of
+#: wc-pj-1o/2o (`calibration/wc-pj-adjudication-2026-11-05`) named five failure modes (a present
+#: state not checked for destruction, a figure not checked against other measures, an attribution not
+#: checked against the literature, UNSUPPORTED after too narrow a search, a definite phrase not traced
+#: to its antecedent); the brief carries a check against each. The re-seals are wc-pj-1o2/2o2.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
@@ -843,7 +848,7 @@ PINS = {
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
     "VERIFY_BRIEF": "a74b7213caceb2cbcc373429dad4f6a1ec42a0e89d1acce8773ceac7f7c06d0d",
     "JUDGE_QUESTION": "cfedf7e933a6a7ab7214e71ac7597049dd006c5e5e5dbe0f62dc064666baefdb",
-    "JUDGE_BRIEF": "22fa321b6141187955c07d0beb2b650e940a2e3e9d4be2a3a25ae06abe6b4296",
+    "JUDGE_BRIEF": "b6f16823792ad9d590ad48a0809ef4e2258871be6d5db33101c520e9421f55fe",
     "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
     "WIKI_CACHE_NOTE_WRITER": "746aa07c4f69f99ee1f7c19c91ccfffb7ea5ad427bc282479f9be71bb05fec1d",
 }
@@ -1360,6 +1365,11 @@ POOL_EXAMPLES = (
     "an arch's span and a bridge's length",
     "a founding and a first mention",
     "the complex",
+    # the adjudicated disagreements of wc-pj-1o/2o (D80/O6, 2026-11-06): their own wording
+    "stands",
+    "the monument",
+    "26 km",
+    "the Seine",
 )
 
 
@@ -1403,13 +1413,27 @@ BRIEF_CHECKS = {
         "A real disagreement.",
         "make sure both state the same fact",
     ),
+    # the adjudication of wc-pj-1o/2o (2026-11-06)
+    "JUDGE_BRIEF": (
+        "A present state is a claim that it still holds.",
+        "search excavation reports, heritage registers and protection decisions for its destruction",
+        "A figure against other measures.",
+        "the sentence is WRONG, even when an official page and the stored article agree with it",
+        "An attribution against the literature.",
+        "an attribution the sources dispute, stated without their hedge, is WRONG",
+        "UNSUPPORTED is the verdict of a search, not of the first pages.",
+        "is a throttle and never a finding",
+        "Trace every referent.",
+        '"coherent" is false, however naturally the phrase still reads',
+    ),
 }
 
 
 @pytest.mark.parametrize("name", sorted(BRIEF_CHECKS))
 def test_the_check_and_verify_briefs_carry_the_calibrations_failure_modes(name: str) -> None:
-    """D80/O6: the briefs of the re-sealed fact checker and web verifier name the checks against the
-    errors the adjudicated Opus calibrations made, without the recalibrated pools' own wording."""
+    """D80/O6: the briefs of the re-sealed fact checker, web verifier and pilot judge name the checks
+    against the errors the adjudicated Opus calibrations made, without the recalibrated pools' own
+    wording."""
     text = " ".join(getattr(P, name).split())
     for check in BRIEF_CHECKS[name]:
         assert check in text, check

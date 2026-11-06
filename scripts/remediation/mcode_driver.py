@@ -1843,15 +1843,21 @@ def register_calibration_run(
         },
     }
     # A verification round names its stage and the sentence numbers it showed; a check round names
-    # neither, and a fields round names the fields it asked per label. Each tool reads what its own
-    # rounds carry, so the calibration round carries the same optional keys and nothing else.
-    for key in ("stage", "shown", "fields"):
+    # the sentence numbers it asked per label and the earlier failures it showed (measured
+    # 2026-11-06: without them the answer check of every calibration check crashed on `asked`); a
+    # fields round names the fields it asked per label. Each tool reads what its own rounds carry,
+    # so the calibration round carries the same optional keys, for its own labels, and nothing else.
+    for key in ("stage", "shown", "fields", "asked"):
         if key in record:
             calibration_round[key] = (
                 {label: list(record[key][label]) for label in labels}
-                if key in ("shown", "fields")
+                if key in ("shown", "fields", "asked")
                 else record[key]
             )
+    if "failures" in record:
+        calibration_round["failures"] = {
+            label: record["failures"][label] for label in labels if label in record["failures"]
+        }
     if where.name == "ROUNDS.jsonl":
         (run_dir / "ROUNDS.jsonl").write_text(
             json.dumps(calibration_round, ensure_ascii=False) + "\n", encoding="utf-8"
