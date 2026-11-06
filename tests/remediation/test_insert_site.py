@@ -38,6 +38,8 @@ from insert_site import run as RUN  # noqa: E402
 from insert_site import writer as W  # noqa: E402
 from mechanical.field_prov import sha_of  # noqa: E402
 
+from pipeline import periods as PE  # noqa: E402
+
 COLOSSEUM = "Q10285"
 TERRACOTTA = "Q47672"
 WIKI = "https://en.wikipedia.org/wiki/Colosseum"
@@ -474,6 +476,32 @@ class TestTheRounds:
         assert {d["status"] for d in decisions.values()} == {RS.COUNTED}
         assert decisions["country"]["value"] == "Italy"
         assert RS.waiting(run) == {}
+
+    def test_a_round_asked_before_a_period_name_came_in_still_imports(
+        self, run: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # d57-2026-11-05: its rounds 0-2 were exported before D113 added three period names, and
+        # import refused every answer as stale; it renders the list of the round's exported_at
+        (added_at, added), *_ = HO.PERIOD_NAMES_ADDED
+        current = RS.FIELD_RULES["period_start"]
+        listed = HO._period_list(PE.PERIODS)
+        monkeypatch.setitem(
+            RS.FIELD_RULES,
+            "period_start",
+            current.replace(listed, HO._period_list(PE.PERIODS.keys() - added)),
+        )
+        monkeypatch.setattr(RS.FH, "now", lambda: "2026-11-05T23:51:55+00:00")
+        handoff, batch = self._export(run, tmp_path)  # asked the list of before D113
+        monkeypatch.setitem(RS.FIELD_RULES, "period_start", current)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        result = RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        assert result["counted"] == len(RS.ASKABLE)
+        # the same round stamped after the addition was asked the new list: its answer is stale
+        rounds = RS.read_rounds(run)
+        rounds[0]["exported_at"] = added_at
+        C.write_jsonl(run / RS.ROUNDS_FILE, rounds)
+        with pytest.raises(OH.HandoffError, match="stale"):
+            RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
 
     def test_a_quote_the_page_does_not_hold_is_asked_again(self, run: Path, tmp_path) -> None:
         handoff, batch = self._export(run, tmp_path)

@@ -491,6 +491,35 @@ class TestTheRegionalStartAndTheStatedYear:
         with pytest.raises(HO.HandoffStepError, match="is not 'D101'"):
             HO.period_rule_text(rule, "D999")
 
+    def test_a_round_asked_before_a_period_name_came_in_is_rendered_without_it(self) -> None:
+        # D113 added three names to the table; the rounds exported before were asked the list
+        # without them, and their import must render that list or every answer reads as stale
+        rule = HO.FIELD_RULES_WD5["period_start"]
+        (added_at, added), *_ = HO.PERIOD_NAMES_ADDED
+        assert added == {"chimu", "late roman", "vinca"} and added <= P.PERIODS.keys()
+        now = HO.period_rule_text(rule, HO.D101)
+        assert HO.period_rule_text(rule, HO.D101, added_at) == now  # asked at the commit: new list
+        assert HO.period_rule_text(rule, HO.D101, "2026-11-06T16:00:00+00:00") == now
+        before = HO.period_rule_text(rule, HO.D101, "2026-11-05T23:51:55+00:00")
+        assert before != now
+        assert ", vinca, " in now and "vinca" not in before and "chimu" not in before
+        assert before == now.replace(
+            HO._period_list(P.PERIODS), HO._period_list(P.PERIODS.keys() - added)
+        )
+        # the pre-D101 text is pinned the same way; a field without the list is unchanged
+        assert "vinca" not in HO.period_rule_text(rule, None, "2026-11-01T00:00:00+00:00")
+        site_type = HO.FIELD_RULES_WD5["site_type"]
+        assert HO.period_rule_text(site_type, HO.D101, "2026-11-01T00:00:00+00:00") == site_type
+
+    def test_a_listed_name_the_table_lost_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            HO, "PERIOD_NAMES_ADDED", (("2026-11-06T15:37:58+00:00", frozenset({"atlantean"})),)
+        )
+        with pytest.raises(HO.HandoffStepError, match="atlantean"):
+            HO.period_rule_text(
+                HO.FIELD_RULES_WD5["period_start"], HO.D101, "2026-11-01T00:00:00+00:00"
+            )
+
     def test_the_adversarial_check_of_a_new_cell_reads_the_regional_start(self) -> None:
         from fields import adversarial as AD
 

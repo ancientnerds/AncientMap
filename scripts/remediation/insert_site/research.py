@@ -315,13 +315,15 @@ def render_prompt(
     period_rule: str | None = None,
     vetoes: Mapping[str, str] | None = None,
     owner: Mapping[str, Any] | None = None,
+    asked_at: str | None = None,
 ) -> str:
     """The exact question for one candidate - a pure function of the candidate line, the fields
     and sources asked, the run's country vocabulary, the round's `period_rule` (D101, or None for a
     round exported before it: `fields.handoff.period_rule_text`) and, in a re-ask, why each field's
     last answer did not count or why the plan's review vetoed it (D104), and in an owner-released
     round (D114) the owner's question per field (`owner`: `{"decision": ..., "questions": {field:
-    text}}`). Import renders it again and refuses an answer to any other text."""
+    text}}`). Import renders it again, with the period list of the round's `exported_at`
+    (`asked_at`, `fields.handoff.PERIOD_NAMES_ADDED`), and refuses an answer to any other text."""
     notes = notes or {}
     vetoes = vetoes or {}
     owner_questions = (owner or {}).get("questions", {})
@@ -372,7 +374,7 @@ def render_prompt(
                 OWNER_NOTE.format(decision=owner["decision"], question=owner_questions[field])
             )
         out.append("")
-        out.append(HO.period_rule_text(FIELD_RULES[field], period_rule))
+        out.append(HO.period_rule_text(FIELD_RULES[field], period_rule, asked_at))
         vocabulary_text = _vocabulary_line(vocabulary) if field == "country" else definitions(field)
         if vocabulary_text:
             out.append("")
@@ -848,6 +850,7 @@ def _read_attempts(run: Path) -> list[dict[str, Any]]:
                     record.get(HO.PERIOD_RULE_KEY),
                     record.get("vetoes", {}).get(qid),
                     _owner_of(record.get(OWNER_KEY), qid),
+                    record["exported_at"],
                 )
                 answer = OH.read_answer(
                     handoff, batch_id=batch_id, stage=STAGE, label=qid, prompt=prompt
