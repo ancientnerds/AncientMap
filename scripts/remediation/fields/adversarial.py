@@ -289,7 +289,7 @@ def select(
     cells = [
         {
             **packet(d, classified[d["site_id"]], Q.Library(REPO, pages_dir(d, run)), wiki),
-            HO.PERIOD_RULE_KEY: HO.D101,
+            HO.PERIOD_RULE_KEY: HO.D111,
         }
         for d in sorted([*replaces, *sampled], key=key)
     ]
@@ -363,16 +363,34 @@ _D101_CLAUSE = (
     "Spain) - and a period word is no answer where the page states a year, century or BP age for "
     "the site's start: that date is the value"
 )
+#: Owner decision D111 (2026-11-06): what a cell selected from then on is asked beside the D101
+#: clause - the four mistakes of the D99 pilot (`HO._D111_SENTENCE` tells the researcher the same).
+#: The pilot's re-check confirmed Čertova pec at the Palaeolithic edge -3,000,000 and Port Way from
+#: a sentence that only classifies the road; it rejected the others for these reasons.
+_D111_CLAUSE = (
+    ". Under owner decision D111, reject: a coarse period word (stone age, palaeolithic without "
+    "lower, middle or upper, prehistoric, ancient, antiquity), and a bare Bronze Age in Britain, "
+    "Ireland, Türkiye, the Levant, Greece, France or Italy; a wider period word where a page names "
+    "a narrower phase for the site (Middle Bronze Age, Late Iron Age, Late Roman); a start whose "
+    "only source is a weak one - a Wikipedia stub that cites no publication for the date, or a "
+    "travel, tourism, community, personal or blog page; a date of the territory, area or town "
+    "around the site, or a first mention; and a quote that only classifies the site (a road in the "
+    "Roman road numbering system) where the same source says it may be older"
+)
 
 
 def criteria(field: str, period_rule: str | None) -> str:
-    """What to check of `field`, as a cell selected under `period_rule` (D101 or None) is asked it."""
+    """What to check of `field`, as a cell selected under `period_rule` (D111, D101 or None) is
+    asked it."""
     text = CRITERIA[field]
     if field != "period_start" or period_rule is None:
         return text
-    if period_rule != HO.D101:
-        raise AdversarialError(f"a cell's {HO.PERIOD_RULE_KEY} {period_rule!r} is not {HO.D101!r}")
-    return HO._swap(text, _FIXED_TABLE_CLAUSE, _D101_CLAUSE)
+    if period_rule not in HO.PERIOD_RULES:
+        raise AdversarialError(
+            f"a cell's {HO.PERIOD_RULE_KEY} {period_rule!r} is not {HO.D101!r} or {HO.D111!r}"
+        )
+    clause = _D101_CLAUSE + (_D111_CLAUSE if period_rule == HO.D111 else "")
+    return HO._swap(text, _FIXED_TABLE_CLAUSE, clause)
 
 
 QUESTION = """\
@@ -1038,6 +1056,93 @@ def owner_accept(run: Path, cells: Sequence[str], *, decision: str, reason: str)
     return {"accepted": len(accepted), "cells": [a["cell"] for a in accepted], "decision": decision}
 
 
+OWNER_REJECTED_FILE = "OWNER_REJECTED.jsonl"
+OWNER = "owner"
+
+
+def owner_reject(run: Path, cells: Sequence[str], *, decision: str, reason: str) -> dict[str, Any]:
+    """The owner's veto on confirmed cells (D112, 2026-11-06: of the pilot's seven confirmed starts
+    two are not written): each named `replace` the re-check confirmed becomes `held` with `via`
+    `owner` - neither written nor cleared, listed in the wave's HELD.jsonl - the researcher's
+    decision kept whole in `adversarial.original` beside the re-check's note, plus an `owner` note.
+
+    Refused like `owner_accept`: no applied re-check, a DECISIONS.jsonl that is not the pinned file,
+    a decision that names no owner decision; and a cell that is not in the run or is not a replace
+    the re-check confirmed. The file before is kept as `DECISIONS.pre-owner-<n>.jsonl`, the cells go
+    to `adv/OWNER_REJECTED.jsonl`, APPLIED.json pins the new file (`owner_rejected` keeps the pins)."""
+    adv = run / HO.ADV_DIR
+    applied = adv / APPLIED_FILE
+    if not applied.exists():
+        raise AdversarialError(f"{applied} is missing: the owner vetoes what the check confirmed")
+    record = json.loads(applied.read_text(encoding="utf-8"))
+    fields_fn = run / HO.DECISIONS_FILE
+    before = _sha256_text(fields_fn)
+    if before != record["decisions_sha256"]:
+        raise AdversarialError(f"{fields_fn} is not the file APPLIED.json pins")
+    if not (decision[:1] == "D" and decision[1:].isdigit()):
+        raise AdversarialError(f"{decision!r} names no owner decision (D<n>)")
+    if not cells:
+        raise AdversarialError("name at least one cell (<site_id>.<field>)")
+    decisions = HO._read_jsonl(fields_fn)
+    index = {cell_id(d["site_id"], d["field"]): i for i, d in enumerate(decisions)}
+    rejected: list[dict[str, Any]] = []
+    at = H.now()
+    for cell in dict.fromkeys(cells):
+        if cell not in index:
+            raise AdversarialError(f"{cell} is no decided cell of this run")
+        confirmed = decisions[index[cell]]
+        note = confirmed.get("adversarial") or {}
+        if confirmed["decision"] != A.REPLACE or note.get("verdict") != CONFIRM:
+            raise AdversarialError(
+                f"{cell} is not a replace the re-check confirmed ({confirmed['decision']})"
+            )
+        original = {k: v for k, v in confirmed.items() if k != "adversarial"}
+        decisions[index[cell]] = {
+            **{k: confirmed[k] for k in ("site_id", "name", "field", "status", "stored", "asked")},
+            "decision": HO.HELD,
+            "value": None,
+            "via": OWNER,
+            "round": confirmed["round"],
+            "counted_rounds": [],
+            "answered_by": confirmed["answered_by"],
+            "model": confirmed["model"],
+            "quotes": [],
+            "reasoning": (
+                f"owner {decision} holds it: {reason} | the re-check confirmed "
+                f"{confirmed['value']!r} (round {note['round']}, {note['answered_by']})"
+            ),
+            "value_page": None,
+            "adversarial": {**note, "original": original},
+            "owner": {"decision": decision, "reason": reason, "at": at},
+        }
+        rejected.append(
+            {
+                "cell": cell,
+                "name": confirmed["name"],
+                "value": confirmed["value"],
+                "decision": decision,
+                "reason": reason,
+                "at": at,
+            }
+        )
+    n = 1 + sum(1 for p in run.glob(f"{OWNER_PRE_PREFIX}*.jsonl"))
+    (run / f"{OWNER_PRE_PREFIX}{n}.jsonl").write_bytes(fields_fn.read_bytes())
+    HO._write_jsonl(fields_fn, decisions)
+    previous = (
+        HO._read_jsonl(adv / OWNER_REJECTED_FILE) if (adv / OWNER_REJECTED_FILE).exists() else []
+    )
+    HO._write_jsonl(adv / OWNER_REJECTED_FILE, [*previous, *rejected])
+    after = _sha256_text(fields_fn)
+    record["owner_rejected"] = [
+        *record.get("owner_rejected", []),
+        {"at": at, "decision": decision, "cells": [r["cell"] for r in rejected],
+         "pre_sha256": before, "decisions_sha256": after},
+    ]  # fmt: skip
+    record["decisions_sha256"] = after
+    _write_json(applied, record)
+    return {"rejected": len(rejected), "cells": [r["cell"] for r in rejected], "decision": decision}
+
+
 # ------------------------------------------------------------------------------------------ the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
@@ -1050,18 +1155,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         name: sub.add_parser(name)
         for name in (
             "select", "export", "export-reask", "brief", "check-answer", "import", "apply", "status",
-            "owner-accept",
+            "owner-accept", "owner-reject",
         )
     }  # fmt: skip
-    for name in ("select", "apply", "owner-accept"):
+    for name in ("select", "apply", "owner-accept", "owner-reject"):
         commands[name].add_argument("--run", type=Path, required=True, help="the wd5 run")
-    commands["owner-accept"].add_argument(
-        "--cell", action="append", required=True, help="<site_id>.<field>"
-    )
-    commands["owner-accept"].add_argument(
-        "--decision", required=True, help="the owner decision, D<n>"
-    )
-    commands["owner-accept"].add_argument("--reason", required=True)
+    for name in ("owner-accept", "owner-reject"):
+        commands[name].add_argument(
+            "--cell", action="append", required=True, help="<site_id>.<field>"
+        )
+        commands[name].add_argument("--decision", required=True, help="the owner decision, D<n>")
+        commands[name].add_argument("--reason", required=True)
     for name in ("export", "export-reask", "brief", "check-answer", "import", "status"):
         commands[name].add_argument("--adv", type=Path, required=True, help="the stage directory")
     for name in ("export", "export-reask", "brief", "check-answer"):
@@ -1093,6 +1197,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = apply(HO._resolve(args.run))
         elif args.command == "owner-accept":
             result = owner_accept(
+                HO._resolve(args.run), args.cell, decision=args.decision, reason=args.reason
+            )
+        elif args.command == "owner-reject":
+            result = owner_reject(
                 HO._resolve(args.run), args.cell, decision=args.decision, reason=args.reason
             )
         else:

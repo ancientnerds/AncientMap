@@ -777,3 +777,23 @@ Known limits: the 83 undated sites whose period's newest journal row is another 
 (`wd5x/UNDATED_REFUSED_SOURCED_WRITE.jsonl`) are refused by `check_listed` and are not in the pilot;
 the adversarial calibration `adv-truth-002` stands for the role, but its cells were framed before
 D101 (no regional period wording). Tests: `tests/remediation/test_fields_d99.py`.
+
+### 15.1 D112 and D111 (2026-11-06)
+
+**D112** wrote 5 of the pilot's 7 confirmed starts (Brean Down, Mawk'allaqta, Karabel/Belören,
+Çimdin Kalesi, Moel y Gest) as wave `2026-11-06a` of `wd5r/pilot`. Port Way and Čertova pec were
+taken out first with `adversarial.py owner-reject --run $P --cell <site>.period_start --decision D112
+--reason ...`: a confirmed `replace` becomes `held` with `via: owner` (nothing written, nothing
+cleared, listed in the wave's HELD.jsonl), the file before is kept as `DECISIONS.pre-owner-<n>.jsonl`,
+`adv/OWNER_REJECTED.jsonl` lists the cells and APPLIED.json pins the new file - the mirror of
+`owner-accept`.
+
+**D111** tightens the question for every round and cell exported from then on: `period_rule` is
+`D111` (`handoff._D111_SENTENCE` after the D101 sentence; `adversarial._D111_CLAUSE` after the D101
+clause): a coarse period word gives no year (`pipeline.periods.COARSE`, and a bare Bronze Age where
+`SUBPHASE_REQUIRED` divides it), the most precise epoch the source gives is the answer, a weak single
+source (a stub citing no publication, a travel/tourism/community/personal/blog page) does not count,
+and the start is the site's own beginning (not the territory around it, not a first mention, not a
+sentence that only classifies it). A D101 round keeps the text it was asked. The second pilot draws
+50 new sites: `d99.py draw ... --exclude wd5r/PILOT_SITES.jsonl --pilot "D111 pilot 2"`.
+Tests: `tests/remediation/test_fields_d111.py`, `test_fields_adversarial.py::TestTheOwnersVeto`.

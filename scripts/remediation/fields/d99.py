@@ -9,8 +9,10 @@ imported and re-checked by `handoff.py` and `adversarial.py` like every wd5 run.
 only the two things the lane lacked:
 
     d99.py draw --undated U.jsonl --sites SITES.jsonl --owner OWNER.jsonl --seed S --out FILE
+                [--exclude EARLIER.jsonl ...] [--pilot NAME]
         the pilot's listed sites: a seeded, stratified draw (`STRATA`), written as the
-        `{"site_id", "reason"}` lines `population.py build --sites` reads
+        `{"site_id", "reason"}` lines `population.py build --sites` reads; `--exclude` keeps the
+        sites of an earlier pilot out (D111: a second pilot of 50 new sites)
     d99.py sources --label SITE_ID [--harvest DIR]
         what is on disk for a site, for the agent to read before the web: the Wikipedia cache
         (`wiki.py`), the item's other-language articles and its Wikidata date claims (the wd5x
@@ -101,10 +103,14 @@ def draw(
     conflicts: frozenset[str],
     seed: int,
     strata: Sequence[tuple[str, int]] = STRATA,
+    *,
+    exclude: frozenset[str] = frozenset(),
+    pilot: str = "D99 pilot",
 ) -> list[dict[str, str]]:
     """The pilot: per stratum, `n` sites drawn with `seed` from the undated sites of that stratum
     (sorted first, so the draw depends on the set and the seed only). A stratum smaller than its
     `n` is refused by name: a pilot that silently shrinks measures less than it claims."""
+    undated = [s for s in undated if s not in exclude]
     missing = sorted(s for s in undated if s not in countries)
     if missing:
         raise D99Error(f"{len(missing)} undated site(s) have no harvest row, e.g. {missing[0]}")
@@ -121,7 +127,7 @@ def draw(
             out.append(
                 {
                     "site_id": site,
-                    "reason": f"D99 pilot (seed {seed}), stratum {name}: {REASON[name]}",
+                    "reason": f"{pilot} (seed {seed}), stratum {name}: {REASON[name]}",
                 }
             )
     return out
@@ -253,6 +259,14 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--owner", type=Path, default=FIELDS_DIR / "wd5" / "adv" / "OWNER.jsonl")
     d.add_argument("--seed", type=int, required=True)
     d.add_argument("--out", type=Path, required=True)
+    d.add_argument(
+        "--exclude",
+        type=Path,
+        action="append",
+        default=[],
+        help='JSON lines with "site_id" never drawn (an earlier pilot: D111 asks 50 new sites)',
+    )
+    d.add_argument("--pilot", default="D99 pilot", help="the name the reason gives the pilot")
     s = sub.add_parser("sources", help="what is on disk for one site, for the agent")
     s.add_argument("--label", required=True, help="the question's label: the site id")
     s.add_argument("--harvest", type=Path, default=HARVEST)
@@ -264,7 +278,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "draw":
             undated = [str(r["site_id"]) for r in _read_jsonl(args.undated)]
             countries = {r["site_id"]: r["country"] for r in _read_jsonl(args.sites)}
-            rows = draw(undated, countries, conflict_sites(_read_jsonl(args.owner)), args.seed)
+            exclude = frozenset(str(r["site_id"]) for f in args.exclude for r in _read_jsonl(f))
+            rows = draw(
+                undated,
+                countries,
+                conflict_sites(_read_jsonl(args.owner)),
+                args.seed,
+                exclude=exclude,
+                pilot=args.pilot,
+            )
             if args.out.exists():
                 raise D99Error(f"{args.out} exists: a draw is written once")
             args.out.parent.mkdir(parents=True, exist_ok=True)

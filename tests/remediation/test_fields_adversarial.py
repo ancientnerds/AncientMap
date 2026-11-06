@@ -761,6 +761,71 @@ class TestTheOwnersWord:
             AD.owner_accept(run, [cell_of(A_ID)], decision="D68", reason="r")
 
 
+class TestTheOwnersVeto:
+    """`owner_reject`: the owner's veto on a cell the re-check confirmed (D112, 2026-11-06)."""
+
+    def test_a_confirmed_cell_is_held_with_the_owners_note(self, tmp_path: Path) -> None:
+        run = TestTheOwnersWord().applied(tmp_path, {})
+        result = AD.owner_reject(run, [cell_of(A_ID)], decision="D112", reason="owner: not this")
+        assert result["rejected"] == 1
+        rows = {(d["site_id"], d["field"]): d for d in HO._read_jsonl(run / HO.DECISIONS_FILE)}
+        row = rows[(A_ID, "period_start")]
+        assert row["decision"] == HO.HELD and row["via"] == "owner"
+        assert row["value"] is None and row["quotes"] == []
+        assert row["owner"]["decision"] == "D112" and "owner D112" in row["reasoning"]
+        assert row["adversarial"]["verdict"] == "confirm"
+        assert row["adversarial"]["original"]["decision"] == "replace"
+        applied = json.loads((run / HO.ADV_DIR / AD.APPLIED_FILE).read_text(encoding="utf-8"))
+        assert applied["decisions_sha256"] == FP._sha256_text(run / HO.DECISIONS_FILE)
+        assert applied["owner_rejected"][0]["cells"] == [cell_of(A_ID)]
+        [line] = HO._read_jsonl(run / HO.ADV_DIR / AD.OWNER_REJECTED_FILE)
+        assert line["cell"] == cell_of(A_ID) and line["decision"] == "D112"
+        assert (run / f"{AD.OWNER_PRE_PREFIX}1.jsonl").exists()
+
+    def test_a_vetoed_cell_is_never_planned(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(FP, "REPO", tmp_path)
+        monkeypatch.setattr(HO, "REPO", tmp_path)
+        run = TestTheOwnersWord().applied(tmp_path, {})
+        AD.owner_reject(run, [cell_of(A_ID)], decision="D112", reason="r")
+        T5.pass_calibrations(tmp_path)
+        FP.build_wave(run, "2026-11-06v")
+        wave = FP.read_wave_at(FP.wave_dir("2026-11-06v", "wd5"))
+        assert all(A_ID not in step for step in wave["steps"])
+        held = HO._read_jsonl(FP.wave_dir("2026-11-06v", "wd5") / FP.HELD_FILE)
+        assert [h["via"] for h in held if h["site_id"] == A_ID] == ["owner"]
+
+    def test_a_cell_the_check_did_not_confirm_is_refused(self, tmp_path: Path) -> None:
+        run = TestTheOwnersWord().applied(tmp_path, {B_ID: "reject"})
+        before = (run / HO.DECISIONS_FILE).read_bytes()
+        with pytest.raises(AD.AdversarialError, match="not a replace the re-check confirmed"):
+            AD.owner_reject(run, [cell_of(B_ID)], decision="D112", reason="r")
+        assert (run / HO.DECISIONS_FILE).read_bytes() == before
+
+    def test_the_decision_must_name_an_owner_decision(self, tmp_path: Path) -> None:
+        run = TestTheOwnersWord().applied(tmp_path, {})
+        with pytest.raises(AD.AdversarialError, match="names no owner decision"):
+            AD.owner_reject(run, [cell_of(A_ID)], decision="owner", reason="r")
+
+    def test_decisions_that_moved_since_the_pin_are_refused(self, tmp_path: Path) -> None:
+        run = TestTheOwnersWord().applied(tmp_path, {})
+        with (run / HO.DECISIONS_FILE).open("a", encoding="utf-8") as handle:
+            handle.write("\n")
+        with pytest.raises(AD.AdversarialError, match="not the file APPLIED.json pins"):
+            AD.owner_reject(run, [cell_of(A_ID)], decision="D112", reason="r")
+
+    def test_an_unknown_cell_is_refused(self, tmp_path: Path) -> None:
+        run = TestTheOwnersWord().applied(tmp_path, {})
+        with pytest.raises(AD.AdversarialError, match="no decided cell"):
+            AD.owner_reject(run, ["nope.period_start"], decision="D112", reason="r")
+
+    def test_it_needs_the_applied_recheck(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [dec()], A_ID)
+        with pytest.raises(AD.AdversarialError, match="is missing"):
+            AD.owner_reject(run, [cell_of(A_ID)], decision="D112", reason="r")
+
+
 class TestWhatThePlanReads:
     def test_a_wave_is_planned_only_from_the_decisions_the_check_was_applied_to(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
