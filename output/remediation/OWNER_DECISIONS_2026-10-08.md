@@ -193,3 +193,20 @@ These were raised by the wave-1 scouts (output/remediation/final-2026-10-08/D70_
 | O8 | Image-role recalibration (image-roles-v1 failed; ~950 answers) | **Not started**: not covered by any release; blocks D15/D17/D59. Cost goes to the owner. |
 | O9 | Weekly backbone restart after the alt-history stories (D75) | A guarded weekly Monday 00:20 UTC cron start is added on the VPS. |
 | O10 | VPS leftovers beyond the listed ones (node_modules-bak-*, sites_dump.dump, 4 untracked scripts, tts_test/, pfps/) | **Left in place** (deletion outside the listed scope); listed for the owner. |
+
+## Owner questionnaire of 2026-11-06 (Claude Code session, Opus 5.5; questions raised by wave 2)
+
+| # | question | decision |
+| --- | --- | --- |
+| D99 | D70 after the deterministic extractor failed (sealed gold 0.7034, spot check 26/30 wrong) | **A Claude agent reads per site** (rec): Sonnet field_researcher proposes a quoted start per undated site, an independent adversarial check verifies; ~1,200-1,500 Sonnet answers. **Pilot of 50 sites first, result shown to the owner** before the rest. O1 (start only, range in the evidence) and the D58 window precheck stay. |
+| D100 | pilot_judge failed its re-seal at Opus (wc-pj-1o2 0.913 with the known error missed; wc-pj-2o2 0.8966 with 2 extra WRONG judged plausibly right) | **Release** (rec): strict rather than lax is the safe side for cards; released on wc-pj-1o2. |
+| D101 | The period word "Neolithic" (and other period words) mapped to one fixed year (-4000) | **A year stated by the same source wins** (rec); a bare period word is used only without a number, and then with a regional start (Near East earlier than Europe). Applies to D57 and the D99 lane. |
+| D102 | GSC manual-action check (D76) | Still open: **the owner checks and sends the wording.** |
+| D103 | Image-role recalibration (image-roles-v1 failed; O8) | **Start the re-test one tier up** (rec), ~950 answers mostly Opus; the cost of the D17/D15/D59 image search itself (~1,500-3,000) is reported separately before it runs. |
+| D104 | D57: 6 vetoed fields (Merv, Mesa Verde, Palmyra, Nan Madol, Pantheon start; Thermopylae coordinates) | **Second research round for the 6 (code + ~15 answers), new plan + Opus review; insert still waits** for text and image (O4). |
+| D105 | Card waves a2-a4 | **Stop after a1 and show the owner cost and quality per card** (rec). |
+| D106 | Disk C: ~96 % full | **Keep only 1 local offsite copy** (VPS keeps 4). |
+| D107 | VPS leftovers (node_modules-bak-*, sites_dump.dump, 4 untracked scripts, tts_test/, pfps/, the two 2026-11-05 d14a backups) | **Delete all except .env.bak-*** (rec); supersedes O10. |
+| D108 | "Claim-checked" badge on SSR paper pages / library cards | **No** (rec), no new design element. |
+| D109 | The 5 novel briefings | **noindex stays** (rec). |
+| D110 | Small items | Cancel Theo request afe7c26a (paused); archive as tags and delete the local branches fix/2026-10-20-reference-linkifier-parens and integrate/wave1, keep feat/visitor-classes-push2 (held by D77); O1-O10 stay in force. |
