@@ -210,3 +210,18 @@ These were raised by the wave-1 scouts (output/remediation/final-2026-10-08/D70_
 | D108 | "Claim-checked" badge on SSR paper pages / library cards | **No** (rec), no new design element. |
 | D109 | The 5 novel briefings | **noindex stays** (rec). |
 | D110 | Small items | Cancel Theo request afe7c26a (paused); archive as tags and delete the local branches fix/2026-10-20-reference-linkifier-parens and integrate/wave1, keep feat/visitor-classes-push2 (held by D77); O1-O10 stay in force. |
+
+## Owner answers of 2026-11-06 evening (questions of AFK_REPORT_2026-11-06.md)
+
+| # | question | decision |
+| --- | --- | --- |
+| D111 | D99 pilot failed (7/50 dated, 5 right) | **Improve, then a second pilot of 50 new sites (~80 answers)**: coarse period words (Stone Age, Palaeolithic, Bronze Age without a sub-phase where the table needs one) give no year, a precise epoch is required, a weak single source (unreferenced stub, travel page) does not count, missing epochs (Chimú, Late Roman, ...) get cited starts. Stop after the pilot and show the owner. |
+| D112 | The 5 checked right pilot years (Brean Down, Mawk'allaqta, Karabel, Çimdin Kalesi, Moel y Gest) | **Write them** through the journalled wd5 lane together with the next step; Port Way and Čertova pec are not written. |
+| D113 | D101 detail questions 1-5 | All as recommended: Italy 'Roman' alone gives no year ('Roman imperial' from -27); Germany/Netherlands/Switzerland 'Roman' alone gives no year; fill missing countries and epochs with Wikipedia citations; a read-only list of already written years the old fixed rule may have got wrong; Wikipedia suffices as a citation and the old British middle/late Neolithic and Iron Age values stay. |
+| D114 | Nan Madol start (research 900 AD vs reviewer 1 AD) | **A small third round for this field only** (2 answers), then a new plan and review; insert still waits (O4). |
+| D115 | pfps/ and tts_test/ on the VPS | **Leave them.** |
+| D116 | An image of a genuine part of the site now in a museum (e.g. the Ishtar Gate in Berlin) | **Counts as "shows the site".** |
+| D117 | The image gold of 2026-09-19 has ~40 wrong entries | **A clean re-measurement** with a new, checked gold set (550-950 answers, mostly Opus). |
+| D118 | Image prefilter failed at Sonnet | **Test it at Opus** (~5 answers first). |
+| D119 | Tolerance for "wrong site" in image_depicts | **At most ~2 %**, because the adversarial check views every image afterwards. |
+| D120 | (unchanged) | The image search itself (D17/D15/D59, ~2,500-3,200 answers) starts only after a separate owner release. |
