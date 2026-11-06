@@ -20,6 +20,10 @@ high, calibrated on the WD1/WD3 rounds and the BP set) and recorded with `opus_h
                                                  the same, plus the counted fields the plan's D8
                                                  review A vetoed (D104): their old answers no
                                                  longer count (`read_review`, `decide`)
+    $I export-reask --run $R --handoff $H-r3 --review A --owner-round F
+                                                 an owner-released round past `MAX_ROUND` (D114):
+                                                 only the fields F names, each vetoed by review A,
+                                                 each asked with the owner's question F holds
 
 (`I="./.venv/Scripts/python.exe scripts/remediation/insert_site/run.py research"`.)
 
@@ -244,6 +248,7 @@ RETRY_NOTE = (
     "An earlier answer to this field did not count: {why}. Answer it again from a source the "
     "checker can read - or answer unresolved when none can be quoted."
 )
+OWNER_NOTE = "The owner asks this field once more (decision {decision}): {question}"
 VETO_NOTE = (
     "An earlier answer to this field counted, but the plan's review (the pilot judge) vetoed its "
     "value: {why} Research the field again on your own. The review is a lead to check, not a "
@@ -309,14 +314,17 @@ def render_prompt(
     notes: Mapping[str, str] | None = None,
     period_rule: str | None = None,
     vetoes: Mapping[str, str] | None = None,
+    owner: Mapping[str, Any] | None = None,
 ) -> str:
     """The exact question for one candidate - a pure function of the candidate line, the fields
     and sources asked, the run's country vocabulary, the round's `period_rule` (D101, or None for a
     round exported before it: `fields.handoff.period_rule_text`) and, in a re-ask, why each field's
-    last answer did not count or why the plan's review vetoed it (D104). Import renders it again and
-    refuses an answer to any other text."""
+    last answer did not count or why the plan's review vetoed it (D104), and in an owner-released
+    round (D114) the owner's question per field (`owner`: `{"decision": ..., "questions": {field:
+    text}}`). Import renders it again and refuses an answer to any other text."""
     notes = notes or {}
     vetoes = vetoes or {}
+    owner_questions = (owner or {}).get("questions", {})
     fields = [f for f in FIELDS if f in asked]
     sources = SOURCES in asked
     if not fields and not sources:
@@ -359,6 +367,10 @@ def render_prompt(
             out.append(RETRY_NOTE.format(why=notes[field]))
         if field in vetoes:
             out.append(VETO_NOTE.format(why=vetoes[field]))
+        if field in owner_questions:
+            out.append(
+                OWNER_NOTE.format(decision=owner["decision"], question=owner_questions[field])
+            )
         out.append("")
         out.append(HO.period_rule_text(FIELD_RULES[field], period_rule))
         vocabulary_text = _vocabulary_line(vocabulary) if field == "country" else definitions(field)
@@ -533,6 +545,7 @@ def _export_round(
     notes: Mapping[str, Mapping[str, str]],
     batch_size: int,
     vetoes: Mapping[str, Mapping[str, str]] | None = None,
+    owner: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
@@ -557,6 +570,7 @@ def _export_round(
                     notes.get(qid),
                     HO.D101,
                     (vetoes or {}).get(qid),
+                    _owner_of(owner, qid),
                 ),
             )
     record = {
@@ -570,6 +584,7 @@ def _export_round(
         "notes": {qid: dict(notes[qid]) for qid in sorted(notes)},
         "vetoes": {qid: dict(v) for qid, v in sorted((vetoes or {}).items())},
         HO.PERIOD_RULE_KEY: HO.D101,
+        **({OWNER_KEY: dict(owner)} if owner is not None else {}),
         "exported_at": FH.now(),
     }
     C.write_jsonl(run / ROUNDS_FILE, [*rounds, record])
@@ -591,11 +606,50 @@ def export(run: Path, handoff: Path, batch_size: int = BATCH_SIZE) -> dict[str, 
     return _export_round(run, handoff, 0, dict.fromkeys(candidates, list(ASKABLE)), {}, batch_size)
 
 
+OWNER_KEY = "owner_round"
+
+
+def _owner_of(owner: Mapping[str, Any] | None, qid: str) -> dict[str, Any] | None:
+    """One candidate's part of an owner-released round: its decision and its questions."""
+    if owner is None or qid not in owner["questions"]:
+        return None
+    return {"decision": owner["decision"], "questions": dict(owner["questions"][qid])}
+
+
+def read_owner_round(path: Path) -> dict[str, Any]:
+    """An owner-released round (D114): `{"decision": "D114", "questions": {qid: {field: text}}}`."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or set(data) != {"decision", "questions"}:
+        raise ResearchError(f"{path}: an owner round holds exactly 'decision' and 'questions'")
+    if not re.fullmatch(r"D\d+", str(data["decision"])):
+        raise ResearchError(f"{path}: {data['decision']!r} names no owner decision (D<n>)")
+    questions = data["questions"]
+    if not isinstance(questions, dict) or not questions:
+        raise ResearchError(f"{path}: an owner round asks at least one field")
+    for qid, fields in questions.items():
+        if not isinstance(fields, dict) or not fields:
+            raise ResearchError(f"{path}: {qid} asks no field")
+        for field, text in fields.items():
+            if field not in FIELDS:
+                raise ResearchError(f"{path}: {qid} {field!r} is no field of {FIELDS}")
+            if not isinstance(text, str) or not text.strip():
+                raise ResearchError(f"{path}: {qid} {field}: the owner's question is empty")
+    return {"decision": data["decision"], "questions": questions}
+
+
 def export_reask(
-    run: Path, handoff: Path, *, vetoes: Mapping[str, Mapping[str, str]] | None = None
+    run: Path,
+    handoff: Path,
+    *,
+    vetoes: Mapping[str, Mapping[str, str]] | None = None,
+    owner: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The next round: every field the last import left without a counted answer, and every
-    counted field the plan's review vetoed (`read_review`), asked with the review's reason."""
+    counted field the plan's review vetoed (`read_review`), asked with the review's reason.
+
+    An owner-released round (`owner`, `read_owner_round`; D114) may follow the last re-ask: it
+    asks exactly the fields the owner named, each of them vetoed by the review, with the owner's
+    question beside the review's reason, and nothing else."""
     rounds = read_rounds(run)
     if not rounds:
         raise ResearchError("nothing was exported")
@@ -605,10 +659,25 @@ def export_reask(
         raise ResearchError(
             f"{REASK_FILE} is from round {reask['after_round']}: import round {last}"
         )
-    if last >= MAX_ROUND:
+    if last >= MAX_ROUND and owner is None:
         raise ResearchError(f"round {last} was the last re-ask (MAX_ROUND {MAX_ROUND})")
     waiting = reask["fields"]
     vetoes = dict(vetoes or {})
+    if owner is not None:
+        if waiting:
+            raise ResearchError(
+                f"an owner round asks only the fields it names, but {REASK_FILE} still waits "
+                f"for {sorted(waiting)}"
+            )
+        named = {(q, f) for q, fields in owner["questions"].items() for f in fields}
+        unvetoed = sorted(named - {(q, f) for q, fields in vetoes.items() for f in fields})
+        if unvetoed:
+            raise ResearchError(f"the owner round names fields no review vetoed: {unvetoed}")
+        vetoes = {
+            q: {f: why for f, why in fields.items() if (q, f) in named}
+            for q, fields in vetoes.items()
+            if any((q, f) in named for f in fields)
+        }
     if not waiting and not vetoes:
         raise ResearchError("every field has a counted answer or is exhausted: nothing to ask")
     decisions = read_decisions(run) if vetoes else {}
@@ -624,7 +693,9 @@ def export_reask(
         for qid in sorted({*waiting, *vetoes})
     }
     notes = {qid: dict(waiting[qid]) for qid in waiting}
-    return _export_round(run, handoff, last + 1, asked, notes, rounds[0]["batch_size"], vetoes)
+    return _export_round(
+        run, handoff, last + 1, asked, notes, rounds[0]["batch_size"], vetoes, owner
+    )
 
 
 REVIEW_ROLE = "pilot_judge"
@@ -776,6 +847,7 @@ def _read_attempts(run: Path) -> list[dict[str, Any]]:
                     # a round exported before D101 carries no key: it was asked the old text
                     record.get(HO.PERIOD_RULE_KEY),
                     record.get("vetoes", {}).get(qid),
+                    _owner_of(record.get(OWNER_KEY), qid),
                 )
                 answer = OH.read_answer(
                     handoff, batch_id=batch_id, stage=STAGE, label=qid, prompt=prompt

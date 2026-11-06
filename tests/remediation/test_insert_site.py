@@ -585,6 +585,94 @@ class TestTheRounds:
         assert decision["status"] == RS.COUNTED and decision["round"] == 1
         assert RS.waiting(run) == {}
 
+    OWNER = {
+        "decision": "D114",
+        "questions": {COLOSSEUM: {"period_start": "Is it 70 (begun) or 72 (building work)?"}},
+    }
+
+    def _to_the_last_round(self, run: Path, tmp_path: Path) -> tuple[Path, dict[str, Any]]:
+        """Round 0 counted, then review vetoes until the last re-ask; the last counted again."""
+        handoff, batch = self._export(run, tmp_path)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        plan_md = tmp_path / "step" / "PLAN.md"
+        vetoes = RS.read_review(self._review(tmp_path, plan_md, [self.VETO]), plan_md)
+        again = block(
+            "replace", "72", [(WIKI, "Construction began under the emperor Vespasian in 72 AD")]
+        )
+        for number in range(1, RS.MAX_ROUND + 1):
+            RS.export_reask(run, tmp_path / f"h-r{number}", vetoes=vetoes)
+            batch_n = next(iter(RS.read_rounds(run)[number]["batches"]))
+            text = json.dumps({"fields": {"period_start": again}})
+            record(tmp_path / f"h-r{number}", batch_n, COLOSSEUM, text)
+            RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        return plan_md, vetoes
+
+    def test_an_owner_round_follows_the_last_reask_and_asks_only_its_fields(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        """D114: after the last re-ask the review vetoed one counted field again. The owner
+        releases one more round for it: the prompt carries the review's reason and the owner's
+        question, the round record names the decision, and the import renders the same prompt."""
+        _, vetoes = self._to_the_last_round(run, tmp_path)
+        with pytest.raises(RS.ResearchError, match="last re-ask"):
+            RS.export_reask(run, tmp_path / "h-rx", vetoes=vetoes)
+        last = RS.MAX_ROUND + 1
+        RS.export_reask(run, tmp_path / "h-owner", vetoes=vetoes, owner=self.OWNER)
+        record_ = RS.read_rounds(run)[last]
+        assert record_["round"] == last and record_["asked"] == {COLOSSEUM: ["period_start"]}
+        assert record_[RS.OWNER_KEY] == self.OWNER and record_["vetoes"] == vetoes
+        [line_] = OH.manifest(tmp_path / "h-owner")
+        prompt = (tmp_path / "h-owner" / line_["prompt_path"]).read_text(encoding="utf-8")
+        assert "the review says 70" in prompt
+        assert "(decision D114): Is it 70 (begun) or 72 (building work)?" in prompt
+        batch = next(iter(record_["batches"]))
+        begun = block("replace", "70", [(WIKI, "Construction began under the emperor Vespasian")])
+        text = json.dumps({"fields": {"period_start": begun}})
+        record(tmp_path / "h-owner", batch, COLOSSEUM, text)
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        decision = RS.read_decisions(run)[COLOSSEUM]["period_start"]
+        # the owner round's answer is the only one that may count; this one's quote states no
+        # year, so the field is exhausted and the vetoed 72 of the earlier rounds stays out
+        assert decision["status"] == RS.EXHAUSTED and RS.waiting(run) == {}
+
+    def test_the_owner_round_s_counted_answer_is_the_decision(self, run: Path, tmp_path) -> None:
+        _, vetoes = self._to_the_last_round(run, tmp_path)
+        RS.export_reask(run, tmp_path / "h-owner", vetoes=vetoes, owner=self.OWNER)
+        batch = next(iter(RS.read_rounds(run)[-1]["batches"]))
+        again = block(
+            "replace", "72", [(WIKI, "Construction began under the emperor Vespasian in 72 AD")]
+        )
+        text = json.dumps({"fields": {"period_start": again}})
+        record(tmp_path / "h-owner", batch, COLOSSEUM, text)
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        decision = RS.read_decisions(run)[COLOSSEUM]["period_start"]
+        assert decision["status"] == RS.COUNTED and decision["round"] == RS.MAX_ROUND + 1
+
+    def test_an_owner_round_names_only_vetoed_fields(self, run: Path, tmp_path: Path) -> None:
+        _, vetoes = self._to_the_last_round(run, tmp_path)
+        other = {"decision": "D114", "questions": {COLOSSEUM: {"site_type": "Which type?"}}}
+        with pytest.raises(RS.ResearchError, match="no review vetoed"):
+            RS.export_reask(run, tmp_path / "h-owner", vetoes=vetoes, owner=other)
+        with pytest.raises(RS.ResearchError, match="no review vetoed"):
+            RS.export_reask(run, tmp_path / "h-owner", vetoes={}, owner=self.OWNER)
+
+    @pytest.mark.parametrize(
+        ("data", "why"),
+        [
+            ({"decision": "D114"}, "exactly"),
+            ({"decision": "soon", "questions": {COLOSSEUM: {"period_start": "q"}}}, "no owner"),
+            ({"decision": "D114", "questions": {}}, "at least one"),
+            ({"decision": "D114", "questions": {COLOSSEUM: {"era": "q"}}}, "no field"),
+            ({"decision": "D114", "questions": {COLOSSEUM: {"period_start": " "}}}, "empty"),
+        ],
+    )
+    def test_an_owner_round_file_is_checked(self, tmp_path: Path, data, why) -> None:
+        path = tmp_path / "owner.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match=why):
+            RS.read_owner_round(path)
+
     def test_a_review_of_another_plan_or_not_by_the_pilot_judge_is_refused(
         self, tmp_path: Path
     ) -> None:
