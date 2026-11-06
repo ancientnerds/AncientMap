@@ -706,6 +706,17 @@ own (>= 20 cells, >= 0.95). A tier that fails is switched off in `CONFIG`, which
   The withheld decisions (ranges, solo kinds) are reported per kind in MEASURE.json (`withheld`), never gated.
 - DEV with the shipped switches: dev 82/104 (0.789), dev-hard 164/181 (0.906) - below 0.95 before the seal.
 
+- **Gold round 1, measured once (2026-11-06, stamp `23397a6a1f72`, commit 292c2b8): FAIL.** Bucket precision
+  102/145 = **0.7034** (Wilson 95 % 0.625-0.772), coverage 0.3625. Tier 1 29/31 (0.936), tier 2 73/114 (0.640);
+  explicit dates 53/58 (year 30/34, century 21/22, bp 1/1, millennium 1/1), period word alone 44/81 (0.543).
+  Hard half: 158/182 (0.868). Withheld ranges would have scored 20/37. A re-seal (round 2) is not drawn: with period
+  words off the explicit dates emit about 58 of 400 gold, below `MIN_EMITTED` 100, so it cannot pass by
+  construction. Nothing is written (D71). The 615 (`wd5x/report-615/`, a measurement without RUN.json): 83 cells
+  (13.5 %), 5 scope holds, 527 abstentions; 83 of the 615 are refused by `population.check_listed` (period written by
+  another lane's sourced write) and the fresh harvest has 2 P31 classes the classify table lacks (Q184368, Q79007),
+  so a wd5x write population cannot be built as it stands. D72: 433 of the 4,294 dated sites read in another bucket
+  (`wd5x/CONFLICTS.jsonl`, never written).
+
 ### 14.5 The run
 
 ```bash
