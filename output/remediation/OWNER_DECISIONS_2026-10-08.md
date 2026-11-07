@@ -225,3 +225,23 @@ These were raised by the wave-1 scouts (output/remediation/final-2026-10-08/D70_
 | D118 | Image prefilter failed at Sonnet | **Test it at Opus** (~5 answers first). |
 | D119 | Tolerance for "wrong site" in image_depicts | **At most ~2 %**, because the adversarial check views every image afterwards. |
 | D120 | (unchanged) | The image search itself (D17/D15/D59, ~2,500-3,200 answers) starts only after a separate owner release. |
+
+## Owner answers of 2026-11-07 (questions of AFK_REPORT_2026-11-05.md section 3 and AFK_REPORT_2026-11-07.md section 7)
+
+| # | question | decision |
+| --- | --- | --- |
+| D121 | The 166 period-word years of D113_CONFLICT_LIST | **Correct them** (rec): 69 get the regional year, 97 become undated; recomputation only, journalled wave. |
+| D122 | The 301 rule-made years without a source (old site_type rule, D12) | **Reset to undated** (rec), in the same journalled run as D121. |
+| D123 | Bare "Bronze Age" where the table has sub-phases | **Stays without a year** (rec). Countries without a clear Wikipedia start stay without one too. |
+| D124 | Dating of the remaining ~430 sites | **Stop here** (rec); only Eddisbury Hill Fort gets its cited radiocarbon start (12th c. BC) through a 1-2 answer re-ask. |
+| D125 | image_depicts at Opus (false depicts 1.6 % <= 2 %, recall 0.79 < 0.90) | **Release** (rec). |
+| D126 | image prefilter at Opus (0.95 vs 0.98) | **Release** (rec). |
+| D127 | Loose museum finds whose provenance is only on the file page | **Count only when the image itself shows the provenance** (label/inscription); architectural parts always count (D116). Correct the ~10-11 gold cases accordingly. |
+| D128 | image adversarial after D127 | **Release if <= 4 real errors per 100** (rec). |
+| D129 | Image search D17/D15/D59 | **In stages** (rec): first ~150 sites, spot check, cost per image reported; the owner decides the rest. |
+| D130 | D57: Miletus, Panathenaic Stadium, Pella | **A small 4th round** for these 3 fields (rec); insert still waits (O4). |
+| D131 | Card waves a2-a4 (a1: 18.2 answers per written card) | **First make it cheaper, then run a2** and report cost and quality (rec); a3/a4 wait for the owner. |
+| D132 | a1 rest | **Rewrite the 4 weak spot-check cards** (Banwolseong, Rudna Glava, Nakhchivan, Seahenge); the 9 cards blocked by the web.archive.org network block stay, retried later without a new access path. |
+| D133 | VPS backups 2026-11-07_a1-* (3 x ~885 MB) | **Delete after Sunday's offsite copy is verified** (rec). |
+| D134 | WC adversarial role + D18 author backfill (44 heroes) | **Both** (rec): calibrate the adversarial role for lane WC (~30-50 Opus answers) and run the D18 author backfill with a journalled write. |
+| D135 | Disk C: (22 GB free) | The owner declined archiving the old handoff dirs; **he cleans up himself**. Runs must stop and report below 10 GB free. |
