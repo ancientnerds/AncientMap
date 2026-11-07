@@ -245,3 +245,9 @@ These were raised by the wave-1 scouts (output/remediation/final-2026-10-08/D70_
 | D133 | VPS backups 2026-11-07_a1-* (3 x ~885 MB) | **Delete after Sunday's offsite copy is verified** (rec). |
 | D134 | WC adversarial role + D18 author backfill (44 heroes) | **Both** (rec): calibrate the adversarial role for lane WC (~30-50 Opus answers) and run the D18 author backfill with a journalled write. |
 | D135 | Disk C: (22 GB free) | The owner declined archiving the old handoff dirs; **he cleans up himself**. Runs must stop and report below 10 GB free. |
+
+## Owner correction of 2026-11-07 (after 988 visible sites showed "Undated")
+
+| # | question | decision |
+| --- | --- | --- |
+| D136 | Sites whose only dating is an epoch word (incl. the coarse words of D111/D123 and the type-rule years reset by D122) | **Use the predefined period bands** (owner: "Ich will die vorgefertigten periods. wir haben doch älter als 4500bc. da kann doch vieles rein."): every epoch maps to the band in which it begins (in the site's country where REGIONAL_STARTS has a value), per the table output/remediation/fields/epoch_bands/EPOCH_BANDS.md; the stored year is the band's edge (`bucket_edge`, as for the 511 band rows of 2026-10-04 and the owner's rule "Neolithic is < 4500 BC"). Coarse words (Stone Age, Palaeolithic, prehistoric, Mesolithic) go to "< 4500 BC"; a bare Bronze Age goes to the band of its regional start. Supersedes D111's/D123's "no year" for epoch words and D122 where the site's own sources, Wikidata P2348 or its own type/name name an epoch. A site with no year and no epoch anywhere stays "Undated". |
