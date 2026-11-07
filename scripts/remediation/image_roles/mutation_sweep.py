@@ -2078,6 +2078,47 @@ D117_CASES = [
       "test_the_fixed_gold_takes_the_check_and_draws_the_re_check", T_GOLD),
 ]  # fmt: skip
 
+STANDING_PY = ROLES_DIR / "standing.py"
+RUN_PY = ROLES_DIR / "run.py"
+T_STD = "tests/remediation/test_image_standing.py"
+#: D125-D128 (2026-11-07): the release of a held image verdict, the gold's audit trail, the gate.
+D125_CASES = [
+    g("d127: a trail on another gold", STANDING_PY, '        if row["gold_sha256"] != gold:',
+      "test_a_trail_made_on_another_gold_is_refused", T_STD),
+    g("d127: a correction names decision and reason", STANDING_PY,
+      "    if not decision.strip() or not reason.strip():",
+      "test_a_case_is_corrected_once_and_only_to_another_truth", T_STD),
+    g("d127: only a case of the gold", STANDING_PY, "    if case_id not in by_id:",
+      "test_a_case_is_corrected_once_and_only_to_another_truth", T_STD),
+    g("d127: a case is corrected once", STANDING_PY,
+      '    if any(r["case_id"] == case_id for r in audit(directory)):',
+      "test_a_case_is_corrected_once_and_only_to_another_truth", T_STD),
+    g("d127: a correction changes the truth", STANDING_PY,
+      '    if by_id[case_id]["truth"] == truth:',
+      "test_a_case_is_corrected_once_and_only_to_another_truth", T_STD),
+    g("d128: no rescore without a correction", STANDING_PY, "    if not trail:",
+      "test_no_rescore_without_a_correction_of_the_decision", T_STD),
+    g("d125: a release names who decided", STANDING_PY, "    if not decided_by.strip():",
+      "test_a_release_without_who_or_why_is_refused", T_STD),
+    g("d125: a release names why", STANDING_PY, "    if not reason.strip():",
+      "test_a_release_without_who_or_why_is_refused", T_STD),
+    g("d125: a passed verdict is not released", STANDING_PY, '    if held["passed"]:',
+      "test_only_a_held_failure_is_released", T_STD),
+    g("d125: a tier move is not released", STANDING_PY, '    if held["tier_move"] is not None:',
+      "test_only_a_held_failure_is_released", T_STD),
+    g("d125: only a held verdict is released", STANDING_PY, '    if not held.get("held"):',
+      "test_only_a_held_failure_is_released", T_STD),
+    g("d125: no release, no standing", STANDING_PY,
+      "    if not path.is_file():\n        raise StandingError(\n            f\"slot {slot} has no passing",
+      "test_a_held_verdict_is_released_and_then_stands", T_STD),
+    g("d125: a moved verdict voids the release", STANDING_PY,
+      '    if not verdict.is_file() or ST.file_sha256(verdict) != record["verdict_sha256"]:',
+      "test_a_release_falls_when_its_verdict_or_evidence_moves", T_STD),
+    c("d125: the re-check export is gated", RUN_PY,
+      '            STD.require_standing(["adversarial"], STD.calibration_root())\n', "",
+      "test_the_lane_s_export_refuses_a_role_that_does_not_stand", T_STD),
+]  # fmt: skip
+
 CASES: list[Case] = [
     *D18_CASES,
     *D15_CASES,
@@ -2088,6 +2129,7 @@ CASES: list[Case] = [
     *CLOSEOUT_CASES,
     *D103_CASES,
     *D117_CASES,
+    *D125_CASES,
 ]
 
 

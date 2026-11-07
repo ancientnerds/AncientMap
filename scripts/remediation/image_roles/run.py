@@ -9,6 +9,7 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
     run.py identity-apply  --run-dir C [--stage identity-verify ...]  -> C/POPULATION_2.jsonl
     run.py search          --run-dir C [--judged V ...] [--workers 2]  -> C/CANDIDATES.jsonl
     run.py pictures        --run-dir C                           renderings on disk -> C/PICTURES.jsonl
+    (the three exports below refuse a role that does not stand: `standing.py`, D125-D128)
     run.py prefilter-export --run-dir C --handoff H              Haiku, 640 px, 60 to a question
     run.py brief | check-answer | import  ... --stage image-prefilter
     run.py depicts-export  --run-dir C --handoff H               Sonnet, 1280 px, by site
@@ -72,6 +73,7 @@ from image_roles import hero_recheck as HR  # noqa: E402
 from image_roles import identity as ID  # noqa: E402
 from image_roles import prefilter as PF  # noqa: E402
 from image_roles import stage as SG  # noqa: E402
+from image_roles import standing as STD  # noqa: E402
 from image_roles.wiki_cache import WikiCache  # noqa: E402
 
 STAGES = {
@@ -282,10 +284,13 @@ def main(argv: list[str] | None = None) -> int:
         elif command == "pictures":
             _print(cmd_pictures(run))
         elif command == "prefilter-export":
+            STD.require_standing(["image_prefilter"], STD.calibration_root())
             _print(FL.prefilter_export(run, args.handoff, limit=args.limit))
         elif command == "depicts-export":
+            STD.require_standing(["image_depicts"], STD.calibration_root())
             _print(FL.depicts_export(run, args.handoff, cache=_cache(args.wiki_cache)))
         elif command == "recheck-export":
+            STD.require_standing(["adversarial"], STD.calibration_root())
             _print(cmd_recheck_export(run, args))
         elif command == "brief":
             spec = _spec(args)

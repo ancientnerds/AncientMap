@@ -14453,3 +14453,30 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
 - **Labels exported:** two independent rounds, 129 questions each in 22 batches (handoffs
   `image-gold3-label-a`, `-b`, role pilot_judge Opus xhigh, web). No answer yet.
 - Mutation sweep: 6 new cases (`img d117`); all 351 needles present once and every mutant compiles.
+
+## 2026-11-07 - Lane d125-images, iteration 1: D125/D126 released, D127 gold audit, D128 not met
+
+- **Code:** `image_roles/standing.py` (new): `release` of a held clean-gold verdict into
+  `<dir>/releases/<slot>.json` (binds verdict, sealed thresholds, fixed gold, the role's registry entry and
+  every evidence file, `calibrate_claude.evidence_records`), the gold's audit trail `GOLD_AUDIT.jsonl`
+  (`correct`: a case corrected once, the sealed GOLD.jsonl untouched), `rescore` of a slot's existing answers
+  against the corrected gold (`verdicts/<slot>.<decision>.json`, no new answer) and `require_standing`, now
+  called by `run.py prefilter-export|depicts-export|recheck-export`. `calibrate_claude.py release` does not
+  fit these directories (its seals are keyed by calibration id in the root THRESHOLDS.json), hence the
+  sibling. Tests `tests/remediation/test_image_standing.py` (16); 14 mutation cases `img d125/d127/d128`.
+- **D125 / D126 released:** `image-roles-v3/releases/image_depicts.json` (decided by "owner (D125)") and
+  `image-roles-v3p/releases/image_prefilter.json` ("owner (D126)"), evidence the clean gold and the
+  orchestrator's checks of every disagreement. `standing.py check`: both stand.
+- **D127 applied to the gold (4 lines, 2 cases x their depicts/re-check rows):** the Perge theatre frieze
+  block (architectural part: not_depicts -> depicts) and the Stabiae milestone (loose find whose provenance the
+  picture does not show: depicts -> not_depicts). The other 9 museum disagreements of the re-check (Harzhorn
+  fitting, Penas de la Cerca sherds and fibula, De Meern chisel, two Assur statues, Dos Pilas plate, the
+  "Memnon" head, both Artemis Orthia cases) were viewed: no legible label or inscription in the picture, so
+  the labellers had already applied the D127 rule and the gold stands. The "~10-11 cases" of the AFK report
+  counted these as corrections towards depicts, which is the opposite of the rule the owner chose.
+- **D128 re-score** (`verdicts/adversarial.D127.json`, 200 existing answers, 0 new): agreement 181/200 =
+  0.905 (CI 0.856-0.942), unchanged. `checks/D128_CHECK.json`: 19 disagreements, all false keeps; 15 real
+  (11 loose finds accepted from the file page, 4 false keeps of landscapes/replicas), 4 with a doubtful gold:
+  **7.5 real errors per 100 > 4. Not released; the hero re-check does not stand, so D129 stage 1 did not
+  start** (no prefilter, depicts or re-check answer spent). Cause: the re-check prompt (`served-check-v3`,
+  `_VERDICT_TERMS_D116`) still counts "an object of this site in a museum" without D127's condition.
