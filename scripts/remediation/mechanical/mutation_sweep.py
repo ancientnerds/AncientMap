@@ -11679,7 +11679,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "the chain follows the contract",
-                "    if spec.name == SHORTS:\n        return shorts_progress(site_id, records)",
+                "    if spec.name == SHORTS:\n        return shorts_progress(site_id, records, defect_stop=spec.defect_stop)",
                 "test_every_stage_in_order_to_a_version_3_provenance",
             ),
             (

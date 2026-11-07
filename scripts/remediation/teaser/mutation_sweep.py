@@ -92,7 +92,115 @@ def advg(label: str, path: Path, needle: str, test: str, testfile: str) -> Case:
     return guard(f"teaser card-adversarial: {label}", path, needle, test, testfile)
 
 
+T_D131 = "tests/remediation/test_teaser_d131.py"
+
+
+def d131(label: str, needle: str, test: str, path: Path = RUN) -> Case:
+    """A guard of owner decisions D131/D132 (2026-11-07): the defect stop and `select --redo`."""
+    return guard(f"teaser d131: {label}", path, needle, test, T_D131)
+
+
+def d131c(label: str, old: str, new: str, test: str, path: Path = RUN) -> Case:
+    return Case(f"teaser d131: {label}", path, old, new, test, T_D131)
+
+
+D131_CASES: list[Case] = [
+    d131(
+        "the stop needs a rewrite that named a sentence",
+        '    if defect_stop and any(sentence is not None for sentence in rewritten["repeats"]):',
+        "test_a_rewrite_that_names_a_description_sentence_ends_the_chain",
+    ),
+    d131c(
+        "a rewrite naming no sentence goes on",
+        '    if defect_stop and any(sentence is not None for sentence in rewritten["repeats"]):',
+        "    if defect_stop:",
+        "test_a_rewrite_that_names_no_sentence_goes_on_to_its_check",
+    ),
+    d131c(
+        "the stop follows the run's record",
+        "        return shorts_progress(site_id, records, defect_stop=spec.defect_stop)",
+        "        return shorts_progress(site_id, records, defect_stop=True)",
+        "test_without_the_record_the_chain_is_as_before",
+    ),
+    d131c(
+        "the stop reaches the verification chain",
+        "            site_id, records, findings, view, checked, defect_stop=defect_stop\n",
+        "            site_id, records, findings, view, checked\n",
+        "test_a_rewrite_that_names_a_description_sentence_ends_the_chain",
+    ),
+    d131(
+        "a run without the record keeps its contract's chain",
+        "    if not path.exists():\n        return spec\n",
+        "test_without_the_record_the_chain_is_as_before",
+    ),
+    d131(
+        "an economy record must stop",
+        '    if spec.name != SHORTS or record.get("defect_stop") is not True:',
+        "test_a_record_that_does_not_stop_is_refused",
+    ),
+    d131(
+        "the record is written once",
+        '    if path.exists():\n        raise RunError(f"{path} exists: a run\'s economy is recorded once")',
+        "test_the_record_is_written_once",
+    ),
+    d131(
+        "the record is shorts-v1's",
+        '    if spec.name != SHORTS:\n        raise RunError(f"{run} is a run of contract {spec.name}: the economy',
+        "test_a_v1_run_takes_no_record",
+    ),
+    d131(
+        "the record comes before check-v",
+        "    if late:",
+        "test_the_record_is_refused_once_check_v_was_exported",
+    ),
+    d131c(
+        "the web agents are told of the archive block",
+        '    + " "\n    + ARCHIVE_NOTE\n',
+        "",
+        "test_every_web_agent_is_told_and_no_other",
+    ),
+    d131c(
+        "a redo site is asked with its finding",
+        "        return PS.rewrite_prompt(site, redo) if redo else PS.writer_prompt(site)",
+        "        return PS.writer_prompt(site)",
+        "test_a_current_card_is_asked_again_with_the_finding",
+    ),
+    d131c(
+        "the finding reaches every writer of the site",
+        "        return PS.rewrite_prompt(site, (*redo, *state.findings))",
+        "        return PS.rewrite_prompt(site, state.findings)",
+        "test_the_finding_stays_before_the_checkers_findings",
+    ),
+    d131(
+        "a redo is only of a current card",
+        "            if reason != CURRENT:",
+        "test_only_a_current_card_is_written_again",
+    ),
+    d131(
+        "a redo is of the live card",
+        '            if again["card"] != row["card"]:',
+        "test_the_live_card_must_be_the_one_the_finding_is_about",
+    ),
+    d131(
+        "a redo site is in the sites file",
+        "    if redo and (sites is None or not set(redo) <= sites):",
+        "test_a_redo_site_must_be_in_the_sites_file",
+    ),
+    d131(
+        "a redo is shorts-v1's",
+        "    if redo and contract != SHORTS:",
+        "test_a_redo_is_shorts_v1s",
+    ),
+    d131(
+        "a redo names a decision",
+        '    if not isinstance(record.get("decision"), str) or not record["decision"]:',
+        "test_a_redo_file_names_a_decision_and_a_reason",
+    ),
+]
+
+
 CASES: list[Case] = [
+    *D131_CASES,
     # ------------------------------------------------------------------ the claims floor
     g(
         "a verifier's answer needs the claims floor",

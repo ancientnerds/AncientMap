@@ -327,6 +327,9 @@ class Spec:
     seeded: tuple[str, ...]
     roles: Mapping[str, str]
     canary: tuple[str, ...]
+    #: Owner decision D131 (`ECONOMY.json`, `record_economy`): a site whose rewrite after a failed
+    #: verification mapped a contradicted claim to a sentence of its description stops there.
+    defect_stop: bool = False
 
     @property
     def independent(self) -> tuple[str, ...]:
@@ -411,8 +414,55 @@ def contract_of(run: Path) -> str:
     return str(value)
 
 
+#: Owner decision D131 (2026-11-07, "first make it cheaper, then run a2"): the measures a shorts-v1
+#: run takes from the moment they are recorded (`record_economy`). Wave a1 spent 121 answers
+#: (check-v 55 and its canaries, verify2 42, the judge 24) on sites whose `rewrite-v` writer had
+#: already named a sentence of the description that the web contradicts: owner decisions D81/O7
+#: hold every such card and write the site afresh by a new run after lane WC repaired the text, so
+#: nothing those answers decided could be written. With the file present such a site stops after
+#: `rewrite-v` (kept, `DESCRIPTION_DEFECT_STOP`); its contradicted sentences go to
+#: DESCRIPTION_DEFECTS.jsonl exactly as before.
+ECONOMY_FILE = "ECONOMY.json"
+DESCRIPTION_DEFECT_STOP = "description-defect-after-verify"
+
+
 def spec_of(run: Path) -> Spec:
-    return SPECS[contract_of(run)]
+    """The run's chain: its contract's, with the measures of `ECONOMY.json` when it has one."""
+    spec = SPECS[contract_of(run)]
+    path = run / ECONOMY_FILE
+    if not path.exists():
+        return spec
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if spec.name != SHORTS or record.get("defect_stop") is not True:
+        raise RunError(f"{path} is not an economy record of a shorts-v1 run")
+    return replace(spec, defect_stop=True)
+
+
+def record_economy(run: Path, decision: str) -> dict[str, Any]:
+    """Record the D131 measures for a shorts-v1 run - once, and only before `check-v` was exported:
+    a site the stop settles must never have been asked a later question."""
+    spec = spec_of(run)
+    path = run / ECONOMY_FILE
+    if path.exists():
+        raise RunError(f"{path} exists: a run's economy is recorded once")
+    if spec.name != SHORTS:
+        raise RunError(f"{run} is a run of contract {spec.name}: the economy is shorts-v1's")
+    late = [s for s in (VERIFY_CHECK, SECOND_VERIFY, JUDGE_STAGE) if _round(run, s) is not None]
+    if late:
+        raise RunError(
+            f"{run} exported {late} already: the stop would settle sites that were "
+            "asked after it - record the economy before check-v is exported"
+        )
+    record = {
+        "run": run.name,
+        "decision": decision,
+        "defect_stop": True,
+        "recorded_at": _now(),
+        "rule": "a site whose rewrite-v mapped a contradicted claim to a description sentence "
+        f"stops after rewrite-v ({DESCRIPTION_DEFECT_STOP}, kept): D81/O7 hold its card anyway",
+    }
+    write_json(path, record)
+    return record
 
 
 def stage_role(spec: Spec, stage: str) -> str:
@@ -615,14 +665,23 @@ def select_rows(
     pilot: tuple[int, int] | None,
     basis: set[str] | None = None,
     contract: str = V1,
+    redo: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Selection:
     """The candidates of a run and the listing of every other curated site. Pure.
 
     `earlier` maps a site asked in an earlier run to the description sha256 it was asked with: it is
     asked again only when its description changed since. `sites` restricts the run to a list;
     `basis` to the candidates of these bases (`BASES`: the pilot of the sentence-checked texts asks
-    `WC` alone); `pilot` = (n, seed) then draws n candidates at random with that seed.
+    `WC` alone); `pilot` = (n, seed) then draws n candidates at random with that seed. `redo` (owner
+    decision D132, `select --redo`) names live cards to write again on an owner's finding: such a
+    site is a candidate although its card is current, only while the live card is the one the
+    finding is about, and its row carries the finding (`redo`).
     """
+    redo = dict(redo or {})
+    if redo and contract != SHORTS:
+        raise RunError("--redo writes shorts-v1 cards again: select it with --contract shorts-v1")
+    if redo and (sites is None or not set(redo) <= sites):
+        raise RunError("every --redo site must be in the run's --sites file")
     candidates: list[dict[str, Any]] = []
     listed: list[dict[str, Any]] = []
 
@@ -641,6 +700,19 @@ def select_rows(
 
     for row in sorted(rows, key=lambda r: str(r["site_id"])):
         reason, detail = classify(row, contract)
+        again = redo.pop(row["site_id"], None)
+        if again is not None:
+            if reason != CURRENT:
+                raise RunError(
+                    f"--redo {row['site_id']}: the site is listed {reason or 'as a candidate'}, "
+                    "not as a current card - --redo writes a live checked card again, nothing else"
+                )
+            if again["card"] != row["card"]:
+                raise RunError(
+                    f"--redo {row['site_id']}: the live card is not the card the finding is about"
+                )
+            candidates.append({**_site_row(row, contract), "redo": dict(again)})
+            continue
         if reason is not None:
             listing(row, reason, detail)
         elif earlier.get(row["site_id"]) == CP.text_sha256(row["description"]):
@@ -655,6 +727,8 @@ def select_rows(
         missing = sorted(sites - {row["site_id"] for row in rows})
         if missing:
             raise RunError(f"{len(missing)} listed site(s) are no curated site: {missing[:5]}")
+    if redo:
+        raise RunError(f"--redo names site(s) the export does not hold: {sorted(redo)[:5]}")
     if pilot is not None:
         n, seed = pilot
         if n > len(candidates):
@@ -667,6 +741,27 @@ def select_rows(
         candidates = [site for site in candidates if site["site_id"] in drawn]
         listed.sort(key=lambda r: r["site_id"])
     return Selection(candidates, listed)
+
+
+def read_redo(path: Path) -> dict[str, Any]:
+    """An owner's findings on live cards to write again (`select --redo`, owner decision D132):
+    `{"decision": "D132", "sites": {site_id: {"card": <the live card>, "reasons": [...]}}}` - each
+    reason one finding the new card must fix, as a checker's reasons are."""
+    record = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(record.get("decision"), str) or not record["decision"]:
+        raise RunError(f"{path}: no owner decision named")
+    sites = record.get("sites")
+    if not isinstance(sites, dict) or not sites:
+        raise RunError(f"{path}: no site to write again")
+    for site_id, entry in sites.items():
+        reasons = entry.get("reasons") if isinstance(entry, dict) else None
+        if (
+            not isinstance(entry.get("card"), str)
+            or not reasons
+            or not all(isinstance(reason, str) and reason.strip() for reason in reasons)
+        ):
+            raise RunError(f"{path}: {site_id} needs its live card and at least one reason")
+    return {"decision": record["decision"], "sites": sites}
 
 
 def earlier_sites(runs: Sequence[Path], contract: str = V1) -> dict[str, str]:
@@ -695,6 +790,7 @@ def select(
     exclude: Sequence[Path],
     basis: set[str] | None = None,
     contract: str = V1,
+    redo_file: Path | None = None,
 ) -> dict[str, Any]:
     """Read production once (read-only) and fix the run's candidates. Once per run."""
     if contract not in (V1, SHORTS):
@@ -713,6 +809,7 @@ def select(
         wanted = {
             line.strip() for line in sites_file.read_text("utf-8").splitlines() if line.strip()
         }
+    redo = None if redo_file is None else read_redo(redo_file)
     selection = select_rows(
         parsed["site"],
         earlier=earlier_sites(exclude, contract),
@@ -720,6 +817,7 @@ def select(
         pilot=pilot,
         basis=basis,
         contract=contract,
+        redo=None if redo is None else redo["sites"],
     )
     if not selection.sites:
         raise RunError("no candidate: nothing to ask")
@@ -739,6 +837,11 @@ def select(
         "sites_file": None if sites_file is None else _shown(sites_file),
         "excluded_runs": [_shown(path) for path in exclude],
         "batch_sizes": dict(DEFAULT_BATCH_SIZES),
+        **(
+            {}
+            if redo is None
+            else {"redo": {"decision": redo["decision"], "file": _shown(redo_file)}}  # type: ignore[arg-type]
+        ),
         "contract": {
             "min_chars": C.MIN_CHARS,
             "max_chars": C.MAX_CHARS,
@@ -786,7 +889,10 @@ def bases(run: Path) -> dict[str, C.Basis]:
         }
         out[row["site_id"]] = (
             SV.shorts_basis(
-                **fields, pool_images=row["pool_images"], image_titles=row["image_titles"]
+                **fields,
+                pool_images=row["pool_images"],
+                image_titles=row["image_titles"],
+                redo=[(row["redo"]["card"], row["redo"]["reasons"])] if "redo" in row else (),
             )
             if shorts
             else C.basis(**fields)
@@ -884,7 +990,7 @@ def progress(
     check and verification on the path judged the card of the writer record it follows
     (`judging`). `spec` is the contract's chain (`spec_of`)."""
     if spec.name == SHORTS:
-        return shorts_progress(site_id, records)
+        return shorts_progress(site_id, records, defect_stop=spec.defect_stop)
     if spec.name == RECHECK:
         return recheck_progress(site_id, records)
     findings: list[P.Finding] = []
@@ -920,9 +1026,13 @@ def verification_progress(
     findings: list[P.Finding],
     written: Mapping[str, Any],
     checked: Mapping[str, Any],
+    *,
+    defect_stop: bool = False,
 ) -> Progress:
     """A card the checker accepted: verified on the web; a card not VERIFIED gets one rewrite
-    (`rewrite-v`), its check (`check-v`) and a new verifier (`verify2`), else the site is cleared."""
+    (`rewrite-v`), its check (`check-v`) and a new verifier (`verify2`), else the site is cleared.
+    Under `defect_stop` (owner decision D131, `ECONOMY.json`) a rewrite that named a sentence of the
+    description for a contradicted claim ends the site's chain there (`DESCRIPTION_DEFECT_STOP`)."""
     first = judging(site_id, records[FIRST_VERIFY].get(site_id), written)
     if first is None:
         return Progress(DUE, FIRST_VERIFY, tuple(findings), written, checked)
@@ -936,6 +1046,10 @@ def verification_progress(
     if rewritten["problems"]:
         findings.append(P.Finding(rewritten["card"], P.findings_of(rewritten)))
         return Progress(CLEARED, None, tuple(findings), **cleared)
+    if defect_stop and any(sentence is not None for sentence in rewritten["repeats"]):
+        return Progress(
+            CLEARED, None, tuple(findings), verified=(first,), reason=DESCRIPTION_DEFECT_STOP
+        )
     rechecked = judging(site_id, records[VERIFY_CHECK].get(site_id), rewritten)
     if rechecked is None:
         return Progress(DUE, VERIFY_CHECK, tuple(findings), rewritten, None, (first,))
@@ -1007,7 +1121,10 @@ def rate_findings(rated: Mapping[str, Any]) -> list[P.Finding]:
 
 
 def shorts_progress(
-    site_id: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]]
+    site_id: str,
+    records: Mapping[str, Mapping[str, Mapping[str, Any]]],
+    *,
+    defect_stop: bool = False,
 ) -> Progress:
     """A site's state under contract shorts-v1: each round is the writer's three variants, the
     rater's choice of the best and its checking; the chain after it is v1's (`verification_progress`)."""
@@ -1035,7 +1152,9 @@ def shorts_progress(
         if checked["verdict"] != A.PASSED:
             findings.append(P.Finding(view["card"], PS.findings_of(checked)))
             continue
-        return verification_progress(site_id, records, findings, view, checked)
+        return verification_progress(
+            site_id, records, findings, view, checked, defect_stop=defect_stop
+        )
     return Progress(CLEARED, None, tuple(findings), reason=FAILED_REWRITES)
 
 
@@ -1208,8 +1327,9 @@ def contract_prompt(spec: Spec, stage: str, site: C.Basis, state: Progress) -> s
         assert state.check is not None and state.verify is not None
         return PS.adversarial_prompt(shown, state.card, state.check, state.verify)
     assert isinstance(site, SV.ShortsBasis) and isinstance(shown, SV.ShortsBasis)
+    redo = tuple(P.Finding(card, reasons) for card, reasons in site.redo)
     if stage == "write":
-        return PS.writer_prompt(site)
+        return PS.rewrite_prompt(site, redo) if redo else PS.writer_prompt(site)
     if stage == VERIFY_REWRITE:
         assert state.card is not None
         first = state.verified[0]
@@ -1221,7 +1341,7 @@ def contract_prompt(spec: Spec, stage: str, site: C.Basis, state: Progress) -> s
             disputed_claims(first),
         )
     if stage in spec.writers:
-        return PS.rewrite_prompt(site, state.findings)
+        return PS.rewrite_prompt(site, (*redo, *state.findings))
     assert state.writer is not None
     if stage in spec.raters:
         return PS.rate_prompt(site.name, site.country, shown_variants(state.writer))
@@ -2131,6 +2251,15 @@ WIKI_LOOKUP = (
     "lang, title, file - the file is relative to {cache}); the page file is JSON with "
     "resolved_title, revid and text."
 )
+#: web.archive.org answers 429 to every request from this project's network and from the VPS since
+#: 2026-11-06 (an AS-level block, not a pace throttle): the import cannot fetch a page cited there,
+#: so a claim quoted only from it stays a transient failure and its card judge-not-clean - nine
+#: cards of wave a1 (owner decision D132: no new access path). The web agents are told so.
+ARCHIVE_NOTE = (
+    "web.archive.org refuses every request from this project's network, so the machine cannot "
+    "check a quote on it: never cite a web.archive.org page - cite the live page or another "
+    "source."
+)
 _WEB_NOTE = (
     "\nWEB RESEARCH. The site's Wikipedia text is in the shared cache: "
     + WIKI_LOOKUP
@@ -2138,6 +2267,8 @@ _WEB_NOTE = (
     + WR.VERIFIER_RULE
     + " "
     + WR.QUOTE_RULE
+    + " "
+    + ARCHIVE_NOTE
 )
 
 BRIEF_ROLE = """{head}
@@ -3184,6 +3315,7 @@ def main(argv: list[str] | None = None) -> int:
         ("void-batch", "set aside a batch whose checker passed its seeded-defect card"),
         ("seed-live", "record the live cards of a run as a re-check run (read-only)"),
         ("escalate", "move a role up one tier after a failed calibration"),
+        ("economy", "record the D131 measures of a shorts-v1 run (before check-v is exported)"),
     ):
         commands[name] = sub.add_parser(name, help=helps)
         commands[name].add_argument("--run", required=True, type=Path)
@@ -3203,6 +3335,7 @@ def main(argv: list[str] | None = None) -> int:
     commands["seed-live"].add_argument("--provenance-run", required=True)
     commands["escalate"].add_argument("--role", required=True, choices=sorted(RO.ROLES))
     commands["escalate"].add_argument("--verdict", required=True, type=Path)
+    commands["economy"].add_argument("--decision", required=True, help="the owner decision")
     commands["select"].add_argument(
         "--contract",
         choices=(V1, SHORTS),
@@ -3212,6 +3345,9 @@ def main(argv: list[str] | None = None) -> int:
     commands["check-answer"].add_argument("--label", required=True)
     commands["check-answer"].add_argument("--text-file", required=True, type=Path)
     commands["select"].add_argument("--sites", type=Path, help="restrict to these site ids")
+    commands["select"].add_argument(
+        "--redo", type=Path, help="live cards to write again on an owner's finding (JSON, D132)"
+    )
     commands["select"].add_argument("--pilot", type=int, help="draw this many candidates")
     commands["select"].add_argument("--seed", type=int, help="the pilot draw's seed")
     commands["select"].add_argument("--exclude-run", type=Path, action="append", default=[])
@@ -3233,6 +3369,7 @@ def main(argv: list[str] | None = None) -> int:
                     exclude=args.exclude_run,
                     basis=None if args.basis is None else set(args.basis),
                     contract=args.contract,
+                    redo_file=None if args.redo is None else _resolve(args.redo),
                 )
             )
         elif args.command == "export":
@@ -3266,6 +3403,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "escalate":
             _print(escalate_role(run, args.role, args.verdict))
+        elif args.command == "economy":
+            _print(record_economy(run, args.decision))
         else:
             result = import_judge(run)
             _print(result)

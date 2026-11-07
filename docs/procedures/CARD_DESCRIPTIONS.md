@@ -1268,6 +1268,22 @@ the judge round runs for every run, not only the pilot, and `mechanical/teaser.p
 with a quote the machine found; otherwise it is listed `judge-not-clean` and the site keeps its card
 (D5). A version-3 card without a judge verdict, or a verdict on another card, stops the plan.
 
+**The economy of a run (owner decision D131, 2026-11-07).** `$T economy --run $R --decision D131`
+writes `ECONOMY.json` once, refused after `check-v`, `verify2` or the judge was exported. From then on
+a site whose `rewrite-v` writer named a sentence of the description for a contradicted claim stops
+after `rewrite-v` (kept, `description-defect-after-verify`): D81/O7 hold such a card anyway and a new
+run writes the site after lane WC repaired the text, so its `check-v`, `verify2` and judge answers
+could never be written (wave a1: 121 of 2,177 answers). DESCRIPTION_DEFECTS.jsonl is unchanged. The
+web agents' brief says that web.archive.org refuses this project's network (`ARCHIVE_NOTE`; nine a1
+cards were judge-not-clean only through it). A run without the file runs exactly as before.
+
+**Writing a live card again (owner decision D132).** `select --contract shorts-v1 --sites F --redo
+REDO.json`, where REDO.json is `{"decision": "D132", "sites": {site_id: {"card": <the live card>,
+"reasons": [...]}}}`: such a site is a candidate although its card is current - only while the live
+card is the one the findings are about - and every writer of it (`write`, `rewrite1`, `rewrite2`) sees
+the live card and the findings as an earlier card that was not accepted (`prompts_shorts.rewrite_prompt`).
+The rest of the chain, the judge and the write are a run's as usual.
+
 The write steps are 5.4's (`mechanical/teaser.py plan`, `apply.py`, `accept`); journal stamps continue
 at `wb-teaser-prov-s035` / `wb-teaser-card-s035`. `select --exclude-run` takes only runs of the
 contract being selected: what a v1 or a re-check run asked, a shorts-v1 run asks again, and

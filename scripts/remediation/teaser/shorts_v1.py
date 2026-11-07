@@ -323,6 +323,10 @@ class ShortsBasis(C.Basis):
     aliases: tuple[str, ...] = ()
     pool_images: int = 0
     image_titles: tuple[str, ...] = ()
+    #: A live card written again on an owner's finding (`run.py select --redo`, owner decision
+    #: D132): `(card, reasons)` pairs, shown to every writer of the site as earlier cards that were
+    #: not accepted. Empty for every other site, whose questions stay byte for byte as they were.
+    redo: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def shorts_eligible(self) -> bool:
@@ -349,8 +353,10 @@ def shorts_basis(
     alt_names: Sequence[str],
     pool_images: int,
     image_titles: Sequence[str],
+    redo: Sequence[tuple[str, Sequence[str]]] = (),
 ) -> ShortsBasis:
-    """The shorts-v1 basis of one site: the v1 basis (`contract.basis`) plus its names and images."""
+    """The shorts-v1 basis of one site: the v1 basis (`contract.basis`) plus its names and images,
+    and the owner's findings on its live card when it is written again (`redo`)."""
     base = C.basis(
         site_id=site_id, name=name, country=country, description=description, alt_names=alt_names
     )
@@ -364,6 +370,7 @@ def shorts_basis(
         aliases=tuple(sorted(set(alt_names))),
         pool_images=pool_images,
         image_titles=tuple(image_titles),
+        redo=tuple((card, tuple(reasons)) for card, reasons in redo),
     )
 
 
