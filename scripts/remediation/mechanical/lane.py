@@ -2038,6 +2038,9 @@ SITE_TYPE_MERGE_LANE = re.compile(r"^site-type-merge-(\d{4}-\d{2}-\d{2}[a-z]?)-s
 #: The five card_stats columns no generator fills (`mechanical/card_stats_ext.py`, D25 "fill the dead
 #: card_stats columns from the Wikidata ids"): `card-stats-ext-<wave>-sNNN`, at most 100 sites a step.
 CARD_STATS_EXT_LANE = re.compile(r"^card-stats-ext-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+#: Owner decisions D121/D122/D124 (2026-11-07): the period correction (`mechanical/period_fix.py`),
+#: `period-fix-<wave>-sNNN`, at most 100 sites a step, the period pair of the wd5 cells.
+PERIOD_FIX_LANE = re.compile(r"^period-fix-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
 
 # ------------------------------------------------------------ the WD1/WD3 structured-field lanes
 #: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
@@ -3124,6 +3127,10 @@ def resolve_lane(name: str) -> Lane:
         from mechanical.card_stats_ext import lane_of as ext_lane_of
 
         return ext_lane_of(name)
+    if PERIOD_FIX_LANE.match(name):
+        from mechanical.period_fix import lane_of as period_fix_lane_of
+
+        return period_fix_lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

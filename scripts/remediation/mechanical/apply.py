@@ -79,6 +79,7 @@ from mechanical.lane import (  # noqa: E402
     PROBE_NEIGHBOUR,
     PROBE_SELF,
     SCOPE_REVIEW_LANE,
+    PERIOD_FIX_LANE,
     SITE_TYPE_MERGE_LANE,
     T05,
     TEASER_LANE,
@@ -1964,6 +1965,10 @@ def readback_for(lane: Lane) -> str:
         from mechanical.card_stats_ext import readback as ext_readback
 
         return ext_readback(lane)
+    if PERIOD_FIX_LANE.match(lane.name):
+        from mechanical.period_fix import readback as period_fix_readback
+
+        return period_fix_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1982,7 +1987,7 @@ def _lane_argument(name: str) -> str:
             "teaser-card-sNNN, card-disclosure-sNNN, card-exact-sNNN, dup-merge-move-<wave>, "
             "dup-merge-retire-<wave>, parent-<wave>, scope-window-<wave>, name-clean-<wave>, "
             "retarget-name-<wave>, spoken-<wave>, site-type-merge-<wave>-sNNN, "
-            "card-stats-ext-<wave>-sNNN)"
+            "card-stats-ext-<wave>-sNNN, period-fix-<wave>-sNNN)"
             + (f": {exc.args[0]}" if exc.args and exc.args[0] != name else "")
         ) from exc
     return name
