@@ -1,4 +1,5 @@
-"""Owner decisions D121, D122 and D124 (2026-11-07): one journalled correction of curated `period_start`.
+"""Owner decisions D121, D122, D124 and D136/D137 (2026-11-07): journalled corrections of curated
+`period_start`.
 
 ## What is corrected
 
@@ -14,6 +15,12 @@
   recomputed from a word the site_type rule chose is still a year no source stands behind.
 * **D124** - one cited start from a released re-ask (`--cited`): a decision file whose every line
   names the site, the year the answer cites and the quote it rests on (`d124-cited`).
+* **D136/D137** - the predefined period bands (`--bands`, `output/remediation/fields/epoch_bands/
+  CANDIDATES.jsonl` of `fields/epoch_bands.py`): an undated site whose own sources, Wikidata P2348 or
+  name give an epoch takes the band that epoch begins in and stores the band's edge (`bucket_edge`,
+  as the 511 `via: "band"` rows of 2026-10-04: `d136-band`); where the site's own source states a
+  year or century for it, that year's band wins and its edge is stored (`d137-year`). Only `band`
+  rows are written; a `scope-hold` row is read too, so the D58 precheck lists it as `d58-window`.
 
 Undated is the residue rung (`residue_period.py`): `period_start` NULL and `period_name` `Undated`.
 The D58 window includes a record without a date (`pipeline.normalizers.dates.passes_date_cutoff`), so
@@ -38,6 +45,7 @@ none) inside the transaction.
 
     M=scripts/remediation/mechanical
     $M/period_fix.py wave   --wave W [--d113 FILE] [--cited FILE]   (read-only; WAVE.json, steps of 100)
+    $M/period_fix.py wave   --wave W --no-d113 --bands CANDIDATES.jsonl                   (D136/D137)
     $M/period_fix.py step   --wave W --step N                       (read-only; PLAN.jsonl, ROLLBACK.sql)
     $M/apply.py --lane period-fix-W-sNNN --emit | --verify | --rehearse | --probe-guards | --apply
     $M/apply.py --lane period-fix-W-sNNN --rehearse-rollback
@@ -94,7 +102,7 @@ from mechanical.plan import (  # noqa: E402
     write_skipped_jsonl,
 )
 from pipeline import periods as P  # noqa: E402
-from pipeline.utils.text import UNDATED, categorize_period  # noqa: E402
+from pipeline.utils.text import UNDATED, bucket_edge, categorize_period  # noqa: E402
 
 ROOT_NAME = "mechanical_period_fix"
 ROOT = REPO / "output" / "remediation" / ROOT_NAME
@@ -116,7 +124,24 @@ D124_QUOTE = (
 )
 #: The site_type rule's journal evidence: `WD3 decision (derived, round 0, rule:derived_rule.json)`.
 _DERIVED = re.compile(r"^WD3 decision \(derived, ")
-RULES = ("d121-regional", "d121-no-year", "d122-unsourced", "d124-cited")
+D136_QUOTE = (
+    "| D136 | Sites whose only dating is an epoch word | **Use the predefined period bands**: every "
+    "epoch maps to the band in which it begins (in the site's country where REGIONAL_STARTS has a "
+    "value); the stored year is the band's edge (`bucket_edge`). |"
+)
+D137_QUOTE = (
+    '| D137 | D136 details after the spot checks | **Write all bands now** (owner: "Egal, '
+    'schreiben"). A century/year the site\'s own source states for the site wins over the epoch '
+    "start (rec). A coarse word is read together with the site's own monument type. |"
+)
+RULES = ("d121-regional", "d121-no-year", "d122-unsourced", "d124-cited", "d136-band", "d137-year")
+BAND_KEYS = frozenset(
+    {"site_id", "name", "status", "band", "edge", "epoch", "band_from", "source_kind", "quote", "url"}
+)
+YEAR_KEYS = frozenset({"year", "year_quote", "year_url"})
+#: The CANDIDATES.jsonl statuses the writer reads: `band` is written, `scope-hold` is read so that the
+#: D58 precheck lists it (`year-stated-only` and `undated` carry no band).
+BAND_STATUSES = ("band", "scope-hold")
 CITED_KEYS = frozenset({"site_id", "start", "url", "quote", "answered_by", "model", "reason"})
 
 
@@ -464,6 +489,80 @@ def load_cited(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def load_bands(path: Path) -> list[dict[str, Any]]:
+    """The band rows of an epoch_bands CANDIDATES.jsonl, each checked against the band rule."""
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        if r.get("status") not in BAND_STATUSES:
+            continue
+        missing = BAND_KEYS - set(r)
+        if missing:
+            raise PlanError(f"{path}: {r.get('site_id')} lacks {sorted(missing)}")
+        if not str(r["quote"]).strip() or not str(r["url"]).strip():
+            raise PlanError(f"{path}: {r['site_id']} has no quote or no URL")
+        if int(r["edge"]) != bucket_edge(str(r["band"])):
+            raise PlanError(f"{path}: {r['site_id']} edge {r['edge']} is not the edge of {r['band']!r}")
+        if r["band_from"] == "year":
+            if YEAR_KEYS - set(r) or not str(r["year_quote"]).strip():
+                raise PlanError(f"{path}: {r['site_id']} is read from a year but carries no year quote")
+            if categorize_period(int(r["year"])) != r["band"]:
+                raise PlanError(f"{path}: {r['site_id']} year {r['year']} does not lie in {r['band']!r}")
+        elif r["band_from"] != "epoch":
+            raise PlanError(f"{path}: {r['site_id']} band_from {r['band_from']!r} is neither epoch nor year")
+        rows.append(r)
+    return rows
+
+
+def decide_band(site: Live, links: Sequence[Link], row: Mapping[str, Any]) -> Decision | Refusal:
+    """D136/D137: an undated site takes the edge of its band (the epoch's, or a stated year's)."""
+    if site.period_start is not None:
+        return Refusal(
+            site.site_id,
+            site.name,
+            "dated-since-candidates",
+            f"the candidates read the site undated, production holds {site.period_start}",
+        )
+    by_year = row["band_from"] == "year"
+    edge = int(row["edge"])
+    quoted_by = f" ({row['quoted_by']})" if row.get("quoted_by") else ""
+    evidence: list[Mapping[str, Any]] = [
+        {"source": "owner decisions D136/D137 (2026-11-07)", "url": DECISIONS, "quote": f"{D136_QUOTE} {D137_QUOTE}"},
+        {
+            "source": f"{row['source_kind']}: epoch {row['epoch']!r}{quoted_by}",
+            "url": str(row["url"]),
+            "quote": str(row["quote"]),
+        },
+    ]
+    if by_year:
+        evidence.append(
+            {
+                "source": f"the year the site's own source states (D137): {row['year']}",
+                "url": str(row["year_url"]),
+                "quote": str(row["year_quote"]),
+            }
+        )
+        note = (
+            f"the site's own source states {row['year']} ({row['band']!r}, over the epoch "
+            f"{row['epoch']!r}'s {row.get('epoch_band')!r}): the band's edge {edge} (D137)"
+        )
+    else:
+        note = f"the epoch {row['epoch']!r} begins in {row['band']!r}: the band's edge {edge} (D136/D137)"
+    evidence.append({"source": "pipeline/periods.py:epoch_band", "url": "pipeline/periods.py", "quote": note})
+    return Decision(
+        site.site_id,
+        site.name,
+        "d137-year" if by_year else "d136-band",
+        None,
+        links[-1].link.id if links else None,
+        edge,
+        note,
+        tuple(evidence),
+    )
+
+
 def build_decisions(
     live: Mapping[str, Live],
     journal: Mapping[str, Sequence[Link]],
@@ -471,6 +570,7 @@ def build_decisions(
     *,
     list_sha: str,
     cited: Sequence[Mapping[str, Any]] = (),
+    bands: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[Decision], list[Refusal], dict[str, int]]:
     """Every decision of a wave and every refusal, from one production read. Pure."""
     decided: dict[str, Decision] = {}
@@ -512,6 +612,21 @@ def build_decisions(
             continue
         assert site is not None
         decided[sid] = decide_cited(site, journal.get(sid, ()), c)
+    for row in bands:
+        sid = str(row["site_id"])
+        if sid in decided:
+            raise PlanError(f"{sid}: a band for a site another rule already decides")
+        site = live.get(sid)
+        refusal = _site_checks(site, journal.get(sid, ()), sid)
+        if refusal is not None:
+            refused.append(refusal)
+            continue
+        assert site is not None
+        out = decide_band(site, journal.get(sid, ()), row)
+        if isinstance(out, Refusal):
+            refused.append(out)
+        else:
+            decided[sid] = out
     final: list[Decision] = []
     for sid in sorted(decided):
         d = decided[sid]
@@ -542,6 +657,7 @@ def build_wave(
     *,
     d113_path: Path | None = D113_LIST,
     cited_path: Path | None = None,
+    bands_path: Path | None = None,
     read: Callable[[str], str] = read_production,
     root: Path = ROOT,
 ) -> dict[str, Any]:
@@ -557,15 +673,18 @@ def build_wave(
     )
     list_sha = sha256_file(d113_path) if d113_path is not None else ""
     cited = load_cited(cited_path) if cited_path is not None else []
+    bands = load_bands(bands_path) if bands_path is not None else []
     text = read(tagged_export_script([("site", site_sql()), ("journal", journal_sql())]))
     live, journal, at = parse_export(text)
     if d113_path is None:
-        # a wave without the list (D124 alone) decides no D122 row either: those are one run's
-        live_scope = {str(c["site_id"]): live[str(c["site_id"])] for c in cited if str(c["site_id"]) in live}
+        # a wave without the list (D124 or D136/D137 alone) decides no D122 row either: those are
+        # one run's
+        named = [str(c["site_id"]) for c in (*cited, *bands)]
+        live_scope = {sid: live[sid] for sid in named if sid in live}
     else:
         live_scope = live
     decisions, refused, counters = build_decisions(
-        live_scope, journal, d113, list_sha=list_sha, cited=cited
+        live_scope, journal, d113, list_sha=list_sha, cited=cited, bands=bands
     )
     ids = [d.site_id for d in decisions]
     record = {
@@ -573,6 +692,7 @@ def build_wave(
         "read_at": at,
         "d113_sha256": list_sha,
         "cited_sha256": sha256_file(cited_path) if cited_path is not None else "",
+        "bands_sha256": sha256_file(bands_path) if bands_path is not None else "",
         "counters": counters,
         "steps": [ids[i : i + MAX_SITES] for i in range(0, len(ids), MAX_SITES)],
         "decisions": [d.as_dict() for d in decisions],
@@ -664,7 +784,7 @@ def write_plan_md(plan: Plan, path: Path, decisions: Sequence[Decision]) -> None
     lane = plan.lane
     by_rule = Counter(d.rule for d in decisions if d.site_id in plan.sites)
     lines = [
-        f"# D121/D122/D124 period correction - {lane.name}",
+        f"# D121/D122/D124/D136/D137 period correction - {lane.name}",
         "",
         f"Built {plan.built_at} by `scripts/remediation/mechanical/period_fix.py`. Run stamp "
         f"`{lane.run_stamp}`, test id `{lane.test_id}`, change keys `{lane.key_prefix}:<site_id>:<column>`.",
@@ -832,13 +952,19 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--d113", type=Path, default=D113_LIST, help="the D113 list")
             command.add_argument("--no-d113", action="store_true", help="a wave of cited starts only")
             command.add_argument("--cited", type=Path, help="D124: cited starts of a released re-ask")
+            command.add_argument("--bands", type=Path, help="D136/D137: the epoch_bands CANDIDATES.jsonl")
         else:
             command.add_argument("--step", type=int, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "wave":
             _print(
-                build_wave(args.wave, d113_path=None if args.no_d113 else args.d113, cited_path=args.cited)
+                build_wave(
+                    args.wave,
+                    d113_path=None if args.no_d113 else args.d113,
+                    cited_path=args.cited,
+                    bands_path=args.bands,
+                )
             )
         elif args.command == "step":
             _print(plan_step(args.wave, args.step))

@@ -224,3 +224,100 @@ class TestAccept:
         )
         sites, journal, at = M.parse_export(text)
         assert sites[WORD_SITE].period_start == 43 and M.is_site_type_rule(journal[WORD_SITE][0]) and at == "now"
+
+
+# ------------------------------------------------------------------------------ D136/D137 bands
+def band_row(site_id: str, **over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "site_id": site_id,
+        "name": "Yarrowbury",
+        "status": "band",
+        "band": "1500 - 500 BC",
+        "edge": -1500,
+        "epoch": "iron age",
+        "band_from": "epoch",
+        "source_kind": "lane-quote",
+        "quote": "Yarrowbury is an Iron Age hill fort situated close to Bigbury in Devon, England.",
+        "url": "https://en.wikipedia.org/wiki/Yarrowbury",
+        "country": "England",
+    }
+    base.update(over)
+    return base
+
+
+YEAR_ROW = {
+    "band_from": "year",
+    "band": "500 BC - 1 AD",
+    "edge": -500,
+    "year": -500,
+    "year_quote": "dating to the 5th century BC",
+    "year_url": "unified_sites.description",
+    "epoch_band": "1500 - 500 BC",
+}
+
+
+class TestBands:
+    def test_an_epoch_band_fills_an_undated_site_with_its_edge_and_label(self) -> None:
+        site = live(RULE_SITE, None, country="England", lat=50.3, lon=-3.9)
+        d = M.decide_band(site, [link(1, "-800", None)], band_row(RULE_SITE))
+        assert isinstance(d, M.Decision)
+        assert d.rule == "d136-band" and d.new_start == -1500 and d.journal_id == 1
+        quotes = " ".join(f"{e.get('source')} {e.get('quote')}" for e in d.evidence)
+        assert "D136" in d.evidence[0]["source"] and "D137" in d.evidence[0]["source"]
+        assert "Iron Age hill fort" in quotes and "iron age" in quotes and "lane-quote" in quotes
+        cells = M.step_verdicts(d, site, [link(1, "-800", None)])
+        assert {(c.column, c.new_value) for c in cells} == {("period_start", "-1500"), ("period_name", "1500 - 500 BC")}
+        assert all(c.finding_test_id.startswith("D136/") for c in cells)
+
+    def test_a_stated_year_writes_its_own_band_edge(self) -> None:
+        site = live(RULE_SITE, None, country="Switzerland", lat=47.35, lon=8.49)
+        d = M.decide_band(site, [], band_row(RULE_SITE, **YEAR_ROW))
+        assert isinstance(d, M.Decision) and d.rule == "d137-year" and d.new_start == -500
+        assert any("5th century BC" in str(e.get("quote")) for e in d.evidence)
+
+    def test_a_site_dated_since_the_candidates_is_refused(self) -> None:
+        out = M.decide_band(live(RULE_SITE, -800), [link(1, None, "-800")], band_row(RULE_SITE))
+        assert isinstance(out, M.Refusal) and out.reason == "dated-since-candidates"
+
+    def test_a_band_outside_the_d58_window_is_listed_not_written(self) -> None:
+        row = band_row(RULE_SITE, status="scope-hold", band="1000 - 1500 AD", edge=1000, epoch="medieval")
+        sites = {RULE_SITE: live(RULE_SITE, None, country="England", lat=52.6, lon=-3.0)}
+        decisions, refused, counters = M.build_decisions(sites, {}, [], list_sha="", bands=[row])
+        assert not decisions and refused[0].reason == "d58-window" and counters["skip:d58-window"] == 1
+
+    def test_the_wave_counts_bands_by_rule(self) -> None:
+        sites = {
+            RULE_SITE: live(RULE_SITE, None, country="England", lat=50.3, lon=-3.9),
+            OTHER: live(OTHER, None, country="Switzerland", lat=47.35, lon=8.49),
+        }
+        bands = [band_row(RULE_SITE), band_row(OTHER, **YEAR_ROW)]
+        decisions, refused, counters = M.build_decisions(sites, {}, [], list_sha="", bands=bands)
+        assert not refused and counters["rule:d136-band"] == 1 and counters["rule:d137-year"] == 1
+
+
+class TestLoadBands:
+    def write(self, tmp_path: Path, *rows: dict[str, Any]) -> Path:
+        path = tmp_path / "CANDIDATES.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        return path
+
+    def test_only_band_and_scope_hold_rows_are_loaded(self, tmp_path: Path) -> None:
+        path = self.write(
+            tmp_path,
+            band_row(RULE_SITE),
+            {"site_id": OTHER, "name": "x", "status": "undated"},
+            {"site_id": WORD_SITE, "name": "y", "status": "year-stated-only", "year_band": "1 - 500 AD"},
+        )
+        assert [r["site_id"] for r in M.load_bands(path)] == [RULE_SITE]
+
+    def test_an_edge_that_is_not_its_band_s_edge_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(PlanError):
+            M.load_bands(self.write(tmp_path, band_row(RULE_SITE, edge=-800)))
+
+    def test_a_year_row_whose_year_lies_outside_its_band_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(PlanError):
+            M.load_bands(self.write(tmp_path, band_row(RULE_SITE, **{**YEAR_ROW, "year": 100})))
+
+    def test_a_band_without_a_quote_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(PlanError):
+            M.load_bands(self.write(tmp_path, band_row(RULE_SITE, quote="")))
