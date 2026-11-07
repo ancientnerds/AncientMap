@@ -14480,3 +14480,27 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   **7.5 real errors per 100 > 4. Not released; the hero re-check does not stand, so D129 stage 1 did not
   start** (no prefilter, depicts or re-check answer spent). Cause: the re-check prompt (`served-check-v3`,
   `_VERDICT_TERMS_D116`) still counts "an object of this site in a museum" without D127's condition.
+
+## 2026-11-07 - Lane d121-dating-fix: D121, D122, D124 written; card_stats, static export, IndexNow
+
+- **Period-fix wave 2026-11-07** (`period_fix.py`, lane `period-fix-2026-11-07-s001..s005`, backup
+  `backups/2026-11-07_d121`, drill passed): 415 curated sites, every step emitted, rehearsed, guards probed,
+  applied, read back, rollback rehearsed and accepted with 0 deviations. D121: 36 regional years, 78 undated;
+  D122: 301 site_type-rule starts undated (52 of the 166 listed sites are such rows and were taken by D122).
+  0 refused or skipped; the 166 listed rows were re-checked against production right before planning.
+  Journal: 415 `period_start` rows (379 cleared) and 407 `period_name` rows.
+- **D124 Eddisbury Hill Fort** (wave 2026-11-07b, backup `backups/2026-11-07_d124`, drill passed):
+  field_researcher Sonnet high (wd5-r0-b0001) returned -1200 from the University of Liverpool Merrick's Hill
+  page ("...which we have now dated to the 12th century BC", found verbatim), the adversarial check
+  (Sonnet high, adv-r0-b0001) confirmed it. Written Undated -> -1200 / `1500 - 500 BC`, 2 journal rows,
+  accepted with 0 deviations.
+- **card_stats wave 2026-11-07**: 3,616 cells over 907 cards (antiquity 185, mystery 824, total_power 841,
+  rarity_score 824, rarity_tier 261, empires 341, empire_count 340; 41 cards without a description left as
+  the generator leaves them), counterfactual 0 of 59,700 cells differing, guards probed (6 of 6 refused),
+  read back row for row, rollback rehearsed. Confirming re-plan 2026-11-07b: 0 cells.
+- **Static:** `rebuild_static` ok (export 10:06 UTC), `static_export_check.py` 0 differing sites, and the
+  416 touched sites' `p`/`pn` in `index.json` equal the database (416 of 416). IndexNow: 417 URLs (416
+  site pages + `/sites/`) accepted. Live: Eddisbury (-1200, 1500 - 500 BC), Gonnus (-6500), Dobberworth
+  (-2300), Treryn Dinas and Devil's Humps (Undated) show the new values.
+- **Totals:** curated sites without a start 1,008 of 5,004 (all `Undated`); shown curated without a start
+  988 of 4,909 (before the lane: 610). No touched site was retired (D58: an undated site stays in scope).
