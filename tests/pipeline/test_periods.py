@@ -22,7 +22,7 @@ import pytest
 
 from pipeline import periods as P
 from pipeline.ingesters import canmore_scotland as CS
-from pipeline.utils.text import PERIOD_BUCKETS, categorize_period
+from pipeline.utils.text import PERIOD_BUCKETS, bucket_edge, categorize_period
 
 #: The 34 P2348 labels measured 2026-10-04, as the labels are spelled in Wikidata.
 WIKIDATA_LABELS = (
@@ -688,3 +688,62 @@ class TestTheD113Fills:
 
     def test_the_new_epochs_leave_canmore_s_old_mapping_alone(self) -> None:
         assert mapped("LATE ROMAN") == (43, 410)  # `roman` still comes first
+
+
+class TestTheEpochBands:
+    """Owner decision D136 (2026-11-07): an epoch word maps to the predefined period band in which
+    the epoch begins - in the site's country where `REGIONAL_STARTS` has a value, else at the
+    conventional `PERIODS` start - and the stored year is that band's edge (`bucket_edge`)."""
+
+    def test_a_regional_epoch_takes_the_band_of_its_start_in_the_country(self) -> None:
+        band = P.epoch_band("Neolithic", country="Jordan")
+        assert (band.label, band.edge, band.start, band.regional) == (
+            "< 4500 BC", -4501, -10000, True
+        )
+        assert P.epoch_band("Neolithic", country="England").label == "4500 - 3000 BC"
+        assert P.epoch_band("Neolithic", country="England").edge == -4500
+
+    def test_a_country_without_a_regional_value_takes_the_conventional_start(self) -> None:
+        band = P.epoch_band("Neolithic", country="Sudan")
+        assert (band.start, band.regional, band.label) == (-4000, False, "4500 - 3000 BC")
+        assert P.epoch_band("Roman", country="Italy").start == P.PERIODS["roman"][0]
+        assert P.epoch_band("Roman", country="Germany").regional is False
+
+    def test_a_country_is_not_needed_for_a_band(self) -> None:
+        assert P.epoch_band("Neolithic", country=None).start == -4000
+        assert P.epoch_band("Hellenistic", country=None).label == "500 BC - 1 AD"
+
+    @pytest.mark.parametrize(
+        "name", ["Stone Age", "Palaeolithic", "prehistoric", "Mesolithic", "Prehistory"]
+    )
+    def test_the_coarse_words_of_d111_give_a_band_by_their_start(self, name: str) -> None:
+        band = P.epoch_band(name, country="Norway")
+        assert (band.label, band.edge) == ("< 4500 BC", -4501)
+
+    def test_ancient_history_and_classical_antiquity_map_by_their_start(self) -> None:
+        assert P.epoch_band("ancient history", country=None).label == "3000 - 1500 BC"
+        assert P.epoch_band("classical antiquity", country=None).label == "1500 - 500 BC"
+
+    def test_a_bare_bronze_age_takes_its_regional_start_where_d111_wanted_a_phase(self) -> None:
+        # D123 left these without a year; D136 bands them by the regional Bronze Age start
+        assert P.epoch_band("Bronze Age", country="England").label == "3000 - 1500 BC"
+        assert P.epoch_band("Bronze Age", country="Greece").label == "4500 - 3000 BC"
+        assert P.epoch_band("Bronze Age", country="Finland").label == "1500 - 500 BC"
+
+    def test_the_edge_is_the_bucket_edge_of_the_band(self) -> None:
+        for name in P.PERIODS:
+            band = P.epoch_band(name, country=None)
+            assert band.label == categorize_period(band.start)
+            assert band.edge == bucket_edge(band.label)
+
+    def test_start_year_keeps_its_exact_year_refusals(self) -> None:
+        with pytest.raises(P.PeriodError, match="too coarse"):
+            P.start_year("Stone Age", country="Norway")
+        with pytest.raises(P.PeriodError, match="sub-phase"):
+            P.start_year("Bronze Age", country="England")
+        with pytest.raises(P.PeriodError, match="no cited start"):
+            P.start_year("Neolithic", country="Sudan")
+
+    def test_an_unknown_word_is_refused_by_name(self) -> None:
+        with pytest.raises(P.PeriodError, match="not one of"):
+            P.epoch_band("Atlantean", country=None)

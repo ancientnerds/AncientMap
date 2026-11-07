@@ -45,21 +45,34 @@ phase, "prehistoric", "ancient history", "classical antiquity" and a bare "Bronz
 table divides it give no year (`COARSE`, `SUBPHASE_REQUIRED`). D113 added the country and epoch
 starts the D99 pilot's sources needed, and names in comments the ones Wikipedia gives no single
 start for.
+
+**Epoch bands (owner decision D136, 2026-11-07).** A site whose only dating is an epoch word is
+written as a band, not as a year of its own: the predefined period band
+(`pipeline.utils.text.PERIOD_BUCKETS`) in which the epoch begins - in the site's country where
+`REGIONAL_STARTS` has a value, else at the conventional `PERIODS` start - stored as the band's edge
+(`bucket_edge`), as the 511 band rows of 2026-10-04 were (`epoch_band`). The D111 refusals are
+refusals of an exact year: `start_year` keeps them, and a coarse word or a bare Bronze Age gets a
+band by its start.
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
+from typing import NamedTuple
+
+from pipeline.utils.text import bucket_edge, categorize_period
 
 __all__ = [
     "COARSE",
     "PERIODS",
+    "EpochBand",
     "REGIONAL_STARTS",
     "SUBPHASE_REQUIRED",
     "PeriodError",
     "century_range",
     "country_key",
+    "epoch_band",
     "fold_name",
     "is_regional",
     "period_of",
@@ -884,6 +897,37 @@ def start_year(name: str, *, country: str | None) -> int:
             f"{len(regional)} country spellings, and another region's year is never used"
         )
     return found
+
+
+class EpochBand(NamedTuple):
+    """The band an epoch word writes (D136): its `label` (one of `PERIOD_BUCKETS`), the `edge` year
+    stored for it (`bucket_edge`), the epoch's `start` the band was read from, and whether that start
+    is the country's own (`regional`) or the conventional one of `PERIODS`."""
+
+    label: str
+    edge: int
+    start: int
+    regional: bool
+
+
+def epoch_band(name: str, *, country: str | None) -> EpochBand:
+    """The period band an epoch word dates a site to (owner decision D136).
+
+    The band is the one in which the epoch begins: for a period of `REGIONAL_STARTS` its start in
+    the site's `country` where the table holds one, otherwise the conventional start of `PERIODS`
+    (a Roman site in Germany, a Neolithic one in Sudan). The year written is the band's edge, never
+    the start itself: a band says when, to the band, and nothing finer. The D111 refusals do not
+    apply - they refuse an *exact* year (`start_year`), and a coarse word ("Stone Age",
+    "prehistoric") or a bare Bronze Age is placed by its start like every other epoch.
+    `PeriodError` for a word the vocabulary does not know."""
+    start = period_of(name)[0]
+    key = str(_key_of(name))  # `period_of` has refused a name without a key
+    found = REGIONAL_STARTS.get(key, {}).get(country_key(country)) if country else None
+    if found is not None:
+        start = found
+    label = categorize_period(start)
+    assert label is not None  # a year always has a bucket
+    return EpochBand(label=label, edge=bucket_edge(label), start=start, regional=found is not None)
 
 
 def states_period(quote: str, name: str) -> bool:
