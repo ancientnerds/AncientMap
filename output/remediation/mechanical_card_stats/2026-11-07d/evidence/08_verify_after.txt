@@ -1,0 +1,31 @@
+[32m2026-11-07 16:24:56[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+C:\PythonProjects\AncientMap\api\cardgame\routes.py:190: FastAPIDeprecationWarning: `regex` has been deprecated, please use `pattern` instead
+  sort: str = Query("wins", regex="^(wins|cards|power|streak)$"),
+INFO | api.routes.public_v1 | Public API: loaded 46 Seshat polities from ancient-nerds-map\src\data\seshat\polities.json
+WARNING | api.routes.vector_sync | [VECTOR-SYNC] Could not load persisted state (table may not exist yet): (psycopg2.OperationalError) connection to server at "localhost" (::1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+                                                                                                  metric                                                                                                   | value 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------
+ card_stats rows of tier 1                                                                                                                                                                                 | 334
+ card_stats rows of tier 2                                                                                                                                                                                 | 1665
+ card_stats rows of tier 3                                                                                                                                                                                 | 2615
+ card_stats rows of tier 4                                                                                                                                                                                 | 371
+ card_stats rows of tier 5                                                                                                                                                                                 | 19
+ card_stats rows whose total_power is not the sum of the five stats                                                                                                                                        | 0
+ curated rows whose card_stats civilization differs from the site country                                                                                                                                  | 0
+ curated sites                                                                                                                                                                                             | 5004
+ curated sites without a card_stats row                                                                                                                                                                    | 0
+ journal rows for the rollback stamp                                                                                                                                                                       | 0
+ journal rows for this run on non-curated rows                                                                                                                                                             | 0
+ journal rows for this run outside card_stats.(antiquity, fortification, cultural_influence, mystery, legacy, total_power, rarity_score, rarity_tier, category_group, civilization, empires, empire_count) | 0
+ journal rows for this run stamp                                                                                                                                                                           | 856
+ journal rows for this run whose row is not a card_stats row                                                                                                                                               | 0
+ journal rows for this run with a site_id_ref of another site                                                                                                                                              | 0
+ journal rows for this test id                                                                                                                                                                             | 57870
+
+
+EXIT=0

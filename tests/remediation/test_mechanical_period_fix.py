@@ -321,3 +321,93 @@ class TestLoadBands:
     def test_a_band_without_a_quote_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(PlanError):
             M.load_bands(self.write(tmp_path, band_row(RULE_SITE, quote="")))
+
+
+# ------------------------------------------------------------------------------ D138 stated years
+def year_only_row(site_id: str, **over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "site_id": site_id,
+        "name": "Kvitky",
+        "status": "year-stated-only",
+        "country": "Ukraine",
+        "year_band": "4500 - 3000 BC",
+        "year_sentences": [
+            {
+                "epochs": [],
+                "file": "unified_sites",
+                "mode": "single",
+                "sentence": "Kvitky is a Cucuteni-Trypillia culture mega-settlement, dating to 3600-3200 BC.",
+                "url": "unified_sites.description",
+                "years": [-3600],
+            },
+            {
+                "epochs": [],
+                "file": "wiki_cache",
+                "mode": "single",
+                "quoted_by": None,
+                "sentence": "The settlement was abandoned around 3200 BC.",
+                "url": "https://en.wikipedia.org/wiki/Kvitky",
+                "years": [-3200],
+            },
+        ],
+    }
+    base.update(over)
+    return base
+
+
+class TestStatedYears:
+    def write(self, tmp_path: Path, *rows: dict[str, Any]) -> Path:
+        path = tmp_path / "CANDIDATES.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        return path
+
+    def test_a_stated_year_fills_an_undated_site_with_its_band_edge(self) -> None:
+        site = live(RULE_SITE, None, country="Ukraine", lat=49.3, lon=31.4)
+        d = M.decide_year(site, [link(1, "-10000", None)], year_only_row(RULE_SITE))
+        assert isinstance(d, M.Decision)
+        assert d.rule == "d138-year" and d.new_start == -4500 and d.journal_id == 1
+        assert "D138" in d.evidence[0]["source"] and "die 60 sites ja" in d.evidence[0]["quote"]
+        assert any("3600-3200 BC" in str(e.get("quote")) for e in d.evidence)
+        cells = M.step_verdicts(d, site, [link(1, "-10000", None)])
+        assert {(c.column, c.new_value) for c in cells} == {
+            ("period_start", "-4500"),
+            ("period_name", "4500 - 3000 BC"),
+        }
+        assert all(c.finding_test_id.startswith("D138/") for c in cells)
+
+    def test_a_site_dated_since_the_candidates_is_refused(self) -> None:
+        out = M.decide_year(live(RULE_SITE, -800), [link(1, None, "-800")], year_only_row(RULE_SITE))
+        assert isinstance(out, M.Refusal) and out.reason == "dated-since-candidates"
+
+    def test_a_reading_error_is_listed_not_written(self) -> None:
+        sid = next(iter(M.D138_READING_ERRORS))
+        sites = {sid: live(sid, None, country="Spain", lat=43.3, lon=-4.4)}
+        decisions, refused, counters = M.build_decisions(
+            sites, {}, [], list_sha="", years=[year_only_row(sid)]
+        )
+        assert not decisions and refused[0].reason == "d137-reading-error"
+        assert counters["skip:d137-reading-error"] == 1
+
+    def test_a_year_outside_the_d58_window_is_listed_not_written(self) -> None:
+        row = year_only_row(
+            RULE_SITE,
+            year_band="1000 - 1500 AD",
+            year_sentences=[{**year_only_row(RULE_SITE)["year_sentences"][0], "years": [1200]}],
+        )
+        sites = {RULE_SITE: live(RULE_SITE, None, country="England", lat=52.6, lon=-3.0)}
+        decisions, refused, _ = M.build_decisions(sites, {}, [], list_sha="", years=[row])
+        assert not decisions and refused[0].reason == "d58-window"
+
+    def test_only_year_stated_only_rows_are_loaded(self, tmp_path: Path) -> None:
+        path = self.write(tmp_path, band_row(OTHER), year_only_row(RULE_SITE))
+        assert [r["site_id"] for r in M.load_years(path)] == [RULE_SITE]
+
+    def test_a_band_that_is_not_the_earliest_year_s_band_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(PlanError):
+            M.load_years(self.write(tmp_path, year_only_row(RULE_SITE, year_band="3000 - 1500 BC")))
+
+    def test_a_year_without_a_quote_is_refused(self, tmp_path: Path) -> None:
+        row = year_only_row(RULE_SITE)
+        row["year_sentences"][0]["sentence"] = ""
+        with pytest.raises(PlanError):
+            M.load_years(self.write(tmp_path, row))

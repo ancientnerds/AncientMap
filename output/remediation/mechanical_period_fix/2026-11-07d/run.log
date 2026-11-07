@@ -1,0 +1,171 @@
+##### step 1
+[32m2026-11-07 16:20:55[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical_period_fix\2026-11-07d\s001\APPLY.sql (118 rows); ROLLBACK.sql is older than APPLY.sql: 1794064767.1969576 vs 1794064855.979099
+period-fix-2026-11-07d-s001 --emit EXIT=0
+[32m2026-11-07 16:20:56[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical_period_fix\2026-11-07d\s001\REHEARSAL.sql (COMMIT -> ROLLBACK)
+NOTICE:  D121 period correction: 118 of 118 planned cell(s) changed and journalled over 59 curated site(s)
+
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 118
+DO
+ROLLBACK
+                                                metric                                                | value 
+------------------------------------------------------------------------------------------------------+-------
+ journal rows for this run stamp                                                                      | 0
+ curated rows whose period_name is not the bucket of period_start, or not Undated where there is none | 0
+ curated sites                                                                                        | 5004
+ temp table _period_fix_plan left behind                                                              | 0
+(4 rows)
+
+
+period-fix-2026-11-07d-s001 --rehearse EXIT=0
+[32m2026-11-07 16:20:58[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+[guard 3 - a planned old value the row does not hold] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned row(s) no longer hold the planned old value
+   journal rows left by this probe: 0
+[guard 2 - a planned cell that is not a change] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 2 - a cell in a column the lane does not own] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 2 - a value longer than its column] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 1 - a unified_sites row outside source_id = 'ancient_nerds'] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned row(s) are not ancient_nerds sites
+   journal rows left by this probe: 0
+[guard 4 - a planned value the lane does not own] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned row(s) write a value this lane does not own
+   journal rows left by this probe: 0
+[site invariant - planned site(s) hold a period_name that is not the bucket of their period_start] psql exit=3 refused by its own guard=True
+   ERROR:  D121 period correction: 1 planned site(s) hold a period_name that is not the bucket of their period_start
+   journal rows left by this probe: 0
+period-fix-2026-11-07d-s001 --probe-guards EXIT=0
+[32m2026-11-07 16:21:11[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+NOTICE:  D121 period correction: 118 of 118 planned cell(s) changed and journalled over 59 curated site(s)
+
+=== before ===
+                                                metric                                                | value 
+------------------------------------------------------------------------------------------------------+-------
+ curated rows whose period_name is not the bucket of period_start, or not Undated where there is none | 0
+ curated rows without a start                                                                         | 625
+ curated sites                                                                                        | 5004
+ journal rows for the rollback stamp                                                                  | 0
+ journal rows for this run on non-curated rows                                                        | 0
+ journal rows for this run outside unified_sites.(period_start, period_name)                          | 0
+ journal rows for this run stamp                                                                      | 0
+ journal rows for this run that clear a start                                                         | 0
+ journal rows for this run with a site_id_ref of another site                                         | 0
+ journal rows for this test id                                                                        | 1590
+ shown curated rows without a start                                                                   | 605
+
+
+column          rows  value
+period_name      191  1000 - 1500 AD
+period_name      948  1500 - 500 BC
+period_name      867  1 - 500 AD
+period_name      565  3000 - 1500 BC
+period_name      372  4500 - 3000 BC
+period_name      372  < 4500 BC
+period_name      123  500 - 1000 AD
+period_name      862  500 BC - 1 AD
+period_name      625  Undated
+period_start     698  1
+period_start      85  1000
+period_start     550  -1500
+period_start     324  -3000
+period_start     166  -4500
+period_start      56  -4501
+period_start     550  -500
+period_start      35  500
+period_start     625  <NULL>
+=== the write ===
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 118
+DO
+COMMIT
+                                                metric                                                | value 
+------------------------------------------------------------------------------------------------------+-------
+ journal rows for this run stamp                                                                      | 118
+ curated sites                                                                                        | 5004
+ curated rows whose period_name is not the bucket of period_start, or not Undated where there is none | 0
+ journal rows for this test id                                                                        | 1708
+ planned rows now holding the new value                                                               | 118
+(5 rows)
+
+
+=== after ===
+                                                metric                                                | value 
+------------------------------------------------------------------------------------------------------+-------
+ curated rows whose period_name is not the bucket of period_start, or not Undated where there is none | 0
+ curated rows without a start                                                                         | 566
+ curated sites                                                                                        | 5004
+ journal rows for the rollback stamp                                                                  | 0
+ journal rows for this run on non-curated rows                                                        | 0
+ journal rows for this run outside unified_sites.(period_start, period_name)                          | 0
+ journal rows for this run stamp                                                                      | 118
+ journal rows for this run that clear a start                                                         | 0
+ journal rows for this run with a site_id_ref of another site                                         | 0
+ journal rows for this test id                                                                        | 1708
+ shown curated rows without a start                                                                   | 546
+
+
+column          rows  value
+period_name      199  1000 - 1500 AD
+period_name      959  1500 - 500 BC
+period_name      877  1 - 500 AD
+period_name      568  3000 - 1500 BC
+period_name      381  4500 - 3000 BC
+period_name      379  < 4500 BC
+period_name      126  500 - 1000 AD
+period_name      870  500 BC - 1 AD
+period_name      566  Undated
+period_start     708  1
+period_start      93  1000
+period_start     561  -1500
+period_start     327  -3000
+period_start     175  -4500
+period_start      63  -4501
+period_start     558  -500
+period_start      38  500
+period_start     566  <NULL>
+  journal rows for this run stamp: 118
+  planned rows now holding the planned new value: 118
+  planned rows with no journal row for this run stamp: 0
+  journal rows for this run outside unified_sites.(period_start, period_name): 0
+APPLY OK: the read-back matches the plan, row for row
+period-fix-2026-11-07d-s001 --apply EXIT=0
+[32m2026-11-07 16:21:22[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\output\remediation\mechanical_period_fix\2026-11-07d\s001\REHEARSAL_ROLLBACK.sql (the reversal, COMMIT -> ROLLBACK)
+NOTICE:  D121 period correction: 118 of 118 planned cell(s) changed and journalled over 59 curated site(s)
+
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 118
+DO
+ROLLBACK
+                    metric                    | value 
+----------------------------------------------+-------
+ journal rows for the rollback stamp          | 0
+ planned rows still holding the written value | 118
+ curated sites                                | 5004
+ temp table _period_fix_plan left behind      | 0
+(4 rows)
+
+
+period-fix-2026-11-07d-s001 --rehearse-rollback EXIT=0
+[32m2026-11-07 16:21:24[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+{
+ "deviations": []
+}
+ACCEPT_EXIT=0

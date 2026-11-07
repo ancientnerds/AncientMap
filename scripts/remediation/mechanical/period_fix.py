@@ -21,6 +21,10 @@
   as the 511 `via: "band"` rows of 2026-10-04: `d136-band`); where the site's own source states a
   year or century for it, that year's band wins and its edge is stored (`d137-year`). Only `band`
   rows are written; a `scope-hold` row is read too, so the D58 precheck lists it as `d58-window`.
+* **D138** - the `year-stated-only` rows of the same file (`--years`): a site with no epoch whose own
+  source states a year takes the band of the earliest year it states and stores the band's edge
+  (`d138-year`, the D137 year rule), with the sentence that states it as evidence. An obvious reading
+  error (D137: a year that is not the site's own) is listed, not written (`D138_READING_ERRORS`).
 
 Undated is the residue rung (`residue_period.py`): `period_start` NULL and `period_name` `Undated`.
 The D58 window includes a record without a date (`pipeline.normalizers.dates.passes_date_cutoff`), so
@@ -46,6 +50,7 @@ none) inside the transaction.
     M=scripts/remediation/mechanical
     $M/period_fix.py wave   --wave W [--d113 FILE] [--cited FILE]   (read-only; WAVE.json, steps of 100)
     $M/period_fix.py wave   --wave W --no-d113 --bands CANDIDATES.jsonl                   (D136/D137)
+    $M/period_fix.py wave   --wave W --no-d113 --years CANDIDATES.jsonl                   (D138)
     $M/period_fix.py step   --wave W --step N                       (read-only; PLAN.jsonl, ROLLBACK.sql)
     $M/apply.py --lane period-fix-W-sNNN --emit | --verify | --rehearse | --probe-guards | --apply
     $M/apply.py --lane period-fix-W-sNNN --rehearse-rollback
@@ -134,7 +139,22 @@ D137_QUOTE = (
     'schreiben"). A century/year the site\'s own source states for the site wins over the epoch '
     "start (rec). A coarse word is read together with the site's own monument type. |"
 )
-RULES = ("d121-regional", "d121-no-year", "d122-unsourced", "d124-cited", "d136-band", "d137-year")
+D138_QUOTE = (
+    "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own "
+    "source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band "
+    'of their stated year (owner: "die 60 sites ja"); **retire Caus Castle and Ayazini Kaya Church** as '
+    'medieval / out of scope (owner: "die 2 mittelalter deaktivieren"), through the journalled '
+    "scope-retire lane. |"
+)
+RULES = (
+    "d121-regional",
+    "d121-no-year",
+    "d122-unsourced",
+    "d124-cited",
+    "d136-band",
+    "d137-year",
+    "d138-year",
+)
 BAND_KEYS = frozenset(
     {"site_id", "name", "status", "band", "edge", "epoch", "band_from", "source_kind", "quote", "url"}
 )
@@ -142,6 +162,18 @@ YEAR_KEYS = frozenset({"year", "year_quote", "year_url"})
 #: The CANDIDATES.jsonl statuses the writer reads: `band` is written, `scope-hold` is read so that the
 #: D58 precheck lists it (`year-stated-only` and `undated` carry no band).
 BAND_STATUSES = ("band", "scope-hold")
+#: The CANDIDATES.jsonl status D138 writes: a stated year and no epoch (`fields/epoch_bands.py`).
+YEAR_ONLY_STATUS = "year-stated-only"
+YEAR_ONLY_KEYS = frozenset({"site_id", "name", "status", "year_band", "year_sentences"})
+#: D137 ("obvious reading errors ... are fixed before the write"), found reading the 60 sentences of
+#: D138 before the write: a stated year that is not a date of the site. Listed for the owner, not written.
+D138_READING_ERRORS = {
+    "f6daed37-710f-4512-a494-bb4ecddd4d2c": (
+        "Cave of El Soplao: the only year is the cave's geological formation ('Its formation dates back "
+        "to the Mesozoic, in particular the Cretaceous period 240 million years ago'), not a date of "
+        "human use of the site (D137: an obvious reading error is not written)"
+    ),
+}
 CITED_KEYS = frozenset({"site_id", "start", "url", "quote", "answered_by", "model", "reason"})
 
 
@@ -516,6 +548,74 @@ def load_bands(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def stated_year(row: Mapping[str, Any]) -> tuple[int, Mapping[str, Any]]:
+    """The earliest year a `year-stated-only` row's sentences state, and the first sentence stating it."""
+    year = min(int(y) for s in row["year_sentences"] for y in s["years"])
+    return year, next(s for s in row["year_sentences"] if year in s["years"])
+
+
+def load_years(path: Path) -> list[dict[str, Any]]:
+    """The `year-stated-only` rows of an epoch_bands CANDIDATES.jsonl (D138), each checked: its band is
+    the band of the earliest year its own sentences state, and that sentence has a quote and a URL."""
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        if r.get("status") != YEAR_ONLY_STATUS:
+            continue
+        missing = YEAR_ONLY_KEYS - set(r)
+        if missing:
+            raise PlanError(f"{path}: {r.get('site_id')} lacks {sorted(missing)}")
+        if not r["year_sentences"] or not all(s.get("years") for s in r["year_sentences"]):
+            raise PlanError(f"{path}: {r['site_id']} states no year")
+        year, sentence = stated_year(r)
+        if categorize_period(year) != r["year_band"]:
+            raise PlanError(
+                f"{path}: {r['site_id']} year_band {r['year_band']!r} is not the band of its earliest "
+                f"quoted year {year} (a year outside the kept sentences?)"
+            )
+        if not str(sentence.get("sentence") or "").strip() or not str(sentence.get("url") or "").strip():
+            raise PlanError(f"{path}: {r['site_id']} has no quote or no URL for its year {year}")
+        rows.append(r)
+    return rows
+
+
+def decide_year(site: Live, links: Sequence[Link], row: Mapping[str, Any]) -> Decision | Refusal:
+    """D138: an undated site whose own source states a year takes the edge of that year's band."""
+    if site.period_start is not None:
+        return Refusal(
+            site.site_id,
+            site.name,
+            "dated-since-candidates",
+            f"the candidates read the site undated, production holds {site.period_start}",
+        )
+    year, sentence = stated_year(row)
+    band = str(row["year_band"])
+    edge = bucket_edge(band)
+    quoted_by = f" ({sentence['quoted_by']})" if sentence.get("quoted_by") else ""
+    note = f"the site's own source states {year}: the band {band!r}, its edge {edge} (D137 year rule, D138)"
+    return Decision(
+        site.site_id,
+        site.name,
+        "d138-year",
+        None,
+        links[-1].link.id if links else None,
+        edge,
+        note,
+        (
+            {"source": "owner decision D138 (2026-11-07)", "url": DECISIONS, "quote": D138_QUOTE},
+            {"source": "owner decision D137 (2026-11-07)", "url": DECISIONS, "quote": D137_QUOTE},
+            {
+                "source": f"the year the site's own source states (D138): {year}, {sentence['file']}{quoted_by}",
+                "url": str(sentence["url"]),
+                "quote": str(sentence["sentence"]),
+            },
+            {"source": "pipeline/utils/text.py:categorize_period", "url": "pipeline/utils/text.py", "quote": note},
+        ),
+    )
+
+
 def decide_band(site: Live, links: Sequence[Link], row: Mapping[str, Any]) -> Decision | Refusal:
     """D136/D137: an undated site takes the edge of its band (the epoch's, or a stated year's)."""
     if site.period_start is not None:
@@ -571,6 +671,7 @@ def build_decisions(
     list_sha: str,
     cited: Sequence[Mapping[str, Any]] = (),
     bands: Sequence[Mapping[str, Any]] = (),
+    years: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[Decision], list[Refusal], dict[str, int]]:
     """Every decision of a wave and every refusal, from one production read. Pure."""
     decided: dict[str, Decision] = {}
@@ -627,6 +728,24 @@ def build_decisions(
             refused.append(out)
         else:
             decided[sid] = out
+    for row in years:
+        sid = str(row["site_id"])
+        if sid in decided:
+            raise PlanError(f"{sid}: a stated year for a site another rule already decides")
+        if sid in D138_READING_ERRORS:
+            refused.append(Refusal(sid, str(row["name"]), "d137-reading-error", D138_READING_ERRORS[sid]))
+            continue
+        site = live.get(sid)
+        refusal = _site_checks(site, journal.get(sid, ()), sid)
+        if refusal is not None:
+            refused.append(refusal)
+            continue
+        assert site is not None
+        out = decide_year(site, journal.get(sid, ()), row)
+        if isinstance(out, Refusal):
+            refused.append(out)
+        else:
+            decided[sid] = out
     final: list[Decision] = []
     for sid in sorted(decided):
         d = decided[sid]
@@ -658,6 +777,7 @@ def build_wave(
     d113_path: Path | None = D113_LIST,
     cited_path: Path | None = None,
     bands_path: Path | None = None,
+    years_path: Path | None = None,
     read: Callable[[str], str] = read_production,
     root: Path = ROOT,
 ) -> dict[str, Any]:
@@ -674,17 +794,18 @@ def build_wave(
     list_sha = sha256_file(d113_path) if d113_path is not None else ""
     cited = load_cited(cited_path) if cited_path is not None else []
     bands = load_bands(bands_path) if bands_path is not None else []
+    years = load_years(years_path) if years_path is not None else []
     text = read(tagged_export_script([("site", site_sql()), ("journal", journal_sql())]))
     live, journal, at = parse_export(text)
     if d113_path is None:
-        # a wave without the list (D124 or D136/D137 alone) decides no D122 row either: those are
-        # one run's
-        named = [str(c["site_id"]) for c in (*cited, *bands)]
+        # a wave without the list (D124, D136/D137 or D138 alone) decides no D122 row either: those
+        # are one run's
+        named = [str(c["site_id"]) for c in (*cited, *bands, *years)]
         live_scope = {sid: live[sid] for sid in named if sid in live}
     else:
         live_scope = live
     decisions, refused, counters = build_decisions(
-        live_scope, journal, d113, list_sha=list_sha, cited=cited, bands=bands
+        live_scope, journal, d113, list_sha=list_sha, cited=cited, bands=bands, years=years
     )
     ids = [d.site_id for d in decisions]
     record = {
@@ -693,6 +814,7 @@ def build_wave(
         "d113_sha256": list_sha,
         "cited_sha256": sha256_file(cited_path) if cited_path is not None else "",
         "bands_sha256": sha256_file(bands_path) if bands_path is not None else "",
+        "years_sha256": sha256_file(years_path) if years_path is not None else "",
         "counters": counters,
         "steps": [ids[i : i + MAX_SITES] for i in range(0, len(ids), MAX_SITES)],
         "decisions": [d.as_dict() for d in decisions],
@@ -784,7 +906,7 @@ def write_plan_md(plan: Plan, path: Path, decisions: Sequence[Decision]) -> None
     lane = plan.lane
     by_rule = Counter(d.rule for d in decisions if d.site_id in plan.sites)
     lines = [
-        f"# D121/D122/D124/D136/D137 period correction - {lane.name}",
+        f"# D121/D122/D124/D136/D137/D138 period correction - {lane.name}",
         "",
         f"Built {plan.built_at} by `scripts/remediation/mechanical/period_fix.py`. Run stamp "
         f"`{lane.run_stamp}`, test id `{lane.test_id}`, change keys `{lane.key_prefix}:<site_id>:<column>`.",
@@ -953,6 +1075,7 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--no-d113", action="store_true", help="a wave of cited starts only")
             command.add_argument("--cited", type=Path, help="D124: cited starts of a released re-ask")
             command.add_argument("--bands", type=Path, help="D136/D137: the epoch_bands CANDIDATES.jsonl")
+            command.add_argument("--years", type=Path, help="D138: its year-stated-only rows")
         else:
             command.add_argument("--step", type=int, required=True)
     args = parser.parse_args(argv)
@@ -964,6 +1087,7 @@ def main(argv: list[str] | None = None) -> int:
                     d113_path=None if args.no_d113 else args.d113,
                     cited_path=args.cited,
                     bands_path=args.bands,
+                    years_path=args.years,
                 )
             )
         elif args.command == "step":
