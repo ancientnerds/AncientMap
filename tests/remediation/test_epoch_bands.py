@@ -22,3 +22,27 @@ def test_a_row_names_its_band_its_edge_and_the_countries_in_another_band() -> No
 def test_a_country_in_the_conventional_band_is_not_listed() -> None:
     assert "england" not in str(EB.other_bands("bronze age"))
     assert EB.other_bands("victorian") == {}
+
+
+def test_a_period_word_that_names_another_thing_is_no_epoch_of_the_site() -> None:
+    for text, key in [
+        ("There is access to the site and The Drift is part of the Viking Way trail.", "viking"),
+        ("Telmessos (Hittite: Kuwalapassa) was a city", "hittite"),
+        ("petroglyphs, primarily lines, geometric shapes", "geometric"),
+        ("situated in the Chavin de Huantar District", "chavin"),
+        ("at the entrance to the old Roman tunnel known as the Crypta Neapolitana", "roman"),
+        ("Roman Rig", "roman"),
+    ]:
+        assert EB.names_another_thing(text, key), text
+    for text, key in [
+        ("Rockbourne Roman Villa is a Roman villa", "roman"),
+        ("Cadbury Castle is an Iron Age Hillfort close to Bickleigh", "iron age"),
+        ("a sanctuary of the Geometric period", "geometric"),
+    ]:
+        assert not EB.names_another_thing(text, key), text
+
+
+def test_a_generic_article_cached_for_a_site_is_not_its_own() -> None:
+    assert not EB.shares_a_word("Hillfort", "Dinas Dinlle")
+    assert EB.shares_a_word("Dundon Hill Hillfort", "Compton Dundon")
+    assert EB.shares_a_word("Kerzérho", "Alignements de Kerzerho")
