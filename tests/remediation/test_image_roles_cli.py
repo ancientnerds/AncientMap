@@ -86,7 +86,7 @@ class TestTheStageCommands:
         run, handoff = _exported(tmp_path)
         OH.write_answer(
             handoff, batch_id="pre-0001", stage="image-prefilter", label="pre-0001", text=GOOD,
-            answered_by="image_prefilter:pre-0001", model=OH.SONNET_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
+            answered_by="image_prefilter:pre-0001", model=OH.OPUS_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
         )  # fmt: skip
         assert CLI.main(["import", *_args(run, handoff)]) == 0
         assert json.loads(capsys.readouterr().out)["answers"] == 1

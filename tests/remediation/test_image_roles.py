@@ -134,9 +134,9 @@ class TestTheTransport:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
         text = SG.brief(run, handoff, spec, "b-001")
-        # Sonnet since D103 (the tier move of image-roles-v1)
-        assert "running as claude-sonnet-5-5 in the role image_prefilter at effort low" in text
-        assert "--model claude-sonnet-5-5 --role image_prefilter" in text
+        # Opus since D118 (the tier move of image-roles-v2)
+        assert "running as claude-opus-5-5 in the role image_prefilter at effort low" in text
+        assert "--model claude-opus-5-5 --role image_prefilter" in text
         assert "check-answer --run-dir" in text and "--stage tiny-stage" in text
         assert "Do not use the web" in text
         with pytest.raises(SG.StageError, match="no batch"):
@@ -181,8 +181,8 @@ class TestTheTransport:
     def test_an_answer_not_stamped_by_the_roles_model_is_refused(self, tmp_path: Path) -> None:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
-        answer_all(handoff, spec, {"q1": '{"ok": true}'}, model=OH.OPUS_MODEL)
-        with pytest.raises(SG.StageError, match="registered to claude-sonnet-5-5"):
+        answer_all(handoff, spec, {"q1": '{"ok": true}'}, model=OH.SONNET_MODEL)
+        with pytest.raises(SG.StageError, match="registered to claude-opus-5-5"):
             SG.import_answers(run, handoff, spec)
 
     def test_an_answer_that_names_no_role_is_refused(self, tmp_path: Path) -> None:
@@ -400,7 +400,7 @@ class TestThePrefilter:
         SG.import_answers(run, handoff, PF.SPEC)
         got = PF.judged(SG.read_results(run, PF.SPEC))
         assert [r["survives"] for r in got] == [True, False]
-        assert RO.role(PF.SPEC.role).model == "claude-sonnet-5-5"  # D103: one tier up from Haiku
+        assert RO.role(PF.SPEC.role).model == "claude-opus-5-5"  # D103 Haiku to Sonnet, D118 to Opus
 
 
 # ========================================================================== depicts

@@ -154,7 +154,11 @@ ROLES: Mapping[str, Role] = _registry(
     # of 0.92, depicts-capable recall 0.9265 of 0.98), the depicts judge from Sonnet to Opus
     # (sensitivity 0.7267, precision 0.843, false depicts 0.1116, 25 foreign rows called depicts).
     # Both are calibrated again one tier up on the same sealed gold (image-roles-v2) before use.
-    Role("image_prefilter", "claude-sonnet-5-5", "low", "image_kind_135"),
+    # The prefilter failed v2 on Sonnet too (photo agreement 0.9033, recall 0.848); D118 tested it
+    # at Opus first (the probe, 0.9267 and 0.9167 on v2's flawed gold; 10 of its 17 drops a
+    # picture of a surviving kind judged not usable, which v2's kind gold does not label) and the
+    # tier move v2 named is applied: Opus low, calibrated on the clean kind gold image-roles-v3p.
+    Role("image_prefilter", "claude-opus-5-5", "low", "image_kind_135"),
     Role("image_depicts", "claude-opus-5-5", "medium", "gallery_audit_calibration_opus"),
     # The image lane's own hero re-check (D15's served-image recheck, D17 C3, the D10 re-check of the
     # MiniMax picks). As the shared `adversarial` it failed image-roles-v1 on Sonnet (agreement 0.86
@@ -328,6 +332,21 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
             "calibration_id": "image-roles-v1",
             "reason": "sensitivity 0.7267 is below 0.9; precision 0.843 is below 0.95; "
             "false_depicts 0.1116 is above 0.03; 25 foreign row(s) called depicts",
+        }
+    ),
+    MappingProxyType(
+        {
+            # `image-roles-v2/verdicts/image_prefilter.json` (2026-11-06, Sonnet low); applied
+            # under owner decision D118 of 2026-11-06 on the evidence of the Opus probe
+            # (`calibration/prefilter-probe-d118/PROBE.json`, 2026-11-07: v2's five questions byte
+            # for byte, photo agreement 0.9267, depicts-capable recall 0.9167 against Sonnet's
+            # 0.9033 and 0.848). Calibrated again on Opus on the clean kind gold image-roles-v3p.
+            "role": "image_prefilter",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "image-roles-v2",
+            "reason": "photo_agreement 0.9033 is below 0.92; depicts_capable_recall 0.848 is "
+            "below 0.98",
         }
     ),
 )

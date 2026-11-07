@@ -10,6 +10,7 @@ import functools
 import io
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -430,6 +431,18 @@ class TestMeasuring:
 
 # ================================================================================ D118: the probe
 class TestTheProbe:
+    @pytest.fixture(autouse=True)
+    def _as_the_probe_ran(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The registry as the probe ran (D118 moved the prefilter to Opus on its evidence)."""
+        monkeypatch.setattr(
+            RO,
+            "ROLES",
+            {
+                **RO.ROLES,
+                "image_prefilter": replace(RO.ROLES["image_prefilter"], model="claude-sonnet-5-5"),
+            },
+        )
+
     def _source(self, tmp_path: Path) -> tuple[Path, list[dict[str, Any]]]:
         src = tmp_path / "image-roles-v2"
         src.mkdir()
@@ -485,6 +498,13 @@ class TestTheProbe:
             agent="probe", now=MEASURED)  # fmt: skip
         with pytest.raises(SG.StageError, match="candidate model"):
             PP.measure(run, handoff, cp=cp)
+
+
+def test_the_probe_is_no_trial_once_the_prefilter_is_registered_on_opus() -> None:
+    """D118 applied the move the probe was evidence for: Opus is the role's model, not a candidate."""
+    assert RO.role("image_prefilter").model == PP.CANDIDATE
+    with pytest.raises(RO.RoleError, match="it is no candidate"):
+        RO.candidate_model(PF.SPEC.role, PP.CANDIDATE)
 
 
 def test_repicture_fetches_exactly_the_pool_pictures_of_a_draw(tmp_path: Path) -> None:

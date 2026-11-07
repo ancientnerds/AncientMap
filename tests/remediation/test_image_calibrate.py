@@ -10,6 +10,7 @@ import functools
 import io
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -97,8 +98,8 @@ class TestTheSeal:
             roles["web_verifier"]["wrong_links"] == 5 and roles["web_verifier"]["good_links"] == 20
         )
         assert set(document["role_registry"]) == set(roles)
-        # D103: the prefilter is on Sonnet, the re-check slot is answered by image_adversarial
-        assert document["role_registry"]["image_prefilter"]["model"] == "claude-sonnet-5-5"
+        # D103 + D118: the prefilter is on Opus, the re-check slot is answered by image_adversarial
+        assert document["role_registry"]["image_prefilter"]["model"] == "claude-opus-5-5"
         assert document["role_registry"]["adversarial"]["role"] == "image_adversarial"
         assert document["role_registry"]["adversarial"]["model"] == "claude-opus-5-5"
         assert document["interval"].startswith("Clopper-Pearson")
@@ -760,21 +761,19 @@ class TestEvaluating:
         assert (
             verdict["passed"]
             and verdict["tier_move"] is None
-            and verdict["model"] == "claude-sonnet-5-5"
+            and verdict["model"] == "claude-opus-5-5"
         )
         assert json.loads((directory / "verdicts" / "image_prefilter.json").read_text())["passed"]
         with pytest.raises(CAL.CalibrationError, match="written once"):
             CAL.evaluate(directory, "image_prefilter", cp=cp)
 
-    def test_a_failing_prefilter_moves_up_one_tier(self, tmp_path: Path) -> None:
+    def test_a_failing_prefilter_on_opus_has_no_tier_left(self, tmp_path: Path) -> None:
+        """Opus since D118: a failure names no move (the top tier fails to the owner)."""
         directory = self._prepared(tmp_path)
         self._answer(directory, {c["case_id"]: "people" for c in self.cases})
         verdict = CAL.evaluate(directory, "image_prefilter", cp=cp)
-        assert not verdict["passed"]
-        assert (
-            verdict["tier_move"]["from"] == "claude-sonnet-5-5"
-            and verdict["tier_move"]["to"] == "claude-opus-5-5"
-        )
+        assert not verdict["passed"] and verdict["model"] == "claude-opus-5-5"
+        assert verdict["tier_move"] is None
         assert verdict["failures"]
 
     def test_an_answer_older_than_the_sample_is_refused(self, tmp_path: Path) -> None:
@@ -1135,7 +1134,18 @@ class TestTheReseal:
             (old / CAL.VERDICTS_DIR / f"{slot}.json").write_text(json.dumps(verdict), "utf-8")
         return old, cases
 
-    def test_the_failed_slots_are_sealed_again_on_the_same_gold(self, tmp_path: Path) -> None:
+    def test_the_failed_slots_are_sealed_again_on_the_same_gold(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # the registry as D103 left it (D118 moved the prefilter on to Opus since)
+        monkeypatch.setattr(
+            RO,
+            "ROLES",
+            {
+                **RO.ROLES,
+                "image_prefilter": replace(RO.ROLES["image_prefilter"], model="claude-sonnet-5-5"),
+            },
+        )
         old, _ = self._finished(tmp_path, ("image_prefilter", "image_depicts", "adversarial"))
         new = tmp_path / "image-roles-v2"
         got = CAL.reseal(old, new, now=lambda: "2026-11-06T00:00:00Z")

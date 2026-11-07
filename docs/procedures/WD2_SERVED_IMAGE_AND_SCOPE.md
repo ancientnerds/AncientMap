@@ -1706,6 +1706,24 @@ for role in image_depicts adversarial; do $PY $CG export --dir $D3 --role $role 
 $PY $CG evaluate --dir $D3 --role image_depicts; $PY $CG disagreements --dir $D3 --role image_depicts
 ```
 
+**D118 applied (2026-11-07).** The probe (`calibration/prefilter-probe-d118/PROBE.json`, 5 Opus
+answers on v2's 300 pictures): photo agreement 0.9267 (Sonnet 0.9033, threshold 0.92),
+depicts-capable recall 0.9167 (Sonnet 0.848, threshold 0.98); Opus fixed 16 of Sonnet's 44 failed
+pictures and broke 2. 10 of its 17 recall drops are pictures of a surviving kind it judged not
+usable (a park sign, a 640x114 panorama strip, a blurred slide, banknotes), which v2's kind gold
+(kinds only, the gold D117 replaces) cannot label. The tier move v2 named (Sonnet -> Opus, effort
+low) is applied in `roles.py`, and the prefilter is measured on its own clean kind gold, labelled
+with `usable` too:
+
+```bash
+D3P=output/remediation/calibration/image-roles-v3p
+$PY $CG seal --dir $D3P --kind kind          # after the move: its registry entry is Opus
+$PY $CG draw --dir $D3P --read output/remediation/calibration/image-roles-v3-inputs/READ.json     --wiki-cache output/remediation/final-2026-10-08/wiki_cache     --pool-run output/remediation/candidate_search/candidates-2026-10-06     --exclude-gold output/remediation/calibration/image-roles-v1/GOLD.jsonl $D3/DRAW.jsonl     --exclude-heroes output/remediation/calibration/image-roles-v1-inputs/OTHER_SITE_HEROES.jsonl     --insert-root output/remediation/import_hero
+$PY scripts/remediation/candidate_search/repicture.py --old-run output/remediation/candidate_search/candidates-2026-10-06     --need gold --calibration-dir $D3P
+for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/remediation/handoff/image-kind3-label-$w; done
+# then as for $D3: disputes, label c, spotcheck, fix, export --role image_prefilter, evaluate
+```
+
 ---
 
 ## 4. Tests and the mutation sweep
