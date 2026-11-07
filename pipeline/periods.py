@@ -67,14 +67,19 @@ __all__ = [
     "COARSE",
     "PERIODS",
     "EpochBand",
+    "MONUMENT_EPOCHS",
     "REGIONAL_STARTS",
     "SUBPHASE_REQUIRED",
+    "SUCCESSORS",
+    "TYPED_COARSE",
     "PeriodError",
     "century_range",
     "country_key",
     "epoch_band",
     "fold_name",
     "is_regional",
+    "late_band",
+    "monument_epoch",
     "period_of",
     "start_year",
     "states_period",
@@ -928,6 +933,104 @@ def epoch_band(name: str, *, country: str | None) -> EpochBand:
     label = categorize_period(start)
     assert label is not None  # a year always has a bucket
     return EpochBand(label=label, edge=bucket_edge(label), start=start, regional=found is not None)
+
+
+#: Owner decision D137 (2026-11-07): the monument types that name their epoch. A coarse word
+#: (`TYPED_COARSE`) read beside one of them - in the site's own `site_type`, its name or the same
+#: sentence - dates the site by the type's epoch, with the site's regional start (`epoch_band`):
+#: "a prehistoric dolmen" is a Neolithic dolmen, "a prehistoric hillfort" an Iron Age one. The
+#: owner's own list ("stone circle/henge/dolmen/long barrow/passage tomb -> Neolithic, round
+#: barrow/cairn -> Bronze Age, hillfort -> Iron Age") and its usual synonyms: a quoit, cromlech and
+#: portal tomb are dolmens, a chambered cairn is a chambered tomb, a passage grave a passage tomb.
+#: A bare "barrow" or "tumulus" is either, and names no epoch.
+MONUMENT_EPOCHS: tuple[tuple[str, str], ...] = (
+    ("stone circle", "neolithic"),
+    ("henge", "neolithic"),
+    ("dolmen", "neolithic"),
+    ("quoit", "neolithic"),
+    ("cromlech", "neolithic"),
+    ("portal tomb", "neolithic"),
+    ("long barrow", "neolithic"),
+    ("chambered tomb", "neolithic"),
+    ("chambered cairn", "neolithic"),
+    ("passage tomb", "neolithic"),
+    ("passage grave", "neolithic"),
+    ("menhir", "neolithic"),
+    ("standing stone", "neolithic"),
+    ("cursus", "neolithic"),
+    ("causewayed enclosure", "neolithic"),
+    ("causewayed camp", "neolithic"),
+    ("round barrow", "bronze age"),
+    ("bowl barrow", "bronze age"),
+    ("bell barrow", "bronze age"),
+    ("disc barrow", "bronze age"),
+    ("cairn", "bronze age"),
+    ("stone row", "bronze age"),
+    ("burnt mound", "bronze age"),
+    ("hillfort", "iron age"),
+    ("hill fort", "iron age"),
+    ("oppidum", "iron age"),
+    ("oppida", "iron age"),
+    ("broch", "iron age"),
+    ("crannog", "iron age"),
+    ("souterrain", "iron age"),
+)
+#: The coarse words D137 reads with the monument type: "prehistoric", "prehistory", "Stone Age",
+#: and a bare Palaeolithic or Mesolithic, which a type that names a later epoch contradicts.
+TYPED_COARSE: frozenset[str] = frozenset(
+    {"prehistoric", "prehistory", "stone age", "palaeolithic", "paleolithic", "mesolithic"}
+)
+_MONUMENT = {
+    word: re.compile(
+        r"(?<![^\W_])" + r"[\W_]+".join(re.escape(w) for w in word.split()) + r"s?(?![^\W_])"
+    )
+    for word, _epoch in MONUMENT_EPOCHS
+}
+
+
+def monument_epoch(*texts: str | None) -> tuple[str, str] | None:
+    """`(type word, epoch)` of the monument type the `texts` name (`MONUMENT_EPOCHS`), the one
+    whose epoch begins first where they name several (a site begins with its oldest part); None
+    when they name none. Read on the folded text, whole words, a plural "s" allowed."""
+    found = []
+    for text in texts:
+        folded = fold_name(text or "")
+        for word, epoch in MONUMENT_EPOCHS:
+            if _MONUMENT[word].search(folded):
+                found.append((PERIODS[epoch][0], word, epoch))
+    if not found:
+        return None
+    _start, word, epoch = min(found)
+    return word, epoch
+
+
+#: D137: the epoch that follows another, where the late phase of the first ends at the regional
+#: start of the second ("the late Copper Age" of Spain ends where its Bronze Age begins).
+SUCCESSORS: dict[str, str] = {"copper age": "bronze age", "chalcolithic": "bronze age"}
+
+
+def late_band(name: str, *, country: str | None) -> EpochBand:
+    """The band of "the late <epoch>" where the vocabulary has no `late ...` key (D137: a dropped
+    "late" moved La Ribera de Algaida from the Argaric to the start of the Copper Age). The late
+    phase lies at the epoch's end: the start of its successor (`SUCCESSORS`) in the site's country
+    where `REGIONAL_STARTS` holds one, else the conventional end of `PERIODS`. `PeriodError` for a
+    word the vocabulary does not know and for one whose late phase is a key of its own (read that
+    key with `epoch_band`)."""
+    end = period_of(name)[1]
+    key = str(_key_of(name))
+    if f"late {key}" in PERIODS:
+        raise PeriodError(f"'late {key}' is a period of its own: read it with epoch_band")
+    successor = SUCCESSORS.get(key)
+    found = (
+        REGIONAL_STARTS.get(successor, {}).get(country_key(country))
+        if successor and country
+        else None
+    )
+    if found is not None:
+        end = found
+    label = categorize_period(end)
+    assert label is not None  # a year always has a bucket
+    return EpochBand(label=label, edge=bucket_edge(label), start=end, regional=found is not None)
 
 
 def states_period(quote: str, name: str) -> bool:

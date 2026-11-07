@@ -747,3 +747,86 @@ class TestTheEpochBands:
     def test_an_unknown_word_is_refused_by_name(self) -> None:
         with pytest.raises(P.PeriodError, match="not one of"):
             P.epoch_band("Atlantean", country=None)
+
+
+class TestTheMonumentTypes:
+    """Owner decision D137 (2026-11-07): a coarse word ("prehistoric", "Stone Age") is read together
+    with the site's own monument type, where the type names its epoch."""
+
+    @pytest.mark.parametrize(
+        ("text", "epoch"),
+        [
+            ("Stone circle", "neolithic"),
+            ("a pair of prehistoric stone circles", "neolithic"),
+            ("Henge", "neolithic"),
+            ("Dolmen", "neolithic"),
+            ("West Lanyon Quoit", "neolithic"),
+            ("Long barrow", "neolithic"),
+            ("chambered tomb", "neolithic"),
+            ("Huntersquoy Chambered Cairn", "neolithic"),
+            ("Rubha an Dùnain Passage Grave", "neolithic"),
+            ("a passage tomb", "neolithic"),
+            ("Menhir du Camp de César", "neolithic"),
+            ("Standing stone", "neolithic"),
+            ("the Dorset Cursus", "neolithic"),
+            ("a causewayed enclosure", "neolithic"),
+            ("a round barrow", "bronze age"),
+            ("a bowl barrow", "bronze age"),
+            ("a bell barrow", "bronze age"),
+            ("Cairn", "bronze age"),
+            ("Calf of Eday Cairns", "bronze age"),
+            ("a prehistoric stone row and cairn circle", "bronze age"),
+            ("a burnt mound", "bronze age"),
+            ("Eggardon Hill is a prehistoric hillfort", "iron age"),
+            ("a hill fort", "iron age"),
+            ("an oppidum", "iron age"),
+            ("Broch of Gurness", "iron age"),
+            ("a crannog", "iron age"),
+            ("Souterrain", "iron age"),
+        ],
+    )
+    def test_a_type_names_its_epoch(self, text: str, epoch: str) -> None:
+        found = P.monument_epoch(text)
+        assert found is not None and found[1] == epoch, text
+
+    def test_the_earliest_type_named_decides(self) -> None:
+        assert P.monument_epoch("Stone circle", "a round barrow beside it") == (
+            "stone circle", "neolithic"
+        )
+
+    @pytest.mark.parametrize(
+        "text",
+        ["Fortress/citadel", "Barrow", "Mound/tumulus", "Cave Structures", "Cairnpapple Hill",
+         "Stonehenged", "Prehistoric Fortress Straževica (Dragaljevo)", "", None],
+    )  # fmt: skip
+    def test_no_type_without_one_of_the_named_monuments(self, text: str | None) -> None:
+        assert P.monument_epoch(text) is None
+
+    def test_the_type_band_takes_the_site_s_regional_start(self) -> None:
+        assert P.epoch_band("neolithic", country="England").label == "4500 - 3000 BC"
+        assert P.epoch_band("bronze age", country="England").label == "3000 - 1500 BC"
+        assert P.epoch_band("iron age", country="England").label == "1500 - 500 BC"
+
+    def test_the_words_a_type_reads(self) -> None:
+        assert {"prehistoric", "prehistory", "stone age", "palaeolithic", "paleolithic",
+                "mesolithic"} == P.TYPED_COARSE  # fmt: skip
+
+
+class TestTheLatePhase:
+    """D137: "the late Copper Age" is not the start of the Copper Age. Where the vocabulary has no
+    `late ...` key of its own, the late phase lies at the epoch's end - the regional start of the
+    epoch that follows it, else the conventional end of `PERIODS`."""
+
+    def test_a_late_copper_age_in_spain_ends_where_the_spanish_bronze_age_begins(self) -> None:
+        band = P.late_band("copper age", country="Spain")
+        assert (band.label, band.start, band.regional) == ("3000 - 1500 BC", -1900, True)
+        assert P.late_band("chalcolithic", country="Portugal").label == "3000 - 1500 BC"
+
+    def test_without_a_regional_successor_the_conventional_end_is_read(self) -> None:
+        band = P.late_band("inca", country="Peru")
+        assert (band.start, band.regional) == (1533, False)
+        assert band.label == categorize_period(1533)
+
+    def test_a_late_phase_the_vocabulary_holds_is_not_read_here(self) -> None:
+        with pytest.raises(P.PeriodError, match="late neolithic"):
+            P.late_band("neolithic", country="England")

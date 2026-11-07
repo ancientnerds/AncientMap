@@ -28,6 +28,7 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from pipeline import periods as P  # noqa: E402
-from pipeline.utils.text import PERIOD_BUCKETS, categorize_period  # noqa: E402
+from pipeline.utils.text import PERIOD_BUCKETS, bucket_edge, categorize_period  # noqa: E402
 
 DEFAULT_OUT = REPO / "output" / "remediation" / "fields" / "epoch_bands" / "EPOCH_BANDS.md"
 
@@ -115,7 +116,10 @@ _CAPITAL_ONLY = frozenset({"geometric"})
 #: Statements that put the epoch in doubt, beyond the extractor's `HEDGES`: "the suggestion that
 #: the site originates in the Iron Age is currently unproven", "the date of construction is not
 #: certainly known", "it has also been claimed".
-_DOUBT = re.compile(r"\b(?:unproven|not certainly known|is not known|been claimed|is uncertain)\b",
+#: D137 (the year route): "dated tentatively", "prompted debate over whether", "remains debated",
+#: "has not yet been dated with certainty".
+_DOUBT = re.compile(r"\b(?:unproven|not certainly known|is not known|been claimed|is uncertain|"
+                    r"tentative(?:ly)?|debated?|not (?:yet )?(?:been )?dated with certainty)\b",
                     re.IGNORECASE)  # fmt: skip
 
 
@@ -133,6 +137,209 @@ def names_another_thing(text: str, key: str) -> bool:
         return nxt == ":" or nxt in _HEADS_A_NAME or nxt.casefold() in _OTHER_THING
 
     return all(other(h) for h in hits)
+
+
+def _mentions(text: str, key: str) -> list[re.Match[str]]:
+    words = r"[\s-]+".join(re.escape(w) for w in key.removesuffix(" period").split())
+    return list(re.finditer(rf"(?i:\b{words})\b", text))
+
+
+# ------------------------------------------------- D137: the reading errors of the spot checks
+#: Finds of the surroundings, not of the site (Sotin: "finds speak of life in the Sotin area from
+#: the Copper Age"): an epoch named after finds, traces or life "in the area", with no name of the
+#: site between the place phrase and the epoch ("finds in the area show that Plataea existed from
+#: Mycenaean times" dates Plataea; "rock art in the Trialeti area" says where the site lies).
+_TRACES = re.compile(
+    r"\b(?:finds?|traces?|evidence|life|settlement|habitation|occupation|activity|remains|"
+    r"artefacts?|artifacts?|inhabited|settled)\b",
+    re.IGNORECASE,
+)
+_AREA = re.compile(
+    r"\b(?:in|around|of|from|throughout|across|within)\s+(?:the\s+)?(?:[\w'’-]+\s+){0,3}?"
+    r"(?:area|surroundings|vicinity|environs|neighbou?rhood)\b",
+    re.IGNORECASE,
+)
+#: A feature next to the site (Berry Camp: "an adjoining prehistoric field system"): an epoch
+#: right after a word of nearness, an article and one word between at most.
+_BESIDE = re.compile(
+    r"\b(?:adjoining|adjacent(?:\s+to)?|neighbou?ring|nearby|near(?:\s+to)?|next\s+to|beside|"
+    r"close\s+to|surrounding)\s+(?:(?:the|an?|its)\s+)?(?:[\w'’-]+\s+)?\Z",
+    re.IGNORECASE,
+)
+#: A later phase of the site ("reoccupied in the Roman period"): an epoch named after a word of
+#: renewal or reuse in the same sentence.
+_RENEWAL = re.compile(
+    r"\b(?:renew\w*|re-?occup\w*|re-?us(?:e|ed|ing)|rebuil[td]|refortif\w*|restor\w*|"
+    r"renovat\w*|reconstruct\w*)\b",
+    re.IGNORECASE,
+)
+#: The site itself called renewed or reused, the sentence naming it (Dolno Gradište).
+_RENEWED = re.compile(r"\b(?:renewed|re-?occupied|re-?used|refortified)\b", re.IGNORECASE)
+_THE_SITE = re.compile(r"\bthe (?:site|settlement|fort|fortress|hillfort)\b", re.IGNORECASE)
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def _names_a_form(text: str, forms: list[str] | tuple[str, ...]) -> bool:
+    norm = f" {P.fold_name(text)} "
+    return any(f" {f} " in norm for f in (P.fold_name(x) for x in forms if x) if f)
+
+
+def sentence_veto(
+    sentence: str, key: str, *, forms: list[str] | tuple[str, ...] = ()
+) -> str | None:
+    """Why every mention of the epoch `key` in `sentence` is not the site's start (D137), or None
+    when one mention is: `area` (it dates finds of the surroundings), `beside` (a feature next to
+    the site), `renewal` (a later renewal or reuse). `forms` are the names of the site."""
+    reasons = []
+    for hit in _mentions(sentence, key):
+        before = sentence[: hit.start()]
+        area = _AREA.search(before)
+        if (
+            area is not None
+            and _TRACES.search(before[: area.start()])
+            and not _names_a_form(before[area.end() :], forms)
+        ):
+            reasons.append("area")
+        elif _BESIDE.search(before):
+            reasons.append("beside")
+        elif _RENEWAL.search(before):
+            reasons.append("renewal")
+        else:
+            return None
+    return reasons[0] if reasons else None
+
+
+#: A year of a find, not of the site ("Material dating from the 1st and 2nd century CE has been
+#: found at the site", Burfa Castle).
+_FIND_NOUN = re.compile(
+    r"\b(?:material|finds?|coins?|pottery|sherds?|artefacts?|artifacts?|objects?|hoards?|"
+    r"jewel(?:le)?ry|tools?)\b",
+    re.IGNORECASE,
+)
+_FOUND = re.compile(r"\b(?:found|discovered|unearthed|recovered|hoards?)\b", re.IGNORECASE)
+#: The year of a site's end or of its latest phase ("The last stela erected in Sacul bears a date
+#: corresponding to AD 800").
+_LAST = re.compile(r"\b(?:last|latest|final)\b", re.IGNORECASE)
+_NEAR_WORDS = r"(?:below|beneath|beside|near|next to|adjoining|adjacent to|close to|nestled below)"
+
+
+def year_veto(sentence: str, forms: list[str] | tuple[str, ...]) -> str | None:
+    """Why the years `sentence` states are not the site's own (D137), or None: `find` (the year of
+    a find at the site), `later-event` (its last or latest phase), `neighbour` (a feature below or
+    beside the site: "Nestled below Caer y Twr is a group of huts")."""
+    if _FIND_NOUN.search(sentence) and _FOUND.search(sentence):
+        return "find"
+    if _LAST.search(sentence):
+        return "later-event"
+    for form in forms:
+        if form and re.search(rf"(?i)\b{_NEAR_WORDS}\s+(?:the\s+)?{re.escape(form)}\b", sentence):
+            return "neighbour"
+    return None
+
+
+def is_a_measure(sentence: str, year: int) -> bool:
+    """Whether the number the reader took for `year` is a measure in `sentence` ("a 160-metre cliff
+    castle")."""
+    unit = (
+        r"(?:metres?|meters?|m|ft|feet|foot|km|kilometres?|kilometers?|miles?|yards?|hectares?|ha)"
+    )
+    return re.search(rf"(?i)\b{abs(year)}[\s-]*{unit}\b", sentence) is not None
+
+
+#: A century the sentence gives the site itself, as an attribute ("The Early Roman House is a
+#: 1st-century AD residential structure"): the D70 reader takes a year only beside a start cue.
+_ATTRIBUTIVE = re.compile(
+    r"\b(?:is|was|are|were)\s+(?:an?|the)\s+(?P<n>\d{1,2})(?:st|nd|rd|th)[\s-]+century"
+    r"(?:[\s-]+(?P<era>AD|CE|BC|BCE|B\.C\.|A\.D\.))?(?![\w-])",
+    re.IGNORECASE,
+)
+
+
+def attributive_century(sentence: str) -> int | None:
+    """The start year of the century `sentence` calls the site ("is a 1st-century AD structure" ->
+    1, "was a 3rd-century BC temple" -> -300, the D70 convention), or None."""
+    found = _ATTRIBUTIVE.search(sentence)
+    if found is None:
+        return None
+    number = int(found.group("n"))
+    if (found.group("era") or "").upper().replace(".", "") in {"BC", "BCE"}:
+        return -number * 100
+    return number * 100 - 99
+
+
+def renewed_site(texts: list[str], forms: list[str]) -> bool:
+    """Whether the site's own text calls the site renewed or reused (a sentence naming it by one of
+    its `forms` or as "the site"): its Wikidata period of use (P2348) is then a later phase, not its
+    start (D137, Dolno Gradište)."""
+    folded = [f for f in (P.fold_name(f) for f in forms if f) if f]
+    for text in texts:
+        for sentence in _SENTENCE_END.split(text):
+            if not _RENEWED.search(sentence):
+                continue
+            norm = f" {P.fold_name(sentence)} "
+            if _THE_SITE.search(sentence) or any(f" {f} " in norm for f in folded):
+                return True
+    return False
+
+
+def name_veto(key: str, texts: list[str], *, hedged: Callable[[str], bool]) -> str | None:
+    """Why the epoch `key` the site's NAME carries is not its start (D137), or None: `older-or-later`
+    when the site's own text puts the site before or after it ("important in pre-Inca times"),
+    `hedged` when every sentence of its own text that names the epoch hedges it (the only source of
+    Bomarzo: "believed to have served as an Etruscan altar"). A name its texts never mention keeps
+    its epoch."""
+    words = r"[\s-]+".join(re.escape(w) for w in key.removesuffix(" period").split())
+    other_time = re.compile(
+        rf"(?i)\b(?:pre|post)[\s-]*{words}\b|\b(?:before|after)\s+the\s+{words}\b"
+    )
+    if any(other_time.search(t) for t in texts):
+        return "older-or-later"
+    naming = [s for t in texts for s in _SENTENCE_END.split(t) if _mentions(s, key)]
+    if naming and all(hedged(s) for s in naming):
+        return "hedged"
+    return None
+
+
+def is_late(sentence: str, key: str) -> bool:
+    """Whether `sentence` names "the late <epoch>" for an epoch whose late phase the vocabulary
+    holds no key of (La Ribera de Algaida: "the late Copper Age")."""
+    if f"late {key}" in P.PERIODS:
+        return False
+    words = r"[\s-]+".join(re.escape(w) for w in key.removesuffix(" period").split())
+    return re.search(rf"(?i)\blate[\s-]+{words}\b", sentence) is not None
+
+
+def stated_start(year_rows: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    """The year the site's own source states for it that wins over the start of the epoch `key`
+    (D137): the earliest stated year that is not after the epoch's end - a year after it is a later
+    event of the site ("occupied until the 5th century"), not its start. None without one."""
+    end = P.period_of(key)[1]
+    found = [(y, row) for row in year_rows for y in row["years"] if y <= end]
+    if not found:
+        return None
+    year, row = min(found, key=lambda f: f[0])
+    return {"year": year, "year_quote": row["sentence"], "year_url": row.get("url")}
+
+
+def option(key: str, site: dict[str, Any], sentence: str) -> dict[str, Any]:
+    """The band the epoch `key` of one sentence gives the site (D136 with D137): a coarse word
+    (`TYPED_COARSE`) takes the epoch of the site's own monument type (its site_type, its name or the
+    same sentence), and a "late" phase the band of the epoch's end."""
+    extra: dict[str, Any] = {}
+    epoch = key
+    if key in P.TYPED_COARSE:
+        typed = P.monument_epoch(site.get("site_type"), site.get("name"), sentence)
+        if typed is not None:
+            extra = {"coarse_word": key, "type_word": typed[0]}
+            epoch = typed[1]
+    country = site.get("country")
+    if is_late(sentence, epoch):
+        band = P.late_band(epoch, country=country)
+        extra["late"] = True
+    else:
+        band = P.epoch_band(epoch, country=country)
+    return {"epoch": epoch, "band": band.label, "edge": band.edge, "start": band.start,
+            "regional": band.regional, **extra}  # fmt: skip
 
 
 def shares_a_word(title: str, name: str) -> bool:
@@ -193,6 +400,12 @@ class _Reader:
         self.wiki = wiki.WikiCache(wiki.WIKI_CACHE)
         self.item_labels = json.loads((HARVEST / harvest.ITEM_LABELS_FILE).read_text("utf-8"))
         self.sites = {s["site_id"]: s for s in harvest.read_sites(HARVEST)}
+        #: the sentence vetoes (`sentence_veto`) of the site being read, reset per site
+        self.vetoed: list[dict[str, Any]] = []
+
+    def hedged(self, sentence: str) -> bool:
+        """Whether the D70 extractor reads `sentence` as hedged (`dating.HEDGES`)."""
+        return bool(self.D.HEDGES.search(self.D.D.reading_text(sentence).casefold()))
 
     def forms(self, site: dict[str, Any], entity: dict[str, Any]) -> list[str]:
         """The names a sentence may name the site by, as `dating._Loaded.found` builds them."""
@@ -230,15 +443,26 @@ class _Reader:
                         epochs.append(key)
             if _DOUBT.search(sentence):
                 continue
-            years = [c.start for c in found.candidates if c.kind != D.PERIOD]
+            years = [c.start for c in found.candidates
+                     if c.kind != D.PERIOD and not is_a_measure(sentence, c.start)]  # fmt: skip
+            if not years and (named or D.names_site(sentence, forms)) and not self.hedged(sentence):
+                century = attributive_century(sentence)
+                years = [] if century is None else [century]
+            if years and year_veto(sentence, forms) is not None:
+                years = []
             several = any(n.reason == D.SEVERAL_PERIODS for n in found.notes)
             if several:  # anchored and unhedged; the site's history, which begins at its first
                 epochs = [k for k in self.mentions(sentence, forms)
                           if not D.FINDS.match(D.D.reading_text(sentence).casefold(),
                                                self._end(sentence, k))]  # fmt: skip
+            vetoed = {k: why for k in epochs
+                      if (why := sentence_veto(sentence, k, forms=forms)) is not None}  # fmt: skip
+            epochs = [k for k in epochs if k not in vetoed]
             if epochs or years:
                 out.append({"sentence": sentence, "epochs": epochs, "years": years,
                             "mode": "earliest-of-several" if several else "single"})  # fmt: skip
+            if vetoed:
+                self.vetoed.append({"sentence": sentence, "vetoed": vetoed, "url": url})
             if D.names_site(sentence, forms):
                 named = True
         return out
@@ -264,6 +488,7 @@ def site_candidates(
 ) -> dict[str, Any]:
     """Every epoch the site's own evidence names, by kind, and the one D136 takes."""
     D, H = reader.D, reader.H
+    reader.vetoed = []
     hs = reader.sites[site["id"]]
     qid = hs.get("qid")
     entity = H.load_entity(HARVEST, qid) if qid else {}
@@ -280,27 +505,51 @@ def site_candidates(
         for hit in reader.sentences(q["quote"], forms=forms, url=q["url"], context_named=own):
             row = {**hit, "url": q["url"], "file": q["file"], "quoted_by": q["model"]}
             (evidence["lane-quote"] if hit["epochs"] and not hit["years"] else years).append(row)
+    own_pages = [
+        page for page in reader.wiki.pages(site["id"])
+        if not page.get("missing") and page.get("lang") == "en"
+        and not D.is_period_name(str(page.get("resolved_title") or page.get("title") or ""))
+        and shares_a_word(str(page.get("resolved_title") or page.get("title") or ""), site["name"])
+    ]  # fmt: skip
+    # the citation markers "[1]." stop `split_sentences` (a number of two digits before a stop)
+    description = re.sub(r"\s*\[\d+\]", "", str(site.get("description") or ""))
+    own_texts = [q["quote"] for q in quotes] + [description] + [
+        " ".join(p for _s, _lead, p in D.readable_paragraphs(str(page["text"]))) for page in own_pages
+    ]  # fmt: skip
+    kept = list(reader.vetoed)  # the description is read for its years only
+    for hit in reader.sentences(description, forms=forms, url="unified_sites.description",
+                                context_named=True):  # fmt: skip
+        if hit["years"]:
+            years.append({**hit, "url": "unified_sites.description", "file": "unified_sites"})
+    reader.vetoed = kept
+    vetoes: list[dict[str, Any]] = []
+    renewed = renewed_site(own_texts, forms)
     for period in D._item_ids(entity, "P2348"):
         label = str((reader.item_labels.get(period) or {}).get("label") or "")
         key = P.fold_name(label)
         if not label or P._key_of(label) is None or P._key_of(label) in D136_UNREAD:
             evidence.setdefault("p2348-unread", []).append({"item": period, "label": label})
             continue
+        if renewed:  # D137: the period of use of a site its own text calls renewed
+            vetoes.append({"kind": "wikidata-p2348", "epoch": P._key_of(label), "why": "renewal"})
+            continue
         evidence["wikidata-p2348"].append({"sentence": f"P2348: {period} ({label})",
                                            "epochs": [P._key_of(label) or key],
                                            "url": D.wikidata_url(qid, entity), "mode": "single"})  # fmt: skip
     for kind, text in (("name", site["name"]), ("site-type", site.get("site_type") or "")):
         epochs = reader.mentions(text, [])
+        if kind == "name":
+            for key in list(epochs):
+                why = name_veto(key, own_texts, hedged=reader.hedged)
+                if why is not None:
+                    vetoes.append({"kind": kind, "epoch": key, "why": why})
+                    epochs.remove(key)
         if epochs:
             evidence[kind].append({"sentence": text, "epochs": epochs, "url": "unified_sites."
                                    + ("name" if kind == "name" else "site_type"),
                                    "mode": "single" if len(epochs) == 1 else "earliest-of-several"})  # fmt: skip
-    for page in reader.wiki.pages(site["id"]):
+    for page in own_pages:
         title = str(page.get("resolved_title") or page.get("title") or "")
-        if page.get("missing") or page.get("lang") != "en" or D.is_period_name(title):
-            continue
-        if not shares_a_word(title, site["name"]):
-            continue
         lead = " ".join(p for _s, is_lead, p in D.readable_paragraphs(str(page["text"])) if is_lead)
         url = D.permalink("en", title, page.get("revid"))
         for hit in reader.sentences(lead, forms=D.name_forms([*forms, title]), url=url,
@@ -312,10 +561,17 @@ def site_candidates(
         rows = [r for r in evidence[kind] if r["epochs"]]
         if not rows:
             continue
-        options = [(_band(key, country), r) for r in rows for key in r["epochs"]]
+        options = [(option(key, site, r["sentence"]), r) for r in rows for key in r["epochs"]]
         best, row = min(options, key=lambda o: (o[0]["start"], o[0]["epoch"]))
         chosen = {"source_kind": kind, **best, "quote": row["sentence"], "url": row["url"],
-                  "mode": row["mode"], "file": row.get("file"), "quoted_by": row.get("quoted_by")}  # fmt: skip
+                  "mode": row["mode"], "file": row.get("file"), "quoted_by": row.get("quoted_by"),
+                  "band_from": "epoch"}  # fmt: skip
+        stated = stated_start(years, best["epoch"])
+        if stated is not None:  # D137: a year the site's own source states wins over the epoch
+            label = categorize_period(stated["year"])
+            assert label is not None  # a year always has a bucket
+            chosen.update(stated, band=label, edge=bucket_edge(label), band_from="year",
+                          epoch_band=best["band"])  # fmt: skip
         break
     bands = sorted({_band(k, country)["band"] for kind in KINDS for r in evidence[kind]
                     for k in r["epochs"]})  # fmt: skip
@@ -323,6 +579,8 @@ def site_candidates(
                            "site_type": site.get("site_type")}  # fmt: skip
     if chosen is None:
         out["status"] = "year-stated-only" if years else "undated"
+        if years:
+            out["year_band"] = categorize_period(min(y for row in years for y in row["years"]))
     else:
         scope = D.scope_problem({**hs, "country": country}, chosen["edge"])
         out.update(chosen)
@@ -331,6 +589,8 @@ def site_candidates(
             out["scope"] = scope
     out["bands_seen"] = bands
     out["year_sentences"] = years[:3]
+    if vetoes or reader.vetoed:
+        out["d137_vetoes"] = vetoes + reader.vetoed
     out["other_kinds"] = {k: [e for r in v for e in r.get("epochs", [])]
                           for k, v in evidence.items() if v and k != out.get("source_kind")}  # fmt: skip
     if reset is not None:
@@ -368,6 +628,16 @@ def candidates(sites_file: Path, resets_file: Path, run: Path) -> dict[str, Any]
         "epoch": dict(Counter(r["epoch"] for r in banded).most_common()),
         "regional": dict(Counter(r["regional"] for r in banded).most_common()),
         "mode": dict(Counter(r["mode"] for r in banded).most_common()),
+        "band_from": dict(Counter(r["band_from"] for r in banded).most_common()),
+        "typed_coarse": dict(
+            Counter(
+                f"{r['coarse_word']} -> {r['type_word']} ({r['epoch']})"
+                for r in banded
+                if "type_word" in r
+            ).most_common()
+        ),
+        "late_phase": sum(1 for r in banded if r.get("late")),
+        "d137_vetoed_sites": sum(1 for r in rows if "d137_vetoes" in r),
         "several_bands_seen": sum(1 for r in banded if len(r["bands_seen"]) > 1),
         "resets_among_banded": sum(1 for r in banded if "d121_d122_reset" in r),
         "resets_total": sum(1 for r in rows if "d121_d122_reset" in r),
