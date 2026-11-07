@@ -30,6 +30,13 @@ a comparison that did not come from here (`verdict`).
   anything - and `compare` refuses a copy or a fresh answer to another one. Not bound: the code that
   fills a question's slots (`cli.judge_prompt`); a change to it between seal and prepare is asked,
   and one after prepare is refused by `compare`;
+* **the adversarial pool** (kind `adversarial`, owner decision D134 of 2026-11-07): lane WC's
+  adversarial second check (`wc_adversarial`, Opus) has no answered round of its own, so its pool is
+  the first check round of a built site-list run of reported defects, asked again with the
+  adversarial question (`register_adversarial_pool`). Its gold is sealed with the threshold: the
+  fact checker's recorded verdicts corrected by the independent verifier (a sentence the verifier
+  dropped is DROP), and a kept sentence the verifier found WRONG is a known error
+  (`adversarial_gold`); `prepare` refuses a source run whose FINAL changed since the seal;
 * **the judge pool is registrable** (`register_judge_pool`): `mcode_driver.register_calibration_run`
   knows the check and the verification rounds, not the judge's, so the calibration run of a judge pool
   is written here (`judge/ROUND.json` marked `calibration`, tied to no plan, the `FINAL.jsonl` lines of its sites).
@@ -81,7 +88,21 @@ MAX_EXTRA_WRONG = 1
 #: briefs print and its imports require - the fact checker (Opus since the tier move of wc-fc-1),
 #: lane WC's own web verifier `wc_web_verifier` (D45; the shared `web_verifier` failed wc-wv-1/2,
 #: `roles.SETTLED_TIER_MOVES`) and the pilot judge.
-KIND_ROLE = {"check": WC.ROLE_CHECK, "verify": WC.ROLE_VERIFY, "judge": WC.ROLE_JUDGE}
+KIND_ROLE = {
+    "check": WC.ROLE_CHECK,
+    "verify": WC.ROLE_VERIFY,
+    "judge": WC.ROLE_JUDGE,
+    "adversarial": WC.ROLE_ADVERSARIAL,
+}
+#: The kind of pool of lane WC's adversarial second check (owner decision D134, 2026-11-07): see
+#: `adversarial_gold`.
+ADVERSARIAL = "adversarial"
+#: The reasons of a FINAL decision that the independent verifier gave (`wc4.run_verification`): a
+#: sentence the check kept and the verifier dropped. The adversarial pool's gold drops it.
+VERIFY_DROPS = frozenset({"verify-wrong", "verify-unsupported", "verify-incoherent"})
+#: The verifier's drops that are the adversarial pool's known errors: a kept sentence the verifier
+#: found WRONG, which the adversary must not keep (as the judge's WRONG is the check pool's).
+KNOWN_VERIFY_DROPS = frozenset({"verify-wrong"})
 #: The verdicts a fresh verification may give a sentence the judge found WRONG (it may not support it).
 NOT_SUPPORTED = ["UNSUPPORTED", "WRONG"]
 JUDGE_ROUND = Path("judge") / "ROUND.json"
@@ -103,9 +124,22 @@ KIND_TEMPLATES = {
         "JUDGE_BRIEF",
         "WIKI_CACHE_NOTE",
     ),
+    "adversarial": (
+        "CHECK_QUESTION",
+        "CHECK_QUESTION_LISTED",
+        "CHECK_QUESTION_ADVERSARIAL",
+        "REASK_BLOCK",
+        "CHECK_BRIEF",
+        "WIKI_CACHE_NOTE",
+    ),
 }
 #: The module each bound text lives in; a text not named here is `wc/prompts.py`'s.
-TEMPLATE_MODULES = {"JUDGE_QUESTION_WN": P2, "JUDGE_QUESTION_ENRICH": PE}
+TEMPLATE_MODULES = {
+    "JUDGE_QUESTION_WN": P2,
+    "JUDGE_QUESTION_ENRICH": PE,
+    "CHECK_QUESTION_LISTED": P2,
+    "CHECK_QUESTION_ADVERSARIAL": P2,
+}
 #: What a seal made before the templates were bound carries none of: the texts in force when every
 #: such seal was made (2026-10-24, the pins of `tests/remediation/test_wc.py` since 2026-10-09). Such
 #: a seal binds these, so the judge question sharpened by X15 refuses wc-pj-1/2's agents. The check
@@ -176,6 +210,11 @@ def expectations(
       `must_be ["False"]`)."""
     if kind not in KIND_ROLE:
         raise WcCalibrationError(f"kind {kind!r} is none of {', '.join(KIND_ROLE)}")
+    if kind == ADVERSARIAL:
+        raise WcCalibrationError(
+            "an adversarial pool's known errors come from its source run's verification, not from "
+            "a judge: `adversarial_gold` derives them when the pool is sealed"
+        )
     if kind == "verify" and handoff is None:
         raise WcCalibrationError("a verify pool names the verification round it is: --handoff")
     found: list[dict[str, Any]] = []
@@ -287,7 +326,7 @@ def round_role(kind: str, run: Path) -> str:
     check pool (the fact checker; an adversarial or enrichment run answers in another role),
     `cli.verify_role` for a verify pool (`wc_web_verifier`; an enrichment run's verifier is lane E's
     `web_verifier`), the pilot judge for a judge pool."""
-    if kind == "check":
+    if kind in ("check", ADVERSARIAL):
         return WC.check_role(run)
     if kind == "verify":
         return WC.verify_role(run)
@@ -305,6 +344,140 @@ def _need_round_role(kind: str, run: Path, calibration_role: str) -> None:
             f"{run}: its {kind} rounds are answered as {answered_in}, but a lane WC {kind} pool "
             f"calibrates {calibration_role}"
         )
+
+
+# ----------------------------------------------------------------------- the adversarial pool
+def _need_adversarial_source(run: Path) -> None:
+    """Refuse a source run that is not what an adversarial pool is cut from: a built site-list run of
+    reported defects (`export --sites F --defects R`), not itself an adversarial run, whose check
+    rounds the fact checker answered and whose FINAL holds the verifier's decisions."""
+    if WC.run_kind(run) != WC.KIND_LIST or WC.run_adversarial(run):
+        raise WcCalibrationError(
+            f"{run}: an adversarial pool is cut from a plain site-list run of reported defects, "
+            f"not from a {WC.run_kind(run)} run (adversarial: {WC.run_adversarial(run)})"
+        )
+    population = json.loads((run / WC.POPULATION_FILE).read_text(encoding="utf-8"))
+    if population.get("defects") is None:
+        raise WcCalibrationError(f"{run}: a site-list run without a defect report asks no claim")
+    if not (run / WC.FINAL_FILE).exists():
+        raise WcCalibrationError(f"{run}: not built - no {WC.FINAL_FILE} holds the verification")
+
+
+def adversarial_gold(
+    run: Path, handoff: Path, batches: Sequence[str]
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """The gold and the known errors of an adversarial pool (owner decision D134, 2026-11-07): the
+    batches of `run`'s first check round (`handoff`), whose sites a later web check reported a claim
+    of contradicted. Lane WC decided them with two independent calibrated roles - the fact checker's
+    answer (the recorded one) and the verifier's verdict on every sentence it kept (`FINAL`). The
+    gold of a sentence is the check's recorded verdict, except where the verifier dropped what the
+    check kept (`VERIFY_DROPS`): there it is DROP. A drop the code made after the check (the pronoun
+    rule, a quote not found) keeps the check's verdict: no second judgement decided that sentence.
+    A kept sentence the verifier found WRONG (`KNOWN_VERIFY_DROPS`) is a known error: the adversary
+    must not keep it, whole or trimmed. Returns (gold answer text by label, known errors)."""
+    record = WC.round_of(run, handoff)
+    if record["round"] != 1:
+        raise WcCalibrationError(
+            f"{handoff} is round {record['round']} of {run}: an adversarial pool is the first "
+            "check round, which asks every sentence"
+        )
+    missing = [batch for batch in batches if batch not in record["batches"]]
+    if missing:
+        raise WcCalibrationError(f"{handoff}: no batch {', '.join(missing)} in round 1 of {run}")
+    finals = WC._finals(run)
+    answers = {
+        file.name[: -len(CC.ANSWER_SUFFIX)]: json.loads(file.read_text(encoding="utf-8"))["text"]
+        for file in CC._answer_files(handoff, batches)
+    }
+    gold: dict[str, str] = {}
+    known: list[dict[str, Any]] = []
+    for batch in batches:
+        for label in record["batches"][batch]:
+            if label not in finals:
+                raise WcCalibrationError(f"{run}: no FINAL line for {label}")
+            if label not in answers:
+                raise WcCalibrationError(f"{handoff / batch}: no recorded answer for {label}")
+            data = json.loads(answers[label])
+            decisions = finals[label]["decisions"]
+            rows = []
+            for row in data["sentences"]:
+                n = row["n"]
+                decision = decisions[n - 1]
+                if decision["n"] != n:
+                    raise WcCalibrationError(
+                        f"{run}/{label}: FINAL decision {n} is not sentence {n}"
+                    )
+                reason = decision["reason"]
+                if reason in VERIFY_DROPS:
+                    if row["verdict"] in MERGED and reason in KNOWN_VERIFY_DROPS:
+                        known.append(
+                            {"label": label, "unit": f"sentence-{n}", "must_not_be": sorted(MERGED)}
+                        )
+                    row = {**row, "verdict": "DROP", "gold_reason": reason}
+                rows.append(row)
+            gold[label] = json.dumps({**data, "sentences": rows}, ensure_ascii=False)
+    return gold, known
+
+
+def _adversarial_prompts(
+    run: Path, handoff: Path, batches: Sequence[str]
+) -> dict[str, dict[str, str]]:
+    """Per batch, the adversarial question of each site (`cli.check_prompt` with `adversarial`): the
+    source round's site, the sentences it asked and its reported claims, asked by the adversary.
+    Built before anything is written; a site without a reported claim refuses."""
+    record = WC.round_of(run, handoff)
+    sites = WC.read_sites(run)
+    prompts: dict[str, dict[str, str]] = {}
+    for batch in batches:
+        prompts[batch] = {}
+        for label in record["batches"][batch]:
+            entry = sites[label]
+            if not entry.get("defects"):
+                raise WcCalibrationError(f"{run}/{label}: the site carries no reported claim")
+            prompts[batch][label] = WC.check_prompt(
+                entry, record["asked"][label], {}, WC.KIND_LIST, adversarial=True
+            )
+    return prompts
+
+
+def register_adversarial_pool(
+    source_run: Path, source_handoff: Path, out: Path, batches: Sequence[str]
+) -> Path:
+    """The calibration run of an adversarial pool: `mcode_driver.register_calibration_run`'s check
+    round, marked an adversarial site-list run (so `brief` prints the adversary's role and
+    `check-answer` rebuilds the adversarial question), and the copy's calibrated questions exported
+    again as the adversarial question. The recorded answers stay out of the copy; the gold is the
+    seal's (`adversarial_gold`)."""
+    prompts = _adversarial_prompts(source_run, source_handoff, batches)
+    run_dir = D.register_calibration_run(source_run, source_handoff, out, batches)
+    population = {"kind": WC.KIND_LIST, "adversarial": True, "calibration": True}
+    (run_dir / WC.POPULATION_FILE).write_text(
+        json.dumps(population, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    for batch in batches:
+        lines = OH.read_manifest(out, batch)
+        for line in lines.values():
+            (out / line["prompt_path"]).unlink()
+        (out / batch / OH.MANIFEST_FILE).unlink()
+        for (stage, label), line in lines.items():
+            OH.export(
+                out,
+                batch_id=batch,
+                stage=stage,
+                label=label,
+                field=line["field"],
+                prompt=prompts[batch][label],
+            )
+    return run_dir
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _source_run(lane: dict[str, Any]) -> Path:
+    path = Path(lane["source_run"])
+    return path if path.is_absolute() else D.REPO / path
 
 
 # ------------------------------------------------------------------------------------- the seal
@@ -330,7 +503,7 @@ def _need_unchanged_templates(calibration_id: str, lane: dict[str, Any]) -> None
     """Refuse a calibration whose question or brief changed after its seal: its agents answer, or
     answered, another prompt than the one the seal binds. A seal made before the templates were bound
     binds `TEMPLATES_BEFORE_X15`."""
-    sealed = lane.get("templates", TEMPLATES_BEFORE_X15[lane["kind"]])
+    sealed = lane["templates"] if "templates" in lane else TEMPLATES_BEFORE_X15[lane["kind"]]
     now = templates(lane["kind"])
     moved = sorted(name for name in set(sealed) | set(now) if sealed.get(name) != now.get(name))
     if moved:
@@ -382,6 +555,16 @@ def seal(
     site outside the pool is named (`outside_pool`), never dropped silently."""
     if kind not in KIND_ROLE:
         raise WcCalibrationError(f"kind {kind!r} is none of {', '.join(KIND_ROLE)}")
+    if kind == ADVERSARIAL:
+        return _seal_adversarial(
+            root,
+            calibration_id=calibration_id,
+            handoff=handoff,
+            batches=batches,
+            threshold=threshold,
+            runs=runs,
+            now=now,
+        )
     for run in runs:
         _need_round_role(kind, run, KIND_ROLE[kind])
     pool = {case.partition("/")[2] for case in CC.case_ids(handoff, batches)}
@@ -407,6 +590,50 @@ def seal(
     )
 
 
+def _seal_adversarial(
+    root: Path,
+    *,
+    calibration_id: str,
+    handoff: Path,
+    batches: Sequence[str],
+    threshold: float,
+    runs: Sequence[Path],
+    now: Callable[[], str],
+) -> dict[str, Any]:
+    """`seal` of an adversarial pool: its one source run (`_need_adversarial_source`), the gold and
+    known errors `adversarial_gold` derives from it, and the sha256 of the source's FINAL, sealed
+    with the threshold before the copy is made."""
+    if len(runs) != 1:
+        raise WcCalibrationError("an adversarial pool names its one source run: --run R, once")
+    (run,) = runs
+    _need_adversarial_source(run)
+    _need_round_role("check", run, WC.ROLE_CHECK)
+    gold, known = adversarial_gold(run, handoff, batches)
+    _adversarial_prompts(run, handoff, batches)  # every question is buildable before the seal
+    lane = {
+        "kind": ADVERSARIAL,
+        "merge": True,
+        "expectations": known,
+        "expectations_sha256": _sha256(known),
+        "outside_pool": [],
+        "templates": templates(ADVERSARIAL),
+        "source_run": D._shown(run),
+        "final_sha256": _file_sha256(run / WC.FINAL_FILE),
+        "gold": gold,
+        "gold_sha256": _sha256(gold),
+    }
+    return CC.seal(
+        root,
+        calibration_id=calibration_id,
+        role=KIND_ROLE[ADVERSARIAL],
+        handoff=handoff,
+        batches=batches,
+        threshold=threshold,
+        lane=lane,
+        now=now,
+    )
+
+
 def _lane(root: Path, calibration_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """The seal of a lane WC calibration and its lane conditions, as they were sealed."""
     sealed = CC._sealed(root, calibration_id)
@@ -418,6 +645,8 @@ def _lane(root: Path, calibration_id: str) -> tuple[dict[str, Any], dict[str, An
         )
     if lane["expectations_sha256"] != _sha256(lane["expectations"]):
         raise WcCalibrationError(f"the sealed expectations of {calibration_id} were changed")
+    if lane["kind"] == ADVERSARIAL and lane["gold_sha256"] != _sha256(lane["gold"]):
+        raise WcCalibrationError(f"the sealed gold of {calibration_id} was changed")
     return sealed, lane
 
 
@@ -426,6 +655,19 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
     `run` answers the pool's kind of round in another role than the sealed one (`round_role`)."""
     sealed, lane = _lane(root, calibration_id)
     _need_unchanged_templates(calibration_id, lane)
+    if lane["kind"] == ADVERSARIAL:
+        if run.resolve() != _source_run(lane).resolve():
+            raise WcCalibrationError(
+                f"{calibration_id} is sealed on the source run {lane['source_run']}, not {run}"
+            )
+        if _file_sha256(run / WC.FINAL_FILE) != lane["final_sha256"]:
+            raise WcCalibrationError(
+                f"{run / WC.FINAL_FILE} changed after {calibration_id} was sealed"
+            )
+        _adversarial_prompts(run, Path(sealed["handoff"]), sealed["batches"])
+        return CC.prepare(
+            root, calibration_id=calibration_id, run=run, register=register_adversarial_pool
+        )
     _need_round_role(lane["kind"], run, sealed["role"])
     handoff = Path(sealed["handoff"])
     record = _judge_record(run, handoff)
@@ -450,7 +692,13 @@ def compare(root: Path, *, calibration_id: str) -> dict[str, Any]:
         raise WcCalibrationError(f"{calibration_id} is not prepared: {recorded_path} is missing")
     if lane["kind"] == "judge":
         _need_current_judge_prompts(out, sealed["batches"])
-    recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
+    # an adversarial pool is measured against the sealed gold (the check corrected by the
+    # verifier, `adversarial_gold`); RECORDED.json keeps the check's answers as they were
+    recorded = (
+        dict(lane["gold"])
+        if lane["kind"] == ADVERSARIAL
+        else json.loads(recorded_path.read_text(encoding="utf-8"))
+    )
     fresh = CC._fresh_answers(out, sealed)
     read = merge if lane["merge"] else (lambda text: text)
     report = D.compare_answers(

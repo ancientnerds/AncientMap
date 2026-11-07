@@ -149,6 +149,15 @@ ROLES: Mapping[str, Role] = _registry(
     # a role of its own on Opus (D51/D6: a failing role moves up) instead of moving the shared one; a
     # new role, not a move: it is calibrated on the 50 card cases before its first answer.
     Role("card_adversarial", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    # Lane WC's own adversarial second check (`wc/cli.py export --adversarial`, D25b): a description
+    # sentence a later web check reported contradicted and that the check and the verifier both kept
+    # (Leominster eebdcbf3 and the other defects_kept of defects-a1-2026-11-06). The shared
+    # `adversarial` (Sonnet) was never calibrated for lane WC, and owner decision D134 of 2026-11-07
+    # calibrates the WC context on Opus (~30-50 answers); following D45 the lane gets a role of its
+    # own instead of moving the shared one, which stays on Sonnet for the fields and identity lanes.
+    # A new role, not a move: it is calibrated on WC's adjudicated defect checks
+    # (`wc/calibration.py`, kind `adversarial`) before its first answer.
+    Role("wc_adversarial", "claude-opus-5-5", "high", "wc_defect_adversarial"),
     # Owner decision D103 (2026-11-06) applies the tier moves of the failed image calibration
     # image-roles-v1 (2026-10-25): the prefilter moves from Haiku to Sonnet (photo agreement 0.9167
     # of 0.92, depicts-capable recall 0.9265 of 0.98), the depicts judge from Sonnet to Opus

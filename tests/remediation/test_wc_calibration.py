@@ -526,7 +526,7 @@ def _foreign_run(tmp_path: Path, **population: object) -> Path:
 @pytest.mark.parametrize(
     ("kind", "population", "answered_in"),
     [
-        ("check", {"kind": "wc-list", "adversarial": True}, "adversarial"),
+        ("check", {"kind": "wc-list", "adversarial": True}, "wc_adversarial"),
         ("check", {"kind": "wn-enrich"}, "enrich_writer"),
         ("verify", {"kind": "wn-enrich"}, "web_verifier"),
     ],
@@ -561,8 +561,14 @@ def test_the_kinds_are_bound_to_the_roles_the_lanes_rounds_answer_in() -> None:
             "check": C.ROLE_CHECK,
             "verify": C.ROLE_VERIFY,
             "judge": C.ROLE_JUDGE,
+            "adversarial": C.ROLE_ADVERSARIAL,
         }
-        == {"check": "fact_checker", "verify": "wc_web_verifier", "judge": "pilot_judge"}
+        == {
+            "check": "fact_checker",
+            "verify": "wc_web_verifier",
+            "judge": "pilot_judge",
+            "adversarial": "wc_adversarial",
+        }
     )
 
 
@@ -719,10 +725,14 @@ def test_a_seal_made_before_the_texts_were_bound_binds_the_texts_of_its_day(
 
 
 def test_the_bound_texts_of_each_kind_are_its_question_its_brief_and_the_cache_note() -> None:
-    assert set(K.KIND_TEMPLATES) == set(K.KIND_ROLE) == set(K.TEMPLATES_BEFORE_X15)
+    # the adversarial kind (D134, 2026-11-07) is younger than X15: every seal of it binds its texts
+    assert set(K.KIND_TEMPLATES) == set(K.KIND_ROLE)
+    assert set(K.TEMPLATES_BEFORE_X15) == set(K.KIND_ROLE) - {K.ADVERSARIAL}
     for kind, names in K.KIND_TEMPLATES.items():
-        assert set(K.TEMPLATES_BEFORE_X15[kind]) == set(names)
+        if kind != K.ADVERSARIAL:
+            assert set(K.TEMPLATES_BEFORE_X15[kind]) == set(names)
         assert "WIKI_CACHE_NOTE" in names and any(n.endswith("_BRIEF") for n in names)
+    assert "CHECK_QUESTION_ADVERSARIAL" in K.KIND_TEMPLATES[K.ADVERSARIAL]
 
 
 def test_a_judge_seal_binds_the_judge_question_of_every_kind_of_run(
@@ -797,3 +807,136 @@ def test_the_copy_is_asked_its_new_questions_only_once_all_are_built(
         assert (out / line["prompt_path"]).read_bytes() == (
             source / line["prompt_path"]
         ).read_bytes()
+
+
+# --------------------------------------- the adversarial pool (owner decision D134, 2026-11-07)
+def _adversarial_source(tmp_path: Path, *, wrong: str | None = None) -> tuple[Path, Path]:
+    """`test_wc_list`'s built defect run (three reported sites, the check by the fact checker, every
+    kept sentence verified SUPPORTED) and its first check round. With `wrong`, the verifier is made to
+    have found that site's first sentence WRONG after the check kept it (`FINAL` as the verification
+    leaves such a sentence: DROP, `verify-wrong`)."""
+    from phase4 import model4 as M
+
+    from tests.remediation import wn_fixtures as WX
+    from tests.remediation.test_wc_list import (
+        SITE_ALL,
+        SITE_NONE,
+        SITE_P4,
+        _defect_answers,
+        _defect_lines,
+        _p4_rows,
+    )
+
+    root = tmp_path / "src"
+    run, _ = WX.build_list_run(
+        root, _p4_rows(), [SITE_P4, SITE_ALL, SITE_NONE], _defect_answers(), name="wcl-defects",
+        defect_lines=_defect_lines(M.text_sha256(WX.P4_TEXT)),
+    )  # fmt: skip
+    if wrong is not None:
+        path = run / C.FINAL_FILE
+        lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for line in lines:
+            if line["site_id"] == wrong:
+                assert line["decisions"][0]["text"] is not None  # the check kept it
+                line["decisions"][0].update(verdict="DROP", reason="verify-wrong", text=None)
+        path.write_text("".join(json.dumps(x) + "\n" for x in lines), encoding="utf-8")
+    return run, root / "handoff" / "wcl-defects-r1"
+
+
+def _verdict_list(text: str) -> list[str]:
+    return [row["verdict"] for row in json.loads(text)["sentences"]]
+
+
+def test_the_adversarial_gold_is_the_check_corrected_by_the_verifier(tmp_path: Path) -> None:
+    from tests.remediation.test_wc_list import SITE_NONE
+
+    run, handoff = _adversarial_source(tmp_path / "a")
+    gold, known = K.adversarial_gold(run, handoff, ["wc-0001"])
+    recorded = {
+        f.name[: -len(CC.ANSWER_SUFFIX)]: json.loads(f.read_text(encoding="utf-8"))["text"]
+        for f in CC._answer_files(handoff, ["wc-0001"])
+    }
+    # nothing the verifier dropped: the gold is the check as it answered
+    assert {k: _verdict_list(v) for k, v in gold.items()} == {
+        k: _verdict_list(v) for k, v in recorded.items()
+    }
+    assert known == []
+    run, handoff = _adversarial_source(tmp_path / "b", wrong=SITE_NONE)
+    gold, known = K.adversarial_gold(run, handoff, ["wc-0001"])
+    assert _verdict_list(gold[SITE_NONE]) == ["DROP", "DROP", "DROP"]
+    assert json.loads(gold[SITE_NONE])["sentences"][0]["gold_reason"] == "verify-wrong"
+    assert known == [
+        {"label": SITE_NONE, "unit": "sentence-1", "must_not_be": ["KEEP", "KEEP_TRIMMED"]}
+    ]
+
+
+def test_an_adversarial_pool_is_asked_the_adversarial_question_and_measured_against_its_gold(
+    tmp_path: Path,
+) -> None:
+    from wc import prompts_sonnet as P2
+
+    from tests.remediation.test_wc_list import SITE_NONE
+
+    run, handoff = _adversarial_source(tmp_path, wrong=SITE_NONE)
+    root = tmp_path / "calibration"
+    sealed = K.seal(
+        root, calibration_id="a1", kind="adversarial", handoff=handoff, batches=["wc-0001"],
+        threshold=0.9, runs=[run], now=lambda: NOW,
+    )  # fmt: skip
+    assert sealed["role"] == "wc_adversarial" and sealed["model"] == "claude-opus-5-5"
+    assert sealed["lane"]["kind"] == "adversarial" and sealed["lane"]["merge"] is True
+    out = Path(K.prepare(root, calibration_id="a1", run=run)["prepared"])
+    calibration_run = out.with_name(out.name + "-run")
+    assert C.run_adversarial(calibration_run) and C.check_role(calibration_run) == "wc_adversarial"
+    for line in OH.manifest(out):
+        if line["batch_id"] == "wc-0001":
+            assert (out / line["prompt_path"]).read_text("utf-8").startswith(P2.ADVERSARIAL_OPENING)
+    assert "--model claude-opus-5-5 --role wc_adversarial" in C.brief(
+        calibration_run, out, "wc-0001"
+    )
+    gold = sealed["lane"]["gold"]
+    # the adversary keeps the sentence the verifier found WRONG: a known error, whatever the rest
+    fresh = dict(gold)
+    data = json.loads(fresh[SITE_NONE])
+    data["sentences"][0]["verdict"] = "KEEP"
+    del data["sentences"][0]["gold_reason"]  # the gold's own note, no part of an answer
+    fresh[SITE_NONE] = json.dumps(data)
+    for label, text in fresh.items():
+        ok, report = C.check_answer(calibration_run, out, "wc-0001", label, text, fetch_pages=False)
+        assert ok, report
+    FX.record_answers(out, fresh, by="wc_adversarial:opus-check-r1", model=OH.OPUS_MODEL)
+    report = K.compare(root, calibration_id="a1")
+    assert report["kind"] == "adversarial" and report["units"] > 0
+    assert report["lane_failures"] and "known error" in report["lane_failures"][0]
+    assert [d["unit"] for d in report["disagreements"]] == ["sentence-1"]
+
+
+def test_an_adversarial_pool_refuses_a_wrong_source_and_a_source_that_moved(
+    tmp_path: Path,
+) -> None:
+    run, handoff = _adversarial_source(tmp_path)
+    root = tmp_path / "calibration"
+    with pytest.raises(K.WcCalibrationError, match="one source run"):
+        K.seal(
+            root, calibration_id="a1", kind="adversarial", handoff=handoff, batches=["wc-0001"],
+            threshold=0.9, runs=[run, run], now=lambda: NOW,
+        )  # fmt: skip
+    plain = _pilot(tmp_path / "p")
+    with pytest.raises(K.WcCalibrationError, match="plain site-list run of reported defects"):
+        K.seal(
+            root, calibration_id="a1", kind="adversarial", handoff=_handoff(tmp_path / "p", "r1"),
+            batches=["wc-0001"], threshold=0.9, runs=[plain], now=lambda: NOW,
+        )  # fmt: skip
+    with pytest.raises(K.WcCalibrationError, match="adversarial_gold"):
+        K.expectations("adversarial", [run])
+    K.seal(
+        root, calibration_id="a1", kind="adversarial", handoff=handoff, batches=["wc-0001"],
+        threshold=0.9, runs=[run], now=lambda: NOW,
+    )  # fmt: skip
+    with pytest.raises(K.WcCalibrationError, match="sealed on the source run"):
+        K.prepare(root, calibration_id="a1", run=plain)
+    final = run / C.FINAL_FILE
+    final.write_text(final.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    with pytest.raises(K.WcCalibrationError, match="changed after a1 was sealed"):
+        K.prepare(root, calibration_id="a1", run=run)
+    assert not (root / "a1").exists()

@@ -2,7 +2,7 @@
 round are the fact checker's (Opus, high, since the tier move of wc-fc-1, D51), the verification
 rounds lane WC's own web verifier's (`wc_web_verifier`, Opus, high: D45/D51 after wc-wv-1/2; lane E's
 verification stays the shared `web_verifier`'s), the judge the pilot judge's (Opus, xhigh), the
-adversarial second check of a standing defect the adversarial role's (Sonnet, high). A brief takes
+adversarial second check of a standing defect lane WC's own `wc_adversarial` (Opus, high: D134). A brief takes
 its model, role and agent family from
 `roles.ROLES`; an import accepts only a Claude answer given in the round's role; a chunk is judged
 by a sample (`judge-export --sample N --seed S`) that never approves a plan.
@@ -286,10 +286,12 @@ def test_an_adversarial_run_asks_the_adversarial_question_and_is_answered_in_tha
     assert "A LATER WEB CHECK REPORTED A CLAIM OF THIS DESCRIPTION CONTRADICTED" in prompt
     assert "THIS TEXT IS NOT TRIMMED" in prompt  # the Phase-4 rule is still there
     text = C.brief(run, handoff, "wc-0001")
-    assert "You are Sonnet checker wc-0001" in text
-    assert "--model claude-sonnet-5-5 --role adversarial" in text
-    assert "--answered-by sonnet-check-r1-wc-0001" in text
-    assert RO.role("adversarial").effort == "high"
+    # lane WC's own adversarial role on Opus (owner decision D134, D45), not the shared Sonnet one
+    assert "You are Opus checker wc-0001" in text
+    assert "--model claude-opus-5-5 --role wc_adversarial" in text
+    assert "--answered-by opus-check-r1-wc-0001" in text
+    assert RO.role("wc_adversarial").effort == "high"
+    assert RO.role("adversarial").model == "claude-sonnet-5-5"  # the shared role did not move
 
 
 def test_a_plain_list_run_does_not_ask_the_adversarial_question(tmp_path: Path) -> None:
@@ -319,7 +321,8 @@ def test_the_adversarial_export_needs_a_report_and_is_no_pilot_and_no_wn_run(
     [
         ("opus-check-r1", OH.OPUS_MODEL, "names no role"),
         ("fact_checker:sonnet-check-r1", OH.SONNET_MODEL, "was given in role fact_checker"),
-        ("adversarial:sonnet-check-r1", OH.OPUS_MODEL, "registered to claude-sonnet-5-5"),
+        ("adversarial:sonnet-check-r1", OH.SONNET_MODEL, "was given in role adversarial"),
+        ("wc_adversarial:sonnet-check-r1", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
     ],
 )
 def test_only_the_adversarial_role_answers_an_adversarial_check(

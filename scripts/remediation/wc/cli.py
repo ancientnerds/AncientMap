@@ -211,11 +211,13 @@ JUDGE_DIR = "judge"
 #: and lane WN's write round are the fact checker's, the verification rounds lane WC's own web
 #: verifier's (`wc_web_verifier`, since the WC calibrations wc-wv-1/2 of 2026-10-24 failed the shared
 #: `web_verifier`, D45/D51; lane E's verification stays the shared role's, `verify_role`), the
-#: judge's questions the pilot judge's, the adversarial second check the adversarial role's. A
+#: judge's questions the pilot judge's, the adversarial second check lane WC's own adversarial role's
+#: (`wc_adversarial`, Opus: owner decision D134 of 2026-11-07, D45 - the shared Sonnet `adversarial`
+#: was never calibrated for lane WC and is not moved for one lane). A
 #: brief takes its `--model`, `--role` and the agent's family from the registry, and the imports
 #: refuse an answer that names another role or carries another role's stamp (`_require_role`).
 ROLE_CHECK, ROLE_VERIFY, ROLE_JUDGE = "fact_checker", "wc_web_verifier", "pilot_judge"
-ROLE_ADVERSARIAL = "adversarial"
+ROLE_ADVERSARIAL = "wc_adversarial"
 #: The day the role registry went live (owner decision D6, 2026-10-08). An answer given before it may
 #: name no role; every answer given from this day on names the role of the round it answers
 #: (`_require_role`), so a Haiku or Sonnet answer cannot enter an Opus round by leaving `--role` off.

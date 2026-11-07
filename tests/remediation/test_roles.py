@@ -37,7 +37,8 @@ import roles as RO  # noqa: E402
 #: tier moves of the failed image calibration image-roles-v1: `image_prefilter` Haiku to Sonnet,
 #: `image_depicts` Sonnet to Opus, and the image lane's re-check got a role of its own,
 #: `image_adversarial` (Opus), which settles the shared `adversarial`'s failed move (D45). D118
-#: (2026-11-07) applied the tier move of image-roles-v2: `image_prefilter` Sonnet to Opus.
+#: (2026-11-07) applied the tier move of image-roles-v2: `image_prefilter` Sonnet to Opus. D134
+#: (2026-11-07) gave lane WC's adversarial second check a role of its own, `wc_adversarial` (Opus).
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "medium"),
@@ -50,6 +51,7 @@ D6 = {
     "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-sonnet-5-5", "high"),
     "card_adversarial": ("claude-opus-5-5", "high"),
+    "wc_adversarial": ("claude-opus-5-5", "high"),
     "image_prefilter": ("claude-opus-5-5", "low"),
     "image_depicts": ("claude-opus-5-5", "medium"),
     "image_adversarial": ("claude-opus-5-5", "high"),
