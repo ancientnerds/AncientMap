@@ -270,7 +270,12 @@ code each step still waits for are in the lane's playbook
      the shown ones and not among the retired (`import_hero.read.IN_THE_READ`), so `insert-plan`
      plans the row of a staged site its claims name instead of refusing it as `retired`, and
      `insert-accept` answers from a fresh read (it opens no connection to the site's page, which
-     still answers 410). The read decides nothing by itself: the claims come from the research.
+     still answers 410). Every site row of `READ.json` says which it is (`staged`; `staged_sites`
+     in the read's summary), and the claims of a staged site come from the research alone: the
+     2025 import's join (`plan`, and `fetch` in a run directory that holds no claims) leaves the
+     staged sites out (`plan.join_import`), because no image role judged the import's picture -
+     Pella and Nan Madol join a feature of the import by source URL (measured 2026-11-11). A read
+     without the column is refused by name where that join asks.
 
    Nothing that shows a site reads the staged predicate: the page, the sitemap, the static export,
    the search and the card draws keep `scope_status IS DISTINCT FROM 'retired'`.
@@ -278,8 +283,9 @@ code each step still waits for are in the lane's playbook
    pipeline.wikidata_name_backfill --apply` (it runs over every site with a QID; the constraint drops
    what exists).
 4. **Description** (the insert writes none): lane WN of the WC tool, after a fresh
-   `scripts/remediation/wc/cli.py read --run-dir R` (a read made before 2026-11-10 holds no
-   `scope_reason` and names no staged site) -
+   `scripts/remediation/wc/cli.py read --run-dir R` made by this code (a read made by a checkout
+   without the `scope_reason` column, whatever its date, cannot say whether a retired site is
+   staged: the export refuses it by name, `the read holds no scope_reason for the retired site`) -
    `scripts/remediation/wc/cli.py export --run-dir R --handoff H --wn --sites INSERTED_SITES.txt
    --pilot 20 --seed S` - with the `description_sources` in `raw_data._insert_provenance` as the
    researcher's lead; the rest of the run and its write through lane WC's gate are

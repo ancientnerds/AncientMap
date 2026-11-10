@@ -26,7 +26,7 @@ import json
 import re
 import sys
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -129,7 +129,10 @@ def read_import(path: Path) -> list[dict[str, Any]]:
 
 
 def join_import(
-    state: ST.State, features: Sequence[Mapping[str, Any]]
+    state: ST.State,
+    features: Sequence[Mapping[str, Any]],
+    *,
+    staged: Collection[str] = (),
 ) -> dict[str, dict[str, Any]]:
     """The import feature of every curated site, on the key the period lane proved: the source
     URL first, the folded title second, first hit wins. Ambiguity is reported, not resolved.
@@ -143,6 +146,15 @@ def join_import(
     a site without one are now both outside the URL arm, where the folded title decides - or, when
     the title does not match either, no feature at all, which the plan reads as "the import links no
     image" and leaves the site's own state standing.
+
+    **A staged D57 site is not joined** (`staged`: the ids `read.staged` takes from this lane's own
+    read, the one read that holds such a site; WD2's read holds the shown sites alone and passes
+    none). The owner made the import's picture the hero of the sites the platform shows
+    (2026-10-05); a staged site (orchestrator decision O12) gets its first picture from the picture
+    research, judged by the image roles (D17, D82), and the import's link was judged by nobody.
+    Measured 2026-11-11 over the 37 planned D57 sites: Pella and Nan Madol join a feature by
+    source URL, each with a Commons image, and the plan refuses both as `no_target_row` - the
+    class `fetch --target insert` downloads and `insert-plan` turns into a hero row.
     """
     by_url: dict[str, list[Mapping[str, Any]]] = {}
     by_title: dict[str, list[Mapping[str, Any]]] = {}
@@ -154,6 +166,8 @@ def join_import(
 
     out: dict[str, dict[str, Any]] = {}
     for sid, site in state.sites.items():
+        if sid in staged:
+            continue
         site_key = url_key(str(site.get("source_url") or ""))
         hits = by_url.get(site_key, []) if site_key else []
         matched_on = "url"

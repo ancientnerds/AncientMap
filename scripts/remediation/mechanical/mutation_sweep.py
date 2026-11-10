@@ -6987,6 +6987,65 @@ WD2_CASES: list[Case] = [
         "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
         "tests/remediation/test_import_hero_insert.py",
     ),
+    # the same path from the read's own statements (`read` -> `insert-plan` -> `insert-accept`)
+    Case(
+        "wd2 d57: insert-plan refuses a staged site of production as retired",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "IN_THE_READ = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "IN_THE_READ = \"(u.scope_status IS DISTINCT FROM 'retired')\"",
+        "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    # -- the read says which of its sites is staged, and the 2025 import's join leaves those out:
+    #    no image role judged the import's picture (Pella, Nan Madol: measured 2026-11-11)
+    Case(
+        "wd2 d57: the read marks no site staged",
+        REPO / "scripts/remediation/import_hero/read.py",
+        '{d57_staged_sql("u")} AS staged',
+        "false AS staged",
+        "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    guard(
+        "wd2 d57: a read that cannot say which site is staged is joined",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "    if unmarked:",
+        "test_a_read_that_cannot_say_which_site_is_staged_is_refused_where_the_join_asks",
+        "tests/remediation/test_import_hero.py",
+    ),
+    guard(
+        "wd2 d57: the 2025 import's join claims a staged site",
+        REPO / "scripts/remediation/import_hero/plan.py",
+        "        if sid in staged:",
+        "test_the_join_claims_no_staged_site",
+        "tests/remediation/test_import_hero.py",
+    ),
+    Case(
+        "wd2 d57: a fetch over a read without claims joins the staged sites",
+        REPO / "scripts/remediation/import_hero/run.py",
+        "    state = ST.load_read(read_path)\n"
+        "    claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))",
+        "    state = ST.load_read(read_path)\n"
+        "    claims = IH.join_import(state, IH.read_import(source))",
+        "test_a_fetch_in_a_run_that_holds_a_read_but_no_claims_gives_a_staged_site_nothing",
+        "tests/remediation/test_import_hero.py",
+    ),
+    Case(
+        "wd2 d57: a fetch that starts a wave joins the staged sites",
+        REPO / "scripts/remediation/import_hero/run.py",
+        "        claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))",
+        "        claims = IH.join_import(state, IH.read_import(source))",
+        "test_a_fetch_that_starts_a_wave_joins_no_staged_site",
+        "tests/remediation/test_import_hero.py",
+    ),
+    Case(
+        "wd2 d57: a plan joins the read's staged sites",
+        REPO / "scripts/remediation/import_hero/run.py",
+        "    claims = IH.join_import(state, features, staged=RD.staged(data))",
+        "    claims = IH.join_import(state, features)",
+        "test_a_plan_over_the_read_joins_no_staged_site",
+        "tests/remediation/test_import_hero.py",
+    ),
 ]
 CASES += WD2_CASES
 

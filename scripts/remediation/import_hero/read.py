@@ -14,14 +14,19 @@ Three read-only statements, the same transport as the rest of the remediation
 **A staged D57 site** (orchestrator decision O12, 2026-11-10: inserted hidden, retired with a reason
 beginning `D57 staged:`, `mechanical.lane.d57_staged_sql`) gets its first picture before the scope
 lane shows it, so the read holds it and its rows with the shown sites and not among the retired
-ones (`IN_THE_READ`). The read decides nothing by that: a row is planned only for a site the run's
-own claims name, and the picture research names a staged site only from its `--sites` list
-(`candidate_search.population`).
+ones (`IN_THE_READ`), and every site row says which of the two it is (`staged`, the column
+`SITES_SQL` reads). A staged site gets a row only from a claim of the picture research
+(`candidate_search.judge.insert_claims`, whose population names a staged site only from its
+`--sites` list): the 2025 import's join leaves it out (`plan.join_import`, `staged`), because the
+owner's decision that the import's picture is the hero was made for the sites the platform shows
+and no image role judged that picture. A read that cannot say which of its sites is staged is
+refused where the join asks.
 """
 
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -41,10 +46,11 @@ READ = "READ.json"
 IN_THE_READ = f"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})"
 
 #: The curated sites the platform shows (and the staged ones), with the two keys the join needs:
-#: `source_url` and the name the folded-title fallback compares.
+#: `source_url` and the name the folded-title fallback compares. `staged` is the read's scope
+#: column: true for a staged D57 insert, false for a site the platform shows.
 SITES_SQL = f"""SELECT row_to_json(t) FROM (
   SELECT u.id::text AS id, u.name, u.country, u.site_type, u.lat, u.lon,
-         u.thumbnail_url, u.source_url
+         u.thumbnail_url, u.source_url, {d57_staged_sql("u")} AS staged
     FROM unified_sites u
    WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}
    ORDER BY u.id
@@ -94,6 +100,22 @@ def read_production() -> dict[str, Any]:
         "images": CW.pv.read_rows(IMAGES_SQL),
         "retired": [row["id"] for row in CW.pv.read_rows(RETIRED_SQL)],
     }
+
+
+def staged(data: Mapping[str, Any]) -> frozenset[str]:
+    """The ids of the staged D57 sites among the read's sites, from each row's `staged` column.
+
+    A read whose rows carry no such column was made by code that does not read it. Its sites may
+    be the shown ones alone or may hold staged ones unmarked, and the read cannot say which: it is
+    refused by name, not taken as holding none."""
+    unmarked = [str(site["id"]) for site in data["sites"] if "staged" not in site]
+    if unmarked:
+        raise StateError(
+            f"{len(unmarked)} site(s) of the read carry no `staged` column (first {unmarked[0]}): "
+            "the read was made by code that does not read it and cannot say which of its sites is "
+            "a staged D57 insert - read again into a new run directory"
+        )
+    return frozenset(str(site["id"]) for site in data["sites"] if site["staged"])
 
 
 def write_read(path: Path, data: dict[str, Any]) -> str:

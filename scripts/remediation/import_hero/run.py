@@ -166,7 +166,7 @@ def cmd_plan(
     data, sha = _read_once(run)
     state = ST.load_read(run / RD.READ)
     features = IH.read_import(source)
-    claims = IH.join_import(state, features)
+    claims = IH.join_import(state, features, staged=RD.staged(data))
     run.mkdir(parents=True, exist_ok=True)
     (run / CLAIMS).write_text(
         json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -285,6 +285,10 @@ def _wave_of(
     whose plan holds nothing to write never got that far - `write_chunks` refuses an empty plan by
     name, which is right for a writer - so those records are absent, and the run's own `READ.json`
     decides: the same read, the same join, the same refusals, and still no second production read.
+
+    That join is the 2025 import's, and it leaves the read's staged D57 sites out (`RD.staged`,
+    `IH.join_import`): a run directory that holds a read but not the claims `insert-claims` writes
+    must not give a hidden site the import's unjudged picture.
     """
     claims_path = run / CLAIMS
     refusals_path = run / REFUSALS
@@ -304,7 +308,7 @@ def _wave_of(
         # fetch is what the plan's refusals are needed for, so it takes the first read itself.
         data, sha = _read_once(run)
         state = ST.load_read(run / RD.READ)
-        claims = IH.join_import(state, IH.read_import(source))
+        claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))
         claims_path.parent.mkdir(parents=True, exist_ok=True)
         claims_path.write_text(
             json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
@@ -315,7 +319,7 @@ def _wave_of(
         return data, sha, claims, [r.as_json() for r in planned.refusals]
     data, sha = _read_once(run)
     state = ST.load_read(read_path)
-    claims = IH.join_import(state, IH.read_import(source))
+    claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))
     claims_path.parent.mkdir(parents=True, exist_ok=True)
     claims_path.write_text(
         json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -411,6 +415,7 @@ def cmd_read(run: Path) -> int:
         "read_sha256": sha,
         "read_at": state.read_at,
         "shown_sites": len(state.sites),
+        "staged_sites": len(RD.staged(data)),
         "rows": sum(len(rows) for rows in state.rows.values()),
     }
     (run / READ_SUMMARY).write_text(

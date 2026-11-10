@@ -255,8 +255,9 @@ ENRICH_THRESHOLDS = {**J_THRESHOLDS, "hook_invented": 0}
 WN_PILOT_SITES = 20
 WN_PILOT_MIN_WITH_TEXT = 0.5
 
-#: The scope columns the read adds to Phase 4's plan read; `plan_row` takes them off again. The
-#: reason is read since 2026-11-10 (`staged`): a `ROWS.jsonl` read before holds the status alone.
+#: The scope columns the read adds to Phase 4's plan read; `plan_row` takes them off again. A
+#: `ROWS.jsonl` written by code without the reason column holds the status alone, whatever its
+#: date: `staged` refuses such a read where a run asks it.
 SCOPE_KEYS = ("scope_status", "scope_reason")
 #: The one production read: the columns of Phase 4's plan read (`plan4.PLAN_SQL`, so a WC site is
 #: the same `PlanSite` lane L and P4 plan from) and the scope status with its reason, in one
@@ -291,10 +292,18 @@ def staged(row: Mapping[str, Any]) -> bool:
     """Whether a row of the read is a staged D57 insert (orchestrator decision O12, 2026-11-10):
     retired with a reason that begins `mechanical.lane.D57_STAGED_PREFIX`. The insert lane creates
     its sites hidden, and lane WN writes their description while they are (`_classify`: only a WN
-    run whose `--sites` list names the site asks it). A read made before the reason was a column
-    of it names no staged site."""
-    reason = row.get("scope_reason")
-    return row["scope_status"] == "retired" and str(reason or "").startswith(D57_STAGED_PREFIX)
+    run whose `--sites` list names the site asks it). A retired row of a read without the reason
+    column may be staged or not, and the read cannot say: it is refused by name, not listed
+    `retired` (a run has one population, so the site would be dropped from it for good)."""
+    if row["scope_status"] != "retired":
+        return False
+    if "scope_reason" not in row:
+        raise WcRunError(
+            f"the read holds no scope_reason for the retired site {row['id']}: it was made by code "
+            "that does not read the column and cannot say whether the site is a staged D57 insert "
+            "- run `read` again with this code, then the export"
+        )
+    return str(row["scope_reason"] or "").startswith(D57_STAGED_PREFIX)
 
 
 # ------------------------------------------------------------------------------------ files

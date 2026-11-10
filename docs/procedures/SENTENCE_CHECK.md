@@ -850,12 +850,17 @@ beginning `D57 staged:` - and lane WN writes their description before the scope 
 `--sites` makes the listed sites the frame of the WN population (`POPULATION.json`: `kind` `wn`,
 `list` the file and its sha256); the pilot draws from them, and a later chunk names the pilot in
 `--after`. A WN run without the list lists a staged site `retired`, and so does every other kind of
-run that names it (plain, site-list, lane E) and every repair pass (`cli.hidden`). A read made before
-2026-11-10 holds no reason, so its retired rows are all `retired`: read again. Everything after the
+run that names it (plain, site-list, lane E) and every repair pass (`cli.hidden`). The read must be
+made by code that reads the reason - the criterion is the column, not the date: a `ROWS.jsonl`
+written by a checkout without it holds the status alone and cannot say whether a retired site is
+staged. A WN run whose list names a retired site of such a read is refused at the export
+(`the read holds no scope_reason for the retired site <id>`; nothing is written): run `read` again
+with this code, then the export. No other run asks the question, so a run of another kind made on
+such a read keeps its population. Everything after the
 export - the write round, the verification, the build, the judge, the gate - is unchanged; the gate
 has no scope condition of its own, so the description is written while the site is hidden.
 Tests: `tests/remediation/test_wn.py` (section "a staged D57 site"); mutation cases
-`phase3/mutation_sweep.py "wc wn staged"` (8 of 8 caught on 2026-11-10).
+`phase3/mutation_sweep.py "wc wn staged"` (10 of 10 caught on 2026-11-11).
 
 ### 12.1a The first WN run, measured (2026-10-06, `runs/wn-2026-10-06`)
 

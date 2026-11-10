@@ -1030,6 +1030,18 @@ have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other
   still refused `retired` - and `insert-accept` answers its three questions from a fresh read of
   production alone: no step of the lane asks the site's page, which answers 410 until the un-retire
   (section 2.2).
+  **The read says which of its sites is staged** (the `staged` column of every site row, `read.staged`;
+  `staged_sites` in the summary), **and the 2025 import's join leaves those out**
+  (`plan.join_import(..., staged=...)`: `plan`, `fetch --start`, and `fetch` in a run directory that
+  holds a read but no `IMPORT_CLAIMS.json` / `IMPORT_HERO_REFUSALS.jsonl`). The owner's decision of
+  2026-10-05 is about the sites the platform shows, and no image role judged the import's picture;
+  measured 2026-11-11, 2 of the 37 planned D57 sites (Pella, Nan Madol) join a feature of the import
+  by source URL, each with a Commons image, and were refused `no_target_row` - the class
+  `fetch --target insert` downloads and `insert-plan` writes. A staged site's claim therefore comes
+  from `judge_run.py insert-claims` alone. A `READ.json` whose site rows carry no `staged` column
+  (made by code without it) cannot say, and those three commands refuse it by name
+  (`REFUSED: N site(s) of the read carry no` ... `column`): read again into a new run directory. `insert-plan`, `accept`, `insert-accept` and `remainder` join nothing and read such a
+  run as before.
 
 **The row rule, and what it had to be measured against.** `insert.plan` refused all nine targets as
 `no_row_at_all`: *"the owner decided on 2026-10-05 (18:32) that such a site keeps its
@@ -1801,8 +1813,13 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
 * The staged D57 sites (2026-11-10): `tests/remediation/test_candidate_routes.py` (the research
   reads one only when its list names it; the credit lane never) and
   `tests/remediation/test_import_hero_insert.py`, `TestAStagedD57Site` (the read's predicate run in
-  SQLite, the three statements, the first row planned and accepted with no connection opened);
-  `mechanical/mutation_sweep.py "wd2 d57"`: 9 cases, 9 fired.
+  SQLite; and the whole path from the read's own statements, run in SQLite behind
+  `persist_verdicts.read_rows`: `read` holds a staged site of production and marks it, `insert-plan`
+  plans its row and refuses another retired site, `insert-accept` accepts it with no connection
+  opened) and `tests/remediation/test_import_hero.py`, `TestAStagedD57SiteIsOutsideTheImportsJoin`
+  (the join, `plan`, `fetch` over a read without claims, `fetch --start`, and the refusal of a read
+  without the `staged` column); `mechanical/mutation_sweep.py "wd2 d57"`: 16 cases, 16 fired
+  (2026-11-11).
 
 ---
 

@@ -335,11 +335,88 @@ def test_a_site_retired_for_another_reason_stays_retired_to_the_run_that_names_i
     asked, listed = _pop([window, bare, later], only={WX.SITE_N, WX.SITE_BLANK, WX.SITE_EMPTY})
     assert asked == [] and listed == {"retired": [WX.SITE_N, WX.SITE_BLANK, WX.SITE_EMPTY]}
     assert cli.staged(WX.staged_row(WX.SITE_N))
-    # a read made before the reason was a column of it: its retired rows are not staged
-    assert not cli.staged({"id": WX.SITE_N, "scope_status": "retired"})
     # shown again by the scope lane, whatever its reason says: an ordinary site
     shown = FX.row(WX.SITE_N, None, scope_reason=f"{D57_STAGED_PREFIX} x")
     assert not cli.staged(shown) and not cli.hidden(shown)
+
+
+def _without_the_reason(rows):
+    """The rows as code without the reason column reads them: the scope status alone."""
+    return [{key: value for key, value in row.items() if key != "scope_reason"} for row in rows]
+
+
+def test_a_read_without_the_reason_column_cannot_say_whether_a_retired_site_is_staged() -> None:
+    """Such a read is made by any checkout without the column, whatever the date. Its retired row
+    may be a staged site: the answer is a refusal by name, not "not staged"."""
+    (stale,) = _without_the_reason([WX.staged_row(WX.SITE_N)])
+    with pytest.raises(cli.WcRunError, match=f"no scope_reason for the retired site {WX.SITE_N}"):
+        cli.staged(stale)
+    # a shown site is not staged whatever the read holds, and no other run asks the question:
+    # the populations of the runs made on such a read are what they were
+    (shown,) = _without_the_reason([WX.wn_row(WX.SITE_EMPTY)])
+    assert not cli.staged(shown)
+    for kind, only in (
+        (cli.KIND_WN, None),
+        (cli.KIND_WC, None),
+        (cli.KIND_LIST, {WX.SITE_N}),
+        (cli.KIND_ENRICH, {WX.SITE_N}),
+    ):
+        asked, listed = cli.population([stale], excluded=set(), earlier=set(), kind=kind, only=only)
+        assert asked == [] and listed == {"retired": [WX.SITE_N]}
+    assert cli.hidden(stale)
+
+
+@pytest.mark.parametrize(
+    ("listed", "pilot"),
+    [
+        ([WX.SITE_N, WX.SITE_BLANK], 2),  # the D57 pilot: every listed site is staged
+        ([WX.SITE_N, WX.SITE_EMPTY], None),  # a list that mixes a staged site and a shown one
+    ],
+)
+def test_a_listed_wn_run_refuses_a_read_without_the_reason_column(
+    tmp_path: Path, listed: list[str], pilot: int | None
+) -> None:
+    """`export --wn --sites F` over a read made by code without the column: neither "a pilot of N
+    from a population of 0" nor an export that lists the staged sites `retired` and writes the
+    run's one population without them. The read is refused, and the same directory exports once
+    it is read again."""
+    run = tmp_path / "runs" / "wn-stale-read"
+    run.mkdir(parents=True)
+    cli.cmd_read(run, runner=FX.ReadRunner(_without_the_reason(_staged_rows())))
+    sites = tmp_path / "sites.txt"
+    sites.write_text("\n".join(listed), encoding="utf-8")
+    export = {"batch_size": 5, "exclude": None, "after": [], "wn": True, "sites": sites}
+    export |= {"pilot": pilot, "seed": None if pilot is None else 1}
+    with pytest.raises(cli.WcRunError, match="no scope_reason for the retired site .* run `read`"):
+        cli.cmd_export(run, tmp_path / "h1", **export)
+    assert not (run / cli.SITES_FILE).exists() and not (run / cli.POPULATION_FILE).exists()
+    cli.cmd_read(run, runner=FX.ReadRunner(_staged_rows()))
+    cli.cmd_export(run, tmp_path / "h1", **export)
+    assert [e["site_id"] for e in read_jsonl(run / cli.SITES_FILE)] == listed
+
+
+def test_a_listed_wn_run_that_names_no_retired_site_exports_from_a_read_without_the_reason(
+    tmp_path: Path,
+) -> None:
+    """The refusal is for the question the read cannot answer, not for the read's age: a list of
+    shown sites asks nothing about a staged one."""
+    run = tmp_path / "runs" / "wn-shown-only"
+    run.mkdir(parents=True)
+    cli.cmd_read(run, runner=FX.ReadRunner(_without_the_reason(_staged_rows())))
+    sites = tmp_path / "sites.txt"
+    sites.write_text(WX.SITE_EMPTY, encoding="utf-8")
+    cli.cmd_export(
+        run,
+        tmp_path / "h1",
+        batch_size=5,
+        exclude=None,
+        after=[],
+        wn=True,
+        sites=sites,
+        pilot=None,
+        seed=None,
+    )
+    assert [e["site_id"] for e in read_jsonl(run / cli.SITES_FILE)] == [WX.SITE_EMPTY]
 
 
 def test_a_staged_site_stays_hidden_to_the_repair_passes() -> None:

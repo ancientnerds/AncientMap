@@ -73,6 +73,7 @@ def _site(site_id: str, name: str, thumb: str | None, url: str | None) -> dict[s
         "lon": 24.71,
         "thumbnail_url": thumb,
         "source_url": url,
+        "staged": False,
     }
 
 
@@ -1627,3 +1628,139 @@ class TestTheReadCommand:
         assert summary["read_at"] == "2026-10-05T16:00:00Z"
         assert IR.main(["read", "--run-dir", str(run)]) == 1
         assert "written once" in capsys.readouterr().err
+
+    def test_the_read_s_summary_counts_the_staged_sites_among_its_sites(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """`shown_sites` counts every site of the read, the staged D57 ones too: the summary says
+        how many of them the platform does not show."""
+        from import_hero import read as RD
+
+        monkeypatch.setattr(RD, "read_production", _staged_read)
+        run = tmp_path / "insert-2026-11-11-d57"
+        assert IR.main(["read", "--run-dir", str(run)]) == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert (printed["shown_sites"], printed["staged_sites"]) == (len(_read()["sites"]) + 1, 1)
+
+
+PELLA = "6f1d2c3b-4a59-4e68-8f70-a1b2c3d4e5f6"
+PELLA_URL = "https://en.wikipedia.org/wiki/Pella"
+PELLA_IMAGE = f"https://upload.wikimedia.org/wikipedia/commons/1/1e/{FETCH_FILE}"
+
+
+def _staged_read() -> dict[str, Any]:
+    """The fixture read with one staged D57 site (orchestrator decision O12): no row, no thumbnail,
+    and the source URL of a feature of the 2025 import - as Pella and Nan Madol have it."""
+    data = _read()
+    data["sites"].append({**_site(PELLA, "Pella", None, PELLA_URL), "staged": True})
+    return data
+
+
+class TestAStagedD57SiteIsOutsideTheImportsJoin:
+    """The lane's read holds the staged D57 sites with the shown ones, because the INSERT wave of
+    the picture research gives each its first row while it is hidden. The 2025 import's join is
+    not that wave: the owner's decision of 2026-10-05 is about the sites the platform shows, and
+    no image role judged the import's picture. Measured 2026-11-11 over the 37 planned sites:
+    Pella and Nan Madol join a feature by source URL, each with a Commons image."""
+
+    def _run(self, tmp_path: Path, data: dict[str, Any]) -> tuple[Path, Path]:
+        run = tmp_path / "insert-2026-11-11-d57"
+        run.mkdir()
+        ST.write_read(run / "READ.json", data)
+        _import(
+            tmp_path,
+            [
+                {"title": "Pella", "url": PELLA_URL, "image": PELLA_IMAGE},
+                {"title": "Nothing", "url": "https://en.wikipedia.org/wiki/Nothing", "image": RUIN},
+                {"title": "Thasos", "url": "", "image": GATE},
+            ],
+        )
+        return run, tmp_path / "ancient_nerds_original.geojson"
+
+    def test_the_join_claims_no_staged_site(self, tmp_path: Path) -> None:
+        from import_hero import read as RD
+
+        data = _staged_read()
+        run, source = self._run(tmp_path, data)
+        state, features = ST.load_read(run / "READ.json"), IH.read_import(source)
+        assert RD.staged(data) == {PELLA}
+        claims = IH.join_import(state, features, staged=RD.staged(data))
+        assert PELLA not in claims
+        assert claims[NOTHING]["image"] == RUIN and claims[THASOS]["image"] == GATE
+        # the fixture bites: joined like a shown site, the staged one is claimed by its URL and
+        # refused as `no_target_row` - the class the INSERT wave fetches and writes
+        unguarded = IH.join_import(state, features)
+        assert (unguarded[PELLA]["matched_on"], unguarded[PELLA]["image"]) == ("url", PELLA_IMAGE)
+        refused = IH.plan(state, unguarded, dimensions=BIG).refusals
+        assert (PELLA, "no_target_row") in [(r.site_id, r.reason) for r in refused]
+
+    def test_a_fetch_in_a_run_that_holds_a_read_but_no_claims_gives_a_staged_site_nothing(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """`fetch --target insert` after `read`, in a directory `insert-claims` did not write: the
+        run's own read decides, through the import's join. The shown site without a row is its
+        target; the staged one is neither claimed, refused, fetched nor planned a row."""
+        _stub_downloader(monkeypatch)
+        run, source = self._run(tmp_path, _staged_read())
+        root = tmp_path / "images"
+        printed = IR.cmd_fetch(run, source=source, root=root, target="insert", delay_s=0)
+        assert printed["targeted"] == 1 and printed["fetched"] == 1
+        claims = json.loads((run / IR.CLAIMS).read_text(encoding="utf-8"))
+        assert PELLA not in claims and claims[NOTHING]["image"] == RUIN
+        refusals = IR._load_jsonl(run / IR.REFUSALS)
+        assert (NOTHING, "no_target_row") in [(r["site_id"], r["reason"]) for r in refusals]
+        assert PELLA not in {r["site_id"] for r in refusals}
+        assert sorted(json.loads((run / IR.FETCHED).read_text(encoding="utf-8"))) == [NOTHING]
+        assert not (root / PELLA[:8]).exists()
+        planned = IR.cmd_insert_plan(run)
+        assert planned["planned_sites"] == 1
+        rows = (run / "chunk-001" / "INSERT.jsonl").read_text(encoding="utf-8")
+        assert NOTHING in rows and PELLA not in rows
+
+    def test_a_fetch_that_starts_a_wave_joins_no_staged_site(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """`fetch --start` takes the first read itself and joins the import over it."""
+        from import_hero import read as RD
+
+        _stub_downloader(monkeypatch)
+        monkeypatch.setattr(RD, "read_production", _staged_read)
+        _, source = self._run(tmp_path, _staged_read())
+        run = tmp_path / "insert-2026-11-11-started"
+        IR.cmd_fetch(
+            run, source=source, root=tmp_path / "images", target="insert", delay_s=0, start=True
+        )
+        claims = json.loads((run / IR.CLAIMS).read_text(encoding="utf-8"))
+        assert PELLA not in claims and claims[NOTHING]["image"] == RUIN
+        assert sorted(json.loads((run / IR.FETCHED).read_text(encoding="utf-8"))) == [NOTHING]
+
+    def test_a_plan_over_the_read_joins_no_staged_site(self, tmp_path: Path) -> None:
+        run, source = self._run(tmp_path, _staged_read())
+        out = IR.cmd_plan(run, source=source)
+        claims = json.loads((run / IR.CLAIMS).read_text(encoding="utf-8"))
+        assert PELLA not in claims and sorted(claims) == sorted(_read_ids())
+        assert out["shown_sites"] == len(claims) + 1
+        assert PELLA not in (run / IR.REFUSALS).read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("command", ["plan", "fetch"])
+    def test_a_read_that_cannot_say_which_site_is_staged_is_refused_where_the_join_asks(
+        self, tmp_path: Path, capsys, command: str
+    ) -> None:
+        """A read made by code without the `staged` column may hold the shown sites alone or a
+        staged one unmarked. The join does not take it as holding none: it refuses the read by
+        name, and writes no claim."""
+        data = _staged_read()
+        for site in data["sites"]:
+            del site["staged"]
+        run, source = self._run(tmp_path, data)
+        argv = [command, "--run-dir", str(run), "--import", str(source)]
+        if command == "fetch":
+            argv += ["--root", str(tmp_path / "images"), "--target", "insert"]
+        assert IR.main(argv) == 1
+        err = capsys.readouterr().err
+        assert "carry no `staged` column" in err and "new run directory" in err
+        assert not (run / IR.CLAIMS).exists() and not (run / IR.REFUSALS).exists()
+
+
+def _read_ids() -> list[str]:
+    return [str(site["id"]) for site in _read()["sites"]]
