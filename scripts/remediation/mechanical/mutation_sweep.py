@@ -6909,6 +6909,84 @@ WD2_CASES: list[Case] = [
         "test_a_run_of_2026_10_08_is_stamped_attribution_and_its_date",
         "tests/remediation/test_gallery_attribution.py",
     ),
+    # -- a staged D57 site (O12, 2026-11-10): read by the research that names it and by the image
+    #    INSERT lane's read, and by neither as a retired site
+    Case(
+        "wd2 d57: the research leaves a staged site its list names out",
+        REPO / "scripts/remediation/candidate_search/population.py",
+        "            scope = f\"({scope} OR {d57_staged_sql('u')})\"",
+        "            pass",
+        "test_the_research_reads_a_staged_d57_site_that_its_site_list_names",
+        "tests/remediation/test_candidate_routes.py",
+    ),
+    Case(
+        "wd2 d57: a population without a list reads the staged sites",
+        REPO / "scripts/remediation/candidate_search/population.py",
+        "    scope = \"u.scope_status IS DISTINCT FROM 'retired'\"",
+        "    scope = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "test_a_population_without_a_site_list_never_reads_a_staged_site",
+        "tests/remediation/test_candidate_routes.py",
+    ),
+    Case(
+        "wd2 d57: the credit lane reads a staged site",
+        REPO / "scripts/remediation/candidate_search/population.py",
+        '        if kind == RESEARCH:\n            scope = f"(',
+        '        if True:\n            scope = f"(',
+        "test_the_credit_lane_never_reads_a_staged_site",
+        "tests/remediation/test_candidate_routes.py",
+    ),
+    Case(
+        "wd2 d57: the insert lane's read holds the shown sites only",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "IN_THE_READ = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "IN_THE_READ = \"(u.scope_status IS DISTINCT FROM 'retired')\"",
+        "test_the_read_holds_a_staged_site_with_the_shown_ones",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: the insert lane's read holds every retired site with a reason",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "IN_THE_READ = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "IN_THE_READ = \"(u.scope_status IS DISTINCT FROM 'retired' OR u.scope_reason IS NOT NULL)\"",
+        "test_a_staged_site_is_not_among_the_reads_retired_and_every_other_retired_site_is",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: the read's sites are the shown ones",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "   WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}\n   ORDER BY u.id",
+        "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'\n"
+        "   ORDER BY u.id",
+        "test_the_read_holds_a_staged_site_with_the_shown_ones",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: the read's image rows are the shown sites' only",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "   WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}\n   ORDER BY w.site_id, w.id",
+        "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'\n"
+        "   ORDER BY w.site_id, w.id",
+        "test_the_read_holds_a_staged_site_with_the_shown_ones",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: a staged site is listed among the read's retired",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "   WHERE u.source_id = 'ancient_nerds' AND NOT {IN_THE_READ}",
+        "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status = 'retired'",
+        "test_a_staged_site_is_not_among_the_reads_retired_and_every_other_retired_site_is",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: a site retired for another reason is planned a row",
+        REPO / "scripts/remediation/import_hero/insert.py",
+        '        if site is None:\n            out.append(Refusal(site_id, "retired", "the site is not in the read"))\n'
+        "            continue\n        rows = state.rows.get(site_id, ())\n        d59 =",
+        '        if False:\n            out.append(Refusal(site_id, "retired", "the site is not in the read"))\n'
+        "            continue\n        rows = state.rows.get(site_id, ())\n        d59 =",
+        "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
 ]
 CASES += WD2_CASES
 

@@ -54,6 +54,19 @@ def wn_row(
     return FX.row(site_id, description, raw_data=raw_data, name=name or "Tarxien Temples")
 
 
+def staged_row(site_id: str, description: str | None = None) -> dict[str, Any]:
+    """A staged D57 insert as the read returns it (orchestrator decision O12): retired, its reason
+    beginning with the staged prefix, no description yet."""
+    from mechanical.lane import D57_STAGED_PREFIX
+
+    return FX.row(
+        site_id,
+        description,
+        scope_status="retired",
+        scope_reason=f"{D57_STAGED_PREFIX} inserted hidden by the insert lane, d57-test-001",
+    )
+
+
 def sentence(
     text: str, *quotes: dict[str, str], note: str = "each quote supports its claim"
 ) -> dict:
@@ -132,21 +145,30 @@ def build_wn_run(
     after: Sequence[Path] = (),
     writer_model: str = OH.SONNET_MODEL,
     verifier_model: str = OH.OPUS_MODEL,
+    sites: Sequence[str] | None = None,
 ) -> tuple[Path, Path]:
     """A lane-WN run end to end: read, export (a pilot that draws the whole population, or a chunk),
     write answers, import, verify (every kept sentence SUPPORTED), build; a pilot is judged and passes
-    unless `judged` is false. Returns the run directory and its gate plan (`WC4.jsonl`)."""
+    unless `judged` is false. `sites` is the run's `--sites` list (the frame of the population).
+    Returns the run directory and its gate plan (`WC4.jsonl`)."""
     from phase3.run import read_jsonl
     from wc import cli
 
     run, handoff = root / "runs" / name, root / "handoff" / f"{name}-w"
     run.mkdir(parents=True)
     cli.cmd_read(run, runner=FX.ReadRunner(rows))
+    listing = None
+    if sites is not None:
+        listing = root / f"{name}.sites.txt"
+        listing.write_text("".join(f"{site}\n" for site in sites), encoding="utf-8", newline="\n")
     asked, _ = cli.population(
-        read_jsonl(run / cli.ROWS_FILE), excluded=set(), earlier=set(), kind=cli.KIND_WN
-    )
+        read_jsonl(run / cli.ROWS_FILE), excluded=set(), earlier=set(), kind=cli.KIND_WN,
+        only=None if sites is None else set(sites),
+    )  # fmt: skip
     draw = {"pilot": len(asked), "seed": 1} if pilot else {"pilot": None, "seed": None}
-    cli.cmd_export(run, handoff, batch_size=5, exclude=None, after=list(after), wn=True, **draw)
+    cli.cmd_export(
+        run, handoff, batch_size=5, exclude=None, after=list(after), wn=True, sites=listing, **draw
+    )
     record_written(handoff, answers, model=writer_model)
     cli.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     FX.verify_all(run, root / "handoff" / f"{name}-verify", model=verifier_model)

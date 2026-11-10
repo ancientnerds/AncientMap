@@ -10,6 +10,8 @@ has the columns for it - and undoes it with a DELETE named by the triple it wrot
 from __future__ import annotations
 
 import json
+import socket
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -890,3 +892,91 @@ class TestTheAcceptance:
         result = IN.check(state, [row])
         assert result["ok"] is False
         assert any("live hero row" in p for p in result["problems"])
+
+
+class TestAStagedD57Site:
+    """Orchestrator decision O12 (2026-11-10): the insert lane creates its sites hidden - retired,
+    with a reason beginning `D57 staged:` - and each gets its first picture before the scope lane
+    shows it. The lane's read holds such a site with the shown ones; every other retired site
+    stays out of it."""
+
+    STAGED = "D57 staged: inserted hidden by the insert lane, d57-test-001"
+
+    def _unified(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE u (id TEXT, scope_status TEXT, scope_reason TEXT)")
+        conn.executemany(
+            "INSERT INTO u VALUES (?, ?, ?)",
+            [
+                ("shown", None, None),
+                ("in-scope", "in_scope", None),
+                ("shown-again", "in_scope", self.STAGED),
+                ("staged", "retired", self.STAGED),
+                ("retired", "retired", "out of the time window"),
+                ("retired-bare", "retired", None),
+                ("retired-undone", "retired", "D57 insert undone (x-rollback): retired"),
+            ],
+        )
+        return conn
+
+    def _ids(self, where: str) -> set[str]:
+        return {row[0] for row in self._unified().execute(f"SELECT id FROM u WHERE {where}")}
+
+    def test_the_read_holds_a_staged_site_with_the_shown_ones(self) -> None:
+        from import_hero import read as RD
+
+        where = f"   WHERE u.source_id = 'ancient_nerds' AND {RD.IN_THE_READ}\n"
+        assert where + "   ORDER BY u.id\n" in RD.SITES_SQL
+        assert where + "   ORDER BY w.site_id, w.id\n" in RD.IMAGES_SQL
+        assert self._ids(RD.IN_THE_READ) == {"shown", "in-scope", "shown-again", "staged"}
+
+    def test_a_staged_site_is_not_among_the_reads_retired_and_every_other_retired_site_is(
+        self,
+    ) -> None:
+        from import_hero import read as RD
+
+        where = f"   WHERE u.source_id = 'ancient_nerds' AND NOT {RD.IN_THE_READ}\n"
+        assert where + "   ORDER BY u.id\n" in RD.RETIRED_SQL
+        retired = self._ids(f"NOT {RD.IN_THE_READ}")
+        assert retired == {"retired", "retired-bare", "retired-undone"}
+        # the two lists part the curated sites: `state.load_read` refuses a site in both
+        assert not retired & self._ids(RD.IN_THE_READ)
+        assert len(retired | self._ids(RD.IN_THE_READ)) == 7
+
+    def test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """`insert-plan` plans the row of a staged site like a shown one's, and `insert-accept`
+        answers its three questions from a fresh read: it opens no connection, so a site whose
+        page still answers 410 is accepted on what production holds."""
+        from import_hero import read as RD
+        from import_hero import run as IR
+
+        run = tmp_path / "insert-2026-11-10-d57"
+        read = {
+            "read_at": "2026-11-10T00:00:00Z",
+            "sites": [_site(SITE_A, None)],  # the staged site: no row, no thumbnail
+            "images": [],
+            "retired": [SITE_B],  # a site retired for another reason
+        }
+        RD.write_read(run / RD.READ, read)
+        state = ST.load_read(run / RD.READ)
+        planned = IN.plan(state, [_refusal(SITE_A), _refusal(SITE_B)], fetched=_fetched(SITE_A))
+        assert [(r.site_id, r.reason) for r in planned.refusals] == [(SITE_B, "retired")]
+        (row,) = planned.inserts
+        assert (row.site_id, row.demoted_id, row.old_thumbnail) == (SITE_A, None, None)
+        IN.write_chunks(planned, run, per_chunk=50)
+
+        inserted = {**VALUES, "id": 99, "site_id": SITE_A, "is_hero": True, "is_excluded": False}
+        after = {**read, "sites": [_site(SITE_A, row.new_thumbnail)], "images": [inserted]}
+        monkeypatch.setattr(RD, "read_production", lambda: after)
+
+        def no_connection(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("insert-accept opened a connection")
+
+        monkeypatch.setattr(socket, "socket", no_connection)
+        monkeypatch.setattr(socket, "create_connection", no_connection)
+        assert IR.cmd_insert_accept(run) == 0
+        record = json.loads((run / IR.ACCEPTANCE_INSERT).read_text(encoding="utf-8"))
+        assert record["ok"] is True and record["problems"] == []
+        assert (record["sites"], record["one_hero"], record["thumbnail_follows"]) == (1, 1, 1)

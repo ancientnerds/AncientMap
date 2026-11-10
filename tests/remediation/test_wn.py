@@ -280,6 +280,99 @@ def test_a_wn_chunk_leaves_the_sites_of_an_earlier_unwritten_chunk_and_the_exclu
     assert listed == {"excluded": [WX.SITE_N], "earlier-run": [WX.SITE_BLANK]}
 
 
+# ------------------------------------------------------------------------------ a staged D57 site
+# Orchestrator decision O12 (2026-11-10): the insert lane creates its sites hidden - retired, with a
+# reason beginning `D57 staged:` - and lane WN writes their description before the scope lane shows
+# them. Only a WN run whose `--sites` list names such a site asks it.
+def _staged_rows():
+    return [
+        WX.staged_row(WX.SITE_N),
+        WX.staged_row(WX.SITE_BLANK, "  "),
+        WX.wn_row(WX.SITE_EMPTY),
+    ]
+
+
+def test_the_read_holds_the_scope_reason_and_the_plan_row_is_phase4s_again() -> None:
+    assert "SELECT u.id::text AS id, u.scope_status, u.scope_reason, u.name, " in cli.WC_SQL
+    row = WX.staged_row(WX.SITE_N)
+    assert row.keys() - cli.plan_row(row).keys() == {"scope_status", "scope_reason"}
+    assert cli.plan_row(row).keys() == cli.plan4.ROW_KEYS
+
+
+def test_a_staged_d57_site_is_asked_by_the_wn_run_whose_list_names_it() -> None:
+    asked, listed = _pop(_staged_rows(), only={WX.SITE_N, WX.SITE_EMPTY})
+    assert [(e["site_id"], e["marking"], e["sentences"]) for e in asked] == [
+        (WX.SITE_N, "none", []),
+        (WX.SITE_EMPTY, "none", []),
+    ]
+    assert listed == {}
+    assert asked[0]["plan_site"].keys() == asked[1]["plan_site"].keys()
+
+
+def test_a_wn_run_without_a_site_list_never_asks_a_staged_site() -> None:
+    asked, listed = _pop(_staged_rows())
+    assert [e["site_id"] for e in asked] == [WX.SITE_EMPTY]
+    assert listed == {"retired": [WX.SITE_N, WX.SITE_BLANK]}
+
+
+@pytest.mark.parametrize("kind", [cli.KIND_WC, cli.KIND_LIST, cli.KIND_ENRICH])
+def test_no_other_kind_of_run_asks_a_staged_site_its_list_names(kind: str) -> None:
+    rows = [WX.staged_row(WX.SITE_N), WX.staged_row(WX.SITE_BLANK, FX.TEXT_A)]
+    asked, listed = cli.population(
+        rows, excluded=set(), earlier=set(), kind=kind, only={WX.SITE_N, WX.SITE_BLANK}
+    )
+    assert asked == [] and listed == {"retired": [WX.SITE_N, WX.SITE_BLANK]}
+
+
+def test_a_site_retired_for_another_reason_stays_retired_to_the_run_that_names_it() -> None:
+    from mechanical.lane import D57_STAGED_PREFIX
+
+    window = FX.row(WX.SITE_N, None, scope_status="retired", scope_reason="out of the time window")
+    bare = FX.row(WX.SITE_BLANK, None, scope_status="retired")
+    later = FX.row(
+        WX.SITE_EMPTY, None, scope_status="retired", scope_reason=f"was {D57_STAGED_PREFIX} once"
+    )
+    asked, listed = _pop([window, bare, later], only={WX.SITE_N, WX.SITE_BLANK, WX.SITE_EMPTY})
+    assert asked == [] and listed == {"retired": [WX.SITE_N, WX.SITE_BLANK, WX.SITE_EMPTY]}
+    assert cli.staged(WX.staged_row(WX.SITE_N))
+    # a read made before the reason was a column of it: its retired rows are not staged
+    assert not cli.staged({"id": WX.SITE_N, "scope_status": "retired"})
+    # shown again by the scope lane, whatever its reason says: an ordinary site
+    shown = FX.row(WX.SITE_N, None, scope_reason=f"{D57_STAGED_PREFIX} x")
+    assert not cli.staged(shown) and not cli.hidden(shown)
+
+
+def test_a_staged_site_stays_hidden_to_the_repair_passes() -> None:
+    """`hidden` is what `defect-sites`, `defect-kept-sites` and `minimax-sites` ask: a staged site
+    is retired to them."""
+    assert cli.hidden(WX.staged_row(WX.SITE_N))
+
+
+def test_a_listed_wn_run_writes_a_staged_site_its_description_end_to_end(tmp_path: Path) -> None:
+    """`export --wn --sites F --pilot N` over the staged sites, as the D57 lane runs it: the pilot
+    draws from the listed population, and the build plans the text of a site that is still hidden."""
+    rows = [*_staged_rows(), WX.wn_row(WX.SITE_BAD)]
+    listed = [WX.SITE_N, WX.SITE_BLANK]
+    answers = {site: WX.good(site) for site in listed}
+    run, plan = WX.build_wn_run(tmp_path, rows, answers, sites=listed)
+    population = json.loads((run / cli.POPULATION_FILE).read_text(encoding="utf-8"))
+    assert population["kind"] == "wn" and population["list"]["sites"] == 2
+    assert (population["population"], population["asked"]) == (2, 2)
+    assert population["listed"] == {} and population["pilot"] == {"sites": 2, "seed": 1}
+    (batch,) = read_jsonl(plan)
+    assert [s["site_id"] for s in batch["sites"]] == listed
+    assert [o["site_id"] for o in batch["outcomes"]] == listed
+    assert len(cli.pilot_approval([plan])) == 1
+    # the same read without the list: the pilot the D57 playbook's check names is refused
+    other = tmp_path / "runs" / "wn-plain"
+    other.mkdir()
+    cli.cmd_read(other, runner=FX.ReadRunner(_staged_rows()[:2]))
+    with pytest.raises(cli.WcRunError, match="a pilot of 2 from a population of 0"):
+        cli.cmd_export(
+            other, tmp_path / "h2", batch_size=5, exclude=None, after=[], wn=True, pilot=2, seed=1
+        )
+
+
 # ------------------------------------------------------------------------------ a whole run
 def _rows():
     return [

@@ -1019,6 +1019,17 @@ have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other
 * The row's journalled `reason` and evidence `source` are read **out of the refusal** that named
   the site. Nothing in a candidate wave came from the 2025 import, and a journal row signed with the
   import's name is not an audit.
+* **A staged D57 site** (orchestrator decision O12 of 2026-11-10, `INSERT_SITES.md` section 6:
+  inserted hidden, `retired` with a `scope_reason` beginning `D57 staged:`) gets its first picture
+  before the scope lane shows it. Two reads admit it, by `mechanical.lane.d57_staged_sql`:
+  `image_roles/run.py population --run-dir <candidate run> --sites <file>` reads a staged site the
+  file names (`population_sql`; a population without `--sites` and D59's credit lane never hold
+  one), and `import_hero/run.py read` holds the staged sites and their rows with the shown ones and
+  not among `retired` (`read.IN_THE_READ`; `shown_sites` in its summary counts them). `insert-plan`
+  therefore plans the row of a staged site that the run's claims name - any other retired site is
+  still refused `retired` - and `insert-accept` answers its three questions from a fresh read of
+  production alone: no step of the lane asks the site's page, which answers 410 until the un-retire
+  (section 2.2).
 
 **The row rule, and what it had to be measured against.** `insert.plan` refused all nine targets as
 `no_row_at_all`: *"the owner decided on 2026-10-05 (18:32) that such a site keeps its
@@ -1787,6 +1798,11 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
   files in place and restores them: run it on an otherwise idle worktree.
+* The staged D57 sites (2026-11-10): `tests/remediation/test_candidate_routes.py` (the research
+  reads one only when its list names it; the credit lane never) and
+  `tests/remediation/test_import_hero_insert.py`, `TestAStagedD57Site` (the read's predicate run in
+  SQLite, the three statements, the first row planned and accepted with no connection opened);
+  `mechanical/mutation_sweep.py "wd2 d57"`: 9 cases, 9 fired.
 
 ---
 

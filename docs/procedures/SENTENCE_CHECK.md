@@ -838,6 +838,25 @@ the last WC step: `$C read ...`, then `cli.population(rows, excluded=set(), earl
 carrying a WC key without a description `stale-keys` (a broken state of another lane: never asked), a
 retired one `retired`.
 
+**A staged D57 site** (orchestrator decision O12 of 2026-11-10, `docs/procedures/INSERT_SITES.md`
+section 6): the insert lane creates its sites hidden - `scope_status = 'retired'`, a `scope_reason`
+beginning `D57 staged:` - and lane WN writes their description before the scope lane shows them.
+`read` holds each row's `scope_reason` beside its `scope_status` for that (`cli.WC_SQL`,
+`cli.staged`), and exactly one kind of run asks such a site: a WN run whose list names it,
+
+    $C read   --run-dir R
+    $C export --run-dir R --handoff H --wn --sites INSERTED_SITES.txt --pilot 20 --seed S
+
+`--sites` makes the listed sites the frame of the WN population (`POPULATION.json`: `kind` `wn`,
+`list` the file and its sha256); the pilot draws from them, and a later chunk names the pilot in
+`--after`. A WN run without the list lists a staged site `retired`, and so does every other kind of
+run that names it (plain, site-list, lane E) and every repair pass (`cli.hidden`). A read made before
+2026-11-10 holds no reason, so its retired rows are all `retired`: read again. Everything after the
+export - the write round, the verification, the build, the judge, the gate - is unchanged; the gate
+has no scope condition of its own, so the description is written while the site is hidden.
+Tests: `tests/remediation/test_wn.py` (section "a staged D57 site"); mutation cases
+`phase3/mutation_sweep.py "wc wn staged"` (8 of 8 caught on 2026-11-10).
+
 ### 12.1a The first WN run, measured (2026-10-06, `runs/wn-2026-10-06`)
 
 The population measured on 2026-10-06 18:25 CEST: **26 curated, not retired sites with a blank

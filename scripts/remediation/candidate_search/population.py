@@ -26,6 +26,11 @@ a kind other than `unsourced` and hashes the point it describes; only then may t
 
 `held_files` are the Commons files of **every** row of the site, excluded ones too: an excluded row was
 judged (or removed) before, and unhiding a file needs a judgement of its own.
+
+**A staged D57 site** (orchestrator decision O12, 2026-11-10: inserted hidden, retired with a reason
+beginning `D57 staged:`, `mechanical.lane.d57_staged_sql`) needs its picture before the scope lane
+shows it. The research reads it only when the `--sites` list names it; a population without the
+list, and D59's credit lane, never hold one.
 """
 
 from __future__ import annotations
@@ -42,6 +47,7 @@ for _path in (_HERE.parents[3], _HERE.parents[1]):
         sys.path.insert(0, str(_path))
 
 from mechanical.field_prov import COORD, SPECS, UNSOURCED, sha_sql  # noqa: E402
+from mechanical.lane import d57_staged_sql  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
 POPULATION_FILE = "POPULATION.jsonl"
@@ -97,11 +103,15 @@ def population_sql(sites: Sequence[str] | None = None, *, kind: str = RESEARCH) 
     """The read-only statement. With `sites` it is restricted to those ids (a pilot, or the 47
     heroes D15 clears); the definition of "serves no picture" is the same either way. `kind`
     `commons_thumbnail` reads the sites D59 credits instead: no live row, and a thumbnail that is a
-    hotlinked Commons file."""
+    hotlinked Commons file. A retired site is in neither, with one exception: a staged D57 site
+    (`d57_staged_sql`) that the research's `sites` name."""
     restriction = ""
+    scope = "u.scope_status IS DISTINCT FROM 'retired'"
     if sites is not None:
         ids = ", ".join(f"'{sid}'::uuid" for sid in sites)
         restriction = f"AND u.id IN ({ids})"
+        if kind == RESEARCH:
+            scope = f"({scope} OR {d57_staged_sql('u')})"
     if kind == RESEARCH:
         thumbnail = f"(coalesce(u.thumbnail_url, '') = '' OR {third_party_thumbnail_sql()})"
     elif kind == COMMONS_THUMBNAIL:
@@ -124,7 +134,7 @@ def population_sql(sites: Sequence[str] | None = None, *, kind: str = RESEARCH) 
                      'commons_page_url', w.commons_page_url, 'is_excluded', w.is_excluded))
                     FROM wiki_images w WHERE w.site_id = u.id), '[]'::json) AS rows
     FROM unified_sites u
-   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'
+   WHERE u.source_id = 'ancient_nerds' AND {scope}
      AND NOT EXISTS (SELECT 1 FROM wiki_images w WHERE w.site_id = u.id AND NOT w.is_excluded)
      AND {thumbnail} {restriction}
    ORDER BY u.id

@@ -258,19 +258,39 @@ code each step still waits for are in the lane's playbook
    (`NOT public_sites.d57_staged(...)`) **and be deployed in the Lyra image before `apply`** -
    a separate change, not part of this lane's code.
 2. **Read the hidden rows.** Every lane's population read drops a retired site. The lanes of steps
-   4 and 5 have to admit a staged one - by the predicate `mechanical.lane.d57_staged_sql(alias)`
-   (SQL) and the prefix `D57_STAGED_PREFIX`, and only for the ids a `--sites` list names.
+   4 and 5 admit a staged one - by the predicate `mechanical.lane.d57_staged_sql(alias)` (SQL) and
+   the prefix `D57_STAGED_PREFIX` - and only where a `--sites` list names it:
+   * lane WN: `wc/cli.py read` holds every row's `scope_reason` beside its `scope_status`, and
+     `export --wn --sites F` asks a staged site F names (`cli.staged`). A WN run without the list,
+     and every other kind of run (plain, site-list, lane E, the repair passes), lists it `retired`;
+   * the picture research: `image_roles/run.py population --sites F` reads a staged site F names
+     (`candidate_search.population.population_sql`); a population without the list, and D59's
+     credit lane, never hold one;
+   * the image INSERT lane: `import_hero/run.py read` holds the staged sites and their rows with
+     the shown ones and not among the retired (`import_hero.read.IN_THE_READ`), so `insert-plan`
+     plans the row of a staged site its claims name instead of refusing it as `retired`, and
+     `insert-accept` answers from a fresh read (it opens no connection to the site's page, which
+     still answers 410). The read decides nothing by itself: the claims come from the research.
+
+   Nothing that shows a site reads the staged predicate: the page, the sitemap, the static export,
+   the search and the card draws keep `scope_status IS DISTINCT FROM 'retired'`.
 3. **Names in every language**: `docker exec ancient_nerds_api python -m
    pipeline.wikidata_name_backfill --apply` (it runs over every site with a QID; the constraint drops
    what exists).
-4. **Description** (the insert writes none): the Phase-4 W lane once X10 is fixed, else lane WN of
-   the WC tool - `scripts/remediation/wc/cli.py export --wn --sites INSERTED_SITES.txt` - with the
-   `description_sources` in `raw_data._insert_provenance` as the researcher's lead. D22: a site that
-   stays without a text gets no card and no Short.
-5. **Pictures (D17)**: the population is derived from every shown curated site with no image row
-   and no `thumbnail_url` (`candidate_search/population.py`), so a staged site is in it only once
-   that read admits it (step 2); the sites carry their item and article in `site_external_ids` and
-   a sourced point (their `_coord_provenance`), so the geotag route searches around them.
+4. **Description** (the insert writes none): lane WN of the WC tool, after a fresh
+   `scripts/remediation/wc/cli.py read --run-dir R` (a read made before 2026-11-10 holds no
+   `scope_reason` and names no staged site) -
+   `scripts/remediation/wc/cli.py export --run-dir R --handoff H --wn --sites INSERTED_SITES.txt
+   --pilot 20 --seed S` - with the `description_sources` in `raw_data._insert_provenance` as the
+   researcher's lead; the rest of the run and its write through lane WC's gate are
+   `SENTENCE_CHECK.md` section 12. D22: a site that stays without a text gets no card and no Short.
+5. **Pictures (D17)**: the population is every shown curated site with no image row and no
+   `thumbnail_url` (`candidate_search/population.py`) and, named by its list, a staged one:
+   `scripts/remediation/image_roles/run.py population --run-dir C --sites F`. The sites carry their
+   item and article in `site_external_ids` and a sourced point (their `_coord_provenance`), so the
+   geotag route searches around them. The rows go in through the INSERT waves of
+   `WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.7 (`judge_run.py insert-claims`, `import_hero/run.py
+   read`, `fetch --target insert`, `insert-plan`, the writer's five steps, `insert-accept`).
 6. **Go live**: the scope lane's journalled un-retire (`mechanical/scope_unretire.py`), for each
    staged site that holds a description and a hero picture - a class of its own that the lane has
    to know (`retired`, the staged reason). A site that ends without text or picture stays hidden

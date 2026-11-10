@@ -495,6 +495,29 @@ class TestThePopulation:
         assert f"AND u.id IN ('{SITE}'::uuid)" in PP.population_sql([SITE])
         assert "u.id IN" not in PP.population_sql()
 
+    SHOWN = "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'\n"
+
+    def test_the_research_reads_a_staged_d57_site_that_its_site_list_names(self) -> None:
+        """O12 (2026-11-10): a site the insert lane created hidden needs its picture before the
+        scope lane shows it; the retired sites of every other reason stay out."""
+        from mechanical.lane import d57_staged_sql
+
+        named = PP.population_sql([SITE])
+        assert (
+            "   WHERE u.source_id = 'ancient_nerds' "
+            f"AND (u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\n"
+        ) in named
+        assert self.SHOWN not in named
+
+    def test_a_population_without_a_site_list_never_reads_a_staged_site(self) -> None:
+        plain = PP.population_sql()
+        assert self.SHOWN in plain and "D57 staged" not in plain
+
+    def test_the_credit_lane_never_reads_a_staged_site(self) -> None:
+        for sites in (None, [SITE]):
+            credit = PP.population_sql(sites, kind=PP.COMMONS_THUMBNAIL)
+            assert self.SHOWN in credit and "D57 staged" not in credit
+
     def test_the_single_item_and_title_come_from_the_external_ids(self) -> None:
         record = PP.site_record(read_line())
         assert (record["qid"], record["qid_conflict"], record["enwiki_title"]) == (
