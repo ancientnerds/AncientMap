@@ -81,7 +81,14 @@ from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
 from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import CANONICAL_TYPES
-from pipeline.utils.public_sites import RETIRED, SCOPE_STATUSES, is_retired, not_retired
+from pipeline.utils.public_sites import (
+    D57_STAGED_PREFIX,  # noqa: F401 - re-exported for the lanes, beside the D50 list
+    RETIRED,
+    SCOPE_STATUSES,
+    d57_staged,
+    is_retired,
+    not_retired,
+)
 from pipeline.utils.text import PERIOD_BUCKETS, UNDATED
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*\Z")
@@ -1175,6 +1182,17 @@ def d50_site_sql(alias: str = "u") -> str:
     """SQL: the row is one of `D50_DISPUTED_SITES`."""
     listed = ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
     return f"CAST({alias}.id AS text) IN ({listed})"
+
+
+def d57_staged_sql(alias: str = "u") -> str:
+    """SQL: the row is a staged D57 insert - the other retired rows a lane may be asked to work on.
+
+    Orchestrator decision O12 (2026-11-10): the insert lane (`insert_site/`) writes its rows hidden,
+    `retired` with a reason that begins `D57_STAGED_PREFIX`; the description and picture lanes work
+    on them while they are hidden, and the scope lane shows each once it holds both. The prefix and
+    the spelling are `pipeline.utils.public_sites`' own, because IndexNow reads them in the Lyra
+    image; the lanes take both from here."""
+    return d57_staged(alias)
 
 
 #: The scope lanes that retire (`scope-review-<wave>`, `scope-window-<wave>`) never retire a D50

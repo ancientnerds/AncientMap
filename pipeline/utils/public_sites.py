@@ -72,6 +72,25 @@ def is_retired(alias: str = "") -> str:
     return f"{_column(alias, 'scope_status')} = '{RETIRED}'"
 
 
+#: A site of the D57 insert lane is created hidden (orchestrator decision O12, 2026-11-10):
+#: ``scope_status = 'retired'`` with a ``scope_reason`` that begins with this text. It was never
+#: public - no page, no dot, no card draw - and the scope lane shows it only once it holds a
+#: description and a picture. No ``%``, ``_`` or quote: the text stands in a LIKE pattern.
+D57_STAGED_PREFIX = "D57 staged:"
+
+
+def d57_staged(alias: str = "") -> str:
+    """SQL predicate: the row is a staged D57 insert - retired, never shown yet.
+
+    Two-valued on purpose (never NULL), so ``NOT (d57_staged())`` keeps a retired row whose
+    reason is NULL: a reader that leaves the staged rows out must not lose the others with them.
+    """
+    return (
+        f"({_column(alias, 'scope_status')} IS NOT DISTINCT FROM '{RETIRED}' "
+        f"AND COALESCE({_column(alias, 'scope_reason')}, '') LIKE '{D57_STAGED_PREFIX}%')"
+    )
+
+
 def duplicate_survivor_id(scope_reason: str | None) -> str | None:
     """The survivor id of a ``duplicate_of:<uuid>`` retirement reason, else None.
 

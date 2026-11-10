@@ -9,6 +9,13 @@ Europe, Byzantium and the Vikings is out (L'Anse aux Meadows stays out). E8 (202
 hand review the list comes from. This is the one sanctioned exception to ENRICHMENT_AUDIT's "only
 the admin promotes to Originals".
 
+**The insert is staged** (orchestrator decision O12, 2026-11-10, under O4 and D143: no page goes
+public without text and picture). The rows are written hidden - `scope_status = 'retired'` with a
+`scope_reason` that begins `D57 staged:` - each with its `card_stats` row, in one journalled
+transaction. A staged site has no page (its URL answers 410), no dot, no sitemap line and no card
+draw. The description and picture lanes work on it while it is hidden, and the scope lane's
+journalled un-retire shows it once it holds both (section 6).
+
 Code: `scripts/remediation/insert_site/` (`candidates.py`, `research.py`, `plan.py`, `writer.py`,
 `run.py`); tests `tests/remediation/test_insert_site.py`; mutation cases `insert-site:` in
 `scripts/remediation/mechanical/mutation_sweep.py`. No model is called by the code; no migration,
@@ -95,11 +102,16 @@ $I emit              --run $R --step 1      # APPLY.sql, pinned; refused without
 $I rehearse          --run $R --step 1      # COMMIT -> ROLLBACK on production, 0 journal rows after
 $I probe-guards      --run $R --step 1      # 8 corrupted copies (7 without a radar-backed proposal), each refused by its own guard
 $I apply             --run $R --step 1      # the one write, then the read-back
-$I readback          --run $R --step 1      # plan = journal = data, both ways
+$I readback          --run $R --step 1      # plan = journal = data, both ways; a NOTE names recomputed card rows
 $I rehearse-rollback --run $R --step 1      # the undo's guards on the landed rows, rolled back
 $I accept            --run $R --step 1      # ACCEPTED.json (0 deviations, once), INSERTED_SITES.txt
 $I status            --run $R
 ```
+
+`plan`, `emit`, `rehearse` and `apply` refuse a step whose rows do not carry the staged reason
+(`REFUSED: ... the plan is not a staged insert - move the step aside and plan again`): a step
+planned before O12 says "in scope" and can no longer be written. `plan` prints `journal_rows`; the
+count of the stamp in `remediation_change_log` after `apply` must equal it.
 
 Exit codes of the writer steps (the shared writers'): 0 ok, 1 refused (nothing sent), 3 not
 committed, 4 committed but psql did not finish cleanly, 5 outcome unknown (read the journal under the
@@ -118,9 +130,10 @@ row per written column, `old_value` NULL, `new_value` read back from the created
   `source_id = 'ancient_nerds'`, `source_record_id = 'd57-<QID>'`, `name`, `name_normalized`
   (`site_key_sql`, the boot reconciliation's key), `lat`, `lon`, `geom`, `site_type`,
   `period_start`, `period_name` (the bucket; `Undated` with no start), `country`, `source_url`,
-  `edited_by = 'remediation-d57'`, `raw_data`, `scope_status = 'in_scope'`, `scope_reason` (D57,
-  the stamp), `updated_at = now()`, `parent_site_id` (pinned components only). `description` and
-  `thumbnail_url` stay NULL - their lanes write them.
+  `edited_by = 'remediation-d57'`, `raw_data`, `scope_status = 'retired'`, `scope_reason`
+  (`plan.staged_reason`: it begins `D57 staged:` - `public_sites.D57_STAGED_PREFIX` - and names the
+  stamp), `updated_at = now()`, `parent_site_id` (pinned components only). `description` and
+  `thumbnail_url` stay NULL - their lanes write them, which is why the row is written hidden.
 * **`raw_data`**: `_insert_provenance` (D57, run, item, article, every field's decision, quotes and
   answerer, the description's sources), `_period_provenance` (`quote`, or `undated`) and
   `_coord_provenance` (`quote`) - the `field_prov` markers (D12/D19), each hashing its value.
@@ -128,6 +141,13 @@ row per written column, `old_value` NULL, `new_value` read back from the created
   closed proposal whose key differs - what `POST /api/proposals/{id}/approve` writes.
 * **`site_external_ids`**: `wikidata_qid` and `enwiki_title` (the Prospector's rung 0; the daily
   refresh writes only for sites without a row).
+* **`card_stats`**: the site's row - the zeroed placeholder the admin import writes for a new site
+  (`plan.CARD_PLACEHOLDER`: the five stats, `total_power`, `rarity_score` and `rarity_tier` 0,
+  `category_group = 'unknown'`; no card text) and the site's country as `civilization`. The
+  card_stats lane and the card lane only UPDATE, so the row has to exist; the civilization is
+  written because the card_stats lane fills no NULL (a placeholder without it would make the first
+  wave that recomputes the site refuse its plan). 11 journal rows per site (`site_id` and the ten
+  columns, `row_pk` the site id, `change_key = 'insert-site:<QID>:card:<column>'`).
 * **`site_proposals`**: each open proposal naming the item or the article -> `approved`,
   `promoted_site_id`, `reviewed_by = 'remediation-d57'`, `reviewed_at`, `review_notes` (lane, D57,
   stamp, site), `updated_at`; journalled old -> new.
@@ -144,9 +164,22 @@ alias, Wikidata alias: the Prospector's same-name rung) - within 50 km; 5 every 
 key; 6 every proposal still holds what the plan read and mirrors the same contribution; 7 a parent
 is a shown curated site of the child's country within 5 km at depth one; 8 every radar contribution
 still holds what the plan read (and is not `promoted`). Invariants (after the writes): the rows stand
-as planned with a page (`curated_page`), the markers hash their values, exactly the planned names
-and ids, the proposals approved for the site, the contributions promoted to the site, the D25 parent
-invariants, exactly the planned journal rows per site.
+as planned and **staged** - curated, retired with the planned reason, which begins `D57 staged:`
+(`lane.d57_staged_sql`), and without a page (`curated_page` is false) -, the markers hash their
+values, exactly the planned names and ids, the zeroed `card_stats` placeholder with the country as
+civilization (no empires, no card text), the proposals approved for the site, the contributions
+promoted to the site, the D25 parent invariants, exactly the planned journal rows per site.
+
+**The card row and the API start.** `generator.backfill_placeholder_stats` recomputes every
+`card_stats` row with `rarity_tier = 0` on each API start (every deploy), unjournalled. So the
+read-back holds the card's journal rows to the plan always, and the row itself only while its
+`rarity_tier` is still 0; a recomputed row is the generator's and no deviation. `readback` prints
+a `NOTE` naming such rows and `accept` records them (`card_rows_recomputed` in `ACCEPTED.json`).
+Run `apply`, `readback`, `rehearse-rollback` and `accept` in one sitting anyway. The next
+card_stats wave reads past the creation's journal rows (`card_stats.created_cards`) and journals
+every cell of the new cards that differs from its recompute, from the stored value - the
+placeholder's, or what an API start made of it. A cell an API start already set to the recompute's
+value gets no journal row: for that cell the journal ends at the insert's placeholder value.
 
 **Each probe corrupts the temp table its guard reads** (`writer.probe_cases`): `_ins_site` for
 guards 1-4 and 7, `_ins_name` for 5, `_ins_prop` for 6, `_ins_contrib` for 8. Probe 5 corrupts the
@@ -181,17 +214,23 @@ radar created a row for the place - D14's question, never a second row). A radar
 other state is promoted with its proposal, never a refusal. A type or a start nobody could source is
 written empty (`Undated`) and listed in PLAN.md.
 
-## 5. Undo: retire, never delete
+## 5. Undo: the rows stay retired, never deleted
 
-`ROLLBACK.sql` (written by `plan`, pinned to the plan, rehearsed by `rehearse-rollback`) moves each
-site `in_scope -> retired` and its `scope_reason` to the undo's, through `apply_remediation_change()`
-(the scope lanes' write path), and restores each closed proposal and each promoted radar
-contribution to the values the plan read - one transaction, journalled under `<run stamp>-rollback`.
+The rows are written retired, so `ROLLBACK.sql` (written by `plan`, pinned to the plan, rehearsed by
+`rehearse-rollback`) moves only each site's `scope_reason`, from the staged one to the undo's
+(`D57 insert undone (...)`), through `apply_remediation_change()` (the scope lanes' write path) -
+one journal row per site; `scope_status` is not touched. Without the staged reason no lane works on
+the row and the scope lane's un-retire never shows it. It restores each closed proposal and each
+promoted radar contribution to the values the plan read - one transaction, journalled under
+`<run stamp>-rollback`.
 It locks those rows first (`FOR UPDATE`), refuses unless they still hold what the insert wrote
 (undo guards 2 and 3), restores only from those values (the same condition in the UPDATE's `WHERE`,
-the row count checked) and journals the values it replaced. The names and ids stay with the retired row:
+the row count checked) and journals the values it replaced. The names, ids and the `card_stats` row
+stay with the retired row:
 a retired site is hidden everywhere (its URL answers 410) but kept for matching, so the Prospector
-does not propose it again. Running it is a decision, never automatic:
+does not propose it again. Undo guard 1 expects the staged pair (`retired`, the planned reason): once
+the scope lane has shown a site, `ROLLBACK.sql` refuses as a whole, and a shown site leaves through
+the scope lanes. Running it is a decision, never automatic:
 
 ```bash
 ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" \
@@ -199,21 +238,28 @@ ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient
 $I readback --run $R --step 1 --rollback
 ```
 
-A retired insert comes back only through the scope lane (un-retire, journalled), never by a second
-insert: the plan refuses an item a curated row holds, retired or not.
+An undone insert never comes back by a second insert: the plan refuses an item a curated row holds,
+retired or not.
 
 ## 6. After the accept: how the new sites reach every lane
 
-`INSERTED_SITES.txt` (one site id per line) is the list the follow-up lanes take.
+`INSERTED_SITES.txt` (one site id per line) is the list the follow-up lanes take. The sites are
+**hidden** until step 6 below; steps 3 to 5 run on hidden rows. The driver's order, checks and the
+code each step still waits for are in the lane's playbook
+(`output/remediation/final-2026-10-08/drivers/d57-insert/PLAYBOOK.md`).
 
-1. **Page, sitemap, IndexNow.** The SSR page `/sites/{country}/{slug}` and the country hub serve the
-   row at once (`curated_page`: curated, a country, not retired); the sitemap lists it; the hourly
-   IndexNow cycle announces it (shown curated sites with journalled page writes,
-   `pipeline/indexnow.py`). The API's list and search caches expire within 30 minutes (the longest
-   TTL in `api/routes/sites.py`).
-2. **Static export** (the globe's `public/data/sites/index.json`): `docker exec ancient_nerds_api
-   python -m api.services.rebuild_static`, then `scripts/remediation/static_export_check.py` in the
-   API container (PROJECT_LESSONS: never as root).
+1. **No page yet.** A staged row is retired: `curated_page` is false, so the SSR route answers 410
+   for its URL, and the sitemap, the country hubs, the static export, the globe, the search and
+   every card draw leave it out. The 12 closed proposals and the 5 promoted radar contributions name
+   a site whose link answers 410 until step 6: keep the time short. **IndexNow**: the hourly cycle
+   announces every curated site whose journal wrote `scope_status = 'retired'` in the last two
+   hours as a removed page (`pipeline/indexnow.py`, `_RETIRED_SITES_SQL`), and the insert journals
+   exactly that row. That statement must leave the staged rows out
+   (`NOT public_sites.d57_staged(...)`) **and be deployed in the Lyra image before `apply`** -
+   a separate change, not part of this lane's code.
+2. **Read the hidden rows.** Every lane's population read drops a retired site. The lanes of steps
+   4 and 5 have to admit a staged one - by the predicate `mechanical.lane.d57_staged_sql(alias)`
+   (SQL) and the prefix `D57_STAGED_PREFIX`, and only for the ids a `--sites` list names.
 3. **Names in every language**: `docker exec ancient_nerds_api python -m
    pipeline.wikidata_name_backfill --apply` (it runs over every site with a QID; the constraint drops
    what exists).
@@ -221,26 +267,25 @@ insert: the plan refuses an item a curated row holds, retired or not.
    the WC tool - `scripts/remediation/wc/cli.py export --wn --sites INSERTED_SITES.txt` - with the
    `description_sources` in `raw_data._insert_provenance` as the researcher's lead. D22: a site that
    stays without a text gets no card and no Short.
-5. **Pictures (D17)**: the population is re-derived at write time from every shown curated site
-   with no image row and no `thumbnail_url` (`candidate_search/population.py`) - the new sites are in
-   it, with their item and article from `site_external_ids` and a sourced point (their
-   `_coord_provenance`), so the geotag route searches around them.
-6. **Cards (WB, D53 judge) - OPEN, no path yet**: a new site has **no `card_stats` row** - the
-   insert writes none, and both the card lane and the card_stats lane only UPDATE
-   (`apply_remediation_change()`; the card_stats lane reports a missing row and writes nothing). So
-   the card part of D57 needs a follow-up task that does not exist yet: **a journalled `card_stats`
-   insert step for the rows of `INSERTED_SITES.txt`, built on this lane's pattern** (plan -> emit ->
-   rehearse -> probe-guards -> apply -> read-back -> accept, with its own journalled undo), owned by
-   the close-out orchestrator as an explicit sub-task of S10 that has to be done before S10 is
-   marked done; never `python -m
-   api.cardgame.generator`, which rewrites every card unjournalled. Until it lands, the card waves
-   skip every new site and D57 is not done for cards. After it: the card_stats wave computes the
-   stats, then `scripts/remediation/teaser/run.py select --sites INSERTED_SITES.txt` after the
-   description. The card_stats lane itself keeps working across the
-   insert: its counterfactual treats a site whose journalled insert lies after the basis horizon as
-   absent at the basis (`mechanical/card_stats.counterfactual_sites`), and the new sites count in
-   the next recompute's `mystery` shares, as the generator counts them.
-7. **Identity**: D25 for the reverse relations (the new site as the parent of curated components:
+5. **Pictures (D17)**: the population is derived from every shown curated site with no image row
+   and no `thumbnail_url` (`candidate_search/population.py`), so a staged site is in it only once
+   that read admits it (step 2); the sites carry their item and article in `site_external_ids` and
+   a sourced point (their `_coord_provenance`), so the geotag route searches around them.
+6. **Go live**: the scope lane's journalled un-retire (`mechanical/scope_unretire.py`), for each
+   staged site that holds a description and a hero picture - a class of its own that the lane has
+   to know (`retired`, the staged reason). A site that ends without text or picture stays hidden
+   and goes on the owner list. Then the static export (`docker exec ancient_nerds_api python -m
+   api.services.rebuild_static`, `scripts/remediation/static_export_check.py` in the API container;
+   PROJECT_LESSONS: never as root) and IndexNow.
+7. **Cards (WB, D53 judge)**: every new site has its `card_stats` row from the insert. A card_stats
+   wave (`mechanical/card_stats.py --wave <label>`) computes the stats of each site with a
+   description: its basis stays the last wave's (the creation's journal rows name none), its
+   counterfactual treats a site whose journalled insert lies after the basis horizon as absent at
+   the basis (`counterfactual_sites`), and the new sites count in the recompute's `mystery` shares,
+   as the generator counts them. Then `scripts/remediation/teaser/run.py select --sites ...` over
+   the shown sites (lane WB reads only shown sites). Never `python -m api.cardgame.generator`,
+   which rewrites every card unjournalled.
+8. **Identity**: D25 for the reverse relations (the new site as the parent of curated components:
    Ephesus Archaeological Museum, Miletus Ancient Theatre, Susa's Darius palace, KV62 under the
    Valley of the Kings) through the parent lane's own judges; D23's spoken name with the next
    discovery run (`identity/export.py` reads every shown curated site).
@@ -251,8 +296,17 @@ insert: the plan refuses an item a curated row holds, retired or not.
   parsed offline by libpg_query (pglast 8.7, installed into a scratch directory, not the venv: the
   outer statements and the DO bodies of the apply, the undo and all eight probes, for a step with a
   radar-backed proposal, one with a plain proposal and one with none; re-run 2026-10-24 after the
-  contribution, old-value and alias changes), and the plan's read ran read-only against production
-  on 2026-10-24. Types are not checked offline: the rehearsal is the first semantic check.
+  contribution, old-value and alias changes, and 2026-11-10 after the staged insert and the
+  `card_stats` row, then with every statement inside the DO bodies parsed on its own), and the
+  plan's read ran read-only against production on 2026-10-24. Types are not checked offline: the
+  rehearsal is the first semantic check - also for the `card_stats` INSERT, whose column list and
+  defaults (`empires` `'[]'::jsonb`, `empire_count` 0, no trigger) were read from production's
+  catalog on 2026-11-10.
+* The staged insert has not run: no step was planned, rehearsed or probed with this code (the
+  builder had read-only access). The first `rehearse` and `probe-guards` are its first execution.
+* A cell of a new card that an API start set to the recompute's value before the first card_stats
+  wave is never journalled as a change (section 4): `apply_remediation_change()` refuses a write
+  that changes nothing, and the lane has no journal-only row.
 * The alias twin check (guard 4 and the plan's read) found no candidate refused on 2026-10-24: the
   37 labels and articles match curated names or aliases only far away (Antioch of Pisidia 500 km,
   Pella in Jordan 1,487 km, the Roman Circus of Merida 1,624 km).

@@ -26,15 +26,21 @@ Beside the row, in the same transaction, what a curated site carries in its own 
   `enrichment_status = 'promoted'` with `promoted_site_id`: what `POST /api/proposals/{id}/approve`
   does in its own transaction (`_mirror_contribution`), so the radar counts the place as added and
   never offers it for a second promotion. 5 of the 11 proposals of `d57-2026-10-24` mirror one
-  (Nineveh, KV62, Sanxingdui, Nan Madol, Chaco Canyon; all `enriched` on 2026-10-24).
+  (Nineveh, KV62, Sanxingdui, Nan Madol, Chaco Canyon; all `enriched` on 2026-10-24);
+* `card_stats` - its row, the zeroed placeholder the admin import writes for a new site
+  (`CARD_PLACEHOLDER`) with the site's country as its `civilization`: the card_stats lane and the
+  card lane only UPDATE, so without it the site could never get its stats or a card.
 
 **`raw_data`** carries the provenance: `_insert_provenance` (the decision, the run, the item, every
 field's quotes and who answered them, the description's sources), and the two markers the fields
 lanes write (`mechanical/field_prov.py`, D12/D19): `_period_provenance` (`quote`, or `undated` for a
 start nobody could source) and `_coord_provenance` (`quote`), each hashing the value it describes.
 
-**`scope_status` is `in_scope`** with a reason naming D57: the site was assessed (E8's hand review,
-D57, D58's window), and the undo is the transition `in_scope -> retired` (`writer.py`).
+**The row is written hidden** (orchestrator decision O12, 2026-11-10): `scope_status` is `retired`
+and `scope_reason` begins with `D57_STAGED_PREFIX` (`pipeline/utils/public_sites.py`). The insert
+writes no description and no picture, and a page without them must never be public (O4, D143), so
+the site has no page, no dot and no card draw until the scope lane's journalled un-retire shows it
+with both. The undo keeps it retired and moves only the reason (`writer.py`).
 
 **What makes a candidate a refusal** (`REFUSALS.jsonl`, first failure wins; the site is not
 inserted and goes on the owner list):
@@ -92,7 +98,7 @@ from pipeline import periods as PV  # noqa: E402
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402
 from pipeline.normalizers.dates import AMERICAS, OCEANIA, e3_region  # noqa: E402
 from pipeline.utils.geo import haversine_distance  # noqa: E402
-from pipeline.utils.public_sites import RETIRED, not_retired  # noqa: E402
+from pipeline.utils.public_sites import D57_STAGED_PREFIX, RETIRED, not_retired  # noqa: E402
 from pipeline.utils.text import UNDATED as UNDATED_LABEL  # noqa: E402
 from pipeline.utils.text import categorize_period  # noqa: E402
 
@@ -104,7 +110,6 @@ MAX_SITES = 100
 NAME_TWIN_METRES = 50_000
 EDITED_BY = "remediation-d57"  # `edited_by` is character varying(20)
 REVIEWED_BY = "remediation-d57"
-IN_SCOPE = "in_scope"
 TEST_ID = "D57/insert-site"
 #: The journal's confidence: one quote from one source per value (the `recheck` rule of the fields
 #: lanes, `fields/rule.py`), the vocabulary of the fields lanes' one-source writes.
@@ -137,6 +142,30 @@ PROPOSAL_COLUMNS = (
 #: in `api/routes/proposals.py` writes these two), each compared as text.
 CONTRIBUTION_COLUMNS = ("enrichment_status", "promoted_site_id")
 PROMOTED = "promoted"
+#: The `card_stats` row of a new site, created in the insert's transaction: the zeroed placeholder
+#: the admin import writes for a new site (`api/routes/sites.py`, "Batch UPSERT card_stats" - these
+#: nine columns; the table's defaults give no empires and no card text). Every card query filters
+#: on `rarity_tier`, so the placeholder is a card nobody can draw.
+CARD_PLACEHOLDER: tuple[tuple[str, int | str], ...] = (
+    ("antiquity", 0),
+    ("fortification", 0),
+    ("cultural_influence", 0),
+    ("mystery", 0),
+    ("legacy", 0),
+    ("total_power", 0),
+    ("rarity_score", 0),
+    ("rarity_tier", 0),
+    ("category_group", "unknown"),
+)
+#: The column that tells a placeholder: `generator.backfill_placeholder_stats` recomputes every row
+#: with `rarity_tier = 0` on each API start, unjournalled, and no recompute leaves it 0
+#: (`constants.get_rarity_tier` answers 1 to 5). A row that still holds 0 is the row as written.
+CARD_TIER = "rarity_tier"
+#: The one column the insert writes beyond the admin import's nine: the card's `civilization` is the
+#: site's country (`api/cardgame/stats.py:compute_all_stats`). The card_stats lane moves a cell from
+#: a value and fills no NULL (`card_stats.CELLS`), so a placeholder left without a civilization
+#: would make the first wave that recomputes the site refuse its whole plan.
+CARD_CIVILIZATION = "civilization"
 
 
 def twin_predicate(site: str, key: str) -> str:
@@ -202,12 +231,21 @@ class Insert:
             "source_url": self.source_url,
             "edited_by": EDITED_BY,
             "raw_data": None,  # compared as jsonb, not as text: see `journal_rows`
-            "scope_status": IN_SCOPE,
+            "scope_status": RETIRED,  # O12: written hidden, shown by the scope lane's un-retire
             "scope_reason": self.scope_reason,
             "updated_at": None,  # now(): read back, never planned
             "parent_site_id": self.parent_site_id,
         }
         return {k: v for k, v in out.items() if v is not None}
+
+    def card_columns(self) -> dict[str, str]:
+        """Every `card_stats` column the INSERT names, as Postgres prints it back: the row's key,
+        the placeholder and the country as its civilization - the journal carries one row each."""
+        return {
+            "site_id": self.site_id,
+            **{c: str(v) for c, v in CARD_PLACEHOLDER},
+            CARD_CIVILIZATION: self.country,
+        }
 
     @property
     def contributions(self) -> list[dict[str, Any]]:
@@ -218,12 +256,14 @@ class Insert:
     def journal_rows(self) -> int:
         """The rows the journal must carry for this site: the row's columns (`raw_data` and
         `updated_at` are written too and journalled from the row), four per name row, one per
-        external id, six per closed proposal, two per promoted radar contribution."""
+        external id, the `card_stats` row's columns, six per closed proposal, two per promoted
+        radar contribution."""
         return (
             len(self.site_columns())
             + 2
             + 4 * len(self.names)
             + len(self.external_ids)
+            + len(self.card_columns())
             + len(PROPOSAL_COLUMNS) * len(self.proposals)
             + len(CONTRIBUTION_COLUMNS) * len(self.contributions)
         )
@@ -343,6 +383,16 @@ def scope_refusal(period_start: int | None, country: str, lat: float, lon: float
         if iso is not None and _continents().get(iso) == "Europe":
             return "scope-d58-europe"
     return None
+
+
+def staged_reason(run_stamp: str) -> str:
+    """The `scope_reason` a new row is written with (O12): it begins with `D57_STAGED_PREFIX`, which
+    is what marks the retired row as a staged insert for every lane that may work on it."""
+    return (
+        f"{D57_STAGED_PREFIX} inserted hidden as an Ancient Nerds Original by the insert lane, "
+        f"{run_stamp} (D57, in scope under D58); shown by the scope lane once it holds a "
+        "description and a picture (O12)"
+    )
 
 
 def marker(kind: str, run_stamp: str, premise: str) -> dict[str, Any]:
@@ -748,10 +798,7 @@ def build_inserts(
                 source_url=str(_value(mine, "source_url")),
                 enwiki_title=str(line["enwiki_title"]),
                 raw_data=raw,
-                scope_reason=(
-                    f"D57 (owner, 2026-10-24): inserted as an Ancient Nerds Original by the insert "
-                    f"lane, {step.run_stamp}; in scope under D58"
-                ),
+                scope_reason=staged_reason(step.run_stamp),
                 parent_site_id=parent_id,
                 names=names,
                 external_ids=[
@@ -909,6 +956,11 @@ def render_md(step: Step) -> str:
         + f"; {sum(len(i.proposals) for i in step.inserts)} proposal(s) to close, "
         f"{sum(len(i.contributions) for i in step.inserts)} radar contribution(s) to mark "
         f"promoted, {sum(i.journal_rows for i in step.inserts)} journal rows.",
+        "",
+        f"Every site is written hidden: `scope_status = '{RETIRED}'`, `scope_reason` beginning "
+        f"`{D57_STAGED_PREFIX}` - no page, no dot, no card draw until the scope lane shows it with "
+        "a description and a picture (O12). Each gets a zeroed `card_stats` row in the same "
+        "transaction.",
         "",
         "| item | name | country | point | type | start | period | page | parent | names | "
         "proposals closed (radar contribution promoted) |",

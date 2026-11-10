@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+from insert_site import plan as INSERT_P  # noqa: E402
 from mechanical import apply as A  # noqa: E402
 from mechanical import card_stats as C  # noqa: E402
 from mechanical import lane as L  # noqa: E402
@@ -308,6 +309,8 @@ class TestTheCounterfactual:
 WAVE = C.FIRST_WAVE
 NEXT = C.card_stats_lane("2026-09-24")
 UNESCO = "A UNESCO World Heritage temple."
+#: The stamp the D57 insert lane journals under (`insert_site/plan.py:Step.run_stamp`).
+INSERT_STAMP = "d57-2026-11-05_insert-site-s001"
 
 
 def bases_in(root: Path) -> Any:
@@ -605,6 +608,153 @@ class TestTheBasis:
                 export([*rows, added], (below, *entries)), NEXT, built_at="t",
                 bases=bases_in(tmp_path),
             )  # fmt: skip
+
+    def inserted(
+        self, tmp_path: Path, **site: Any
+    ) -> tuple[list[dict[str, Any]], tuple[dict, ...]]:
+        """Wave W applied, then the D57 insert lane created SITE_B and its `card_stats` row: the
+        export a later wave reads. The site holds the zeroed placeholder unless `site` says what
+        the row holds; the journal carries the creation as the insert's writer journals it."""
+        rows, entries, _ = self.scenario(tmp_path)
+        first = len(entries) + 100
+        placeholder = {f"stored_{column}": value for column, value in INSERT_P.CARD_PLACEHOLDER}
+        created = {
+            **row(SITE_B, site_type="Cairn"),
+            **placeholder,
+            "stored_civilization": "Malta",  # the row's country, which the insert writes
+            "stored_empires": "[]",
+            "stored_empire_count": 0,
+            **site,
+        }
+        written = [
+            ("site_id", SITE_B),
+            *((c, str(v)) for c, v in INSERT_P.CARD_PLACEHOLDER),
+            (INSERT_P.CARD_CIVILIZATION, "Malta"),
+        ]
+        journal = [{**jrow(first, SITE_B, "id", None, SITE_B), "run_stamp": INSERT_STAMP}]
+        journal += [
+            {
+                **jrow(first + n, SITE_B, column, None, value, "card_stats"),
+                "run_stamp": INSERT_STAMP,
+            }
+            for n, (column, value) in enumerate(written, start=1)
+        ]
+        return [*rows, created], (*entries, *journal)
+
+    def test_a_card_the_insert_lane_created_is_not_a_foreign_write(self, tmp_path: Path) -> None:
+        """D57: the insert journals the `card_stats` row it creates - nine of the twelve columns
+        among them, from NULL. They are the first values of a card that did not exist, so the
+        basis stays the last wave's; before this the next wave refused with "no card_stats wave's
+        write or undo"."""
+        rows, entries = self.inserted(tmp_path, description=None)
+        assert C.created_cards(entries) == {(INSERT_STAMP, SITE_B)}
+        assert C.basis_pointer(entries) == (WAVE, "after")
+        result = C.build_card_stats_plan(
+            export(rows, entries), NEXT, built_at="t", bases=bases_in(tmp_path)
+        )
+        assert result.proof.pointer == (WAVE, "after")
+        assert result.proof.counters["counterfactual_sites_added_since_basis"] == 1
+        assert [(s.site_id, s.reason) for s in result.plan.skipped] == [(SITE_B, "no-description")]
+        assert not result.plan.changes
+        # with no wave at all, a creation still names no basis
+        created = tuple(j for j in entries if j["run_stamp"] == INSERT_STAMP)
+        assert C.basis_pointer(created) is None
+
+    def test_only_the_rows_of_a_creation_are_read_past(self, tmp_path: Path) -> None:
+        """A row of the twelve columns under the insert's stamp that is no part of a creation is
+        a foreign write like any other: one from a value (no creation writes over a value), one
+        on a card whose `site_id` row the stamp never journalled."""
+        _, entries = self.inserted(tmp_path)
+        last = max(int(j["id"]) for j in entries)
+        over = {
+            **jrow(last + 1, SITE_B, "mystery", "0", "7", "card_stats"),
+            "run_stamp": INSERT_STAMP,
+        }
+        with pytest.raises(P.PlanError, match="no card_stats wave's write or undo"):
+            C.basis_pointer((*entries, over))
+        other = {
+            **jrow(last + 1, SITE_A, "mystery", None, "0", "card_stats"),
+            "run_stamp": INSERT_STAMP,
+        }
+        with pytest.raises(P.PlanError, match="no card_stats wave's write or undo"):
+            C.basis_pointer((*entries, other))
+        # a `site_id` row that names another card's key creates nothing on this one
+        miskeyed = {
+            **jrow(last + 2, SITE_A, "site_id", None, SITE_B, "card_stats"),
+            "run_stamp": INSERT_STAMP,
+        }
+        assert C.created_cards((miskeyed,)) == set()
+        with pytest.raises(P.PlanError, match="no card_stats wave's write or undo"):
+            C.basis_pointer((*entries, other, miskeyed))
+        keyless = tuple(j for j in entries if j["column_name"] != "site_id")
+        with pytest.raises(P.PlanError, match="no card_stats wave's write or undo"):
+            C.basis_pointer(keyless)
+
+    def test_the_wave_after_an_insert_journals_the_placeholder_s_cells(
+        self, tmp_path: Path
+    ) -> None:
+        """The site has its description now: every cell that differs from the zeroed placeholder
+        is planned from the placeholder's value (tier 0, group `unknown`), the plan and its
+        reversal render on the lane, and the wave after it stands on this one and plans nothing."""
+        rows, entries = self.inserted(tmp_path)
+        wave = plan_wave(rows, entries, tmp_path, wave="2026-09-24")
+        assert wave.proof.pointer == (WAVE, "after")
+        cells = {c.column: (c.old_value, c.new_value) for c in wave.plan.changes}
+        assert {c.site_id for c in wave.plan.changes} == {SITE_B}
+        computed = C.recompute(rows, ORDER)[SITE_B]
+        assert cells["rarity_tier"] == ("0", str(computed["rarity_tier"]))
+        assert cells["category_group"] == ("unknown", computed["category_group"])
+        assert "civilization" not in cells  # the insert wrote the country: nothing to fill
+        assert (
+            set(cells) == {c for c in C.COLUMNS if C.stored(rows[-1], c) != computed[c]}
+            and len(cells) >= 8
+        )
+        plan_path = tmp_path / "PLAN.jsonl"
+        P.write_plan_jsonl(wave.plan, plan_path)
+        P.write_rollback_sql(wave.plan, tmp_path / "ROLLBACK.sql", plan_path=plan_path)
+        A.validate_records(A.load_records(plan_path), lane=NEXT)
+        after, journal = applied(rows, entries, wave, first_id=1000)
+        result = C.build_card_stats_plan(
+            export(after, journal),
+            C.card_stats_lane("2026-09-25"),
+            built_at="t",
+            bases=bases_in(tmp_path),
+        )
+        assert result.proof.pointer == ("2026-09-24", "after") and not result.plan.changes
+        assert result.proof.counters["counterfactual_sites_added_since_basis"] == 0
+
+    def test_the_wave_after_an_api_start_journals_the_cells_that_differ(
+        self, tmp_path: Path
+    ) -> None:
+        """`generator.backfill_placeholder_stats` recomputed the zeroed row on an API start,
+        unjournalled, before the site had its picture: the stored cells are the generator's of
+        that day, not the journal's placeholder. The wave is not refused; it plans every cell
+        that differs from today's recompute, from the stored value, and no other."""
+        at_boot = row(SITE_B, site_type="Cairn", thumbnail_url=None, wiki_images=0)
+        boot = C.recompute([at_boot], ORDER)[SITE_B]
+        assert boot["rarity_tier"] != 0
+        stored = {
+            f"stored_{c}": (C.cell_text(c, boot[c]) if c == "empires" else boot[c])
+            for c in C.COLUMNS
+        }
+        rows, entries = self.inserted(tmp_path, **stored)
+        wave = plan_wave(rows, entries, tmp_path, wave="2026-09-24")
+        today = C.recompute(rows, ORDER)[SITE_B]
+        moved = {c for c in C.COLUMNS if boot[c] != today[c]}
+        assert moved and "cultural_influence" in moved
+        assert {(c.site_id, c.column) for c in wave.plan.changes} == {(SITE_B, c) for c in moved}
+        assert all(
+            c.old_value == C.cell_text(str(c.column), boot[c.column]) for c in wave.plan.changes
+        )
+        after, journal = applied(rows, entries, wave, first_id=1000)
+        result = C.build_card_stats_plan(
+            export(after, journal),
+            C.card_stats_lane("2026-09-25"),
+            built_at="t",
+            bases=bases_in(tmp_path),
+        )
+        assert not result.plan.changes
+        assert result.proof.counters["counterfactual_cells_differing"] == 0
 
     def test_a_row_committed_below_the_horizon_after_the_export_refuses(
         self, tmp_path: Path
