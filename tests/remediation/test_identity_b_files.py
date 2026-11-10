@@ -234,3 +234,14 @@ class TestTheReadOnlyReader:
             ("w2", "d", "gone"),
         ]
         assert set(got[0]) == {"wave", "site_id", "name", "reason", "note"}
+
+    def test_a_skip_keeps_what_its_plan_recorded(self, tmp_path: Path) -> None:
+        """The D20 plan says with a skip `entry-moved` when it read production (`read_at`):
+        `export-moved` reads it from the listed row."""
+        lane = tmp_path / "lane"
+        waves.select_wave(lane, "w1", {"a"}, limit=1, built_at="t")
+        row = {"site_id": "a", "name": "A", "reason": "entry-moved", "note": "n", "read_at": "T"}
+        (tmp_path / "w1.jsonl").write_text(json.dumps(row) + "\n", "utf-8")
+        assert waves.wave_skips(lane, lambda wave: [tmp_path / "w1.jsonl"]) == [
+            {"wave": "w1", **row}
+        ]

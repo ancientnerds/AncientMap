@@ -98,8 +98,9 @@ def wave_skips(
     lane_dir: Path, plan_skip_files: Callable[[str], Sequence[Path]]
 ) -> list[dict[str, Any]]:
     """The sites the plans of every wave left out, one row per site and wave (the first reason
-    wins): `wave`, `site_id`, `name`, `reason`, `note`. `plan_skip_files(wave)` names the wave's
-    skip files; a skip that leaves nothing to write (`NOTHING_LEFT`) is not listed."""
+    wins): `wave` and the row as the plan wrote it (`site_id`, `name`, `reason`, `note`; a D20 skip
+    `entry-moved` also says when its plan read production, `read_at`). `plan_skip_files(wave)` names
+    the wave's skip files; a skip that leaves nothing to write (`NOTHING_LEFT`) is not listed."""
     rows: list[dict[str, Any]] = []
     for record in all_waves(lane_dir):
         seen: set[str] = set()
@@ -110,10 +111,5 @@ def wave_skips(
                 if row["site_id"] in seen or row["reason"] in NOTHING_LEFT:
                     continue
                 seen.add(row["site_id"])
-                rows.append(
-                    {
-                        "wave": record["wave"],
-                        **{k: row[k] for k in ("site_id", "name", "reason", "note")},
-                    }
-                )
+                rows.append({"wave": record["wave"], **row})
     return rows

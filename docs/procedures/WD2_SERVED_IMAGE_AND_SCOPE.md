@@ -223,13 +223,14 @@ the rendered SQL evaluated in SQLite equals the Python rule row for row),
 
 **A D20 site whose entry moved since its question (`export-moved`).** The scope-window plan writes a
 decision only on the entry it judged (name, type, country, point, period, scope status and reason);
-a site another lane changed in between is skipped `entry-moved`, with nothing written. Such a site
-is asked again, not left to the owner list:
+a site another lane changed in between is skipped `entry-moved`, with nothing written; the skip row
+says when the plan read production (`read_at`, the database's clock). Such a site is asked again,
+not left to the owner list:
 
 ```bash
 PY=./.venv/Scripts/python.exe; I=scripts/remediation/identity
-$PY $I/export.py && $PY $I/scope_window.py     # a discovery read after the move (the other identity
-                                               # lanes read EXPORT.jsonl too: only when none has a round open)
+$PY $I/export.py && $PY $I/scope_window.py     # a discovery read after the plan that skipped the site (the other
+                                               # identity lanes read EXPORT.jsonl too: only when none has a round open)
 $PY $I/run.py --lane scope-window export-moved --stage scope-window-web --handoff DIR
 #   brief, answer, validate, import as for any round; export-reask for a held answer
 $PY $I/run.py --lane scope-window export --stage scope-window-recheck --handoff DIR2        # a site never re-checked
@@ -243,8 +244,16 @@ $PY $I/run.py --lane scope-window wave --wave W2     # a new label; then plan an
   plain question (the earlier answer judged another entry). It prints `left_population`: skipped
   sites the discovery no longer lists (retired by another lane, or back inside the window with no
   decision open), which are not asked. It refuses (`REFUSED: ... build the discovery again first`)
-  while the discovery still holds a skipped site exactly as it was asked, and
-  `no decided site is to be asked again` when nothing is open.
+  a discovery that was not read after the plan that found the move (the export's `exported_at`
+  against the skip's `read_at`): building the discovery again always clears that refusal. It
+  answers `no decided site is to be asked again` when nothing is open.
+* Whether the entry still differs from the one asked is not tested. A site whose move was undone
+  since (the other lane's write rolled back) reads as it was asked and is asked again like the
+  others: its wave is past, and only an imported moved round opens it for a new one.
+* While the moved web round is exported and not imported, the answer that stands is the earlier
+  one, about the earlier entry: a `plan` of the wave that skipped the site made again (it has no
+  `APPLY.sql`) compares production with that entry (`rounds.judged_contexts`) and skips the site
+  `entry-moved` again. It never writes the earlier answer onto the entry the new round asks about.
 * A re-check answered before the web answer it would stand for confirms nothing
   (`scope_judge.precedes`): the site is `waiting-for-recheck` in `result`, the plan refuses it, and
   the re-check command asks it again with the new proposal.
@@ -257,8 +266,9 @@ $PY $I/run.py --lane scope-window wave --wave W2     # a new label; then plan an
   shows no retired site; the footpath's group is then empty).
 
 Tests: `tests/remediation/test_identity_b_scope.py` (`TestAnEntryThatMoved`, the re-check that
-precedes), `test_identity_b_rounds.py` (the moved round), `test_identity_b_files.py` (a released
-site), `test_identity_b_run.py` (the whole path through the command line).
+precedes), `test_identity_b_rounds.py` (the moved round, the context a decision judged),
+`test_identity_b_files.py` (a released site, a skip row kept whole), `test_identity_b_run.py` (the
+whole path through the command line, a plan made again before the import, a move that was undone).
 
 ---
 

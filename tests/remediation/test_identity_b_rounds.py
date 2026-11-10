@@ -318,11 +318,17 @@ class TestTheImport:
         prompt = (tmp_path / "h2" / "r2-b01" / "toy-web" / f"{A_ID}.prompt.txt").read_text("utf-8")
         assert prompt == "Question about Alpha the Great."
         assert R.asked_again(out) == set(), "exported only: the round has decided nothing yet"
+        # ... and the decision that stands judged the entry of its own round, not the new one
+        assert R.load_contexts(out)[A_ID]["name"] == "Alpha the Great"
+        judged = R.judged_contexts(out)
+        assert sorted(judged) == [A_ID, B_ID]
+        assert judged[A_ID] == questions()[0].context != renamed.context
         answer_all(tmp_path / "h2", again, SPEC, {A_ID: {"site_id": A_ID, "ok": False}})
         summary = run_import(out, "r2")
         assert (summary["held"], summary["sites_decided_overall"]) == (1, 1)
         assert R.asked_again(out) == {(A_ID, "wave w1")}
         assert R.load_contexts(out)[A_ID]["name"] == "Alpha the Great"
+        assert R.judged_contexts(out)[A_ID] == renamed.context
         # the new answer is held: the re-ask asks it on the moved round's context, and the moved
         # round used up neither of the two re-asks
         for number in (3, 4):

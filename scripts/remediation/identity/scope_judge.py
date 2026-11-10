@@ -36,9 +36,12 @@ other European site, its cutoff 500 AD.
 `pending` -> `retired` transitions are the dangerous ones).
 
 **An entry that moved.** The plan writes a decision only on the entry it judged (`JUDGED`); a site
-whose entry changed since is skipped `entry-moved`. `run.py export-moved` asks it again, on its
-entry as a discovery built after the move holds it (`moved_questions`), in a round of its own; a
-site that left the population is not asked. A re-check answered before the web answer it would
+whose entry changed since is skipped `entry-moved`, and the skip says when the plan read production
+(`read_at`, the database's clock). `run.py export-moved` asks it again, on its entry as a discovery
+read after that plan holds it (`moved_questions`), in a round of its own; a site that left the
+population is not asked, and one whose move was undone is asked like the others. Until that round
+is imported the answer that stands is about the earlier entry, and the plan compares it with that
+one (`rounds.judged_contexts`). A re-check answered before the web answer it would
 stand for read another proposal (`precedes`): it confirms nothing, the site waits for its re-check
 (`stale_rechecks`, the same command for the re-check stage), and the imported round opens the site
 for a new wave (`rounds.asked_again`).
@@ -724,7 +727,6 @@ def final_state(
 def moved_questions(
     skips: Sequence[Mapping[str, Any]],
     asked_again: Collection[tuple[str, str]],
-    stored: Mapping[str, Mapping[str, Any]],
     fresh: Mapping[str, Question],
 ) -> tuple[list[Question], dict[str, str], list[str]]:
     """The web questions of a moved round: every site a wave's plan skipped `entry-moved`
@@ -733,8 +735,12 @@ def moved_questions(
 
     Returns the questions, `site -> the wave that skipped it`, and the sites that are no longer in
     the population (retired, or back inside the window with no scope decision open): nothing of the
-    window is left to ask about them. A site the discovery still holds as it was asked (`stored`)
-    is refused: that discovery was read before the entry moved."""
+    window is left to ask about them. A discovery that was not read after the plan that found the
+    move (the context's `exported_at` against the skip's `read_at`, both the database's clock) is
+    refused: it cannot show the entry that plan found. Whether the entry still differs from the one
+    asked is no test of that: a site whose move was undone since reads as it was asked, and it is
+    asked again like the others - its wave is past, and only an imported moved round opens it for a
+    new one."""
     questions: list[Question] = []
     moved: dict[str, str] = {}
     left: list[str] = []
@@ -746,11 +752,11 @@ def moved_questions(
             left.append(sid)
             continue
         ctx = fresh[sid].context
-        if all(ctx[k] == stored[sid][k] for k in JUDGED):
+        if datetime.fromisoformat(ctx["exported_at"]) <= datetime.fromisoformat(row["read_at"]):
             raise common.IdentityError(
-                f"{sid} ({ctx['name']}) is in the discovery as it was asked, but the plan of wave "
-                f"{wave} found its entry changed: build the discovery again first (export.py, "
-                "scope_window.py)"
+                f"the discovery was read {ctx['exported_at']}, not after the plan of wave {wave} "
+                f"found the entry of {sid} ({ctx['name']}) changed ({row['read_at']}): build the "
+                "discovery again first (export.py, scope_window.py)"
             )
         questions.append(fresh[sid])
         moved[sid] = wave
@@ -774,11 +780,12 @@ def stale_rechecks(
 
 # ------------------------------------------------------------------------------------ the plan
 def live_sql(site_ids: Sequence[str]) -> str:
-    """The entries as production holds them now, with the lane's premise. Read-only."""
+    """The entries as production holds them now, with the lane's premise and the database's clock
+    at the read (`read_at`, as the export's `exported_at` is). Read-only."""
     ids = ", ".join(f"{sql_literal(s)}::uuid" for s in sorted(site_ids))
     return (
         "SELECT u.id::text AS site_id, u.source_id, u.name, u.site_type, u.country, u.lat, u.lon, "
-        "u.period_start, u.period_end, u.scope_status, u.scope_reason, "
+        "u.period_start, u.period_end, u.scope_status, u.scope_reason, now()::text AS read_at, "
         f"{SCOPE_REVIEW_PREMISE_SQL} AS premise FROM unified_sites u WHERE u.id IN ({ids}) "
         "ORDER BY u.id"
     )
@@ -865,9 +872,9 @@ def build(
     passed in)."""
     plan = ScopePlan(scope_window_lane(wave))
 
-    def skip(sid: str, reason: str, note: str) -> None:
+    def skip(sid: str, reason: str, note: str, **more: Any) -> None:
         plan.skipped.append(
-            {"site_id": sid, "name": asked[sid]["name"], "reason": reason, "note": note}
+            {"site_id": sid, "name": asked[sid]["name"], "reason": reason, "note": note, **more}
         )
 
     for sid in sorted(final):
@@ -889,6 +896,7 @@ def build(
                 "the entry the decision judged changed: "
                 + "; ".join(moved)
                 + " - `export-moved` asks it again",
+                read_at=now["read_at"],
             )
             continue
         if now["scope_status"] == RETIRED:

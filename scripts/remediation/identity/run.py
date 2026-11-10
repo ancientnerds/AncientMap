@@ -25,7 +25,7 @@ probe-guards, apply, read-back, rehearse-rollback.
     $PY $I/run.py --lane L export-reask --stage S --handoff DIR2              # the held sites, r2/r3
     $PY $I/run.py --lane L status --stage S
     # D20 only: the decided sites a wave's plan skipped `entry-moved`, asked again on their entry as
-    # a discovery built after the move holds it (export.py, scope_window.py first); then, for the
+    # a discovery read after that plan holds it (export.py, scope_window.py first); then, for the
     # re-check stage, the retirements whose re-check was answered before that new web answer
     $PY $I/run.py --lane scope-window export-moved --stage scope-window-web --handoff DIR3
     $PY $I/run.py --lane scope-window export-moved --stage scope-window-recheck --handoff DIR4
@@ -233,7 +233,7 @@ def moved_round(
     fresh = {q.site_id: q for q in population()}
     if args.stage == scope_judge.WEB:
         skips = waves.wave_skips(run / scope_judge.LANE, _scope_skip_files)
-        return scope_judge.moved_questions(skips, R.asked_again(out), R.load_contexts(out), fresh)
+        return scope_judge.moved_questions(skips, R.asked_again(out), fresh)
     web = R.decisions_by_site(R.stage_dir(run, scope_judge.web_spec()))
     stale = scope_judge.stale_rechecks(web, R.decisions_by_site(out))
     return [fresh[sid] for sid in stale], stale, []
@@ -582,7 +582,9 @@ def cmd_scope(args: argparse.Namespace, run: Path) -> int:
                 f"wave {args.wave} holds no site any more: every one of its {len(taken)} was "
                 "asked again after its entry moved and belongs to a later wave"
             )
-        asked = R.load_contexts(web_dir)
+        # the entry each decision judged: a moved round that is exported and not imported has
+        # stored the site's new entry already, and the answer that stands is not about that one
+        asked = R.judged_contexts(web_dir)
         live = {str(r["site_id"]): r for r in read_only_reader()(scope_judge.live_sql(ids))}
         built = scope_judge.build({s: web[s] for s in ids}, second, asked, live, args.wave)
         mech = scope_judge.to_plan(built, _now())

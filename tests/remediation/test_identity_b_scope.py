@@ -45,6 +45,11 @@ WD_TEXT = "Ali Masjid fort in Pakistan"
 WEB_AT = "2026-10-09T02:00:00+00:00"
 RECHECK_AT = "2026-10-09T03:00:00+00:00"
 LATER_AT = "2026-10-20T02:00:00+00:00"
+#: The database's clock: when the discovery of `context` was read (its `exported_at`), when a plan
+#: read production (`live_row`), and a discovery read after that plan.
+ASKED_FROM = "2026-10-08 20:35:11+00"
+PLAN_READ_AT = "2026-10-12 08:00:00.5+00"
+READ_AFTER = "2026-10-12 08:00:00.500001+00"
 
 
 def q(url: str, text: str) -> dict[str, str]:
@@ -95,7 +100,7 @@ def context(sid: str = FORT, **over: Any) -> dict[str, Any]:
         rec,
         {"wikidata_qid": ["Q42"], "enwiki_title": ["Ali Masjid"]},
         [{"lang": "en", "title": "Ali Masjid", "path": "C:/cache/en/x.json"}],
-        "2026-10-08 20:35:11+00",
+        ASKED_FROM,
     )
     ctx.update({k: v for k, v in over.items() if k not in record()})
     return ctx
@@ -559,6 +564,7 @@ def live_row(sid: str = FORT, **over: Any) -> dict[str, Any]:
         "site_id": sid, "source_id": "ancient_nerds", "name": "Ali Masjid Fort",
         "site_type": "Fortress/citadel", "country": "Pakistan", "lat": 34.0, "lon": 71.2,
         "period_start": 1837, "period_end": None, "scope_status": None, "scope_reason": None,
+        "read_at": PLAN_READ_AT,
         "premise": "Ali Masjid Fort | Fortress/citadel | 34.0 | 71.2 | Pakistan | 1837 | NULL",
     }  # fmt: skip
     row.update(over)
@@ -701,6 +707,10 @@ class TestThePlan:
     ) -> None:
         plan = build({FORT: decision_for("OUT_OF_WINDOW")}, {} if live is None else {FORT: live})
         assert plan.changes == [] and [s["reason"] for s in plan.skipped] == [reason]
+        # the skip `export-moved` reads says when its plan read production, and no other does
+        assert [s.get("read_at") for s in plan.skipped] == [
+            PLAN_READ_AT if reason == "entry-moved" else None
+        ]
 
     def test_a_retired_site_is_left_alone(self) -> None:
         asked = {FORT: context(FORT, scope_status="retired")}
@@ -822,6 +832,7 @@ class TestThePlan:
         sql = SJ.live_sql([FORT])
         assert "concat_ws(' | ', u.name" in sql and f"'{FORT}'::uuid" in sql
         assert sql.lstrip().upper().startswith("SELECT")
+        assert "now()::text AS read_at" in sql, "the database's clock, as the export's exported_at"
 
 
 class TestAnEntryThatMoved:
@@ -829,40 +840,54 @@ class TestAnEntryThatMoved:
     the entry as it is now."""
 
     def skip(self, sid: str = FORT, wave: str = "2026-10-12", reason: str = "entry-moved") -> dict:
-        return {"wave": wave, "site_id": sid, "name": "n", "reason": reason, "note": "x"}
+        row = {"wave": wave, "site_id": sid, "name": "n", "reason": reason, "note": "x"}
+        return {**row, "read_at": PLAN_READ_AT} if reason == "entry-moved" else row
+
+    def now(self, sid: str = FORT, **over: Any) -> R.Question:
+        """The site in a discovery read after the plan that skipped it."""
+        return R.Question(sid, context(sid, **{"exported_at": READ_AFTER, **over}))
 
     def test_a_skipped_site_is_asked_on_its_entry_as_the_discovery_holds_it_now(self) -> None:
-        stored = {FORT: context(FORT), MUSEUM: context(MUSEUM)}
-        fresh = {
-            FORT: R.Question(FORT, context(FORT, name="Ali Masjid")),
-            MUSEUM: R.Question(MUSEUM, context(MUSEUM)),
-        }
+        fresh = {FORT: self.now(name="Ali Masjid"), MUSEUM: self.now(MUSEUM)}
         skips = [self.skip(), self.skip(MUSEUM, reason="gone"), self.skip(PENDING, reason="x")]
-        questions, moved, left = SJ.moved_questions(skips, set(), stored, fresh)
+        questions, moved, left = SJ.moved_questions(skips, set(), fresh)
         assert [q.context["name"] for q in questions] == ["Ali Masjid"]
         assert moved == {FORT: "2026-10-12"} and left == []
 
     def test_a_site_already_asked_again_for_that_wave_is_not_asked_twice(self) -> None:
-        stored = {FORT: context(FORT)}
-        fresh = {FORT: R.Question(FORT, context(FORT, lat=34.5))}
+        fresh = {FORT: self.now(lat=34.5)}
         done = {(FORT, "2026-10-12")}
-        assert SJ.moved_questions([self.skip()], done, stored, fresh) == ([], {}, [])
+        assert SJ.moved_questions([self.skip()], done, fresh) == ([], {}, [])
         later = self.skip(wave="2026-10-13")
-        questions, moved, _ = SJ.moved_questions([self.skip(), later], done, stored, fresh)
+        questions, moved, _ = SJ.moved_questions([self.skip(), later], done, fresh)
         assert len(questions) == 1 and moved == {FORT: "2026-10-13"}
 
     def test_a_site_that_left_the_population_is_listed_and_not_asked(self) -> None:
-        got = SJ.moved_questions([self.skip()], set(), {FORT: context(FORT)}, {})
+        got = SJ.moved_questions([self.skip()], set(), {})
         assert got == ([], {}, [FORT])
 
-    @pytest.mark.parametrize("field", ["description", "images", "exported_at"])
-    def test_a_discovery_read_before_the_entry_moved_is_refused(self, field: str) -> None:
-        """Only the fields the decision judged tell a moved entry (`JUDGED`): a discovery that
-        still holds them as they were asked would ask the same question again."""
-        stored = {FORT: context(FORT)}
-        fresh = {FORT: R.Question(FORT, {**context(FORT), field: "another"})}
-        with pytest.raises(common.IdentityError, match="build the discovery again first"):
-            SJ.moved_questions([self.skip()], set(), stored, fresh)
+    @pytest.mark.parametrize("read", [ASKED_FROM, "2026-10-12 07:59:59+00", PLAN_READ_AT])
+    def test_a_discovery_not_read_after_the_plan_that_found_the_move_is_refused(
+        self, read: str
+    ) -> None:
+        """The plan found the move when it read production (the skip's `read_at`). The discovery
+        the site was asked from, one built between the question and that plan and one read in the
+        plan's own instant cannot show the entry the plan found, whatever they hold."""
+        for over in ({}, {"name": "Ali Masjid"}):
+            fresh = {FORT: self.now(exported_at=read, **over)}
+            with pytest.raises(common.IdentityError, match="build the discovery again first"):
+                SJ.moved_questions([self.skip()], set(), fresh)
+
+    def test_a_site_whose_move_was_undone_is_asked_again_and_blocks_no_other(self) -> None:
+        """A discovery read after the plan holds FORT as it was asked (the write that moved it was
+        rolled back) and MUSEUM renamed. That is no stale discovery: both are asked, FORT on the
+        entry it has again, because only an imported moved round opens it for a new wave."""
+        fresh = {FORT: self.now(), MUSEUM: self.now(MUSEUM, name="Museum of Peshawar")}
+        assert all(fresh[FORT].context[k] == context(FORT)[k] for k in SJ.JUDGED)
+        skips = [self.skip(), self.skip(MUSEUM)]
+        questions, moved, left = SJ.moved_questions(skips, set(), fresh)
+        assert [q.site_id for q in questions] == [FORT, MUSEUM]
+        assert moved == {FORT: "2026-10-12", MUSEUM: "2026-10-12"} and left == []
 
 
 TS_OTHER = MUSEUM

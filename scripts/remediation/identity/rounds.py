@@ -227,6 +227,15 @@ def load_contexts(out: Path) -> dict[str, Mapping[str, Any]]:
     return merged
 
 
+def judged_contexts(out: Path) -> dict[str, Mapping[str, Any]]:
+    """The context each site's decision judged: the one stored with the round the decision is of.
+    `load_contexts` gives the newest round's, and that is another entry while a moved round is
+    exported and not imported: the site's new context is stored, its decision is still the earlier
+    round's."""
+    stored = {record.name: _contexts(out, record.name) for record in load_rounds(out)}
+    return {d["site_id"]: stored[d["round"]][d["site_id"]] for d in load_decisions(out)}
+
+
 def agreement(first: Path, second: Path) -> dict[str, Any]:
     """The verdicts of two imports of the same questions side by side - a pilot answered by the
     stage's role and again by the pilot judge (`--as-role pilot_judge`, a stage directory of its own)."""
