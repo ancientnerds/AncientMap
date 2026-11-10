@@ -5,6 +5,10 @@ already and is measured against them. The bar is O18's: at least the sealed shar
 agreement, every question answered, and 0 false sources. The threshold is **sealed before the run**;
 a role that fails moves up one tier (Haiku to Sonnet to Opus) and is calibrated again.
 
+Owner decisions D153 and D154 of 2026-11-10 put every role on Fable 5.2 and run no calibration
+there: such a role stands by the owner's decision (`roles.owner_standing`), which `require_passed`
+asks before it looks for a verdict. The steps below stay for a role that is moved again.
+
 This is `mcode_driver`'s calibration without its `mcode exec` transport: the copy, the registered
 calibration run and the comparison are `mcode_driver.copy_for_calibration`,
 `register_calibration_run` and `compare_answers`; the agents that answer are the orchestrator's own
@@ -751,7 +755,11 @@ def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> list[dict[st
     needs are named in one refusal.
 
     Returns, per need, how it stands (`standing` is `PASSED` or `RELEASED`; a release also names who
-    decided it), so that the caller can say so in its output."""
+    decided it), so that the caller can say so in its output.
+
+    A role that stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable, D154
+    says no calibration is run there) has no verdict to find: its need is met by that decision and
+    its line says so (`standing` is `roles.OWNER_STANDING`, with no `calibration_id`)."""
     seals = _seals(root)
     verdicts_dir = root / VERDICTS_DIR
     candidates = [
@@ -767,6 +775,17 @@ def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> list[dict[st
     standing: list[dict[str, str]] = []
     unmet: list[str] = []
     for role, comparison in needs:
+        by_owner = RO.owner_standing(role)
+        if by_owner is not None:
+            standing.append(
+                {
+                    "role": role,
+                    "comparison": comparison,
+                    "standing": by_owner["standing"],
+                    "owner_decision": by_owner["owner_decision"],
+                }
+            )
+            continue
         found = next(
             (
                 (calibration_id, how)

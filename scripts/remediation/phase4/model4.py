@@ -192,9 +192,60 @@ AI_SYSTEM_CLAUDE_SONNET_HAIKU = (
     "Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-sonnet-5-5 and "
     "anthropic/claude-haiku-5-5 (Claude Code agents), an-sites-remediation-2026-10"
 )
+#: Owner decision D153, 2026-11-10: every role answers on Fable 5.2 from now on, and the answers
+#: recorded before keep their stamp. A write may therefore rest on Fable answers alone, or on
+#: Fable answers beside earlier Opus, Sonnet or Haiku ones (a run that began before the decision,
+#: a text an earlier write made and a Fable one changed): one string for each such set, as D56
+#: asks, each naming exactly its models. Tagged with the month they were first written.
+AI_SYSTEM_CLAUDE_FABLE = (
+    "Claude Fable (Anthropic): anthropic/claude-fable-5-2 (Claude Code agent), "
+    "an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_OPUS_FABLE = (
+    "Claude Opus and Claude Fable (Anthropic): anthropic/claude-opus-5-5 and "
+    "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_SONNET_FABLE = (
+    "Claude Sonnet and Claude Fable (Anthropic): anthropic/claude-sonnet-5-5 and "
+    "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_HAIKU_FABLE = (
+    "Claude Haiku and Claude Fable (Anthropic): anthropic/claude-haiku-5-5 and "
+    "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_OPUS_SONNET_FABLE = (
+    "Claude Opus, Claude Sonnet and Claude Fable (Anthropic): anthropic/claude-opus-5-5, "
+    "anthropic/claude-sonnet-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+    "an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_OPUS_HAIKU_FABLE = (
+    "Claude Opus, Claude Haiku and Claude Fable (Anthropic): anthropic/claude-opus-5-5, "
+    "anthropic/claude-haiku-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+    "an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_SONNET_HAIKU_FABLE = (
+    "Claude Sonnet, Claude Haiku and Claude Fable (Anthropic): anthropic/claude-sonnet-5-5, "
+    "anthropic/claude-haiku-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+    "an-sites-remediation-2026-11"
+)
+AI_SYSTEM_CLAUDE_OPUS_SONNET_HAIKU_FABLE = (
+    "Claude Opus, Claude Sonnet, Claude Haiku and Claude Fable (Anthropic): "
+    "anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, anthropic/claude-haiku-5-5 and "
+    "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+)
+#: A text a MiniMax agent took part in before 2026-10-08 that a Fable answer now changes or checks
+#: again (a lane-WN text asked again, a union of two writes): the combined `AI_SYSTEM` names no
+#: Fable, so this is its counterpart - both families, each with its maker, and beside the models
+#: `AI_SYSTEM` lists the one that answers since D153.
+AI_SYSTEM_FABLE = (
+    "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+    "anthropic/claude-sonnet-5-5, anthropic/claude-fable-5-2, "
+    "minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-11"
+)
 #: The disclosure of each set of Claude stamps a write can rest on (D56): every non-empty subset of
-#: Opus, Sonnet and Haiku, each named by the one string that names exactly its models. Opus and
-#: Sonnet keep `AI_SYSTEM_CLAUDE`, all three `AI_SYSTEM_CLAUDE_HAIKU` (both in production).
+#: Opus, Sonnet, Haiku and (D153) Fable, each named by the one string that names exactly its
+#: models. Opus and Sonnet keep `AI_SYSTEM_CLAUDE`, Opus, Sonnet and Haiku `AI_SYSTEM_CLAUDE_HAIKU`
+#: (both in production).
 CLAUDE_DISCLOSURES: Mapping[frozenset[str], str] = MappingProxyType(
     {
         frozenset({OH.OPUS_MODEL}): AI_SYSTEM_CLAUDE_OPUS,
@@ -204,19 +255,38 @@ CLAUDE_DISCLOSURES: Mapping[frozenset[str], str] = MappingProxyType(
         frozenset({OH.OPUS_MODEL, OH.HAIKU_MODEL}): AI_SYSTEM_CLAUDE_OPUS_HAIKU,
         frozenset({OH.SONNET_MODEL, OH.HAIKU_MODEL}): AI_SYSTEM_CLAUDE_SONNET_HAIKU,
         frozenset({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL}): AI_SYSTEM_CLAUDE_HAIKU,
+        frozenset({OH.FABLE_MODEL}): AI_SYSTEM_CLAUDE_FABLE,
+        frozenset({OH.OPUS_MODEL, OH.FABLE_MODEL}): AI_SYSTEM_CLAUDE_OPUS_FABLE,
+        frozenset({OH.SONNET_MODEL, OH.FABLE_MODEL}): AI_SYSTEM_CLAUDE_SONNET_FABLE,
+        frozenset({OH.HAIKU_MODEL, OH.FABLE_MODEL}): AI_SYSTEM_CLAUDE_HAIKU_FABLE,
+        frozenset(
+            {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.FABLE_MODEL}
+        ): AI_SYSTEM_CLAUDE_OPUS_SONNET_FABLE,
+        frozenset(
+            {OH.OPUS_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL}
+        ): AI_SYSTEM_CLAUDE_OPUS_HAIKU_FABLE,
+        frozenset(
+            {OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL}
+        ): AI_SYSTEM_CLAUDE_SONNET_HAIKU_FABLE,
+        frozenset(
+            {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL}
+        ): AI_SYSTEM_CLAUDE_OPUS_SONNET_HAIKU_FABLE,
     }
 )
 #: Every disclosure a validator accepts: the strings already in production (provenances re-read by
 #: audits, accepts and plans) and every string `ai_system_for` can return. A validator accepts
-#: exactly these nine.
-AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, *CLAUDE_DISCLOSURES.values()})
+#: exactly these eighteen: the nine of D56 and the nine that name Fable.
+AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_FABLE, *CLAUDE_DISCLOSURES.values()})
 #: The stamps each accepted disclosure names - what two writes' union is built from
 #: (`wc4.union_ai_system`). `AI_SYSTEM_OPUS` names Opus as `AI_SYSTEM_CLAUDE_OPUS` does; the combined
-#: `AI_SYSTEM` names the three models it lists.
+#: `AI_SYSTEM` names the three models it lists, `AI_SYSTEM_FABLE` its four.
 DISCLOSED_STAMPS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         AI_SYSTEM_OPUS: frozenset({OH.OPUS_MODEL}),
         AI_SYSTEM: frozenset({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL}),
+        AI_SYSTEM_FABLE: frozenset(
+            {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.FABLE_MODEL, OH.MINIMAX_MODEL}
+        ),
         **{system: stamps for stamps, system in CLAUDE_DISCLOSURES.items()},
     }
 )
@@ -226,7 +296,8 @@ def ai_system_for(stamps: Iterable[str]) -> str:
     """The disclosure of a new write, from the stamps of the answers it rests on
     (`opus_handoff.ANSWER_MODELS` values): the combined `AI_SYSTEM` when any was MiniMax's (the
     text then rests on a MiniMax judgement; D6/D44 admit no new MiniMax answer, so this re-derives
-    only a write a MiniMax agent took part in before 2026-10-08), else the string of
+    only a write a MiniMax agent took part in before 2026-10-08) - `AI_SYSTEM_FABLE` when a Fable
+    answer stands beside it, since `AI_SYSTEM` names no Fable - else the string of
     `CLAUDE_DISCLOSURES` that names exactly the Claude models that answered (owner decision D56).
     No stamp, or one no handoff answer carries, is refused - the disclosure is never guessed."""
     named = frozenset(stamps)
@@ -238,7 +309,7 @@ def ai_system_for(stamps: Iterable[str]) -> str:
             f"ai_system_for: {sorted(unknown)!r} is no stamp of opus_handoff.ANSWER_MODELS"
         )
     if OH.MINIMAX_MODEL in named:
-        return AI_SYSTEM
+        return AI_SYSTEM_FABLE if OH.FABLE_MODEL in named else AI_SYSTEM
     return CLAUDE_DISCLOSURES[named]
 
 

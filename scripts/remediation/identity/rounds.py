@@ -33,7 +33,10 @@ decided or held), merges `DECISIONS.jsonl` (per site, the decision of its latest
 has no passed verdict, or whose verdict was reached under another registry entry, or whose pool is
 not the lane's own, or that was sealed without a bar of 0 false writes (`WRITE_VERDICTS`): a role
 that has not passed is not a role to write from (D6). `import_round` refuses an answer given before
-the verdict was decided: the calibration comes first, not after.
+the verdict was decided: the calibration comes first, not after. Since owner decisions D153 and D154
+of 2026-11-10 every role is on Fable 5.2 and no calibration is run there: such a role stands by the
+owner's decision (`roles.owner_standing`), which `require_calibration` asks first and returns in
+words; it has no verdict, so no calibration id is named and no answer can precede one.
 """
 
 from __future__ import annotations
@@ -423,7 +426,7 @@ def check_answer(
 
 # ------------------------------------------------------------------------------ the calibration
 def require_calibration(
-    root: Path, calibration_id: str, role: str, pool_stage: str
+    root: Path, calibration_id: str | None, role: str, pool_stage: str
 ) -> dict[str, Any]:
     """The passed verdict of `calibration_id` for `role`, or `RoundError`.
 
@@ -432,7 +435,20 @@ def require_calibration(
     (`roles.role_sha256`): a role moved up a tier after a failed calibration is calibrated again.
     The sealed pool must be the lane's own (its questions are of `pool_stage`, the lane's web
     stage), and the seal must hold the bar of 0 false writes over `WRITE_VERDICTS`, which the
-    verdict met."""
+    verdict met.
+
+    A role that stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable, D154
+    says no calibration is run there) has no verdict: what is returned is that decision in words,
+    with no calibration id, no agreement and no `decided_at` - there is no calibration an answer
+    could have been given before. Any other role needs its `calibration_id`."""
+    by_owner = RO.owner_standing(role)
+    if by_owner is not None:
+        return {**by_owner, "calibration_id": None, "agreement": None, "decided_at": None}
+    if calibration_id is None:
+        raise RoundError(
+            f"role {role} does not stand by an owner decision: name the calibration it passed "
+            "(--calibration ID)"
+        )
     verdict_path = root / VERDICTS_DIR / f"{calibration_id}.json"
     if not verdict_path.exists():
         raise RoundError(
@@ -514,14 +530,16 @@ def import_round(
     spec: StageSpec,
     round_name: str,
     *,
-    decided_at: str,
+    decided_at: str | None,
     http: Callable[[], httpx.Client] = web.client,
     resolver: Callable[[list[str], httpx.Client], dict[str, dict[str, Any]]] = web.resolve_titles,
     now: Callable[[], str] = now_utc,
     pace: float = Q.PACE_SECONDS,
 ) -> dict[str, Any]:
     """Parse, fetch, resolve and decide every answer of one round; merge the decisions. Refused
-    when an answer was given before `decided_at`, the time the role's calibration was decided."""
+    when an answer was given before `decided_at`, the time the role's calibration was decided.
+    `decided_at` is `None` only for a role that stands by the owner's decision
+    (`require_calibration`): it has no calibration, so no answer precedes one."""
     record = find_round(out, round_name)
     newest = load_rounds(out)[-1].name
     if record.name != newest:
@@ -557,10 +575,15 @@ def import_round(
             f"have them answered again: " + "; ".join(problems[:5])
         )
 
-    calibrated = datetime.fromisoformat(decided_at)
-    early = [
-        sid for sid, a in sorted(raw.items()) if datetime.fromisoformat(a.answered_at) < calibrated
-    ]
+    early = (
+        []
+        if decided_at is None
+        else [
+            sid
+            for sid, a in sorted(raw.items())
+            if datetime.fromisoformat(a.answered_at) < datetime.fromisoformat(decided_at)
+        ]
+    )
     if early:
         raise RoundError(
             f"{len(early)} answer(s) were given before the calibration was decided ({decided_at}): "

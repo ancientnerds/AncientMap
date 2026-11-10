@@ -345,6 +345,7 @@ def test_the_write_prompt_is_the_one_frozen_question_with_the_parsers_numbers(ru
     assert cli.check_prompt(entry, [], {}, cli.KIND_WN) == prompt
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_brief_names_the_fact_checkers_family_and_model_for_the_writer(run_dirs) -> None:
     """Lane WN's writer is the fact checker (no writer role is registered): Opus since the tier move
     of wc-fc-1 (D51, 2026-10-24)."""

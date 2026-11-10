@@ -309,6 +309,29 @@ def test_the_disclosure_of_two_writes_names_every_model_that_took_part() -> None
         WC4.union_ai_system("someone", M.AI_SYSTEM_CLAUDE)
 
 
+def test_a_text_an_earlier_write_made_and_a_fable_write_changed_names_both() -> None:
+    """Owner decision D153 (2026-11-10): the write that changes a text is Fable's, whoever wrote
+    it before. The union names the earlier models and Fable - a MiniMax text too, for which the
+    combined 2026-10 string names no Fable - and is the same string whichever write comes first."""
+    fable = M.AI_SYSTEM_CLAUDE_FABLE
+    for earlier, both in (
+        (M.AI_SYSTEM_CLAUDE_FABLE, M.AI_SYSTEM_CLAUDE_FABLE),
+        (M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE_OPUS_FABLE),  # a text of 2026-09
+        (M.AI_SYSTEM_CLAUDE_OPUS, M.AI_SYSTEM_CLAUDE_OPUS_FABLE),
+        (M.AI_SYSTEM_CLAUDE_SONNET, M.AI_SYSTEM_CLAUDE_SONNET_FABLE),
+        (M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM_CLAUDE_OPUS_SONNET_FABLE),
+        (M.AI_SYSTEM_CLAUDE_HAIKU, M.AI_SYSTEM_CLAUDE_OPUS_SONNET_HAIKU_FABLE),
+        (M.AI_SYSTEM, M.AI_SYSTEM_FABLE),  # a lane-WN text a MiniMax agent wrote
+        (M.AI_SYSTEM_FABLE, M.AI_SYSTEM_FABLE),
+    ):
+        assert WC4.union_ai_system(earlier, fable) == both == WC4.union_ai_system(fable, earlier)
+        assert "anthropic/claude-fable-5-2" in both
+    # every pair of accepted disclosures has a union, and it is an accepted disclosure
+    for one in M.AI_SYSTEMS:
+        for other in M.AI_SYSTEMS:
+            assert WC4.union_ai_system(one, other) in M.AI_SYSTEMS
+
+
 # ------------------------------------------------------------------------------ the record
 def _record(**change: Any) -> WC4.DescriptionEnrichment:
     sentences = (

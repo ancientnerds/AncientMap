@@ -84,6 +84,7 @@ def scope_prod(rows: list[dict[str, Any]]):
 
 
 class TestTheScopeLane:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_question_stage_a_calibration_gate_a_wave_a_plan_and_a_read_back(
         self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -281,6 +282,38 @@ class TestTheScopeLane:
                   "--calibration", "c", "--calibration-root", str(tree / "cal"))  # fmt: skip
         assert code == 1 and "recorded under adversarial" in capsys.readouterr().err
 
+    def test_the_import_names_the_owners_decision_and_asks_no_calibration(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """D153/D154: the stage's role is on Fable and stands by the owner's decision. `import`
+        takes no `--calibration`, reads no verdict (the calibration root is empty) and prints how
+        the role stands in words, with no calibration id and no agreement."""
+        run = tree / "identity"
+        monkeypatch.setattr(
+            SJ, "questions", lambda run_, root=None: [R.Question(TS.FORT, TS.context())]
+        )
+        handoff = tree / "h"
+        go(tree, "--lane", "scope-window", "export", "--stage", "scope-window-web",
+           "--handoff", str(handoff))  # fmt: skip
+        out = R.stage_dir(run, SJ.web_spec())
+        assert SJ.web_spec().model == "claude-fable-5-2"
+        answer_all(
+            handoff, R.find_round(out, "r1"), SJ.web_spec(), {TS.FORT: TS.answer("OUT_OF_WINDOW")}
+        )
+        seed_pages(out, {TS.FORT_PAGE: html(TS.FORT_TEXT)})
+        capsys.readouterr()
+        code = go(tree, "--lane", "scope-window", "import", "--stage", "scope-window-web",
+                  "--round", "r1", "--calibration-root", str(tree / "no-calibration"))  # fmt: skip
+        printed = capsys.readouterr()
+        assert code == 0, printed.err
+        summary = json.loads(printed.out)
+        assert (
+            summary["standing"] == "owner decision D153 (no calibration on claude-fable-5-2: D154)"
+        )
+        assert (summary["calibration"], summary["agreement"]) == (None, None)
+        assert (out / R.DECISIONS_FILE).exists()
+
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_import_refuses_answers_given_before_the_calibration_and_another_lane_s_pool(
         self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -491,6 +524,7 @@ class TestTheRetargetLane:
                   "--calibration", role_id, "--calibration-root", str(tree / "cal"))  # fmt: skip
         assert code == 0, capsys.readouterr().err
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_whole_chain_from_the_question_to_the_hand_off_lists(
         self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:

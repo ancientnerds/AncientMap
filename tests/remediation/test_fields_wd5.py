@@ -167,10 +167,11 @@ class TestTheQuestion:
         HO.export(run, handoff)
         batch = next(iter(HO.read_rounds(run)[0]["batches"]))
         text = HO.brief(run, handoff, batch)
-        assert "WD5 structured-field re-check" in text and "claude-sonnet-5-5" in text
+        assert "WD5 structured-field re-check" in text and "claude-fable-5-2" in text
         # the model is the registry's for the role, not a constant of the brief (2026-10-09: the
-        # role moved to Opus and, under D36, back to Sonnet while this table still said Sonnet)
-        assert "Opus" not in text
+        # role moved to Opus and, under D36, back to Sonnet while this table still said Sonnet;
+        # 2026-11-10: D153 put it on Fable)
+        assert "Opus" not in text and "claude-sonnet-5-5" not in text
         assert HO.BRIEF_PARTS[R.RECHECK.name]["model"] == RO.role("field_researcher").model
         other = tmp_path / "handoff2"
         run2 = tmp_path / "run2"
@@ -181,6 +182,19 @@ class TestTheQuestion:
         batch2 = next(iter(HO.read_rounds(run2)[0]["batches"]))
         assert "--model claude-opus-5-5" in HO.brief(run2, other, batch2)
         assert "claude-opus-5-5" in OH.ANSWER_MODELS
+        # a round exported before D153 recorded Sonnet, the model the role answered on until then:
+        # it goes on with Fable (`roles.model_now`), so its brief names what the recorder takes
+        third = tmp_path / "handoff3"
+        run3 = tmp_path / "run3"
+        run3.mkdir()
+        R.write_run(run3, RE)
+        HO._write_jsonl(run3 / C.CLASSIFIED_FILE, [{**wd5_line(), "asked": ["period_start"]}])
+        HO.export(run3, third, model="claude-sonnet-5-5")
+        assert HO.read_rounds(run3)[0]["model"] == "claude-sonnet-5-5"
+        batch3 = next(iter(HO.read_rounds(run3)[0]["batches"]))
+        earlier = HO.brief(run3, third, batch3)
+        assert "--model claude-fable-5-2 --role field_researcher" in earlier
+        assert "claude-sonnet-5-5" not in earlier
 
 
 # ------------------------------------------------------------------------------ the lane
@@ -791,6 +805,7 @@ class TestTheWaveAndTheStep:
         return FP.build_step("2026-10-09a", 1, reader=self.reader, country_check=TP.AGREES,
                              frontend=lambda y: FP.categorize_period(y), stage="wd5")  # fmt: skip
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_wave_lives_under_wd5_and_takes_the_unresolved_it_may_withdraw(
         self, repo: Path
     ) -> None:
@@ -811,6 +826,7 @@ class TestTheWaveAndTheStep:
             == repo / "output/remediation/fields/wd5/write/2026-10-09a"
         )
 
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize(
         ("over", "said"),
         [
@@ -826,6 +842,7 @@ class TestTheWaveAndTheStep:
         with pytest.raises(PlanError, match=said):
             FP.build_wave(repo / "run", "2026-10-09a")
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_released_calibration_is_named_released_in_the_wave(self, repo: Path) -> None:
         """A researcher pool that failed at the top tier and was released stands like a pass, and the
         wave says so (`calibrate_claude.py release`)."""

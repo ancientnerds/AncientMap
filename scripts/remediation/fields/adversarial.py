@@ -679,7 +679,9 @@ def brief(adv: Path, handoff: Path, batch_id: str) -> str:
         scratch=f"{shown}-scratch/{batch_id}",
         adv=HO._shown(adv),
         stage=STAGE,
-        model=record["model"],
+        # the model the role answers with now: Fable for a round exported before owner decision
+        # D153 took the role from the model the round recorded (`roles.model_now`)
+        model=RO.model_now(ROLE, record["model"]),
         role=ROLE,
     )
 

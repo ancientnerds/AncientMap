@@ -130,6 +130,7 @@ class TestTheTransport:
         with pytest.raises(RO.RoleError, match="no role"):
             SG.export(tmp_path / "r", tmp_path / "h", _tiny_spec("oracle"), [], {})
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_brief_names_the_role_model_and_recording_command(self, tmp_path: Path) -> None:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
@@ -178,6 +179,7 @@ class TestTheTransport:
         with pytest.raises(SG.StageError, match="not in the role image_prefilter"):
             SG.import_answers(run, handoff, spec)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_an_answer_not_stamped_by_the_roles_model_is_refused(self, tmp_path: Path) -> None:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
@@ -384,6 +386,7 @@ class TestThePrefilter:
         assert [(r["file"], r["survives"]) for r in got] == [("a", True), ("b", False)]
         assert got[0]["answered_by"] == "image_prefilter:pre-0001"
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_stage_runs_end_to_end_in_the_prefilter_role(self, tmp_path: Path) -> None:
         run, handoff = tmp_path / "run", tmp_path / "handoff"
         questions, pictures = PF.build_questions(_candidates(2), lambda c: jpeg())
@@ -554,6 +557,7 @@ class TestTheDepictsRole:
         with pytest.raises(SG.StageError, match="no size recorded"):
             DP.verdict_rows([result], {})
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_role_is_opus_at_medium_effort(self) -> None:
         # D103: the tier move of image-roles-v1 (Sonnet failed every depicts threshold)
         assert (RO.role(DP.SPEC.role).model, RO.role(DP.SPEC.role).effort) == (
@@ -620,6 +624,7 @@ class TestTheHeroRecheck:
             == "depicts"
         )
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_role_is_the_image_lane_s_own_and_each_round_has_its_own_files(self) -> None:
         # D45/D103: the image lane's re-check is image_adversarial on Opus, not the shared role
         assert HR.SPEC.role == "image_adversarial"
@@ -960,6 +965,7 @@ class TestTheIdentityAnswers:
         with pytest.raises(SG.AnswerShapeError, match="must answer exactly"):
             ID.parse(META, json.dumps({"sites": {}}))
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_role_is_the_web_verifier_for_both_modes(self) -> None:
         for spec in (ID.VERIFY_SPEC, ID.RESEARCH_SPEC):
             assert (RO.role(spec.role).model, RO.role(spec.role).effort) == (

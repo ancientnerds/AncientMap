@@ -769,7 +769,7 @@ CASES: list[Case] = [
     advg(
         "a settled role stays where the move started",
         ROLES,
-        '        if roles[name].model != move["from"]:',
+        '        if stood[name] != move["from"]:',
         "test_a_role_that_moved_has_an_applied_move_not_a_settled_one",
         T_ROLES,
     ),
@@ -783,7 +783,7 @@ CASES: list[Case] = [
     advg(
         "the role that settles stands at the move's model",
         ROLES,
-        '        if taker == name or roles[taker].model != move["to"]:',
+        '        if taker == name or stood[taker] != move["to"]:',
         "test_a_thin_or_unjoined_settlement_is_refused",
         T_ROLES,
     ),

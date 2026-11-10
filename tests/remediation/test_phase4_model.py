@@ -467,9 +467,11 @@ def test_the_disclosed_ai_systems_are_the_claude_ones_and_the_combined_one() -> 
         "an-sites-remediation-2026-10"
     )
     assert M.AI_SYSTEMS == frozenset(
-        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM, *M.CLAUDE_DISCLOSURES.values()}
+        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM, M.AI_SYSTEM_FABLE, *M.CLAUDE_DISCLOSURES.values()}
     )
-    assert len(M.AI_SYSTEMS) == 9
+    # the nine of D56 and, since owner decision D153 (2026-11-10), the nine that name Fable
+    assert len(M.AI_SYSTEMS) == 18
+    assert len([s for s in M.AI_SYSTEMS if "claude-fable-5-2" in s]) == 9
     assert M.AI_SYSTEM_OPUS == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
     assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
     assert OH.SONNET_MODEL.split(" (")[0] in M.AI_SYSTEM and "claude-opus-5-5" in M.AI_SYSTEM
@@ -521,6 +523,101 @@ def test_ai_system_for_derives_the_disclosure_from_the_models_that_answered() ->
     assert M.ai_system_for([OH.MINIMAX_MODEL]) == M.AI_SYSTEM
 
 
+def test_the_fable_disclosures_are_these_nine_strings() -> None:
+    """Owner decision D153 (2026-11-10): every role answers on Fable 5.2, and the answers recorded
+    before keep their stamp. A write names Fable alone, or Fable beside the earlier models it also
+    rests on. Copied here, not read from `model4`: what a write discloses is pinned verbatim."""
+    assert M.AI_SYSTEM_CLAUDE_FABLE == (
+        "Claude Fable (Anthropic): anthropic/claude-fable-5-2 (Claude Code agent), "
+        "an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_OPUS_FABLE == (
+        "Claude Opus and Claude Fable (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_SONNET_FABLE == (
+        "Claude Sonnet and Claude Fable (Anthropic): anthropic/claude-sonnet-5-5 and "
+        "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_HAIKU_FABLE == (
+        "Claude Haiku and Claude Fable (Anthropic): anthropic/claude-haiku-5-5 and "
+        "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_OPUS_SONNET_FABLE == (
+        "Claude Opus, Claude Sonnet and Claude Fable (Anthropic): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+        "an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_OPUS_HAIKU_FABLE == (
+        "Claude Opus, Claude Haiku and Claude Fable (Anthropic): anthropic/claude-opus-5-5, "
+        "anthropic/claude-haiku-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+        "an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_SONNET_HAIKU_FABLE == (
+        "Claude Sonnet, Claude Haiku and Claude Fable (Anthropic): anthropic/claude-sonnet-5-5, "
+        "anthropic/claude-haiku-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+        "an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_CLAUDE_OPUS_SONNET_HAIKU_FABLE == (
+        "Claude Opus, Claude Sonnet, Claude Haiku and Claude Fable (Anthropic): "
+        "anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, anthropic/claude-haiku-5-5 and "
+        "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11"
+    )
+    assert M.AI_SYSTEM_FABLE == (
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, anthropic/claude-fable-5-2, "
+        "minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-11"
+    )
+
+
+def test_ai_system_for_names_fable_alone_or_beside_the_earlier_models() -> None:
+    """D153: a write only Fable answered names Fable only; a run that began before the decision
+    (its earlier answers Opus's or Sonnet's, the rest Fable's) names both, each exactly once. A
+    text a MiniMax agent took part in that a Fable answer changes names Fable too - the combined
+    2026-10 string does not, so it is not what such a write carries."""
+    assert M.ai_system_for([OH.FABLE_MODEL]) == M.AI_SYSTEM_CLAUDE_FABLE
+    assert M.ai_system_for(iter([OH.FABLE_MODEL, OH.FABLE_MODEL])) == M.AI_SYSTEM_CLAUDE_FABLE
+    # lane WB, a wave whose verification Opus began and Fable finished
+    assert (
+        M.ai_system_for([OH.OPUS_MODEL, OH.OPUS_MODEL, OH.OPUS_MODEL, OH.FABLE_MODEL])
+        == M.AI_SYSTEM_CLAUDE_OPUS_FABLE
+    )
+    assert M.ai_system_for({OH.SONNET_MODEL, OH.FABLE_MODEL}) == M.AI_SYSTEM_CLAUDE_SONNET_FABLE
+    assert M.ai_system_for({OH.HAIKU_MODEL, OH.FABLE_MODEL}) == M.AI_SYSTEM_CLAUDE_HAIKU_FABLE
+    assert (
+        M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.FABLE_MODEL})
+        == M.AI_SYSTEM_CLAUDE_OPUS_SONNET_FABLE
+    )
+    assert (
+        M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL})
+        == M.AI_SYSTEM_CLAUDE_OPUS_SONNET_HAIKU_FABLE
+    )
+    assert M.ai_system_for([OH.FABLE_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM_FABLE
+    assert M.ai_system_for([OH.OPUS_MODEL, OH.FABLE_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM_FABLE
+    assert "claude-fable-5-2" not in M.AI_SYSTEM  # which is why it is not returned for such a set
+    for stamps, system in M.CLAUDE_DISCLOSURES.items():
+        assert (OH.FABLE_MODEL in stamps) == ("claude-fable-5-2" in system), system
+        assert system.endswith("2026-11") == (OH.FABLE_MODEL in stamps), system
+
+
+def test_the_fable_strings_leave_every_earlier_disclosure_as_it_was() -> None:
+    """Production holds the earlier strings: adding Fable rebinds none of them, and no earlier set
+    of stamps derives another string than it did."""
+    assert M.ai_system_for([OH.OPUS_MODEL]) == (
+        "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-10"
+    )
+    assert M.ai_system_for([OH.OPUS_MODEL, OH.SONNET_MODEL]) == (
+        "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+    )
+    assert M.ai_system_for([OH.SONNET_MODEL, OH.MINIMAX_MODEL]) == (
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+        "an-sites-remediation-2026-09"
+    )
+
+
 def test_the_all_opus_disclosure_is_not_the_corrected_2026_09_string() -> None:
     """D56's Opus-only string is a new one: `AI_SYSTEM_OPUS` is what lane WB's disclosure
     correction replaced on 185 cards a Sonnet agent wrote (the planner refuses an outcome naming it
@@ -547,15 +644,31 @@ def test_the_all_opus_disclosure_is_not_the_corrected_2026_09_string() -> None:
         {OH.OPUS_MODEL, OH.HAIKU_MODEL},
         {OH.SONNET_MODEL, OH.HAIKU_MODEL},
         {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL},
+        {OH.FABLE_MODEL},
+        {OH.OPUS_MODEL, OH.FABLE_MODEL},
+        {OH.SONNET_MODEL, OH.FABLE_MODEL},
+        {OH.HAIKU_MODEL, OH.FABLE_MODEL},
+        {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.FABLE_MODEL},
+        {OH.OPUS_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL},
+        {OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL},
+        {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL},
     ],
-    ids=["opus", "sonnet", "haiku", "opus+sonnet", "opus+haiku", "sonnet+haiku", "all-three"],
-)
+    ids=[
+        "opus", "sonnet", "haiku", "opus+sonnet", "opus+haiku", "sonnet+haiku", "all-three",
+        "fable", "opus+fable", "sonnet+fable", "haiku+fable", "opus+sonnet+fable",
+        "opus+haiku+fable", "sonnet+haiku+fable", "all-four",
+    ],
+)  # fmt: skip
 def test_each_claude_disclosure_names_exactly_the_models_that_answered(stamps: set[str]) -> None:
-    """D56 for every Claude set: the derived string names each answering model and no other, and
-    `DISCLOSED_STAMPS` reads the same set back out of it (what a union of two writes is built
-    from)."""
+    """D56 for every Claude set (since D153 the sets with Fable too): the derived string names each
+    answering model and no other, and `DISCLOSED_STAMPS` reads the same set back out of it (what a
+    union of two writes is built from)."""
     system = M.ai_system_for(stamps)
-    named = {stamp.split(" (")[0] for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL)}
+    named = {
+        stamp.split(" (")[0]
+        for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL)
+    }
+    assert len(M.CLAUDE_DISCLOSURES) == 15  # every non-empty subset of the four
     for model in named:
         assert (model in system) == any(s.startswith(model) for s in stamps), (model, system)
     assert "minimax" not in system.lower()
@@ -568,6 +681,9 @@ def test_every_accepted_disclosure_names_its_stamps() -> None:
     assert M.DISCLOSED_STAMPS[M.AI_SYSTEM_OPUS] == frozenset({OH.OPUS_MODEL})
     assert M.DISCLOSED_STAMPS[M.AI_SYSTEM] == frozenset(
         {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL}
+    )
+    assert M.DISCLOSED_STAMPS[M.AI_SYSTEM_FABLE] == frozenset(
+        {OH.OPUS_MODEL, OH.SONNET_MODEL, OH.FABLE_MODEL, OH.MINIMAX_MODEL}
     )
     for system, stamps in M.DISCLOSED_STAMPS.items():
         for stamp in stamps:
@@ -587,6 +703,18 @@ def test_the_shorts_note_names_exactly_the_models_of_each_new_disclosure() -> No
     )
     for system in M.CLAUDE_DISCLOSURES.values():
         teaser_note(system)
+    # D153: a card Fable wrote, checked and verified, one a wave began on Opus, and a card a
+    # MiniMax agent took part in that Fable checked again
+    assert "AI-generated by Claude Fable 5.2 (Anthropic) from" in teaser_note(
+        M.AI_SYSTEM_CLAUDE_FABLE
+    )
+    assert "AI-generated by Claude Opus 5.5, Claude Fable 5.2 (Anthropic) from" in teaser_note(
+        M.AI_SYSTEM_CLAUDE_OPUS_FABLE
+    )
+    assert (
+        "AI-generated by Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.2 (Anthropic); "
+        "MiniMax M3.1 Flash (MiniMax) from"
+    ) in teaser_note(M.AI_SYSTEM_FABLE)
 
 
 @pytest.mark.parametrize(
@@ -629,6 +757,19 @@ def test_ai_system_for_refuses_no_stamp_and_a_stamp_no_handoff_records(stamps: l
         "anthropic/claude-haiku-5-5 (Claude Code agents), an-sites-remediation-2026-10",
         "Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-sonnet-5-5 and "
         "anthropic/claude-haiku-5-5 (Claude Code agents), an-sites-remediation-2026-10",
+        # owner decision D153 (2026-11-10): Fable alone, beside an earlier model, beside MiniMax
+        "Claude Fable (Anthropic): anthropic/claude-fable-5-2 (Claude Code agent), "
+        "an-sites-remediation-2026-11",
+        "Claude Opus and Claude Fable (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11",
+        "Claude Sonnet and Claude Fable (Anthropic): anthropic/claude-sonnet-5-5 and "
+        "anthropic/claude-fable-5-2 (Claude Code agents), an-sites-remediation-2026-11",
+        "Claude Opus, Claude Sonnet and Claude Fable (Anthropic): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5 and anthropic/claude-fable-5-2 (Claude Code agents), "
+        "an-sites-remediation-2026-11",
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, anthropic/claude-fable-5-2, "
+        "minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-11",
     ],
 )
 def test_a_provenance_accepts_each_disclosed_ai_system(system: str) -> None:
@@ -645,6 +786,9 @@ def test_a_provenance_accepts_each_disclosed_ai_system(system: str) -> None:
         "Claude Sonnet (Anthropic): anthropic/claude-sonnet-5-5 (Claude Code agent), "
         "an-sites-remediation-2026-09",
         "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)",
+        # a Fable string under another month's tag is no disclosure a write ever carried
+        "Claude Fable (Anthropic): anthropic/claude-fable-5-2 (Claude Code agent), "
+        "an-sites-remediation-2026-10",
         M.AI_SYSTEM + " ",
     ],
 )

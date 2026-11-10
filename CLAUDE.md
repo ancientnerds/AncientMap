@@ -23,14 +23,16 @@ stamp and the public AI disclosure name MiniMax truthfully (`ANSWER_MODELS`, `mo
 calibration against already-answered batches has passed.
 
 **A MiniMax Code session therefore cannot answer the DB repair's remaining questions**: owner decision
-D6 (2026-10-08) limits a new answer to `opus_handoff.NEW_ANSWER_MODELS` — `claude-opus-5-5`,
-`claude-sonnet-5-5`, `claude-haiku-5-5` — and `fields/handoff.py` refuses every other stamp at import,
-so the WD5 main run, the card pilot and the image lanes need a Claude Code session (they are driven by
-Claude agents, not by an API call from the code). D40 ("`fact_checker`/`web_verifier` to Opus") came
-**after** D36 (it followed the calibration teaser-2026-10-10, in which no Sonnet checker passed) and the
-owner confirmed it on 2026-10-17 (D42), scoped to the card lane (D45): the card lane has checkers of
-its own on Opus (`card_fact_checker`, `card_web_verifier`), while the shared `fact_checker` and
-`web_verifier` stay on Sonnet. D44 keeps D6 closed to MiniMax.
+D6 (2026-10-08) limits a new answer to `opus_handoff.NEW_ANSWER_MODELS` (Claude ids only) and
+`fields/handoff.py` refuses every other stamp at import, so the WD5 main run, the card pilot and the
+image lanes need a Claude Code session (they are driven by Claude agents, not by an API call from the
+code). **Since owner decisions D153 and D154 (2026-11-10) every role answers on `claude-fable-5-2`**:
+`roles.ROLES` registers all 19 roles to it, each by an owner move in `roles.APPLIED_ESCALATIONS`, and
+`opus_handoff.py answer --role` refuses any other model. No calibration is run on Fable: a role stands
+by the decision (`roles.owner_standing`, which every calibration gate asks first). An answer recorded
+before keeps its Opus, Sonnet or Haiku stamp and stays valid (`roles.answer_problem`), and a run that
+began before goes on with Fable (`roles.model_now`). This supersedes the model mix of D6 and
+D36/D40/D45. D44 keeps D6 closed to MiniMax.
 
 ## Code Quality Standards
 

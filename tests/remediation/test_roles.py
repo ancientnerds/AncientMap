@@ -3,6 +3,14 @@
 Every model judgement of the final repair is made by a role, and a role is one registered model at
 one effort. The registry is a constant, the answer stamp always names the real model, and a role
 answered by any other model is refused. No test here calls a model or opens a socket.
+
+Owner decision D153 of 2026-11-10 put every role on Fable 5.2 (`test_roles_fable.py`). The tests
+here are the record of how the registry came to stand where D153 found it - the tier moves, the
+owner moves and the settlements of D6 to D134 - and of the rules that made it so. They run on that
+registry (`conftest.registry_until_d153`, rebuilt from the applied moves): on a registry in which
+every role names one model, a tier move, a candidate and "another model's stamp" have nothing to
+tell apart. The recorder's tests start `opus_handoff.py` as a process of its own, which reads the
+registry as it is, so they name Fable.
 """
 
 from __future__ import annotations
@@ -22,6 +30,13 @@ if str(REMEDIATION) not in sys.path:
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+
+#: Proven on the role registry as it stood until owner decision D153 (2026-11-10) put every role on
+#: Fable: a tier move, the hold at the top tier, a release, a candidate trial and a stamp refused
+#: between two roles' models all need roles on different tiers, and no calibration is run on Fable
+#: (D154). `conftest.registry_until_d153` rebuilds that registry from the applied moves; what D153
+#: and D154 changed is tested on the registry as it is (`test_roles_fable.py`).
+pytestmark = pytest.mark.usefixtures("registry_until_d153")
 
 #: D6 as amended by owner decision D36 of 2026-10-09 (quota: Sonnet instead of Opus), role by role:
 #: (model id, effort). `field_researcher`, `fact_checker` and `web_verifier` went to Opus by tier move
@@ -724,27 +739,31 @@ def test_answer_with_a_role_records_the_role_in_answered_by(tmp_path: Path) -> N
     text.write_text("VERDICT: SUPPORTED\n", encoding="utf-8")
 
     done = _run(
-        _answer_argv(tmp_path, text, "--model", "claude-sonnet-5-5", "--role", "enrich_writer")
+        _answer_argv(tmp_path, text, "--model", "claude-fable-5-2", "--role", "enrich_writer")
     )
 
     assert done.returncode == 0, done.stderr
     stored = _stored(tmp_path)
     assert stored["answered_by"] == "enrich_writer:agent-7"
-    assert stored["model"] == OH.SONNET_MODEL
+    assert stored["model"] == OH.FABLE_MODEL
     assert set(stored) == OH.ANSWER_KEYS  # the frozen shape did not grow
 
 
-def test_answer_with_a_role_refuses_a_model_that_is_not_the_registered_one(tmp_path: Path) -> None:
+@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"])
+def test_answer_with_a_role_refuses_a_model_that_is_not_the_registered_one(
+    tmp_path: Path, model: str
+) -> None:
+    """Since D153 the registered model of every role is Fable: the recorder refuses each 5.5 model
+    for a role's new answer - Sonnet too, on which this role answered until the decision."""
     _handoff_with_a_question(tmp_path)
     text = tmp_path / "a.txt"
     text.write_text("VERDICT: SUPPORTED\n", encoding="utf-8")
 
-    refused = _run(
-        _answer_argv(tmp_path, text, "--model", "claude-opus-5-5", "--role", "enrich_writer")
-    )
+    refused = _run(_answer_argv(tmp_path, text, "--model", model, "--role", "enrich_writer"))
 
     assert refused.returncode == 2
-    assert "enrich_writer" in refused.stderr and "claude-sonnet-5-5" in refused.stderr
+    assert "role enrich_writer is registered to claude-fable-5-2" in refused.stderr
+    assert f"not {model}" in refused.stderr
     assert not (tmp_path / OH.answer_relpath("batch-0001", "check", "site-1")).exists()
 
 
@@ -809,7 +828,7 @@ def test_a_candidate_trial_answer_needs_a_role(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("model", "candidate", "message"),
     [
-        ("claude-sonnet-5-5", "claude-sonnet-5-5", "is the registered model of web_verifier"),
+        ("claude-fable-5-2", "claude-fable-5-2", "is the registered model of web_verifier"),
         ("claude-sonnet-5-5", "claude-haiku-5-5", "is not the candidate model claude-haiku-5-5"),
     ],
 )
@@ -899,8 +918,8 @@ def settled_move(**over: object) -> dict[str, object]:
         ({"settled_by": "writer"}, "unregistered role"),
         ({"role": "writer"}, "unregistered role"),
         ({"from": "claude-haiku-5-5"}, "not one tier up"),
-        ({"settled_by": "adversarial"}, "not another role registered to claude-opus-5-5"),
-        ({"settled_by": "code_builder"}, "not another role registered to claude-opus-5-5"),
+        ({"settled_by": "adversarial"}, "not another role that stood at claude-opus-5-5"),
+        ({"settled_by": "code_builder"}, "not another role that stood at claude-opus-5-5"),
     ],
 )
 def test_a_thin_or_unjoined_settlement_is_refused(over: dict[str, object], message: str) -> None:
@@ -923,7 +942,7 @@ def test_a_role_that_moved_has_an_applied_move_not_a_settled_one() -> None:
     is a move that is applied and settled at once."""
     moved = dict(RO.ROLES)
     moved["adversarial"] = RO.Role("adversarial", "claude-opus-5-5", "high", "opus_audit_934")
-    with pytest.raises(RO.RoleError, match="adversarial is registered to claude-opus-5-5"):
+    with pytest.raises(RO.RoleError, match="adversarial stood at claude-opus-5-5"):
         RO.check_settled_tier_moves(RO.SETTLED_TIER_MOVES, RO.APPLIED_ESCALATIONS, moved)
     applied = {k: settled_move()[k] for k in ("role", "from", "to", "calibration_id", "reason")}
     with pytest.raises(RO.RoleError, match="applied and settled at once"):

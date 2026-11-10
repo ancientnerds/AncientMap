@@ -347,6 +347,7 @@ class TestTheRounds:
         AD.select(run, seed=1, wiki=None)
         return run / HO.ADV_DIR
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_one_question_per_cell_in_batches_by_country_and_name(
         self, adv: Path, tmp_path: Path
     ) -> None:
@@ -398,6 +399,7 @@ class TestTheRounds:
     def test_a_check_exported_before_the_size_was_recorded_keeps_its_eight(self) -> None:
         assert AD.LEGACY_BATCH_SIZE == 8
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_brief_names_the_role_the_model_and_the_cache(
         self, adv: Path, tmp_path: Path
     ) -> None:
@@ -408,6 +410,23 @@ class TestTheRounds:
         assert "adversarial.py check-answer" in text and "3 check question(s)" in text
         with pytest.raises(AD.AdversarialError, match="is no batch"):
             AD.brief(adv, tmp_path / "h-r0", "adv-r0-b0009")
+
+    def test_a_round_exported_before_d153_is_briefed_with_fable(
+        self, adv: Path, tmp_path: Path
+    ) -> None:
+        """The re-check's role is on Fable since owner decision D153. A round exported today records
+        Fable; one exported before recorded Sonnet, the role's model until then, and its open
+        batches are briefed with the model the recorder takes now (`roles.model_now`)."""
+        AD.export(adv, tmp_path / "h-r0")
+        [record] = AD.read_rounds(adv)
+        assert record["model"] == "claude-fable-5-2"
+        assert "--model claude-fable-5-2 --role adversarial" in AD.brief(
+            adv, tmp_path / "h-r0", "adv-r0-b0001"
+        )
+        HO._write_jsonl(adv / AD.ROUNDS_FILE, [{**record, "model": "claude-sonnet-5-5"}])
+        earlier = AD.brief(adv, tmp_path / "h-r0", "adv-r0-b0001")
+        assert "--model claude-fable-5-2 --role adversarial" in earlier
+        assert "claude-sonnet-5-5" not in earlier
 
     def test_check_answer_names_the_shape_problem(self, adv: Path, tmp_path: Path) -> None:
         AD.export(adv, tmp_path / "h-r0")
@@ -487,6 +506,7 @@ class TestTheImport:
             self.imported(adv)
         assert not (adv / AD.VERDICTS_FILE).exists()
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_an_answer_stamped_with_another_model_is_refused(
         self, adv: Path, tmp_path: Path
     ) -> None:

@@ -1053,6 +1053,7 @@ def test_the_question_shows_the_site_its_sentences_and_asks_every_one(tmp_path: 
     assert f'"site_id": "{FX.SITE_A}"' in prompt
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_brief_names_the_batchs_own_scratch_and_the_commands(tmp_path: Path) -> None:
     run, handoff = _run(tmp_path)
     text = C.brief(run, handoff, "wc-0002")
@@ -1289,6 +1290,7 @@ def _judge(run: Path, handoff: Path, answers: dict[str, str], by: str = "opus-ju
     return C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_pilot_judge_sees_the_kept_text_with_its_quotes_and_the_drops(tmp_path: Path) -> None:
     run, handoff = _judge_run(tmp_path)
     lines = {line["label"]: line for line in OH.manifest(handoff)}

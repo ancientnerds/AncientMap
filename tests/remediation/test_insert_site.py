@@ -457,7 +457,23 @@ class TestTheRounds:
         with pytest.raises(RS.ResearchError, match="already"):
             RS.export(run, tmp_path / "h-r0b")
         brief = RS.brief(run, handoff, batch)
-        assert "--role field_researcher" in brief and "--model claude-sonnet-5-5" in brief
+        # the registry's model for the role, as it is: Fable since owner decision D153
+        assert "--role field_researcher" in brief and "--model claude-fable-5-2" in brief
+
+    def test_a_round_exported_before_d153_is_briefed_with_fable(self, run: Path, tmp_path) -> None:
+        """Round 5 of d57-2026-11-05 was exported on 2026-11-07 and recorded Sonnet, the role's
+        model until owner decision D153: its open questions are answered by Fable, and the brief
+        names the model the recorder takes (`roles.model_now`)."""
+        handoff, batch = self._export(run, tmp_path)
+        [record] = RS.read_rounds(run)
+        assert record["model"] == "claude-fable-5-2"
+        C.write_jsonl(run / RS.ROUNDS_FILE, [{**record, "model": "claude-sonnet-5-5"}])
+        brief = RS.brief(run, handoff, batch)
+        assert "--model claude-fable-5-2 --role field_researcher" in brief
+        assert "claude-sonnet-5-5" not in brief
+        # a round that recorded a model the role was not moved from keeps what it recorded
+        C.write_jsonl(run / RS.ROUNDS_FILE, [{**record, "model": "claude-opus-5-5"}])
+        assert "--model claude-opus-5-5 --role field_researcher" in RS.brief(run, handoff, batch)
 
     def test_check_answer_reports_per_field(self, run: Path, tmp_path: Path) -> None:
         handoff, batch = self._export(run, tmp_path)

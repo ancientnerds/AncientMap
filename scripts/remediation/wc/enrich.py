@@ -435,6 +435,20 @@ def require_writer_calibration(root: Path) -> str:
     return hashlib.sha256(verdict_path.read_bytes()).hexdigest()
 
 
+def writer_standing(root: Path) -> dict[str, str]:
+    """How the writer role stands for the approval of a lane-E pilot, as the approval records it.
+
+    By the owner's decision when `roles.owner_standing` says so (D153 put the role on Fable, D154
+    says no calibration is run there): `{"writer_standing": <that decision, in words>}` - there is
+    no verdict whose sha256 could be named. Otherwise by its calibration:
+    `{"calibration_sha256": ...}` of the passed verdict (`require_writer_calibration`), or
+    `EnrichError`."""
+    by_owner = RO.owner_standing(WRITER_ROLE)
+    if by_owner is not None:
+        return {"writer_standing": by_owner["standing"]}
+    return {"calibration_sha256": require_writer_calibration(root)}
+
+
 # ------------------------------------------------------------------------------ the roles
 def require_role(answer: OH.Answer, role: str, where: str) -> None:
     """Refuse an answer that is not given in `role`: its `answered_by` names the role

@@ -1031,7 +1031,7 @@ def test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent(
     assert f"{scratch}/<site id>.txt" in text
     record = f"{H.HANDOFF4.as_posix()} record --run-dir {batch_dir.parent.resolve().as_posix()}"
     assert record in text and f"under your name {agent}" in text
-    model = "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>"
+    model = "--model <the model id you run as: claude-fable-5-2>"
     assert f"--label <label> {model} --text-file" in text and "no web page" in text
     # The one way an answer is recorded is through its check: the brief never names the unchecked
     # writer as a command to run.

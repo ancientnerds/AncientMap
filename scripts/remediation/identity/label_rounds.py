@@ -295,13 +295,22 @@ def parse_calibrations(values: Iterable[str]) -> dict[str, str]:
 
 def check_calibrated(
     roles: Iterable[str], calibrations: Mapping[str, str], root: Path | None = None
-) -> None:
+) -> list[dict[str, str]]:
     """Refuse an import whose answering roles are not calibrated (owner decision D6): each role
     needs the id of a sealed calibration of that role (`calibrate_claude.py`) whose verdict passed
     and whose registry entry is unchanged since the seal. An answer of a role without one counts
-    for nothing, so the import stops before it reads a page or writes a decision."""
+    for nothing, so the import stops before it reads a page or writes a decision.
+
+    A role that stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable, D154
+    says no calibration is run there) has no verdict and needs no id. Returns how each role stands,
+    in role order: that decision in words, or its passed calibration."""
     base = CC.CALIBRATION_ROOT if root is None else root
+    standing: list[dict[str, str]] = []
     for role in sorted(set(roles)):
+        by_owner = RO.owner_standing(role)
+        if by_owner is not None:
+            standing.append(by_owner)
+            continue
         calibration_id = calibrations.get(role)
         if calibration_id is None:
             raise RoundError(
@@ -330,6 +339,8 @@ def check_calibrated(
                 )
         except CC.CalibrationError as exc:
             raise RoundError(f"calibration {calibration_id} of role {role}: {exc}") from exc
+        standing.append({"role": role, "calibration_id": calibration_id, "standing": CC.PASSED})
+    return standing
 
 
 def read_answers(

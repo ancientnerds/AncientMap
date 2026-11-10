@@ -268,6 +268,7 @@ def outcome(run: Path, name: str) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------ select
 class TestSelect:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_run_records_its_contract_the_limits_and_the_roles(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, NAMES)
         record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
@@ -437,6 +438,7 @@ class TestSelect:
 
 # ------------------------------------------------------------------------------ the chain
 class TestTheFirstRound:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_every_stage_in_order_to_a_version_3_provenance(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, NAMES)
         assert step(run, tmp_path, "write", writes(NAMES))["mechanical_failures"] == 0
@@ -674,6 +676,7 @@ class TestTheFirstRound:
         md = (run / "OUTCOMES.md").read_text(encoding="utf-8")
         assert "kept 1" in md and "cleared" not in md.split("## Every contradiction")[0]
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_contradicted_card_is_rewritten_and_carries_no_rating(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
         step(run, tmp_path, "write", writes([MP]))
@@ -785,6 +788,7 @@ class TestTheRoles:
         ):
             R.import_stage(run, "write", fit=T.fit)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_stamp_that_is_not_the_roles_model_is_refused(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
         handoff = tmp_path / "handoff-write"
@@ -801,6 +805,7 @@ class TestTheRoles:
         with pytest.raises(R.RunError, match="role card_writer is recorded as claude-opus-5-5"):
             R.import_stage(run, "write", fit=T.fit)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_rater_that_rated_the_site_before_is_refused(self, tmp_path: Path) -> None:
         """The roles make the names of different roles differ; the rule still catches one agent name
         used for the same role in two rounds."""
@@ -1188,6 +1193,7 @@ class TestTheBriefs:
         R.export_stage(run, stage, handoff)
         return run, handoff
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_writer_brief_names_the_role_the_fixed_model_and_the_flags(
         self, tmp_path: Path
     ) -> None:
@@ -1201,6 +1207,7 @@ class TestTheBriefs:
         assert "accepts the decline the prompt offers" in text
         assert "Wikipedia cache" not in text
 
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize(
         ("stage", "role", "model", "effort"),
         [
@@ -1237,6 +1244,7 @@ class TestTheBriefs:
         text = R.brief(run, handoff, "rate-001")
         assert "you do not know and must not look up whether anything is true" in text
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_agents_of_a_round_are_workflow_ready_jobs(self, tmp_path: Path) -> None:
         run, handoff = self.exported(tmp_path, "verify")
         jobs = R.agent_jobs(run, handoff)
@@ -1282,6 +1290,7 @@ class TestTheBriefs:
         put(handoff, "judge", "judge-001", sid(MP), VERIFIED_ANSWER, "pilot_judge")
         assert R.import_judge(run, client=judge_client(), pace=0)["pilot"] == "PASS"
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_pilot_judge_is_the_pilot_judge_role(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
         chain(run, tmp_path, [MP])
@@ -1384,6 +1393,7 @@ CANARY_CAUGHT_V1 = T.checker_answer("FAIL", [("x", [])], ["The seeded flaw."])
 
 
 class TestTheRecheckRun:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_live_cards_of_the_run_are_seeded_as_the_write_stage(self, tmp_path: Path) -> None:
         run = seed(tmp_path, [MP, DENBURY], extra=[production_row(HUACA)])
         record = json.loads((run / "RUN.json").read_text("utf-8"))
@@ -1532,6 +1542,7 @@ class TestTheRecheckRun:
         )
         assert row["findings"] and "card-clear-" + reason == f"card-clear-{row['reason']}"
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_adversarial_stage_is_the_card_reviewer_s_on_opus(self, tmp_path: Path) -> None:
         """The re-check's last stage is answered by the card lane's own reviewer `card_adversarial`
         (Opus), never by the shared `adversarial` (Sonnet), which failed the card calibration: the
@@ -1611,6 +1622,7 @@ class TestTheRecheckRun:
         R.outcomes(run)
         assert outcome(run, MP)["reason"] == R.RECHECK_MECHANICAL
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_recheck_roles_answer_each_stage(self, tmp_path: Path) -> None:
         run = seed(tmp_path, [MP])
         handoff = tmp_path / "handoff-check"

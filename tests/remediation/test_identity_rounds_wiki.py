@@ -177,6 +177,7 @@ class TestTheWikiCache:
 
 # ---------------------------------------------------------------------------------- the roles
 class TestTheRoleOfAnAnswer:
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize(
         ("model", "by", "allowed", "message"),
         [
@@ -233,16 +234,19 @@ class TestTheCalibrationGate:
     def test_a_passed_sealed_calibration_of_the_role_counts(self, tmp_path: Path) -> None:
         self.check(tmp_path, ["web_verifier", "adversarial", "web_verifier"])
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_role_without_a_named_calibration_does_not(self, tmp_path: Path) -> None:
         with pytest.raises(rounds.RoundError, match="role adversarial answered"):
             self.check(tmp_path, ["adversarial"], {"web_verifier": "cal-web_verifier"})
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_calibration_without_a_verdict_does_not(self, tmp_path: Path) -> None:
         root = self.root(tmp_path)
         (root / "verdicts" / "cal-web_verifier.json").unlink()
         with pytest.raises(rounds.RoundError, match="has no verdict"):
             rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_failed_verdict_does_not(self, tmp_path: Path) -> None:
         root = self.root(tmp_path)
         path = root / "verdicts" / "cal-web_verifier.json"
@@ -253,10 +257,12 @@ class TestTheCalibrationGate:
         with pytest.raises(rounds.RoundError, match="did not pass"):
             rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_another_role_s_calibration_does_not(self, tmp_path: Path) -> None:
         with pytest.raises(rounds.RoundError, match="calibration of role adversarial, not of"):
             self.check(tmp_path, ["web_verifier"], {"web_verifier": "cal-adversarial"})
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_role_whose_registry_entry_changed_after_the_seal_does_not(
         self, tmp_path: Path
     ) -> None:
@@ -267,6 +273,7 @@ class TestTheCalibrationGate:
         with pytest.raises(rounds.RoundError, match="changed after the seal"):
             rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_candidate_trial_does_not_stand_for_the_registered_role(self, tmp_path: Path) -> None:
         """A passed trial of another model says nothing about the model the registry holds."""
         root = self.root(tmp_path)
@@ -279,6 +286,7 @@ class TestTheCalibrationGate:
         with pytest.raises(rounds.RoundError, match="trial of claude-haiku-5-5"):
             rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_verdict_without_a_seal_does_not(self, tmp_path: Path) -> None:
         root = self.root(tmp_path)
         (root / "THRESHOLDS.json").write_text("{}", encoding="utf-8")

@@ -1354,7 +1354,7 @@ BRIEF_PARTS = {
             "university pages."
         ),
         "unsourced": 'is "clear" (or "unresolved" for coordinates)',
-        "model": "<the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>",
+        "model": "<the model id you run as: claude-fable-5-2>",
     },
     R.ONE_FAMILY.name: {
         "role": "Sonnet researcher",
@@ -1473,6 +1473,10 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     if record.get("model"):
         # the round names the model, so the role must not claim to be another one
         parts["role"] = "researcher"
+        if rule.name in RULE_ROLE:
+            # the model the rule's role answers with now: Fable for a round exported before owner
+            # decision D153 took the role from the model the round recorded (`roles.model_now`)
+            parts["model"] = RO.model_now(RULE_ROLE[rule.name], record["model"])
     if is_d99_run(run):
         parts["evidence"] = _swap(parts["evidence"], D99_REPLACED_EVIDENCE, D99_EVIDENCE)
     return BRIEF.format(

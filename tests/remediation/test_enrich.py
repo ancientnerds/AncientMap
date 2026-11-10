@@ -138,6 +138,7 @@ def test_an_enriched_text_is_asked_by_no_check_and_no_list_run(
 
 
 # ------------------------------------------------------------------------------ the agent's aids
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_brief_records_the_answer_in_the_writers_role(tmp_path: Path) -> None:
     rows, _ = _rows(tmp_path)
     run, handoff = EF.start_enrich_run(tmp_path / "r", rows)
@@ -188,6 +189,7 @@ def _record(handoff: Path, answers: dict[str, str], **kwargs: Any) -> None:
     EF.record_enriched(handoff, answers, **kwargs)
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -347,6 +349,7 @@ def test_a_text_the_verifier_calls_incoherent_loses_the_new_sentence_it_names(
     assert [d["reason"] for d in final["decisions"]] == ["verify-incoherent", None]
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_a_verifier_must_be_an_independent_agent_in_the_verifiers_role(tmp_path: Path) -> None:
     run, _ = _to_verify(tmp_path)
     cli.cmd_verify_export(run, tmp_path / "v", batch_size=5)
@@ -446,6 +449,7 @@ def test_a_pilot_whose_judge_finds_a_hook_invented_fails(tmp_path: Path) -> None
         cli.pilot_approval([run / cli.PLAN_FILE])
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_judge_must_be_an_opus_agent_in_the_pilot_judges_role(tmp_path: Path) -> None:
     rows, answers = _rows(tmp_path)
     run, _ = EF.build_enrich_run(tmp_path / "r", rows, answers, judged=False)
@@ -467,6 +471,7 @@ def test_the_judge_question_shows_the_old_text_and_marks_the_hook(built: dict[st
     assert cli.judge_brief(built["run"], handoff, "judge-0001").count("--role pilot_judge") == 1
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_each_kind_of_text_has_its_own_pilot_and_an_enrichment_plan_never_rests_on_the_others(
     tmp_path: Path, built: dict[str, Any], calibrated: Path
 ) -> None:
@@ -491,6 +496,7 @@ def test_each_kind_of_text_has_its_own_pilot_and_an_enrichment_plan_never_rests_
     assert len(cli.pilot_approval([wn_plan, built["plan"], chunk_plan])) == 2
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("change", "message"),
     [
@@ -522,6 +528,7 @@ def test_a_lane_e_pilot_is_not_approved_on_a_writer_that_was_not_calibrated(
         cli.pilot_approval([built["plan"]])
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_writers_calibration_is_void_once_its_registry_entry_changed(
     built: dict[str, Any], calibrated: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

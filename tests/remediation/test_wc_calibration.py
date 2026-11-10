@@ -27,6 +27,13 @@ from tests.remediation import wc_fixtures as FX  # noqa: E402
 from tests.remediation.test_wc_verify import _answers, _rows  # noqa: E402
 from tests.remediation.wc_fixtures import OH, wiki_cache  # noqa: E402,F401
 
+#: Proven on the role registry as it stood until owner decision D153 (2026-11-10) put every role on
+#: Fable: a tier move, the hold at the top tier, a release, a candidate trial and a stamp refused
+#: between two roles' models all need roles on different tiers, and no calibration is run on Fable
+#: (D154). `conftest.registry_until_d153` rebuilds that registry from the applied moves; what D153
+#: and D154 changed is tested on the registry as it is (`test_roles_fable.py`).
+pytestmark = pytest.mark.usefixtures("registry_until_d153")
+
 NOW = "2026-10-09T09:00:00+00:00"
 Q_DATE_J = {"url": FX.WIKI, "quote": "They date to approximately 3150 BC."}
 

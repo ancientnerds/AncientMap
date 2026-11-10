@@ -21,7 +21,10 @@ verdicts, and this module is their record:
 
 `require_standing` is the gate the image lane's exports call (`run.py`): a slot stands when its
 verdict passed or a release still rests on the verdict, the seal, the gold, the registry entry and
-the evidence it was made on. Nothing here calls a model.
+the evidence it was made on - or, since owner decisions D153 and D154 of 2026-11-10 (every role on
+Fable 5.2, no calibration run on it), when its role stands by that decision
+(`roles.owner_standing`), which the gate asks first and names in what it returns. Nothing here
+calls a model.
 
     standing.py correct --dir D --case ID --truth depicts|not_depicts --decision D127 --reason R
     standing.py rescore --dir D --slot adversarial --decision D127
@@ -266,7 +269,14 @@ def release(
 
 def standing(directory: Path, slot: str) -> dict[str, Any]:
     """How `slot` stands in `directory`: its verdict passed, or a release still rests on what it was
-    made on. Refused otherwise, naming what is missing or what moved."""
+    made on. Refused otherwise, naming what is missing or what moved.
+
+    A slot whose role stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable,
+    D154 says no calibration is run there) has no verdict of its own: the answer is that decision,
+    in words, and the directory - sealed for the role's earlier model - is not asked."""
+    by_owner = RO.owner_standing(CAL.slot_role(slot))
+    if by_owner is not None:
+        return {"slot": slot, **by_owner}
     CG.sealed(directory)
     plain = directory / CAL.VERDICTS_DIR / f"{slot}.json"
     if plain.is_file() and json.loads(plain.read_text(encoding="utf-8"))["passed"]:
