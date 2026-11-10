@@ -36,7 +36,14 @@ router = APIRouter()
 BASE_URL = "https://ancientnerds.com"
 
 #: One part file per page type; /sitemap.xml indexes exactly these.
-SITEMAP_PARTS = ("static", "sites", "countries", "stories", "research", "articles", "legacy")
+#:
+#: Until 2026-11-10 a seventh part, sitemap-legacy.xml, listed the retired
+#: /site.html?id={uuid} URLs so that Google processed their 301s. Its removal
+#: condition was met (owner decisions D141 and O22): the legacy URLs fell from 201
+#: impressions a day (2026-10-01) to 17 (2026-10-19) and had none from 2026-11-03 on,
+#: while Google still spent 10-15 of its 125-170 daily page fetches on them. The URLs
+#: keep answering 301 (sites_html.legacy_site_redirect); only their sitemap is gone.
+SITEMAP_PARTS = ("static", "sites", "countries", "stories", "research", "articles")
 
 # 1h: long enough that crawler bursts hit nginx/API caches, short enough
 # that a freshly published story is advertised within the hour.
@@ -47,20 +54,19 @@ def _xml(content: str) -> Response:
     return Response(content=content, media_type="application/xml", headers=_HEADERS)
 
 
-def _loc(path: str, query: str = "") -> str:
+def _loc(path: str) -> str:
     """Absolute, percent-encoded, XML-escaped <loc> value for a raw site path.
 
     Sitemap URLs must be URL-escaped; ~600 site slugs and ~100 news/article
-    slugs contain non-ASCII characters. Takes the UNENCODED path; `query` is
-    appended verbatim after `?` (only the legacy part has one).
+    slugs contain non-ASCII characters. Takes the UNENCODED path.
     """
-    return escape(f"{BASE_URL}{encode_path(path)}{'?' + query if query else ''}")
+    return escape(f"{BASE_URL}{encode_path(path)}")
 
 
-def _url(path: str, lastmod: datetime | None, *, query: str = "") -> str:
+def _url(path: str, lastmod: datetime | None) -> str:
     """One <url> element; lastmod only where the data actually provides one."""
     lastmod_xml = f"\n    <lastmod>{lastmod.strftime('%Y-%m-%d')}</lastmod>" if lastmod else ""
-    return f"  <url>\n    <loc>{_loc(path, query)}</loc>{lastmod_xml}\n  </url>"
+    return f"  <url>\n    <loc>{_loc(path)}</loc>{lastmod_xml}\n  </url>"
 
 
 def _urlset(urls: list[str], *, image_ns: bool = False) -> str:
@@ -116,8 +122,6 @@ _SITES_SQL = text(
     + _CURATED_SHOWN
     + " ORDER BY u.name"
 )
-
-_LEGACY_SQL = text("SELECT u.id FROM unified_sites u WHERE " + _CURATED_SHOWN + " ORDER BY u.id")
 
 _COUNTRIES_SQL = text(
     "SELECT u.country, MAX("
@@ -230,39 +234,16 @@ async def sitemap_sites(db: Session = Depends(get_db)):
     """All curated site detail pages (/sites/{country}/{slug}, ~5,000).
 
     Only Ancient Nerds Originals — the routes serve curated sites only, and
-    bulk-imported sources would be hundreds of thousands of thin pages. The
-    legacy /site.html?id={uuid} URLs live in sitemap-legacy.xml for now (see
-    sitemap_legacy); this part lists canonical URLs only.
+    bulk-imported sources would be hundreds of thousands of thin pages. This
+    part lists canonical URLs only. A page served with the Google-only noindex
+    (no description yet: siteMeta in src/seo/meta.ts) stays listed, so Google
+    fetches it, sees the tag, and sees it gone once the description exists.
     """
     rows = db.execute(_SITES_SQL).fetchall()
     urls = [
         _url(site_path(row.country, row.name, row.id), _sites_lastmod(row.lastmod)) for row in rows
     ]
     return _xml(_urlset(urls))
-
-
-@router.api_route("/sitemap-legacy.xml", methods=["GET", "HEAD"])
-async def sitemap_legacy(db: Session = Depends(get_db)):
-    """TEMPORARY: the retired /site.html?id={uuid} URLs, so Google recrawls
-    them and processes their 301s.
-
-    On 2026-08-07 Google had never fetched one of these. Between then and the
-    retirement of the nginx crawler rewrite they answered 200, and Google
-    indexed them: on 2026-09-15 462 legacy URLs still carried 5,130
-    impressions in 28 days (11.5 % of the site), URL Inspection showed the
-    legacy URL as Google-selected canonical on 3/3 samples with last crawls
-    08-25 … 09-07, and "augustus mirabilis" / "xiol" ranked only through
-    them. Every one now answers 301 to /sites/{country}/{slug}
-    (legacy_site_redirect); listing redirecting URLs is Google's own advice
-    for moved URLs so the redirects get processed instead of waiting for the
-    natural recrawl (~490 in 14 days). No lastmod: nothing changed on them.
-
-    Remove this part (and the query support in _url) once
-    `scripts/gsc_report.py pages` shows no /site.html?id= impressions for a
-    full week.
-    """
-    rows = db.execute(_LEGACY_SQL).fetchall()
-    return _xml(_urlset([_url("/site.html", None, query=f"id={row.id}") for row in rows]))
 
 
 @router.api_route("/sitemap-countries.xml", methods=["GET", "HEAD"])

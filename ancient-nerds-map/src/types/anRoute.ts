@@ -93,9 +93,13 @@ export interface StoryRoute {
   channel_name: string
   /** Raw ISO timestamp: video publish date, else item creation. */
   published_at: string
+  /** Raw ISO timestamp of the row's creation (naive UTC): the day storyMeta() keys the
+   *  Google-only noindex on (owner decisions D141 and O22, 2026-11-10). */
+  created_at: string
   news_category: string | null
-  /** LLM-derived JSON — only clean http(s) entries may render as links. */
-  web_sources: { url?: string | null; title?: string | null; snippet?: string | null }[] | null
+  /** LLM-derived JSON — only clean http(s) entries may render as links. Title and link
+   *  only: the search-result excerpt stays in the database (O22). */
+  web_sources: { url?: string | null; title?: string | null }[] | null
   timestamp_seconds: number | null
   speculative_tag: string | null
   /** kind is why the story was picked: site | place | country | topic |

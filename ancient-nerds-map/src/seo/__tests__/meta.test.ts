@@ -16,6 +16,12 @@
  * Mehr Abweichungen gibt es nicht. (renderHead maskiert < zusätzlich am
  * Sink; byte-identisch, weil jsonStr schon maskiert — Defense in Depth,
  * keine Ausgabedifferenz.)
+ *
+ * Changed by hand on 2026-11-10 (owner decisions D141 and O22): pyref/country.html
+ * gained `<meta name="googlebot" content="noindex">`, because its payload lists three
+ * sites and a country page with at most four is out of Google's index; the two story
+ * payloads gained `created_at` (2026-03-15, before the rule's first day), which leaves
+ * their heads as they were.
  */
 
 import { readdirSync } from 'node:fs'
@@ -24,9 +30,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { PageMeta } from '../meta'
 import {
+  COUNTRY_GOOGLE_NOINDEX_MAX_SITES,
   RESEARCH_FEED,
   SITE_TITLE_MAX,
   STORIES_FEED,
+  STORY_GOOGLE_NOINDEX_FROM,
   articleIndexMeta,
   articleMeta,
   countryMeta,
@@ -466,5 +474,126 @@ describe('researchMeta: Roman-Briefings', () => {
     const m = researchMeta(FIXTURES.research)
     expect(m.robots).toBeUndefined()
     expect(renderHead(m)).toContain('<meta name="robots" content="index, follow, max-image-preview:large">')
+  })
+})
+
+// Owner decisions D141 and O22 (2026-11-10, proposal output/seo-audit-2026-11-10/
+// PROPOSAL_D141.md): three kinds of page leave Google's index and no other engine's. The
+// directive is a googlebot tag of its own; the robots tag every engine reads stays "index".
+describe('the Google-only noindex (D141, O22)', () => {
+  const GOOGLEBOT = '<meta name="googlebot" content="noindex">'
+  const ROBOTS_INDEX = '<meta name="robots" content="index, follow, max-image-preview:large">'
+
+  /** The head of a page under the rule: the googlebot tag, and the robots tag unchanged. */
+  function expectGoogleOnly(m: PageMeta) {
+    expect(m.googleNoindex).toBe(true)
+    expect(m.robots).toBeUndefined()
+    const head = renderHead(m)
+    expect(head).toContain(`${ROBOTS_INDEX}\n${GOOGLEBOT}\n<link rel="canonical"`)
+    expect(head.match(/<meta name="googlebot"/g)).toHaveLength(1)
+    expect(head.match(/<meta name="robots"/g)).toHaveLength(1)
+    expect(head).not.toContain('nofollow')
+  }
+
+  function expectIndexed(m: PageMeta) {
+    expect(m.googleNoindex).toBe(false)
+    const head = renderHead(m)
+    expect(head).not.toContain('googlebot')
+    expect(head).toContain(ROBOTS_INDEX)
+  }
+
+  describe('measure 1, stage A: a story created on or after 2026-11-11', () => {
+    it('the first day is 2026-11-11', () => {
+      expect(STORY_GOOGLE_NOINDEX_FROM).toBe('2026-11-11')
+    })
+
+    it('the first second of that day is under the rule, with and without microseconds', () => {
+      expectGoogleOnly(storyMeta({ ...FIXTURES.story, created_at: '2026-11-11T00:00:00' }))
+      expectGoogleOnly(storyMeta({ ...FIXTURES.story, created_at: '2026-11-11T00:00:00.000001' }))
+      expectGoogleOnly(storyMeta({ ...FIXTURES.story, created_at: '2027-01-02T10:11:12.948972' }))
+    })
+
+    it('the last moment of the day before is not', () => {
+      expectIndexed(storyMeta({ ...FIXTURES.story, created_at: '2026-11-10T23:59:59.999999' }))
+      expectIndexed(storyMeta(FIXTURES.story))
+    })
+
+    it('the day is the row creation, not the date of the video', () => {
+      // An old video summarised today is a new story; a new video's date changes nothing
+      // for a story that was written before the rule.
+      expectGoogleOnly(
+        storyMeta({ ...FIXTURES.story, published_at: '2019-05-01T12:00:00', created_at: '2026-11-12T08:00:00' }),
+      )
+      expectIndexed(
+        storyMeta({ ...FIXTURES.story, published_at: '2026-11-12T08:00:00', created_at: '2026-11-10T08:00:00' }),
+      )
+    })
+
+    it('a new speculative story keeps its noindex for every engine and gains the tag', () => {
+      const m = storyMeta({
+        ...FIXTURES.story,
+        news_category: 'speculative',
+        created_at: '2026-11-11T09:00:00',
+      })
+      const head = renderHead(m)
+      expect(head).toContain('<meta name="robots" content="noindex, follow, max-image-preview:large">')
+      expect(head).toContain(GOOGLEBOT)
+    })
+  })
+
+  describe('measure 3: a site page without a description', () => {
+    it.each([null, '', '   ', '\n'])('description %j is under the rule', description => {
+      expectGoogleOnly(siteMeta({ ...FIXTURES.site, description }))
+    })
+
+    it('ends by itself once the description exists', () => {
+      expectIndexed(siteMeta(FIXTURES.site))
+      expectIndexed(siteMeta({ ...FIXTURES.site, description: 'A hill fort.' }))
+    })
+
+    it('a missing image alone keeps the page in the index', () => {
+      // The proposal's refutation pass: the 1,095 pages without a picture carried 42 % of
+      // the site pages' impressions; only the 40 without any text leave.
+      expectIndexed(siteMeta({ ...FIXTURES.site, image: null }))
+    })
+  })
+
+  describe('measure 5: a country page that shows at most four sites', () => {
+    const sites = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        ...FIXTURES.country.sites[0],
+        name: `Site ${i + 1}`,
+        path: `/sites/türkiye/site-${i + 1}-0000000${i}`,
+      }))
+
+    it('the bound is four', () => {
+      expect(COUNTRY_GOOGLE_NOINDEX_MAX_SITES).toBe(4)
+    })
+
+    it.each([1, 3, 4])('%i sites: under the rule', n => {
+      expectGoogleOnly(countryMeta({ ...FIXTURES.country, sites: sites(n) }))
+    })
+
+    it.each([5, 50])('%i sites: indexed', n => {
+      expectIndexed(countryMeta({ ...FIXTURES.country, sites: sites(n) }))
+    })
+  })
+
+  it('no other page type carries the tag', () => {
+    const others: PageMeta[] = [
+      storyArchiveMeta(FIXTURES.storyArchive),
+      storyArchiveMeta({ ...FIXTURES.storyArchive, q: 'chariot' }),
+      sitesIndexMeta(FIXTURES.sitesIndex),
+      researchMeta(FIXTURES.research),
+      researchMeta({ ...FIXTURES.research, noindex: true }),
+      researchIndexMeta(FIXTURES.researchIndex),
+      articleMeta(FIXTURES.article),
+      articleIndexMeta(FIXTURES.articleIndex),
+      landingMeta(FIXTURES.landing),
+    ]
+    for (const m of others) {
+      expect(m.googleNoindex).toBeUndefined()
+      expect(renderHead(m)).not.toContain('googlebot')
+    }
   })
 })

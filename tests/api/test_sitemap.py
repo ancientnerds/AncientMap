@@ -16,6 +16,7 @@ import asyncio
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -24,6 +25,7 @@ from fastapi import Response
 from api.routes import sitemap as sm
 
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+REPO = Path(__file__).resolve().parents[2]
 
 
 def _root(resp: Response) -> ET.Element:
@@ -119,7 +121,6 @@ def _all_part_responses() -> dict[str, Response]:
         "stories": asyncio.run(sm.sitemap_stories(db=_orm_db(STORIES))),
         "research": asyncio.run(sm.sitemap_research(db=_execute_db(PAPERS))),
         "articles": asyncio.run(sm.sitemap_articles(db=_orm_db(ARTICLES))),
-        "legacy": asyncio.run(sm.sitemap_legacy(db=_execute_db(SITES))),
     }
 
 
@@ -169,15 +170,73 @@ def test_sites_lastmod_is_floored_at_the_template_change():
     assert [u.findtext(f"{NS}lastmod") for u in urls] == [_FLOOR_DAY] * 3
 
 
-def test_legacy_part_lists_the_retired_id_urls_without_lastmod():
-    """Temporary part (see sitemap_legacy): one /site.html?id= per curated site,
-    query intact (not percent-encoded), no lastmod."""
-    resp = asyncio.run(sm.sitemap_legacy(db=_execute_db(SITES)))
-    urls = list(_root(resp).iter(f"{NS}url"))
-    assert [u.findtext(f"{NS}loc") for u in urls] == [
-        f"https://ancientnerds.com/site.html?id={s.id}" for s in SITES
+def test_every_part_has_a_route_and_a_test_response():
+    """SITEMAP_PARTS, the routes and this file's fixtures name the same parts."""
+    routed = {
+        match.group(1)
+        for route in sm.router.routes
+        if (match := re.fullmatch(r"/sitemap-([a-z]+)\.xml", route.path))
+    }
+    assert routed == set(sm.SITEMAP_PARTS) == set(_all_part_responses())
+
+
+def test_the_legacy_part_is_gone_everywhere():
+    """Owner decisions D141 and O22 (2026-11-10): the sitemap of the retired
+    /site.html?id={uuid} URLs is dropped. Its condition was met - no impression since
+    2026-11-03 - and Google still spent 10-15 of 125-170 daily page fetches on it. No
+    index entry, no route, no nginx location, no line in robots.txt; no sitemap URL
+    carries a query any more."""
+    assert "legacy" not in sm.SITEMAP_PARTS
+    index = asyncio.run(sm.sitemap_index()).body.decode()
+    assert "legacy" not in index
+    assert all("legacy" not in route.path for route in sm.router.routes)
+    for resp in _all_part_responses().values():
+        assert all("?" not in loc and "site.html" not in loc for loc in _locs(resp))
+
+    robots = (REPO / "ancient-nerds-map/public/robots.txt").read_text(encoding="utf-8")
+    assert "legacy" not in robots
+    nginx = (REPO / "ancientnerds-nginx-config").read_text(encoding="utf-8")
+    assert "sitemap-legacy" not in nginx
+
+
+def test_robots_txt_and_nginx_name_exactly_the_parts_of_the_index():
+    robots = (REPO / "ancient-nerds-map/public/robots.txt").read_text(encoding="utf-8")
+    named = re.findall(r"^Sitemap: (\S+)$", robots, flags=re.MULTILINE)
+    assert named == [
+        "https://ancientnerds.com/sitemap.xml",
+        *(f"https://ancientnerds.com/sitemap-{part}.xml" for part in sm.SITEMAP_PARTS),
     ]
-    assert all(u.findtext(f"{NS}lastmod") is None for u in urls)
+    nginx = (REPO / "ancientnerds-nginx-config").read_text(encoding="utf-8")
+    assert f"location ~ ^/sitemap-({'|'.join(sm.SITEMAP_PARTS)})\\.xml$ {{" in nginx
+
+
+def test_pages_with_the_google_only_noindex_stay_in_their_sitemap():
+    """Owner decisions D141 and O22: a new story, a site page without a description and
+    a country page with at most four sites are served with a noindex for Google only
+    (src/seo/meta.ts). Each stays listed, so Google fetches the page and sees the tag -
+    in the 21 days after 2026-10-20 it refetched 444 of 2,541 stories and 502 of 4,907
+    site pages, and without the sitemap it takes longer still. So no part filters on
+    the description, on the number of sites of a country, or on a story's age."""
+    # The row filter of both parts is the curated-page rule and nothing else.
+    assert sm._SITES_SQL.text.rsplit(" WHERE ", 1)[1] == sm._CURATED_SHOWN + " ORDER BY u.name"
+    assert (
+        sm._COUNTRIES_SQL.text.rsplit(" WHERE ", 1)[1]
+        == sm._CURATED_SHOWN + " GROUP BY u.country ORDER BY u.country"
+    )
+
+    q = MagicMock()
+    q.with_entities.return_value = q
+    q.order_by.return_value = q
+    q.all.return_value = [
+        _story(9001, "Found today", datetime(2026, 11, 11, 6, 0)),
+        _story(4711, "Found in spring", datetime(2026, 3, 14)),
+    ]
+    with patch.object(sm, "public_stories_query", return_value=q):
+        locs = _locs(asyncio.run(sm.sitemap_stories(db=MagicMock())))
+    # The set is public_stories_query as it is: the part adds no filter of its own.
+    q.filter.assert_not_called()
+    assert "https://ancientnerds.com/news-archive/found-today-9001" in locs
+    assert "https://ancientnerds.com/news-archive/found-in-spring-4711" in locs
 
 
 def test_no_url_appears_in_two_parts():

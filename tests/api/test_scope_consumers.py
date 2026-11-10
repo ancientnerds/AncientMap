@@ -33,7 +33,7 @@ SITE_ID = "9c8b7a65-4321-4cba-8000-111122223333"
 def test_sitemap_parts_list_only_shown_sites():
     from api.routes import sitemap as sm
 
-    for sql in (sm._SITES_SQL.text, sm._LEGACY_SQL.text, sm._COUNTRIES_SQL.text):
+    for sql in (sm._SITES_SQL.text, sm._COUNTRIES_SQL.text):
         assert U in sql, sql
         assert "u.source_id = 'ancient_nerds'" in sql
 

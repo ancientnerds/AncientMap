@@ -88,8 +88,16 @@ def _item(**overrides) -> SimpleNamespace:
         "screenshot_url": "/data/news/screenshots/4711.jpg",
         "news_category": "Excavation",
         "web_sources": [
-            {"url": "https://en.natmus.dk/sun-chariot/", "title": "The Sun Chariot"},
-            {"url": "javascript:alert(1)", "title": "evil"},
+            {
+                "url": "https://en.natmus.dk/sun-chariot/",
+                "title": "The Sun Chariot",
+                "snippet": "The Sun Chariot was found in 1902 in the Trundholm bog.",
+            },
+            {
+                "url": "javascript:alert(1)",
+                "title": "evil",
+                "snippet": "Linked in video description",
+            },
         ],
         "timestamp_seconds": 754,
         "speculative_tag": None,
@@ -140,14 +148,22 @@ def test_story_hands_the_full_raw_payload():
     assert route["summary"] == "A second fragment."
     assert route["facts"] == ["Second fragment found"]
     assert route["post_text"] == "Archaeologists re-examined spoil heaps."
-    # Roh durchgereicht — der http(s)-Filter ist eine Anzeigeentscheidung
-    # und lebt in StoryPage; der javascript:-Eintrag darf dort nie ein href
-    # werden (render.test.tsx beweist das).
-    assert route["web_sources"] == item.web_sources
+    # Der http(s)-Filter ist eine Anzeigeentscheidung und lebt in StoryPage; der
+    # javascript:-Eintrag darf dort nie ein href werden (render.test.tsx beweist das).
+    # Title and link only (owner decisions D141/O22, 2026-11-10): the search-result
+    # excerpt of an entry does not reach the served document.
+    assert route["web_sources"] == [
+        {"url": "https://en.natmus.dk/sun-chariot/", "title": "The Sun Chariot"},
+        {"url": "javascript:alert(1)", "title": "evil"},
+    ]
+    assert "found in 1902" not in str(route)
     assert route["timestamp_seconds"] == 754
     assert route["screenshot_url"] == "/data/news/screenshots/4711.jpg"
     # Video-Datum gewinnt vor created_at; roher ISO-String, Format in TS.
     assert route["published_at"] == "2026-03-14T09:30:00"
+    # The row's own creation time beside it: storyMeta() keys the Google-only noindex of
+    # stage A on it (a story created on or after 2026-11-11), never on the video's date.
+    assert route["created_at"] == "2026-03-15T08:00:00"
     assert route["youtube_url"] == "https://www.youtube.com/watch?v=abc123"
     assert route["video_title"] == "Sun Chariot's Lost Twin?"
     assert route["channel_name"] == "Ancient Architects"
@@ -193,6 +209,32 @@ def test_story_without_site_gets_related_stories_by_topic():
         ("6770", "topic"),
         ("5839", "topic"),
     ]
+
+
+def test_story_without_researched_sources_hands_none():
+    """599 news_items rows carry no web_sources (psql 2026-11-10): the payload says null, and the
+    page then lists only the link of the post text, if it has one."""
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            story_page("sun-chariot-fragment-found-4711", db=_orm_db(first=_item(web_sources=None)))
+        )
+
+    assert render_mock.call_args[0][0]["web_sources"] is None
+
+
+def test_new_story_hands_its_creation_time_not_the_video_date():
+    """Stage A (owner decisions D141/O22): the rule is about when the story was written.
+    A video of 2019 summarised on 2026-11-11 is a new story."""
+    item = _item(created_at=datetime(2026, 11, 11, 0, 0, 0, 948972))
+    item.video.published_at = datetime(2019, 5, 1, 12, 0)
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(story_page("sun-chariot-fragment-found-4711", db=_orm_db(first=item)))
+
+    route = render_mock.call_args[0][0]
+    assert route["created_at"] == "2026-11-11T00:00:00.948972"
+    assert route["published_at"] == "2019-05-01T12:00:00"
 
 
 def test_bulk_imported_site_is_not_marked_curated():

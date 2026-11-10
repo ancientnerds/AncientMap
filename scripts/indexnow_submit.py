@@ -8,10 +8,9 @@ few URLs after a manual fix.
     python scripts/indexnow_submit.py https://ancientnerds.com/sites/ https://ancientnerds.com/research/
 
 --all reads https://ancientnerds.com/sitemap.xml and its parts over HTTP (the
-local DB is empty, the live sitemap is the truth) and skips sitemap-legacy.xml:
-those URLs answer 301 and are for Google's redirect processing, not for Bing.
-The day-to-day announcements come from the orchestrator step and the publish
-hooks (pipeline/indexnow.py); this script is not needed for them.
+local DB is empty, the live sitemap is the truth). The day-to-day announcements
+come from the orchestrator step and the publish hooks (pipeline/indexnow.py);
+this script is not needed for them.
 
 --lastmod-since keeps only the URLs whose <lastmod> is on or after the date. It is
 the catch-up for changes older than the orchestrator's two-hour window - the 2026-09
@@ -57,14 +56,12 @@ def part_urls(xml: bytes, since: date | None = None) -> list[str]:
 
 
 def sitemap_urls(index_url: str = SITEMAP_INDEX, since: date | None = None) -> list[str]:
-    """Every <loc> of every part the index lists, except the legacy part."""
+    """Every <loc> of every part the index lists."""
     index = httpx.get(index_url, timeout=30.0)
     index.raise_for_status()
     parts = [el.text.strip() for el in ET.fromstring(index.content).findall(".//sm:loc", _NS)]
     urls: list[str] = []
     for part in parts:
-        if part.endswith("sitemap-legacy.xml"):
-            continue
         resp = httpx.get(part, timeout=60.0)
         resp.raise_for_status()
         urls += part_urls(resp.content, since)

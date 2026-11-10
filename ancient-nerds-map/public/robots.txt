@@ -8,11 +8,10 @@ User-agent: *
 Disallow: /index-all/
 Allow: /
 
-# Sitemap location: the index, and its content parts by name. Bing reads all
-# seven parts from the index, but GPTBot and ClaudeBot fetched only the index
-# and never a part in the 14 days to 2026-10-08 (SEO audit), so each part is
-# named here as well. sitemap-legacy.xml stays in the index only: its URLs are
-# redirects, listed so Google processes them.
+# Sitemap location: the index, and its parts by name. Bing reads every part
+# from the index, but GPTBot and ClaudeBot fetched only the index and never a
+# part in the 14 days to 2026-10-08 (SEO audit), so each part is named here
+# as well.
 Sitemap: https://ancientnerds.com/sitemap.xml
 Sitemap: https://ancientnerds.com/sitemap-static.xml
 Sitemap: https://ancientnerds.com/sitemap-sites.xml

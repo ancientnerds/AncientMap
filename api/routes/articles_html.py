@@ -416,11 +416,22 @@ def story_payload(item: NewsItem, related: list[dict]) -> dict:
         "published_at": (
             video.published_at if video and video.published_at else item.created_at
         ).isoformat(),
+        # The row's own creation time (naive UTC): storyMeta() serves a story created on
+        # or after 2026-11-11 with a noindex for Google only (owner decisions D141/O22).
+        "created_at": item.created_at.isoformat(),
         "news_category": item.news_category,
         # Stored per story since the tweet-verifier work, never rendered
         # until 2026-08-08: researched web sources, the exact video offset,
-        # and the pipeline's own speculative label.
-        "web_sources": item.web_sources,
+        # and the pipeline's own speculative label. Title and link only since
+        # O22 (2026-11-10): the search-result excerpt each entry was found with
+        # stays in the database and leaves the served document, the injected
+        # payload included. Every entry carries both keys (tweet_verifier.py;
+        # 25,485 of 25,485 in production on 2026-11-10).
+        "web_sources": (
+            None
+            if item.web_sources is None
+            else [{"url": s["url"], "title": s["title"]} for s in item.web_sources]
+        ),
         "timestamp_seconds": item.timestamp_seconds,
         "speculative_tag": item.speculative_tag,
         "related": related,

@@ -613,11 +613,28 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(bare).not.toContain('story-significance')
   })
 
-  it('Quellen aus web_sources: Titel, nackter Host, Snippet', () => {
+  it('Quellen aus web_sources: Titel und nackter Host', () => {
     expect(html).toContain('https://en.natmus.dk/sun-chariot/')
     expect(html).toContain('National Museum of Denmark')
     expect(html).toContain('en.natmus.dk')
-    expect(html).toContain('found in 1902 in the Trundholm bog')
+  })
+
+  // Owner decisions D141 and O22 (2026-11-10): a source is its title and its link. The
+  // search-result excerpt it was found with is not printed, for any story - the frozen
+  // payload still carries one, as a document cached before the deploy does.
+  it('a source prints no search-result excerpt, even when the payload carries one', () => {
+    const sources = FIXTURES.story.web_sources as unknown as { snippet?: string }[]
+    expect(sources[0].snippet).toBe('The Sun Chariot was found in 1902 in the Trundholm bog.')
+    expect(html).not.toContain('found in 1902 in the Trundholm bog')
+    expect(html).not.toContain('story-source-snippet')
+    const block = html.slice(html.indexOf('class="story-sources"'))
+    const source = block.slice(block.indexOf('<div class="story-source">'), block.indexOf('</div>') + 6)
+    expect(source).toBe(
+      '<div class="story-source">' +
+        '<a href="https://en.natmus.dk/sun-chariot/" target="_blank" rel="noopener nofollow">' +
+        'The Sun Chariot — National Museum of Denmark</a>' +
+        '<span class="story-source-host">en.natmus.dk</span></div>',
+    )
   })
 
   it('web_sources ist LLM-derived: ein javascript:-Eintrag wird nie ein href', () => {

@@ -18,7 +18,6 @@ import { hostOf } from '../../utils/hostOf'
 import { globeUrlForSite } from '../../constants/brand'
 import { isoDate, longDate } from '../../seo/display'
 import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
-import { blurb } from '../../seo/text'
 import { youtubeIdOf } from '../theo/paperExtras'
 import type { StoryRoute } from '../../types/anRoute'
 import AiFootnote from './AiFootnote'
@@ -48,11 +47,15 @@ import '../../styles/story-page.css'
  * Der Quellenblock aus den rohen web_sources: erst der [:8]-Schnitt, dann
  * der http(s)-Filter — die Liste ist LLM-derived, ein javascript:-Eintrag
  * darf nie ein href werden (Reihenfolge wie im Python-Payload).
+ *
+ * Title and link only (owner decisions D141 and O22, 2026-11-10): until then each source
+ * also printed the search-result excerpt it was found with, and 696 of 2,541 story pages
+ * carried more of those excerpts than text of their own.
  */
 function storySources(raw: StoryRoute['web_sources']) {
   return (raw || [])
     .slice(0, 8)
-    .filter((s): s is { url: string; title?: string | null; snippet?: string | null } => {
+    .filter((s): s is { url: string; title?: string | null } => {
       const url = s?.url
       return typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))
     })
@@ -60,7 +63,6 @@ function storySources(raw: StoryRoute['web_sources']) {
       url: s.url,
       title: s.title || hostOf(s.url),
       host: hostOf(s.url),
-      snippet: blurb(s.snippet, 200),
     }))
 }
 
@@ -98,7 +100,7 @@ export default function StoryArticle({ story, related, children }: StoryArticleP
     ...researched,
     ...postLinks
       .filter(url => !researched.some(s => s.url === url))
-      .map(url => ({ url, title: hostOf(url) || url, host: hostOf(url), snippet: '' })),
+      .map(url => ({ url, title: hostOf(url) || url, host: hostOf(url) })),
   ]
 
   return (
@@ -285,7 +287,6 @@ export default function StoryArticle({ story, related, children }: StoryArticleP
               {s.host && s.host !== s.title && (
                 <span className="story-source-host">{s.host}</span>
               )}
-              {s.snippet && <div className="story-source-snippet">{s.snippet}</div>}
             </div>
           ))}
         </div>

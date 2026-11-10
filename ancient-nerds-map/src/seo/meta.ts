@@ -87,12 +87,33 @@ export interface PageMeta {
    * the research briefings commissioned for a novel (D90, SEO audit E1b).
    */
   robots?: string
+  /**
+   * Keeps the page out of Google's index only (owner decisions D141 and O22, 2026-11-10):
+   * renderHead() adds `<meta name="googlebot" content="noindex">` beside the robots tag,
+   * which stays as it is, so Bing, DuckDuckGo and every other engine read the page as
+   * before. Google applies the most restrictive of the two tags. The page stays in its
+   * sitemap, so Google fetches it and sees the tag.
+   */
+  googleNoindex?: boolean
   /** Atom feeds of the page, as <link rel="alternate" type="application/atom+xml">. */
   feeds?: Feed[]
 }
 
 const ROBOTS_INDEX = 'index, follow, max-image-preview:large'
 const ROBOTS_NOINDEX = 'noindex, follow, max-image-preview:large'
+
+/**
+ * Stage A of measure 1 (proposal D141, decision O22): a story created on or after this UTC
+ * day is served with the Google-only noindex. `created_at` is the row's naive UTC timestamp
+ * in ISO form, so the comparison is one of strings.
+ */
+export const STORY_GOOGLE_NOINDEX_FROM = '2026-11-11'
+
+/**
+ * Measure 5: a country page that shows at most this many sites is served with the
+ * Google-only noindex (18 of 92 hubs on 2026-11-10, 8 of them with one site).
+ */
+export const COUNTRY_GOOGLE_NOINDEX_MAX_SITES = 4
 
 /** Python html.escape(): &, <, >, " und — anders als viele JS-Helfer — auch '. */
 const esc = (s: string) =>
@@ -214,8 +235,9 @@ export function renderHead(m: PageMeta): string {
         `href="${esc(f.href)}">`,
     )
     .join('')
+  const googlebotTag = m.googleNoindex ? '\n<meta name="googlebot" content="noindex">' : ''
   return `<title>${t} | Ancient Nerds</title>${descTag}
-<meta name="robots" content="${m.robots ?? ROBOTS_INDEX}">
+<meta name="robots" content="${m.robots ?? ROBOTS_INDEX}">${googlebotTag}
 <link rel="canonical" href="${canonical}">${feedTags}
 <meta property="og:type" content="${m.ogType ?? 'website'}">
 <meta property="og:url" content="${canonical}">
@@ -286,6 +308,9 @@ export function storyMeta(route: StoryRoute): PageMeta {
     // category have been indexed since February, and pulling them out now
     // would drop live pages out of Google for no reason.
     robots: route.news_category === 'speculative' ? ROBOTS_NOINDEX : undefined,
+    // Stage A of measure 1: by the day the story was created, not by the video's date
+    // (published_at), which can lie years back for a story written today.
+    googleNoindex: route.created_at >= STORY_GOOGLE_NOINDEX_FROM,
   }
 }
 
@@ -414,6 +439,10 @@ export function siteMeta(route: SiteRoute): PageMeta {
     ogType: 'place',
     image: ogImage,
     schema,
+    // Measure 3: a page without a description is out of Google's index until it has one.
+    // By condition, so the tag ends with the write of the text (lane WN, D145): 40 of
+    // 4,907 pages on 2026-11-10.
+    googleNoindex: !description,
   }
 }
 
@@ -465,6 +494,7 @@ export function countryMeta(route: CountryRoute): PageMeta {
     canonical,
     image: hero ? absoluteUrl(hero) : undefined,
     schema,
+    googleNoindex: total <= COUNTRY_GOOGLE_NOINDEX_MAX_SITES,
   }
 }
 
