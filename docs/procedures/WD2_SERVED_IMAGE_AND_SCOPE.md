@@ -100,7 +100,7 @@ E3/O7 above stays the documented history: the applied scope-e4 and scope-review 
 | `label_scope(record, qids)` | the whole rule for a path that admits a record **without** a scope verdict: `out_of_scope` for a Viking item or a date past the window, `label_borderline` for a borderline record or one the open question on Islamic Europe holds (`label_open_question`; held: only a verdict on its subject - or the owner's answer - may admit it), else `in_scope`. Phase 4's `scope-pending` flag (`phase4/plan4.py`) holds every record that is not `in_scope`. The loader keeps only `in_scope` (a borderline record is skipped and counted as held, as E3's 500 AD skipped it), Lyra's auto-promotion leaves a borderline contribution to the founder and never promotes an `out_of_scope` one, the Prospector writes the answer as the proposal's `scope_verdict` (an `out_of_scope` one gets status `out_of_scope`; a `label_borderline` one stays in the review queue under that verdict) |
 | `passes_e3_cutoff(record)` | the E3/O7 rule under its own name (T11's census, the scope review's O7 reinstatement) |
 | `label_borderline(record)` | dated after 500 and through 1500 in a `LABEL_BORDERLINE_COUNTRIES` country: the window keeps it, the label decides |
-| `label_open_question(record)` | dated after 500 and through 1500 in the medieval Old World in Spain, Portugal or Malta (`ISLAMIC_EUROPE_COUNTRIES`) or on Sicily (`ISLAMIC_EUROPE_PARTS`, a box of Italy): the owner's open question on Islamic Europe holds it - the window keeps it at 500 AD (nothing comes back on it), and no path retires it by its region alone |
+| `label_open_question(record)` | dated after 500 and through 1500 in the medieval Old World in Spain, Portugal or Malta (`ISLAMIC_EUROPE_COUNTRIES`) or on Sicily (`ISLAMIC_EUROPE_PARTS`, a box of Italy): Islamic Europe, which the review of 2026-10-24 held as an open question. Decided by X13 (below): the window keeps it at 500 AD and the D20 lane asks and retires it like any European site; the function still holds such a record on the paths that admit without a verdict (`label_scope`) and the un-retire still skips it, so nothing comes in or back on it |
 | `in_rest_of_world(country, lat, lon)` | the country is one of `REST_OF_WORLD_COUNTRIES` (every state and territory of Asia, Africa, the Americas and Antarctica under the names `lookup_country` and `NAME_TO_ISO` give them, with their ISO codes; the borderline countries among them), or the point lies in a `NON_EUROPEAN_PARTS` box of the medieval Old World state it names |
 | `VIKING_SUBJECT_QIDS` | `Q189113` L'Anse aux Meadows: out by its subject wherever it lies. Asked through `label_scope` by the loader (`raw_data.wikidata_id` / `wikidata`), Lyra's promotion (`user_contributions.wikidata_id`) and the Prospector (the resolved item, the radar contribution's item); `POST /api/proposals/{id}/approve` answers 422 for it; the un-retire skips it (`viking-subject`); the D57 insert lane (`insert_site/candidates.py`, branch `closeout/insert-lane`) pins it in `EXCLUSIONS` |
 
@@ -137,24 +137,26 @@ the ISO alpha-2 codes listed beside the names as for Oceania):
   World at 500 AD; making it borderline needs a box or a list of republics the rows do not carry
   (`country` says "Russia"). Measured 2026-10-24: no curated row of the North Caucasus is dated
   500-1500, so the choice moves nothing today.
-* **Open owner question - Islamic Europe (held, review of 2026-10-24):** al-Andalus (711-1492: the
-  Umayyad emirate and caliphate, the taifas, the Almoravids, Almohads and Nasrids), the Emirate of
-  Sicily (831-1091) and Arab Malta (870-1091). The rule's own examples of what stays name "the
-  Islamic Golden Age" among the non-European Old World, but these lands are Europe, so the region
-  alone cuts their sites at 500 AD. Held today (read-only, 2026-10-24; all five shown, none decided,
-  none retired): Ruins of Talamanca (Spain 860), Huéscar (Spain 1201), Ponferrada (Spain 1001, the
-  Templar castle), Castle of Cola (Portugal 1000) and Villaggio Bizantino (Sicily 550) - the hold
-  is by place, so a Christian or Byzantine subject is held too until the answer. Until the owner answers,
-  `label_open_question` holds a site of Spain, Portugal, Malta or Sicily dated 500-1500: the window
-  stays 500 AD (the un-retire skips it `label-open-question`), the D20 population leaves it out
-  (`scope_window.build`, counted `held_label_open_question`) and `scope_judge.build` skips an
-  OUT_OF_WINDOW answer for it `label-open-question`, so no D20 wave retires it by its region; a
-  NOT_A_SITE answer is decided as before. The loader holds it, Lyra leaves it to the founder and the
-  Prospector files it `label_borderline`. **The owner's choice:** keep the region (the 500 AD stands,
-  a later D20 wave may retire the three) or make Islamic Europe borderline (the subject decides:
-  Umayyad, taifa, Almoravid, Almohad, Nasrid or Emirate of Sicily stays; a Christian kingdom's,
-  Visigothic or Norman site is out) - the second needs a `MEDIEVAL_SUBJECT` kind for a Christian
-  European subject and the label note in `scope-window-v2`.
+* **Islamic and Byzantine Europe - decided (X13, 2026-10-24; in the D20 lane since 2026-11-11):**
+  al-Andalus (711-1492: the Umayyad emirate and caliphate, the taifas, the Almoravids, Almohads and
+  Nasrids), the Emirate of Sicily (831-1091) and Arab Malta (870-1091). The rule's own examples of
+  what stays name "the Islamic Golden Age" among the non-European Old World, but these lands are
+  Europe, so the region cuts their sites at 500 AD; the review of 2026-10-24 held them as an open
+  owner question. Orchestrator decision X13 (`MASTER_PLAN.md`; O15 of 2026-11-10 builds it in
+  before the first D20 round) reads them as medieval Europe under D58: **they stay out, and the
+  scope-window lane treats them as outside the label window.** The D20 population asks such a site
+  like every other European site past 500 AD (`scope_window.build` holds nothing out; the count
+  `held_label_open_question` is gone) and `scope_judge.build` writes an OUT_OF_WINDOW answer the
+  re-check confirmed (the skip `label-open-question` is gone from that lane). Shown and undecided on
+  2026-11-11 (read-only): Ruins of Talamanca (Spain 860), Huéscar (Spain 1201), Ponferrada (Spain
+  1001, the Templar castle), Ponte de Rubiães (Portugal 1100) and Villaggio Bizantino (Sicily 550);
+  Castle of Cola (Portugal) is dated -1900 since the period re-research and is inside the window.
+  **Unchanged outside the D20 lane:** `dates.label_open_question` still holds such a record on the
+  paths that admit without a verdict (`label_scope`: the loader skips it, Lyra leaves it to the
+  founder, the Prospector files it `label_borderline`) and the un-retire still skips it
+  `label-open-question`. None of them admits or brings back such a site, so X13 holds there too;
+  an X13 reading of `label_scope` would answer `out_of_scope` instead of holding, which is a change
+  to `pipeline/` (deployed) that no decision has asked for.
 * **The rest of the world, positively** (`REST_OF_WORLD_COUNTRIES`, review of 2026-10-24): Asia
   (Asian Russia, Central Asia, Iran, Iraq, the Arabian Peninsula included), Africa (Morocco and
   sub-Saharan Africa), the Americas and Antarctica, by every name `lookup_country` (Natural Earth's
@@ -179,7 +181,8 @@ unrecognised country) and the residual
 and scope-review plans render it. Where the window is computed now: the identity export
 (`identity/export.py`: `outside_window`, `label_borderline`, `label_open_question`), the D20
 population (`identity/scope_window.py`, groups `outside_window`, `label_borderline`, `pending`,
-`hadrians_wall_path`; a `label_open_question` row held out), the D20 question and its calibration pool (`scope_judge.cutoff_of`,
+`hadrians_wall_path`; a `label_open_question` row is asked like any other since X13, and the
+footpath's group is empty once a wave has retired it), the D20 question and its calibration pool (`scope_judge.cutoff_of`,
 `calibration.select_scope`), the scope-window lane's residual and read-back
 (`identity_lanes.scope_window_lane`) and the un-retire (section 2.2).
 
@@ -217,6 +220,45 @@ region), `tests/remediation/test_scope_unretire.py` (`TestTheLabelWindowInSql`:
 the rendered SQL evaluated in SQLite equals the Python rule row for row),
 `tests/pipeline/test_loader_scope_rule.py`, `tests/pipeline/test_radar_auto_promote.py` and
 `tests/pipeline/test_prospector_scope_rule.py` (the doors without a verdict, the approval's 422).
+
+**A D20 site whose entry moved since its question (`export-moved`).** The scope-window plan writes a
+decision only on the entry it judged (name, type, country, point, period, scope status and reason);
+a site another lane changed in between is skipped `entry-moved`, with nothing written. Such a site
+is asked again, not left to the owner list:
+
+```bash
+PY=./.venv/Scripts/python.exe; I=scripts/remediation/identity
+$PY $I/export.py && $PY $I/scope_window.py     # a discovery read after the move (the other identity
+                                               # lanes read EXPORT.jsonl too: only when none has a round open)
+$PY $I/run.py --lane scope-window export-moved --stage scope-window-web --handoff DIR
+#   brief, answer, validate, import as for any round; export-reask for a held answer
+$PY $I/run.py --lane scope-window export --stage scope-window-recheck --handoff DIR2        # a site never re-checked
+$PY $I/run.py --lane scope-window export-moved --stage scope-window-recheck --handoff DIR3  # a site re-checked before
+$PY $I/run.py --lane scope-window result
+$PY $I/run.py --lane scope-window wave --wave W2     # a new label; then plan and the lane's gates as ever
+```
+
+* The web command asks every site a wave's `SKIPPED.jsonl` lists as `entry-moved` and no imported
+  round asked again for that wave, on its entry as the discovery holds it now; the prompt is the
+  plain question (the earlier answer judged another entry). It prints `left_population`: skipped
+  sites the discovery no longer lists (retired by another lane, or back inside the window with no
+  decision open), which are not asked. It refuses (`REFUSED: ... build the discovery again first`)
+  while the discovery still holds a skipped site exactly as it was asked, and
+  `no decided site is to be asked again` when nothing is open.
+* A re-check answered before the web answer it would stand for confirms nothing
+  (`scope_judge.precedes`): the site is `waiting-for-recheck` in `result`, the plan refuses it, and
+  the re-check command asks it again with the new proposal.
+* Once the moved round is imported, the wave that skipped the site no longer holds it
+  (`rounds.asked_again`, `waves.planned_sites`): the next `wave` takes it when its new answer is
+  kept or confirmed, and its skip row leaves `OWNER_LIST.jsonl` (`WAVE_SKIPS.jsonl` keeps it).
+* A moved round uses up none of a stage's two re-ask rounds; a held answer of a moved round is asked
+  by `export-reask` only while one of the two is left.
+* `scope_window.py` builds the discovery also after a wave retired Hadrian's Wall Path (the export
+  shows no retired site; the footpath's group is then empty).
+
+Tests: `tests/remediation/test_identity_b_scope.py` (`TestAnEntryThatMoved`, the re-check that
+precedes), `test_identity_b_rounds.py` (the moved round), `test_identity_b_files.py` (a released
+site), `test_identity_b_run.py` (the whole path through the command line).
 
 ---
 
@@ -1760,7 +1802,9 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   dispute screen and lane E.
 * `scripts/remediation/mechanical/mutation_sweep.py d58 d50` - the D58/D50 guards (`D58_CASES`);
   `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20
-  window and question; `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
+  window and question; `mechanical/mutation_sweep.py x13` - Islamic Europe asked and retired like
+  any European site; `mutation_sweep_b.py moved` and `identity/mutation_sweep.py footpath` - a
+  decided site asked again after its entry moved (below); `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
   `enrich disputes` - the D50 exemptions of lane WC/E.
 * `tests/remediation/test_hero_moves.py` - D48/D49: the four problems, what qualifies a hero (never
   a new small hero), that a hero is a chosen row (never a `depicts` ranked by its pixels), the

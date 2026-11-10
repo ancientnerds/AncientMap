@@ -7,7 +7,9 @@ rehearse-rollback, 0 deviations. A stamp is applied once, so a wave is **selecte
 a wave could not write (a skip: its state moved, another record carries its item, its name key is
 taken, its links have not landed) is not selected again: the lane's `result` lists it, with the
 wave and the reason, in `WAVE_SKIPS.jsonl` (and in the owner list where the lane has one), so no
-skip disappears with the wave that made it.
+skip disappears with the wave that made it. One skip is taken up again: a site the plan skipped
+because its entry had moved and that was asked again since on the entry as it is now (D20:
+`scope_judge.moved_questions`) is **released** by the wave that took it and open for a new one.
 
 `<lane dir>/waves/<wave>/` also holds the wave's plan files, written by the lane's own planner.
 """
@@ -38,25 +40,33 @@ def wave_dir(lane_dir: Path, wave: str) -> Path:
     return lane_dir / "waves" / wave
 
 
-def planned_sites(lane_dir: Path) -> set[str]:
-    """The sites an earlier wave of the lane took."""
+def planned_sites(lane_dir: Path, released: Collection[tuple[str, str]] = ()) -> set[str]:
+    """The sites an earlier wave of the lane took and still holds: a `(site, wave)` pair in
+    `released` is a site that wave could not write and that was asked again since."""
     taken: set[str] = set()
     for path in sorted((lane_dir / "waves").glob(f"*/{WAVE_FILE}")):
-        taken |= set(json.loads(path.read_text(encoding="utf-8"))["sites"])
+        record = json.loads(path.read_text(encoding="utf-8"))
+        taken |= {s for s in record["sites"] if (s, record["wave"]) not in released}
     return taken
 
 
 def select_wave(
-    lane_dir: Path, wave: str, candidates: Collection[str], *, limit: int, built_at: str
+    lane_dir: Path,
+    wave: str,
+    candidates: Collection[str],
+    *,
+    limit: int,
+    built_at: str,
+    released: Collection[tuple[str, str]] = (),
 ) -> dict[str, Any]:
-    """The next wave's sites: the first `limit` (1 to 100) of `candidates` no earlier wave took, in
-    site order. Written once to `waves/<wave>/WAVE.json`."""
+    """The next wave's sites: the first `limit` (1 to 100) of `candidates` no earlier wave holds
+    (`planned_sites`), in site order. Written once to `waves/<wave>/WAVE.json`."""
     if not 1 <= limit <= SITES_PER_WAVE:
         raise WaveError(f"a wave holds 1..{SITES_PER_WAVE} sites, not {limit}")
     path = wave_dir(lane_dir, wave) / WAVE_FILE
     if path.exists():
         raise WaveError(f"{path} exists: a wave is selected once")
-    taken = planned_sites(lane_dir)
+    taken = planned_sites(lane_dir, released)
     open_sites = [s for s in sorted(candidates) if s not in taken]
     if not open_sites:
         raise WaveError("no site is left for a new wave")

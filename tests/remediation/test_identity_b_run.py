@@ -390,6 +390,175 @@ class TestTheScopeLane:
         assert sorted(asked) == sites and len(set(asked)) == 4
         assert go(tree, *export, "--handoff", str(tree / "h3")) == 1
 
+    def test_a_site_whose_entry_moved_is_asked_again_re_checked_again_and_written_in_a_new_wave(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """`export-moved`: the plan skipped a confirmed retirement because the site's name had
+        changed. The site is asked again on its entry as a new discovery holds it, the confirmation
+        of its first answer no longer counts, the re-check is asked again, and a new wave takes the
+        site and writes the new answer."""
+        run = tree / "identity"
+        population = {"now": [R.Question(TS.FORT, TS.context())]}
+        monkeypatch.setattr(SJ, "questions", lambda run_, root=None: population["now"])
+        web, recheck = SJ.web_spec(), SJ.recheck_spec()
+        out, rout = R.stage_dir(run, web), R.stage_dir(run, recheck)
+        pages = {TS.FORT_PAGE: html(TS.FORT_TEXT), TS.OTHER_PAGE: html(TS.OTHER_TEXT)}
+        seed_pages(out, pages)
+        seed_pages(rout, pages)
+        confirm = {
+            "site_id": TS.FORT,
+            "verdict": "CONFIRM",
+            "why": "read the pages",
+            "quotes": [TS.q(TS.FORT_PAGE, TS.FORT_TEXT)],
+        }
+
+        def stage(command: str, spec: R.StageSpec, *rest: str) -> tuple[int, Any, str]:
+            return run_json(
+                tree, capsys, "--lane", "scope-window", command, "--stage", spec.stage, *rest
+            )
+
+        def answered(spec: R.StageSpec, name: str, text: dict[str, Any], when: str) -> None:
+            stage_out = R.stage_dir(run, spec)
+            handoff = tree / f"{spec.stage}-{name}"
+            answer_all(handoff, R.find_round(stage_out, name), spec, {TS.FORT: text}, now=when)
+            code, _, err = stage(
+                "import", spec, "--round", name, "--calibration-root", str(tree / "none")
+            )
+            assert code == 0, err
+
+        def scope(*argv: str) -> tuple[int, Any, str]:
+            return run_json(tree, capsys, "--lane", "scope-window", *argv)
+
+        def handoff(spec: R.StageSpec, name: str) -> list[str]:
+            return ["--handoff", str(tree / f"{spec.stage}-{name}")]
+
+        # the first answer, its confirmation and the wave that takes the site
+        assert stage("export-moved", web, *handoff(web, "r1"))[2].startswith("REFUSED: no round")
+        assert stage("export", web, *handoff(web, "r1"))[0] == 0
+        answered(web, "r1", TS.answer("OUT_OF_WINDOW"), "2026-10-09T02:00:00+00:00")
+        assert stage("export", recheck, *handoff(recheck, "r1"))[0] == 0
+        answered(recheck, "r1", confirm, "2026-10-09T03:00:00+00:00")
+        assert scope("wave", "--wave", "2026-10-12")[1]["sites"] == [TS.FORT]
+        code, _, err = stage("export-moved", web, *handoff(web, "r2"))
+        assert code == 1 and "no decided site is to be asked again" in err
+
+        # the plan finds another name in production: nothing is written, the site is skipped
+        renamed = {"name": "Ali Masjid"}
+        monkeypatch.setattr(RUN, "read_only_reader", lambda: scope_prod([TS.live_row(**renamed)]))
+        code, planned, _ = scope("plan", "--wave", "2026-10-12")
+        assert code == 0 and (planned["sites"], planned["skipped"]) == (0, 1)
+        result = scope("result")[1]
+        assert (result["wave_skips"], result["owner_list"]) == (1, 1)
+        assert "no site is left" in scope("wave", "--wave", "2026-10-13")[2]
+
+        # a discovery read before the move is refused; one in which the site is gone asks nothing
+        code, _, err = stage("export-moved", web, *handoff(web, "r2"))
+        assert code == 1 and "build the discovery again first" in err
+        population["now"] = []
+        code, _, err = stage("export-moved", web, *handoff(web, "r2"))
+        assert code == 1 and f"(1 left the population: ['{TS.FORT}'])" in err
+        assert not (tree / "scope-window-web-r2").exists()
+
+        # the discovery built after the move: the site is asked again, as a plain question
+        population["now"] = [R.Question(TS.FORT, TS.context(**renamed))]
+        code, exported, _ = stage("export-moved", web, *handoff(web, "r2"))
+        assert code == 0 and exported == {
+            "round": "r2",
+            "sites": 1,
+            "batches": 1,
+            "left_population": [],
+        }
+        assert R.find_round(out, "r2").moved == {TS.FORT: "2026-10-12"}
+        prompt = OH.read_manifest(tree / "scope-window-web-r2", "r2-b01")[(web.stage, TS.FORT)][
+            "prompt_path"
+        ]
+        text = (tree / "scope-window-web-r2" / prompt).read_text("utf-8")
+        assert "name:         Ali Masjid\n" in text and "EARLIER ANSWER" not in text
+        assert "no site is left" in scope("wave", "--wave", "2026-10-13")[2], "exported only"
+
+        # the new answer retires for another reason: the old confirmation has not read it
+        answered(web, "r2", TS.answer("NOT_A_SITE"), "2026-10-12T02:00:00+00:00")
+        result = scope("result")[1]
+        assert result["by_verdict_and_state"] == {"NOT_A_SITE:waiting-for-recheck": 1}
+        assert (result["wave_skips"], result["owner_list"]) == (1, 1), "the skip row is superseded"
+        assert "no site is left" in scope("wave", "--wave", "2026-10-13")[2]
+        assert "nothing to export" in stage("export", recheck, *handoff(recheck, "r2"))[2]
+        code, exported, _ = stage("export-moved", recheck, *handoff(recheck, "r2"))
+        assert code == 0 and (exported["round"], exported["sites"]) == ("r2", 1)
+        assert R.find_round(rout, "r2").moved == {TS.FORT: "scope-window-web r2"}
+        asked = R.load_contexts(rout)[TS.FORT]
+        assert asked["name"] == "Ali Masjid" and asked["proposal"]["verdict"] == "NOT_A_SITE"
+        answered(recheck, "r2", confirm, "2026-10-12T03:00:00+00:00")
+        result = scope("result")[1]
+        assert result["by_verdict_and_state"] == {"NOT_A_SITE:confirmed": 1}
+        assert (result["wave_skips"], result["owner_list"]) == (1, 0)
+        for spec in (web, recheck):
+            code, _, err = stage("export-moved", spec, *handoff(spec, "r3"))
+            assert code == 1 and "no decided site is to be asked again" in err
+
+        # a new wave takes the site and the plan writes the new answer on the entry as it is
+        assert scope("wave", "--wave", "2026-10-13")[1]["sites"] == [TS.FORT]
+        code, planned, _ = scope("plan", "--wave", "2026-10-13")
+        assert code == 0 and (planned["sites"], planned["NULL->retired"]) == (1, 1)
+        lane_out = tree / "lanes" / "mechanical_scope_window" / "2026-10-13"
+        cells = [
+            json.loads(line) for line in (lane_out / "PLAN.jsonl").read_text("utf-8").splitlines()
+        ]
+        assert {c["site_name"] for c in cells} == {"Ali Masjid"}
+        assert "E3: not an archaeological site (modern): The sources date it." in {
+            c["new_value"] for c in cells
+        }
+
+        # the wave that released the site does not plan it a second time
+        code, _, err = scope("plan", "--wave", "2026-10-12")
+        assert code == 1 and "wave 2026-10-12 holds no site any more: every one of its 1" in err
+
+    def test_a_wave_plans_only_the_sites_it_still_holds(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A wave took two kept sites; one was asked again after its entry moved. A plan of that
+        wave made again reads and plans the other one only."""
+        run = tree / "identity"
+        sites = [TS.FORT, TS.MUSEUM]
+        monkeypatch.setattr(
+            SJ, "questions", lambda run_, root=None: [R.Question(s, TS.context(s)) for s in sites]
+        )
+        web = SJ.web_spec()
+        out = R.stage_dir(run, web)
+        seed_pages(out, {TS.FORT_PAGE: html(TS.FORT_TEXT)})
+        stage = ["--lane", "scope-window", "{}", "--stage", web.stage]
+        assert go(tree, *[w.format("export") for w in stage], "--handoff", str(tree / "h1")) == 0
+        kept = {s: TS.answer("PERIOD_WRONG", site_id=s) for s in sites}
+        answer_all(tree / "h1", R.find_round(out, "r1"), web, kept)
+        importing = [*[w.format("import") for w in stage], "--calibration-root", str(tree / "no")]
+        assert go(tree, *importing, "--round", "r1") == 0
+        assert go(tree, "--lane", "scope-window", "wave", "--wave", "2026-10-12") == 0
+        moved = R.Question(TS.FORT, TS.context(TS.FORT, name="Ali Masjid"))
+        again = R.export_round(out, web, tree / "h2", [moved], moved={TS.FORT: "2026-10-12"})
+        answer_all(tree / "h2", again, web, {TS.FORT: kept[TS.FORT]})
+        assert go(tree, *importing, "--round", "r2") == 0
+
+        asked: list[str] = []
+
+        def reader(sql: str) -> list[dict[str, Any]]:
+            asked.append(sql)
+            return [TS.live_row(TS.MUSEUM)]
+
+        monkeypatch.setattr(RUN, "read_only_reader", lambda: reader)
+        code, planned, err = run_json(
+            tree, capsys, "--lane", "scope-window", "plan", "--wave", "2026-10-12"
+        )
+        assert code == 0, err
+        assert (planned["sites"], planned["skipped"]) == (1, 0)
+        assert TS.MUSEUM in asked[0] and TS.FORT not in asked[0]
+
+    def test_only_the_scope_window_asks_a_decided_site_again(self, tree: Path) -> None:
+        args = RUN.build_parser().parse_args(
+            ["--lane", "names", "export-moved", "--stage", "name-clean-web", "--handoff", "h"]
+        )
+        with pytest.raises(RUN.UsageError, match="lane names asks no decided site again"):
+            RUN.moved_round(args, tree / "identity", tree / "out", lambda: [])
+
     def test_a_stage_that_does_not_exist_is_refused(
         self, tree: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:

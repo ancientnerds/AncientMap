@@ -13965,20 +13965,22 @@ D58_CASES: list[Case] = [
         "test_the_numeric_cut_s_other_retirements_are_listed",
         UNRETIRE_TESTS,
     ),
+    # -- X13 (2026-10-24, O15): Islamic and Byzantine Europe is medieval Europe in the D20 lane; the
+    #    two holds of the review above are gone, and a mutant that puts one back is noticed
     Case(
-        "d58 window: Islamic Europe is not asked",
+        "x13 window: Islamic Europe is asked like any site past the window",
         SCOPE_WINDOW_PY,
-        '        if row["label_open_question"]:\n',
-        "        if False:\n",
-        "test_a_site_of_islamic_europe_is_held_out_of_the_population",
+        '        if not found or row["id"] in D50_DISPUTED_SITES:\n',
+        '        if not found or row["id"] in D50_DISPUTED_SITES or row["label_open_question"]:\n',
+        "test_a_site_of_islamic_europe_is_asked_like_any_site_past_the_window",
         "tests/remediation/test_identity_scope_parents.py",
     ),
     Case(
-        "d58 window: the region alone retires no Islamic Europe site",
+        "x13 window: the region retires an Islamic Europe site",
         SCOPE_JUDGE_PY,
-        "        if verdict == OUT_OF_WINDOW and label_open_question(now):\n",
-        "        if False:\n",
-        "test_the_region_alone_never_retires_a_site_of_islamic_europe",
+        "        if sid in D50_DISPUTED_SITES:\n",
+        '        if sid in D50_DISPUTED_SITES or now["country"] in ("Spain", "Portugal"):\n',
+        "test_a_site_of_islamic_or_byzantine_europe_is_retired_like_any_european_site",
         "tests/remediation/test_identity_b_scope.py",
     ),
     Case(

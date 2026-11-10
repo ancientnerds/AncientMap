@@ -97,9 +97,10 @@ class TestThePopulation:
         ]
         assert counts["group_label_borderline"] == 1
 
-    def test_a_site_of_islamic_europe_is_held_out_of_the_population(self) -> None:
-        """The owner's open question (WD2 section 1b): Ruins of Talamanca (Spain, 860) is past the
-        window but not asked - the window would retire it by its region alone."""
+    def test_a_site_of_islamic_europe_is_asked_like_any_site_past_the_window(self) -> None:
+        """X13 (2026-10-24, under D58; O15): Ruins of Talamanca (Spain, 860) is medieval Europe,
+        outside the label window. The export still flags it `label_open_question`; the population
+        does not read the flag and holds nothing out."""
         talamanca = site(
             name="Ruins of Talamanca",
             country="Spain",
@@ -108,8 +109,12 @@ class TestThePopulation:
             label_open_question=True,
         )
         records, counts = scope_window.build(export_of([talamanca, hadrian()]))
-        assert [r["name"] for r in records] == ["Hadrian's Wall Path"]
-        assert counts["held_label_open_question"] == 1 and counts["population"] == 1
+        assert [(r["name"], r["groups"]) for r in records] == [
+            ("Hadrian's Wall Path", ["hadrians_wall_path"]),
+            ("Ruins of Talamanca", ["outside_window"]),
+        ]
+        assert counts["population"] == 2 and counts["group_outside_window"] == 1
+        assert "held_label_open_question" not in counts
 
     def test_a_d50_site_is_never_in_the_population(self) -> None:
         """D50: the six disputed sites are shown again by the un-retire; their scope is decided,
@@ -139,12 +144,25 @@ class TestThePopulation:
         assert flagged["Museum"] is True and flagged["Hadrian's Wall Path"] is False
         assert counts["museum_question"] == 1 and counts["museum_undecided"] == 1
 
-    def test_the_footpath_must_be_exactly_one_site_with_the_pinned_name(self) -> None:
-        with pytest.raises(common.IdentityError, match="is not one shown site"):
-            scope_window.build(export_of([site()]))
+    def test_the_footpath_is_at_most_one_site_with_the_pinned_name(self) -> None:
         wrong = site(id=HADRIAN_ID, name="Something else")
-        with pytest.raises(common.IdentityError, match="is not one shown site"):
+        with pytest.raises(common.IdentityError, match="is not the one site named"):
             scope_window.build(export_of([wrong]))
+        twin = {
+            **hadrian(),
+            "id": f"{export.HADRIANS_WALL_PATH_PREFIX}-0000-4000-8000-000000000002",
+        }
+        with pytest.raises(common.IdentityError, match="is not the one site named"):
+            scope_window.build(export_of([hadrian(), twin]))
+
+    def test_the_discovery_is_built_again_once_a_wave_has_retired_the_footpath(self) -> None:
+        """The export shows no retired site: after the wave that retires the footpath the
+        population is built without that group (a site asked again after its entry moved needs a
+        discovery read after the wave that skipped it)."""
+        late = site(name="Late", outside_window=True, period_start=1800)
+        records, counts = scope_window.build(export_of([late]))
+        assert [r["name"] for r in records] == ["Late"]
+        assert "group_hadrians_wall_path" not in counts and counts["population"] == 1
 
 
 class TestTheProvenance:

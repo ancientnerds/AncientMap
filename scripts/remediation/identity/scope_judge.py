@@ -11,10 +11,10 @@ medieval Old World of Europe, Byzantium and the Vikings is out after 500 AD, eve
 its sites through 1500 AD (`dates.scope_region`, `dates.LABEL_CUTOFFS`). Where the label and not the
 region decides - a site dated 500-1500 in the Levant, Egypt, Byzantine Africa, the Caucasus or
 Greenland (`dates.label_borderline`, the discovery's group `label_borderline`) - the question asks
-whether its subject is Byzantine, Crusader or Norse. A site of Islamic Europe dated 500-1500 (Spain,
-Portugal, Malta, Sicily: `dates.label_open_question`) is an open owner question: the discovery does
-not ask it, and an OUT_OF_WINDOW answer for one is skipped `label-open-question` - its region alone
-retires nothing.
+whether its subject is Byzantine, Crusader or Norse. A site of Islamic or Byzantine Europe dated
+500-1500 (Spain, Portugal, Malta, Sicily) is medieval Europe (orchestrator decision X13 of
+2026-10-24 under D58, built in before the first round by O15): it is asked and decided like every
+other European site, its cutoff 500 AD.
 
 **The question** (stage `scope-window-web`, role `web_verifier`, Sonnet; prompt `scope-window-v2`):
 
@@ -35,6 +35,14 @@ retires nothing.
 `NOT_A_SITE` and `MEDIEVAL_SUBJECT`, because a retirement is a 410 for that URL (and the `in_scope` -> `retired` and
 `pending` -> `retired` transitions are the dangerous ones).
 
+**An entry that moved.** The plan writes a decision only on the entry it judged (`JUDGED`); a site
+whose entry changed since is skipped `entry-moved`. `run.py export-moved` asks it again, on its
+entry as a discovery built after the move holds it (`moved_questions`), in a round of its own; a
+site that left the population is not asked. A re-check answered before the web answer it would
+stand for read another proposal (`precedes`): it confirms nothing, the site waits for its re-check
+(`stale_rechecks`, the same command for the re-check stage), and the imported round opens the site
+for a new wave (`rounds.asked_again`).
+
 **The write** is `scope-window-<wave>` (`mechanical/identity_lanes.py`): `scope_status` and
 `scope_reason` of one site in one transaction, the premise the entry the decision judged. A date
 retirement's reason is `E3: period_start N is past the cutoff; <quote>` (the prefix every scope
@@ -46,8 +54,9 @@ subject (<kind>): <reason>; <quote>`.
 from __future__ import annotations
 
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -95,7 +104,6 @@ from pipeline.normalizers.dates import (  # noqa: E402
     MEDIEVAL_OLD_WORLD,
     OCEANIA,
     UNPLACED_OLD_WORLD,
-    label_open_question,
     scope_region,
 )
 from pipeline.utils.public_sites import RETIRED  # noqa: E402
@@ -124,6 +132,8 @@ YEAR_LOW, YEAR_HIGH = -200_000, 2100
 SOURCE_FILE = "SCOPE_WINDOW.jsonl"
 PERIOD_WRONG_FILE = "PERIOD_WRONG.jsonl"
 DIR = "scope-window"
+#: The plan's skip of a site whose entry changed since its question: `export-moved` asks it again.
+ENTRY_MOVED = "entry-moved"
 
 
 # ------------------------------------------------------------------------------------ the contexts
@@ -673,12 +683,22 @@ def recheck_spec() -> StageSpec:
 
 
 # ------------------------------------------------------------------------------------ the result
+def precedes(second: Mapping[str, Any], decision: Mapping[str, Any]) -> bool:
+    """Whether a re-check was answered before the web answer it would stand for. It read another
+    proposal then - the site was asked again after its entry moved - and confirms nothing of this
+    one."""
+    return datetime.fromisoformat(second["answered_at"]) < datetime.fromisoformat(
+        decision["answered_at"]
+    )
+
+
 def final_state(
     web: Mapping[str, Mapping[str, Any]], recheck: Mapping[str, Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
     """Where every asked site stands: `kept` (PERIOD_WRONG, MUSEUM_KEEP: decided, no re-check),
-    `confirmed` (a retiring verdict the re-check confirmed), `rejected`, `waiting-for-recheck` or
-    `held` (the web answer is still held after the rounds)."""
+    `confirmed` (a retiring verdict the re-check confirmed), `rejected`, `waiting-for-recheck` (no
+    decided re-check yet, or one that `precedes` the web answer) or `held` (the web answer is still
+    held after the rounds)."""
     out = []
     for sid, decision in sorted(web.items()):
         if decision["status"] != DECIDED:
@@ -690,12 +710,66 @@ def final_state(
                 state = "kept"
             elif second is None or second["status"] != DECIDED:
                 state = "waiting-for-recheck"
+            elif precedes(second, decision):
+                state = "waiting-for-recheck"
             elif second["data"]["verdict"] == CONFIRM:
                 state = "confirmed"
             else:
                 state = "rejected"
         out.append({"site_id": sid, "verdict": verdict, "state": state})
     return out
+
+
+# ------------------------------------------------------------------------------ an entry that moved
+def moved_questions(
+    skips: Sequence[Mapping[str, Any]],
+    asked_again: Collection[tuple[str, str]],
+    stored: Mapping[str, Mapping[str, Any]],
+    fresh: Mapping[str, Question],
+) -> tuple[list[Question], dict[str, str], list[str]]:
+    """The web questions of a moved round: every site a wave's plan skipped `entry-moved`
+    (`skips`: `waves.wave_skips`) that no imported round asked again for that wave (`asked_again`:
+    `rounds.asked_again`), on its entry as the discovery holds it now (`fresh`).
+
+    Returns the questions, `site -> the wave that skipped it`, and the sites that are no longer in
+    the population (retired, or back inside the window with no scope decision open): nothing of the
+    window is left to ask about them. A site the discovery still holds as it was asked (`stored`)
+    is refused: that discovery was read before the entry moved."""
+    questions: list[Question] = []
+    moved: dict[str, str] = {}
+    left: list[str] = []
+    for row in skips:
+        sid, wave = row["site_id"], row["wave"]
+        if row["reason"] != ENTRY_MOVED or (sid, wave) in asked_again:
+            continue
+        if sid not in fresh:
+            left.append(sid)
+            continue
+        ctx = fresh[sid].context
+        if all(ctx[k] == stored[sid][k] for k in JUDGED):
+            raise common.IdentityError(
+                f"{sid} ({ctx['name']}) is in the discovery as it was asked, but the plan of wave "
+                f"{wave} found its entry changed: build the discovery again first (export.py, "
+                "scope_window.py)"
+            )
+        questions.append(fresh[sid])
+        moved[sid] = wave
+    return questions, moved, left
+
+
+def stale_rechecks(
+    web: Mapping[str, Mapping[str, Any]], recheck: Mapping[str, Mapping[str, Any]]
+) -> dict[str, str]:
+    """The sites whose re-check is asked again, each with the web round it has not read: the web
+    answer is decided and retires, and the re-check that stands was answered before it."""
+    return {
+        sid: f"{WEB} {decision['round']}"
+        for sid, decision in sorted(web.items())
+        if decision["status"] == DECIDED
+        and decision["data"]["verdict"] in RETIRING
+        and sid in recheck
+        and precedes(recheck[sid], decision)
+    }
 
 
 # ------------------------------------------------------------------------------------ the plan
@@ -811,8 +885,10 @@ def build(
         if moved:
             skip(
                 sid,
-                "entry-moved",
-                "the entry the decision judged changed: " + "; ".join(moved) + " - asked again",
+                ENTRY_MOVED,
+                "the entry the decision judged changed: "
+                + "; ".join(moved)
+                + " - `export-moved` asks it again",
             )
             continue
         if now["scope_status"] == RETIRED:
@@ -824,14 +900,6 @@ def build(
                 "d50-disputed",
                 "D50 (owner, 2026-10-19) shows it as a disputed site: the scope window does not "
                 "decide it (`lane.D50_NOT_RETIRED`)",
-            )
-            continue
-        if verdict == OUT_OF_WINDOW and label_open_question(now):
-            skip(
-                sid,
-                "label-open-question",
-                f"{now['country']}: Islamic Europe (al-Andalus, the Emirate of Sicily, Arab Malta) "
-                "is an open owner question - its region alone does not retire it",
             )
             continue
         if verdict == PERIOD_WRONG and data["period_start"] != ctx["period_start"]:
@@ -857,6 +925,10 @@ def build(
             second = rechecks.get(sid)
             if second is None or second["data"]["verdict"] != CONFIRM:
                 raise MP.PlanError(f"{sid}: a retirement is written only after a CONFIRM")
+            if precedes(second, decision):
+                raise MP.PlanError(
+                    f"{sid}: its re-check was answered before the web answer it would confirm"
+                )
         evidence = [
             {"source": q["url"], "url": q["url"], "quote": q["quote"]}
             for q in data["quotes"]

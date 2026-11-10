@@ -18,10 +18,12 @@ stage's own parts injected:
 **A round** is one export into its own handoff directory (an exported question is never replaced):
 a first round `r1` asks the sites it is given (a pilot, or the whole population); a **follow-on**
 round asks sites never asked (the rest of the population after a pilot); a **re-ask** round asks
-the sites whose latest answer was held, each prompt carrying why. The rounds are recorded in
-`ROUNDS.jsonl`, the stored contexts in `contexts/<round>.jsonl`; a round is imported once
-`answers/<round>.jsonl` exists. Only the newest round is imported, and a held site is asked again
-at most `MAX_REASKS` times (two re-ask rounds).
+the sites whose latest answer was held, each prompt carrying why; a **moved** round asks again
+decided sites whose entry changed since their answer, each on the context the lane gives it now and
+with no word of the earlier answer (the lane says which sites and why: `scope_judge`). The rounds
+are recorded in `ROUNDS.jsonl`, the stored contexts in `contexts/<round>.jsonl`; a round is imported
+once `answers/<round>.jsonl` exists. Only the newest round is imported, and a held site is asked
+again at most `MAX_REASKS` times (two re-ask rounds; a moved round is none of them).
 
 **The import** refuses, with nothing written, an answer that is not the stage's role's: the
 `answered_by` carries `<role>:<agent>` (`opus_handoff.py answer --role`), and the stamp must be the
@@ -45,7 +47,7 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -172,6 +174,8 @@ class Round:
     batches: dict[str, list[str]]
     #: site id -> why its answer of the round before was held (re-ask rounds only)
     earlier: dict[str, str]
+    #: site id -> why a decided site is asked again on its entry as it is now (moved rounds only)
+    moved: dict[str, str] = field(default_factory=dict)
 
     @property
     def sites(self) -> list[str]:
@@ -187,6 +191,7 @@ def _round_of(record: Mapping[str, Any]) -> Round:
         exported_at=record["exported_at"],
         batches=record["batches"],
         earlier=record["earlier"] if "earlier" in record else {},
+        moved=record["moved"] if "moved" in record else {},
     )
 
 
@@ -267,6 +272,18 @@ def reask_sites(out: Path) -> dict[str, str]:
     return held_sites(out)
 
 
+def asked_again(out: Path) -> set[tuple[str, str]]:
+    """The `(site, why)` pairs of the moved rounds that are imported: the site's decision is that
+    round's or a later one's, on the entry as that round asked it. A moved round that is only
+    exported has decided nothing yet."""
+    return {
+        (sid, why)
+        for record in load_rounds(out)
+        if imported(out, record.name)
+        for sid, why in record.moved.items()
+    }
+
+
 def batches(site_ids: Sequence[str], round_name: str, per_batch: int) -> dict[str, list[str]]:
     """`<round>-bNN -> site ids`, in site order, at most `per_batch` each."""
     if per_batch < 1:
@@ -292,12 +309,16 @@ def export_round(
     questions: Sequence[Question],
     *,
     earlier: Mapping[str, str] | None = None,
+    moved: Mapping[str, str] | None = None,
     now: Callable[[], str] = now_utc,
 ) -> Round:
     """Export one round of questions into a new handoff directory and record it. The first round asks
     the questions it is given; a later round without `earlier` is a follow-on and asks only sites
-    never asked; a later round with `earlier` is a re-ask and asks exactly the held sites."""
+    never asked; a later round with `earlier` is a re-ask and asks exactly the held sites; a later
+    round with `moved` asks exactly those sites again, each decided and each on the context it is
+    given now - its prompt carries no word of the earlier answer, which judged another entry."""
     earlier = dict(earlier or {})
+    moved = dict(moved or {})
     if not questions:
         raise RoundError("no question to ask - nothing to export")
     ids = [q.site_id for q in questions]
@@ -309,9 +330,20 @@ def export_round(
     number = len(known) + 1
     if number == 1 and earlier:
         raise RoundError("round 1 re-asks nothing")
+    if moved and (number == 1 or earlier):
+        raise RoundError(
+            "a moved round is a later round of its own: it asks decided sites again, no held one"
+        )
     if number > 1:
         latest_imported(out, "another round")
-        if earlier:
+        if moved:
+            decided = {d["site_id"] for d in load_decisions(out) if d["status"] == DECIDED}
+            if set(moved) != set(ids) or not set(ids) <= decided:
+                raise RoundError(
+                    "a moved round asks exactly the decided sites whose entry changed, each with "
+                    "why (a held site is asked by a re-ask round)"
+                )
+        elif earlier:
             if sum(1 for r in known if r.earlier) >= MAX_REASKS:
                 raise RoundError(
                     f"{MAX_REASKS} re-ask rounds are out: a held site is asked at most twice more"
@@ -346,7 +378,7 @@ def export_round(
             for q in sorted(questions, key=lambda q: q.site_id)
         ),
     )
-    record = Round(name, handoff.as_posix(), now(), grouped, earlier)
+    record = Round(name, handoff.as_posix(), now(), grouped, earlier, moved)
     with (out / ROUNDS_FILE).open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(asdict(record), ensure_ascii=False, sort_keys=True) + "\n")
     return record

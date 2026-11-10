@@ -797,8 +797,16 @@ CASES: list[Case] = [
     guard(
         "footpath pinned",
         SCOPE,
-        '    if len(hadrian) != 1 or hadrian[0]["name"] != HADRIANS_WALL_PATH_NAME:',
-        "test_the_footpath_must_be_exactly_one_site_with_the_pinned_name",
+        '    if len(hadrian) > 1 or any(r["name"] != HADRIANS_WALL_PATH_NAME for r in hadrian):',
+        "test_the_footpath_is_at_most_one_site_with_the_pinned_name",
+        T_SCOPE,
+    ),
+    swap(
+        "footpath retired",
+        SCOPE,
+        '    if len(hadrian) > 1 or any(r["name"] != HADRIANS_WALL_PATH_NAME for r in hadrian):',
+        '    if len(hadrian) != 1 or any(r["name"] != HADRIANS_WALL_PATH_NAME for r in hadrian):',
+        "test_the_discovery_is_built_again_once_a_wave_has_retired_the_footpath",
         T_SCOPE,
     ),
     swap(

@@ -41,6 +41,10 @@ WIKI = "https://en.wikipedia.org/wiki/Ali_Masjid"
 WIKIDATA = "https://www.wikidata.org/wiki/Q42"
 WIKI_TEXT = "Ali Masjid is a fort in the Khyber Pass."
 WD_TEXT = "Ali Masjid fort in Pakistan"
+#: When the web answer, its re-check and a web answer of a later moved round were given.
+WEB_AT = "2026-10-09T02:00:00+00:00"
+RECHECK_AT = "2026-10-09T03:00:00+00:00"
+LATER_AT = "2026-10-20T02:00:00+00:00"
 
 
 def q(url: str, text: str) -> dict[str, str]:
@@ -472,7 +476,7 @@ class TestTheRecheck:
 
     def test_the_final_state_of_each_kind_of_verdict(self) -> None:
         def d(verdict: str, status: str = R.DECIDED) -> dict[str, Any]:
-            return {"status": status, "data": {"verdict": verdict}}
+            return {"status": status, "answered_at": WEB_AT, "data": {"verdict": verdict}}
 
         web = {"a": d("PERIOD_WRONG"), "b": d("OUT_OF_WINDOW"), "c": d("NOT_A_SITE"),
                "e": d("MUSEUM_KEEP"), "f": d("OUT_OF_WINDOW", R.HELD), "g": d("NOT_A_SITE")}  # fmt: skip
@@ -486,6 +490,37 @@ class TestTheRecheck:
             "f": "held",
             "g": "waiting-for-recheck",
         }
+
+    def test_a_re_check_answered_before_the_web_answer_confirms_nothing_of_it(self) -> None:
+        """A site asked again after its entry moved (`export-moved`): the confirmation of its first
+        answer read another proposal, so the new retirement waits for a re-check of its own; a keep
+        needs none, and a re-check given in the same second as the web answer is not before it."""
+        again = {**decision_for("NOT_A_SITE"), "answered_at": LATER_AT, "round": "r4"}
+        old = {FORT: confirm()}
+        assert SJ.precedes(confirm(), again) and not SJ.precedes(confirm(), decision_for("x"))
+        assert [r["state"] for r in SJ.final_state({FORT: again}, old)] == ["waiting-for-recheck"]
+        assert SJ.stale_rechecks({FORT: again}, old) == {FORT: "scope-window-web r4"}
+        new = {FORT: {**confirm(), "answered_at": "2026-10-20T03:00:00+00:00"}}
+        assert [r["state"] for r in SJ.final_state({FORT: again}, new)] == ["confirmed"]
+        assert SJ.stale_rechecks({FORT: again}, new) == {}
+        same = {FORT: {**confirm(), "answered_at": LATER_AT}}
+        assert [r["state"] for r in SJ.final_state({FORT: again}, same)] == ["confirmed"]
+        kept = {**decision_for("PERIOD_WRONG"), "answered_at": LATER_AT}
+        assert [r["state"] for r in SJ.final_state({FORT: kept}, old)] == ["kept"]
+
+    def test_only_a_decided_retirement_with_an_earlier_re_check_is_re_checked_again(self) -> None:
+        late = {"answered_at": LATER_AT, "round": "r4"}
+        web = {
+            FORT: {**decision_for("OUT_OF_WINDOW"), **late},
+            MUSEUM: {**decision_for("PERIOD_WRONG", MUSEUM), **late},
+            PENDING: {**decision_for("NOT_A_SITE", PENDING), **late, "status": R.HELD},
+            PATH_: {**decision_for("NOT_A_SITE", PATH_), **late},
+        }
+        second = {s: confirm(s) for s in (FORT, MUSEUM, PENDING)}
+        assert SJ.stale_rechecks(web, second) == {FORT: "scope-window-web r4"}, (
+            "a keep needs no re-check, a held answer proposes nothing, and a site the re-check "
+            "never read is asked by the follow-on round"
+        )
 
 
 # ------------------------------------------------------------------------------ the plan
@@ -508,12 +543,14 @@ def decision_for(verdict: str, sid: str = FORT, **over: Any) -> dict[str, Any]:
         "status": R.DECIDED,
         "round": "r1",
         "answered_by": "web_verifier:r1-b01",
+        "answered_at": WEB_AT,
         "data": data,
     }
 
 
 def confirm(sid: str = FORT) -> dict[str, Any]:
     return {"site_id": sid, "status": R.DECIDED, "round": "r1", "answered_by": "adversarial:r1-b01",
+            "answered_at": RECHECK_AT,
             "data": {"verdict": "CONFIRM", "why": "read the pages", "quotes": []}}  # fmt: skip
 
 
@@ -686,25 +723,39 @@ class TestThePlan:
             )
             assert plan.changes == [] and plan.skipped[0]["reason"] == "d50-disputed", verdict
 
-    def test_the_region_alone_never_retires_a_site_of_islamic_europe(self) -> None:
-        """The owner's open question on al-Andalus and the Emirate of Sicily (WD2 section 1b): an
-        OUT_OF_WINDOW answer for a site of Spain, Portugal, Malta or Sicily dated 500-1500 writes
-        nothing; a site's other verdicts and every other European site are decided as before."""
-        talamanca = {"country": "Spain", "lat": 40.74, "lon": -3.51, "period_start": 860,
-                     "name": "Ruins of Talamanca", "site_type": "Fortress/citadel"}  # fmt: skip
-        asked = {FORT: context(FORT, **talamanca)}
-        live = {FORT: live_row(**talamanca)}
-        plan = build({FORT: decision_for("OUT_OF_WINDOW")}, live, asked)
-        assert plan.changes == [] and [s["reason"] for s in plan.skipped] == ["label-open-question"]
-        assert "open owner question" in plan.skipped[0]["note"]
-        retired = build({FORT: decision_for("NOT_A_SITE")}, live, asked)
-        assert {c.new_value for c in retired.changes if c.column == "scope_status"} == {"retired"}
-        venice = {**talamanca, "country": "Italy", "lat": 45.43, "lon": 12.33}
-        plan = build(
-            {FORT: decision_for("OUT_OF_WINDOW")}, {FORT: live_row(**venice)},
-            {FORT: context(FORT, **venice)},
-        )  # fmt: skip
-        assert {c.new_value for c in plan.changes if c.column == "scope_status"} == {"retired"}
+    @pytest.mark.parametrize(
+        ("name", "country", "lat", "lon", "start"),
+        [
+            ("Ruins of Talamanca", "Spain", 40.74, -3.51, 860),
+            ("Castle of Cola", "Portugal", 37.9, -8.26, 1000),
+            ("Villaggio Bizantino", "Italy", 37.05, 14.7, 550),  # Sicily
+            ("Venice", "Italy", 45.43, 12.33, 860),
+        ],
+    )
+    def test_a_site_of_islamic_or_byzantine_europe_is_retired_like_any_european_site(
+        self, name: str, country: str, lat: float, lon: float, start: int
+    ) -> None:
+        """X13 (2026-10-24, under D58; O15): al-Andalus, the Emirate of Sicily and Byzantine Sicily
+        dated 500-1500 are medieval Europe. Their cutoff is 500 AD, an OUT_OF_WINDOW answer the
+        re-check confirmed retires them, and nothing is skipped as an open question."""
+        entry = {"name": name, "country": country, "lat": lat, "lon": lon, "period_start": start,
+                 "date_used": start, "site_type": "Fortress/citadel"}  # fmt: skip
+        asked = {FORT: context(FORT, **entry)}
+        assert (asked[FORT]["region"], asked[FORT]["cutoff"]) == ("medieval Old World", 500)
+        live = {FORT: live_row(**{k: v for k, v in entry.items() if k != "date_used"})}
+        plan = build({FORT: decision_for("OUT_OF_WINDOW", found_start=start)}, live, asked)
+        cells = {c.column: c.new_value for c in plan.changes}
+        assert plan.skipped == [] and cells["scope_status"] == "retired"
+        assert cells["scope_reason"] == f"E3: period_start {start} is past the cutoff; {FORT_TEXT}"
+
+    def test_a_retirement_whose_re_check_precedes_the_web_answer_is_refused(self) -> None:
+        """The wave takes only confirmed sites (`final_state`); a plan handed a confirmation that
+        was answered before the web answer it stands for writes nothing."""
+        again = {**decision_for("OUT_OF_WINDOW"), "answered_at": LATER_AT}
+        with pytest.raises(MP.PlanError, match="answered before the web answer"):
+            build({FORT: again}, {FORT: live_row()})
+        kept = {**decision_for("PERIOD_WRONG"), "answered_at": LATER_AT}
+        assert build({FORT: kept}, {FORT: live_row()}).sites == [FORT]
 
     def test_the_lane_refuses_retiring_a_d50_site(self) -> None:
         assert IL.scope_window_lane("2026-10-12").site_invariants == (L.D50_NOT_RETIRED,)
@@ -771,6 +822,47 @@ class TestThePlan:
         sql = SJ.live_sql([FORT])
         assert "concat_ws(' | ', u.name" in sql and f"'{FORT}'::uuid" in sql
         assert sql.lstrip().upper().startswith("SELECT")
+
+
+class TestAnEntryThatMoved:
+    """`export-moved`: a decided site the plan skipped because its entry changed is asked again on
+    the entry as it is now."""
+
+    def skip(self, sid: str = FORT, wave: str = "2026-10-12", reason: str = "entry-moved") -> dict:
+        return {"wave": wave, "site_id": sid, "name": "n", "reason": reason, "note": "x"}
+
+    def test_a_skipped_site_is_asked_on_its_entry_as_the_discovery_holds_it_now(self) -> None:
+        stored = {FORT: context(FORT), MUSEUM: context(MUSEUM)}
+        fresh = {
+            FORT: R.Question(FORT, context(FORT, name="Ali Masjid")),
+            MUSEUM: R.Question(MUSEUM, context(MUSEUM)),
+        }
+        skips = [self.skip(), self.skip(MUSEUM, reason="gone"), self.skip(PENDING, reason="x")]
+        questions, moved, left = SJ.moved_questions(skips, set(), stored, fresh)
+        assert [q.context["name"] for q in questions] == ["Ali Masjid"]
+        assert moved == {FORT: "2026-10-12"} and left == []
+
+    def test_a_site_already_asked_again_for_that_wave_is_not_asked_twice(self) -> None:
+        stored = {FORT: context(FORT)}
+        fresh = {FORT: R.Question(FORT, context(FORT, lat=34.5))}
+        done = {(FORT, "2026-10-12")}
+        assert SJ.moved_questions([self.skip()], done, stored, fresh) == ([], {}, [])
+        later = self.skip(wave="2026-10-13")
+        questions, moved, _ = SJ.moved_questions([self.skip(), later], done, stored, fresh)
+        assert len(questions) == 1 and moved == {FORT: "2026-10-13"}
+
+    def test_a_site_that_left_the_population_is_listed_and_not_asked(self) -> None:
+        got = SJ.moved_questions([self.skip()], set(), {FORT: context(FORT)}, {})
+        assert got == ([], {}, [FORT])
+
+    @pytest.mark.parametrize("field", ["description", "images", "exported_at"])
+    def test_a_discovery_read_before_the_entry_moved_is_refused(self, field: str) -> None:
+        """Only the fields the decision judged tell a moved entry (`JUDGED`): a discovery that
+        still holds them as they were asked would ask the same question again."""
+        stored = {FORT: context(FORT)}
+        fresh = {FORT: R.Question(FORT, {**context(FORT), field: "another"})}
+        with pytest.raises(common.IdentityError, match="build the discovery again first"):
+            SJ.moved_questions([self.skip()], set(), stored, fresh)
 
 
 TS_OTHER = MUSEUM

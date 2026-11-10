@@ -17,7 +17,8 @@ The parts (the kind names the line's meaning):
               constants, `label_borderline` (`mechanical.lane.label_borderline_sql`: a
               site dated 500-1500 where the label, not the region, decides) and
               `label_open_question` (`mechanical.lane.label_open_question_sql`: a site of
-              Islamic Europe dated 500-1500, held by the owner's open question);
+              Islamic Europe dated 500-1500; X13 decided it as medieval Europe, and the D20
+              population no longer reads the flag);
 * `ext_ids` - every `site_external_ids` row of those sites (a site can hold more than one item);
 * `names`   - the English alias rows and the label row of `unified_site_names`;
 * `pairs`   - two shown sites of one country within 300 m whose normalised names have a trigram
