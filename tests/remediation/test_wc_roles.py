@@ -45,6 +45,7 @@ def _no_braces_left(text: str) -> None:
 
 
 # ------------------------------------------------------------------------------ the briefs
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_check_brief_is_the_fact_checkers_and_names_the_registry_model_and_role(
     tmp_path: Path,
 ) -> None:
@@ -97,6 +98,7 @@ def test_a_brief_refuses_to_send_an_agent_to_a_cache_that_is_not_there(
         C.brief(run, handoff, "wc-0001")
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_judges(
     tmp_path: Path,
 ) -> None:
@@ -119,6 +121,7 @@ def test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_jud
     assert RO.role("pilot_judge").effort == "xhigh"
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_write_brief_of_lane_wn_is_the_fact_checkers_too(tmp_path: Path) -> None:
     """No writer role is registered: the web research that writes a sentence on a quote is the fact
     checker's (Opus, high, since the tier move of wc-fc-1)."""
@@ -195,6 +198,7 @@ def test_a_minimax_judge_answer_is_never_imported(tmp_path: Path) -> None:
         C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("by", "model", "match"),
     [
@@ -274,6 +278,7 @@ def _adversarial_export(tmp_path: Path, **change):
     return run, handoff, C.cmd_export(run, handoff, **{**options, **change})
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_an_adversarial_run_asks_the_adversarial_question_and_is_answered_in_that_role(
     tmp_path: Path,
 ) -> None:
@@ -316,6 +321,7 @@ def test_the_adversarial_export_needs_a_report_and_is_no_pilot_and_no_wn_run(
         _adversarial_export(tmp_path / "c", wn=True)
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("by", "model", "match"),
     [
@@ -664,6 +670,7 @@ def test_the_fact_checker_and_lane_wcs_web_verifier_answer_lane_wc_only() -> Non
     assert not any(path.startswith("wc/") and path != "wc/prompts_enrich.py" for path in shared)
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_every_wc_run_kind_but_lane_e_is_verified_by_wc_web_verifier(tmp_path: Path) -> None:
     """`verify_role`: plain, site-list (the defect runs, the D10 re-check) and WN runs are verified by
     lane WC's own role; an enrichment run by lane E's verifier, the shared `web_verifier`."""
@@ -689,6 +696,7 @@ def test_every_wc_run_kind_but_lane_e_is_verified_by_wc_web_verifier(tmp_path: P
     )
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("by", "model", "match"),
     [

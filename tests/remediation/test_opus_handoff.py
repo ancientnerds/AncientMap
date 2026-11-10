@@ -79,35 +79,46 @@ def test_the_answer_models_are_opus_sonnet_haiku_and_the_recorded_minimax() -> N
     """Owner decision 2026-10-01: the orchestrator runs Opus 5.5, every answering subagent Sonnet
     5.5. Owner decision 2026-10-03: MiniMax Code (`mcode`, `MiniMax-M3.1-Flash-Preview`) replaces
     Claude Code, so an answer may name that model too. Owner decision D6 of 2026-10-08: Claude only
-    again, with Haiku 5.5 for the cheap roles. The four stamps are pinned; an answer recorded before
-    stays valid, so the MiniMax entry stays for reading."""
+    again, with Haiku 5.5 for the cheap roles. Owner decision D153 of 2026-11-10: Fable 5.2 for
+    every role from then on. The five stamps are pinned; an answer recorded before stays valid, so
+    the Opus, Sonnet and Haiku entries stay beside Fable's and the MiniMax entry stays for reading."""
     assert OH.SONNET_MODEL == "anthropic/claude-sonnet-5-5 (Claude Code agent)"
     assert OH.HAIKU_MODEL == "anthropic/claude-haiku-5-5 (Claude Code agent)"
+    assert OH.FABLE_MODEL == "anthropic/claude-fable-5-2 (Claude Code agent)"
     assert OH.MINIMAX_MODEL == "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
     assert dict(OH.ANSWER_MODELS) == {
         "claude-opus-5-5": OH.OPUS_MODEL,
         "claude-sonnet-5-5": OH.SONNET_MODEL,
         "claude-haiku-5-5": OH.HAIKU_MODEL,
+        "claude-fable-5-2": OH.FABLE_MODEL,
         "MiniMax-M3.1-Flash-Preview": OH.MINIMAX_MODEL,
     }
     assert dict(OH.ANSWER_FAMILIES) == {
         "claude-opus-5-5": "opus",
         "claude-sonnet-5-5": "sonnet",
         "claude-haiku-5-5": "haiku",
+        "claude-fable-5-2": "fable",
         "MiniMax-M3.1-Flash-Preview": "minimax",
     }
 
 
-def test_a_new_answer_may_name_only_the_three_claude_ids() -> None:
+def test_a_new_answer_may_name_only_the_claude_ids() -> None:
     """D6: new answers are Claude's. The MiniMax id stays in `ANSWER_MODELS` so the answers already
-    recorded can be read and validated, but nothing new may name it."""
-    assert OH.NEW_ANSWER_MODELS == ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+    recorded can be read and validated, but nothing new may name it. D153: Fable first - it is the
+    model of every role, and the registry holds a role's answer to it; the three 5.5 ids stay for
+    the applied moves, a candidate trial and the stamps a reader counts as Claude's."""
+    assert OH.NEW_ANSWER_MODELS == (
+        "claude-fable-5-2",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+    )
     assert set(OH.NEW_ANSWER_MODELS) < set(OH.ANSWER_MODELS)
     assert set(OH.ANSWER_MODELS) - set(OH.NEW_ANSWER_MODELS) == {"MiniMax-M3.1-Flash-Preview"}
 
 
 @pytest.mark.parametrize(
-    "stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.MINIMAX_MODEL]
+    "stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL, OH.MINIMAX_MODEL]
 )
 def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, stamp: str) -> None:
     _export(tmp_path)
@@ -126,11 +137,13 @@ def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, s
         "anthropic/claude-haiku-5 (Claude Code agent)",
         "claude-sonnet-5-5",  # the model id, not the stamp: the CLI maps one to the other
         "anthropic/claude-sonnet-5-5",
+        "claude-fable-5-2",  # the Fable model id, not its stamp
+        "anthropic/claude-fable-5 (Claude Code agent)",
         "MiniMax-M3.1-Flash-Preview",  # the MiniMax model id, not its stamp, either
         "",
     ],
 )
-def test_a_model_outside_the_four_stamps_is_refused_on_write_read_and_validate(
+def test_a_model_outside_the_five_stamps_is_refused_on_write_read_and_validate(
     tmp_path: Path, stamp: str
 ) -> None:
     _export(tmp_path)
@@ -415,9 +428,10 @@ def test_the_cli_validates_and_answers(tmp_path: Path) -> None:
     assert second.returncode == 0 and json.loads(second.stdout)["ok"] is True
 
 
-def test_the_cli_offers_the_three_claude_models_and_refuses_minimax(tmp_path: Path) -> None:
+def test_the_cli_offers_the_claude_models_and_refuses_minimax(tmp_path: Path) -> None:
     """D6 (2026-10-08): `--model` offers exactly `NEW_ANSWER_MODELS`. A MiniMax Code run can no longer
-    record a new answer, however the recorded ones stay readable (the stamp tests above)."""
+    record a new answer, however the recorded ones stay readable (the stamp tests above). D153
+    (2026-11-10): the answering agents run as Fable 5.2, and the recorder stamps them so."""
     _export(tmp_path)
     text = tmp_path / "answer.txt"
     text.write_text("VERDICT: CORRECT - Ötzi\n", encoding="utf-8")
@@ -457,3 +471,16 @@ def test_the_cli_offers_the_three_claude_models_and_refuses_minimax(tmp_path: Pa
     )
     assert haiku.returncode == 0, haiku.stderr
     assert _read(tmp_path).model == OH.HAIKU_MODEL
+
+    _answer_file(tmp_path).unlink()  # an answer is written once: ask the recorder again
+    fable = subprocess.run(
+        [*argv, "--model", "claude-fable-5-2"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert fable.returncode == 0, fable.stderr
+    assert (
+        _read(tmp_path).model == OH.FABLE_MODEL == "anthropic/claude-fable-5-2 (Claude Code agent)"
+    )

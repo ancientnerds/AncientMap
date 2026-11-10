@@ -412,6 +412,7 @@ def _research_round(screened: dict[str, Any], answers: dict[str, str] | None = N
     return handoff
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_research_round_asks_one_question_per_candidate(screened: dict[str, Any]) -> None:
     run = screened["run"]
     summary = D.cmd_export(run, screened["tmp"] / "h")
@@ -484,6 +485,7 @@ def test_the_import_checks_every_quote_and_ends_an_unverified_position(
         D.cmd_import(screened["run"], handoff, client=EF.pages_client(), pace=0.0)
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -517,6 +519,7 @@ def _adjudicate(screened: dict[str, Any], verdicts: dict[str, dict], *, agent: s
     return h2
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_adjudication_asks_the_researched_sites_and_an_independent_agent_answers(
     screened: dict[str, Any],
 ) -> None:
@@ -537,6 +540,7 @@ def test_the_adjudication_asks_the_researched_sites_and_an_independent_agent_ans
     assert D.cmd_adjudicate_import(screened["run"], h2) == {"dispute": 1}
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [

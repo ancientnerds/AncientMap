@@ -284,6 +284,7 @@ def test_an_incoherent_text_may_name_no_broken_sentence() -> None:
 
 
 # ------------------------------------------------------------------------------ the stage
+@pytest.mark.usefixtures("registry_until_d153")
 def test_verify_asks_every_site_whose_check_kept_a_sentence_with_its_text_as_published(
     tmp_path: Path,
 ) -> None:
@@ -371,6 +372,7 @@ def test_a_text_the_verifier_confirms_is_built_verified_and_needs_no_second_roun
     assert C._finals(run)[FX.SITE_C]["verification"]["status"] == "nothing-kept"
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verified_again(
     tmp_path: Path,
 ) -> None:

@@ -31,6 +31,13 @@ from identity import scope_judge as SJ  # noqa: E402
 from tests.remediation.identity_b_fixtures import NOW, WP  # noqa: E402
 from tests.remediation.identity_fixtures import export_of, ext, site  # noqa: E402
 
+#: Proven on the role registry as it stood until owner decision D153 (2026-11-10) put every role on
+#: Fable: a tier move, the hold at the top tier, a release, a candidate trial and a stamp refused
+#: between two roles' models all need roles on different tiers, and no calibration is run on Fable
+#: (D154). `conftest.registry_until_d153` rebuilds that registry from the applied moves; what D153
+#: and D154 changed is tested on the registry as it is (`test_roles_fable.py`).
+pytestmark = pytest.mark.usefixtures("registry_until_d153")
+
 CHANIA = next(iter(CAL.KNOWN_DEFECTS))
 EXPORTED = "2026-10-08 20:35:11+00"
 

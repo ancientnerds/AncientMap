@@ -477,7 +477,9 @@ def stage_role(spec: Spec, stage: str) -> str:
 def roles_record(spec: Spec) -> dict[str, dict[str, str]]:
     """The registry's entries for the roles of this contract's stages and the pilot judge, as a
     run fixes them at its start (`RUN.json["roles"]`): later changes of `roles.ROLES` do not move a
-    run that began - an escalation is a record of its own (`escalate_role`)."""
+    run that began - an escalation is a record of its own (`escalate_role`). The one change that
+    does reach a run that began is owner decision D153 (every role on Fable from 2026-11-10 on):
+    `role_now` and `role_problem` read the recorded model through `roles.model_now`."""
     names = sorted({*spec.roles.values(), JUDGE_ROLE})
     return {name: {"model": RO.role(name).model, "effort": RO.role(name).effort} for name in names}
 
@@ -491,11 +493,22 @@ def run_roles(run: Path) -> dict[str, dict[str, str]]:
     return dict(record["roles"])
 
 
+def role_now(run: Path, role: str) -> dict[str, str]:
+    """The model and effort `role` answers this run with now: the effort the run recorded, and the
+    model `roles.model_now` gives for the one it recorded - Fable for a run that began before owner
+    decision D153 took the role from that model, the recorded model for every other run."""
+    fixed = run_roles(run)[role]
+    return {**fixed, "model": RO.model_now(role, fixed["model"])}
+
+
 def role_problem(
     roles: Mapping[str, Mapping[str, str]], role: str, answered_by: str, stamp: str
 ) -> str | None:
     """Why an answer is not the role's: it names another role, or its stamp is not the stamp of the
-    model the run recorded for the role. `None` when it is."""
+    model the run recorded for the role. `None` when it is.
+
+    A run that began before owner decision D153 goes on with Fable (`roles.model_now`): its answers
+    carry the recorded model's stamp when they were given before the move and Fable's after it."""
     named = RO.role_of(answered_by)
     if named != role:
         return (
@@ -503,6 +516,8 @@ def role_problem(
             f"answer --role {role}`)"
         )
     expected = OH.ANSWER_MODELS[roles[role]["model"]]
+    if stamp == OH.ANSWER_MODELS[RO.model_now(role, roles[role]["model"])]:
+        return None
     if stamp != expected:
         return (
             f"role {role} is recorded as {roles[role]['model']} ({expected!r}), but the answer "
@@ -2326,10 +2341,11 @@ def _role_kind(spec: Spec, stage: str) -> str:
 def role_brief(run: Path, spec: Spec, record: Mapping[str, Any], batch_id: str) -> str:
     """The instruction of the agent that answers one batch of a role-bound contract: the role, the
     model id the registry fixed for it and the effort - and the `--role`/`--model` flags that
-    record the answer under them."""
+    record the answer under them. The model is the one the role answers this run with now
+    (`role_now`: Fable for a run that began before owner decision D153)."""
     stage = record["stage"]
     role = stage_role(spec, stage)
-    fixed = run_roles(run)[role]
+    fixed = role_now(run, role)
     kind = _role_kind(spec, stage)
     shown = _shown(Path(record["handoff"]))
     web = kind in WEB_KINDS
@@ -2370,7 +2386,7 @@ def agent_jobs(run: Path, handoff: Path) -> list[dict[str, Any]]:
     record = _round_of_handoff(run, handoff)
     stage = record["stage"]
     role = stage_role(spec, stage)
-    fixed = run_roles(run)[role]
+    fixed = role_now(run, role)
     web = _role_kind(spec, stage) in WEB_KINDS
     return [
         {

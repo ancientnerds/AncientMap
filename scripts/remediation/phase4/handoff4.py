@@ -161,7 +161,7 @@ For each line of the manifest:
    the label's part before "/" (create the directory).
 4. Record it through its shape check (the stage's own parser; nothing is judged). An answer is
    written once, under your name {agent}:
-   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<site id>.txt
+   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --model <the model id you run as: claude-fable-5-2> --text-file {scratch}/<site id>.txt
    It prints {{"ok": true, "wrote": true, ...}} when the answer is recorded. It prints
    {{"ok": false, "problem": ...}} and records nothing when the shape is wrong: fix the shape in
    your file, never the finding, and run the same command again. If it says REFUSED, stop and

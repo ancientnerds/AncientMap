@@ -519,6 +519,7 @@ class TestTheMachineGates:
 
 
 class TestTheSpec:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_web_stage_is_the_web_verifier_s(self) -> None:
         spec = RT.web_spec({})
         assert (spec.stage, spec.role, spec.model) == (

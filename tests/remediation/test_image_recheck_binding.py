@@ -40,6 +40,7 @@ def test_every_image_hero_recheck_is_the_image_lane_s_own_role() -> None:
     assert CAL.ROLE_SPECS[SLOT].role == ROLE and CAL.slot_role(SLOT) == ROLE
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_image_role_is_opus_high_and_the_shared_role_stays_sonnet_as_d36_left_it() -> None:
     entry = RO.role(ROLE)
     assert (entry.model, entry.effort) == ("claude-opus-5-5", "high")
@@ -52,6 +53,7 @@ def test_the_image_role_is_opus_high_and_the_shared_role_stays_sonnet_as_d36_lef
     assert settled is not None and settled["settled_by"] == ROLE
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_image_calibration_measures_the_slot_and_seals_its_role_s_entry(
     tmp_path: Path,
 ) -> None:

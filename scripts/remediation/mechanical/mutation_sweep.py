@@ -9775,10 +9775,12 @@ WD5_ADV_CASES: list[Case] = [
         ROLES_TESTS,
     ),
     Case(
+        # since owner decision D153 the registry holds Fable for every role; where the writer
+        # stood until then is the `from` of its D153 move, which the test's registry is built from
         "wd5-adv: the lane E writer follows the researcher to Opus",
         ROLES_PY,
-        '    Role("enrich_writer", "claude-sonnet-5-5", "high", "enrich-writer"),',
-        '    Role("enrich_writer", "claude-opus-5-5", "high", "enrich-writer"),',
+        '    _d153_move("enrich_writer", "claude-sonnet-5-5", "high"),',
+        '    _d153_move("enrich_writer", "claude-opus-5-5", "high"),',
         "test_the_enrich_writer_stays_on_sonnet_under_its_own_calibration_set",
         ROLES_TESTS,
     ),
@@ -14520,6 +14522,287 @@ WD5X_CASES: list[Case] = [
           "test_the_shown_cells_gate", DATING_GOLD_TESTS),
 ]  # fmt: skip
 CASES += WD5X_CASES
+
+
+# ---------------- owner decisions D153 and D154 (2026-11-10): every role on Fable 5.2, by an owner
+# move that rests on no calibration; a role stands by the decision (`roles.owner_standing`), an
+# answer recorded before keeps its stamp (`roles.answer_problem`) and a run that began before goes
+# on with Fable (`roles.model_now`). Every label starts with "d153:", so the group runs on its own:
+# `mutation_sweep.py d153:`. The guards `roles.py` runs at import (the chain, the settlements) have
+# no case here: a mutant of one stops the import of every test, which proves nothing about any.
+FABLE_TESTS = "tests/remediation/test_roles_fable.py"
+SHORTS_NOTE_TESTS = "tests/pipeline/video/test_shorts.py"
+P4_MODEL_PY = REPO / "scripts/remediation/phase4/model4.py"
+REMEDIATION = REPO / "scripts/remediation"
+_D153_STANDS = "test_a_role_moved_again_after_d153_stands_by_its_calibration_again"
+_D153_NO_DECISION = "test_no_role_stood_by_an_owner_decision_before_d153"
+_D153_MOVE = "test_a_d153_move_rests_on_no_calibration_and_may_not_name_one"
+_D153_STAMP = "test_an_answer_recorded_before_the_move_keeps_its_stamp_and_stays_valid"
+_D153_RUN = "test_a_run_that_recorded_the_roles_earlier_model_goes_on_with_fable"
+_D153_IDENTITY = "test_the_identity_gates_name_the_decision_and_ask_no_calibration_id"
+_D153_GATES = "test_every_gate_still_refuses_a_role_that_stands_by_no_decision"
+_D153_MIXED = "test_a_round_answered_partly_by_opus_and_partly_by_fable_imports"
+_D153_FOR = "test_ai_system_for_names_fable_alone_or_beside_the_earlier_models"
+D153_CASES: list[Case] = [
+    # ---- roles.py: the move
+    guard(
+        "d153: a D153 move names no calibration",
+        ROLES_PY,
+        "    if to_fable and evidence:",
+        _D153_MOVE,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: a D153 move ends at Fable",
+        ROLES_PY,
+        '    if to_fable and move["to"] != FABLE:',
+        _D153_MOVE,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: only a D153 move may rest on no calibration",
+        ROLES_PY,
+        "        or (not evidence and not to_fable)",
+        "        or False",
+        _D153_MOVE,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: the enrich writer stood on Sonnet when D153 found it",
+        ROLES_PY,
+        '    _d153_move("enrich_writer", "claude-sonnet-5-5", "high"),',
+        '    _d153_move("enrich_writer", "claude-opus-5-5", "high"),',
+        "test_each_role_got_there_by_an_owner_move_of_its_own_under_d153",
+        FABLE_TESTS,
+    ),
+    # ---- roles.py: the three rules
+    Case(
+        "d153: the decision covers a role only while its D153 move is its last",
+        ROLES_PY,
+        '        and moved["decision"] == FABLE_DECISION',
+        "        and True",
+        _D153_STANDS,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: a tier move is no owner decision",
+        ROLES_PY,
+        '        and moved.get("kind") == OWNER_KIND',
+        "        and True",
+        _D153_NO_DECISION,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: a role without its D153 move stands by no decision",
+        ROLES_PY,
+        "    if fable_move(name) is None:",
+        _D153_NO_DECISION,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: an earlier answer keeps its stamp",
+        ROLES_PY,
+        '    if moved is not None and stamp == OH.ANSWER_MODELS[moved["from"]]:',
+        _D153_STAMP,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: only the role's own earlier stamp is kept",
+        ROLES_PY,
+        '    if moved is not None and stamp == OH.ANSWER_MODELS[moved["from"]]:',
+        "    if moved is not None and stamp in OH.ANSWER_MODELS.values():",
+        _D153_STAMP,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: a run that recorded the earlier model goes on with Fable",
+        ROLES_PY,
+        '    if moved is not None and moved["from"] == recorded:',
+        _D153_RUN,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: a run that recorded another model is not moved",
+        ROLES_PY,
+        '    if moved is not None and moved["from"] == recorded:',
+        "    if moved is not None:",
+        _D153_RUN,
+        FABLE_TESTS,
+    ),
+    # ---- the gates: each asks `owner_standing` first, and still asks its calibration otherwise
+    guard(
+        "d153: the fields gate asks the owner standing",
+        CALIBRATE,
+        "        if by_owner is not None:",
+        "test_the_fields_wave_gate_names_the_decision_and_needs_no_verdict",
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: the card lane's standing asks the owner standing",
+        CALIBRATE_SHORTS,
+        "    if by_owner is not None:",
+        "test_the_card_lanes_standing_names_the_decision",
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: the image gate asks the owner standing",
+        REMEDIATION / "image_roles" / "standing.py",
+        "    if by_owner is not None:",
+        "test_the_image_lanes_gate_names_the_decision_for_every_slot",
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: the identity import gate asks the owner standing",
+        REMEDIATION / "identity" / "rounds.py",
+        "    if by_owner is not None:",
+        _D153_IDENTITY,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: a role that stands by no decision names its calibration",
+        REMEDIATION / "identity" / "rounds.py",
+        "    if calibration_id is None:",
+        _D153_GATES,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: an import under the decision has no calibration time",
+        REMEDIATION / "identity" / "rounds.py",
+        "        if decided_at is None\n",
+        "        if False\n",
+        "test_a_role_that_stands_by_the_owners_decision_imports_without_a_calibration",
+        "tests/remediation/test_identity_b_rounds.py",
+    ),
+    Case(
+        "d153: the identity import prints how the role stands",
+        REMEDIATION / "identity" / "run.py",
+        '        standing = verdict["standing"] if "owner_decision" in verdict else CC.PASSED',
+        "        standing = CC.PASSED",
+        "test_the_import_names_the_owners_decision_and_asks_no_calibration",
+        "tests/remediation/test_identity_b_run.py",
+    ),
+    guard(
+        "d153: the judges' gate asks the owner standing",
+        REMEDIATION / "identity" / "label_rounds.py",
+        "        if by_owner is not None:",
+        _D153_IDENTITY,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: the enrichment approval asks the owner standing",
+        REMEDIATION / "wc" / "enrich.py",
+        "    if by_owner is not None:",
+        "test_the_enrichment_approval_names_the_decision_in_place_of_a_verdict",
+        FABLE_TESTS,
+    ),
+    # ---- a run or round that began before the decision
+    Case(
+        "d153: a card run that began before takes the Fable answers",
+        TEASER_RUN,
+        '    if stamp == OH.ANSWER_MODELS[RO.model_now(role, roles[role]["model"])]:',
+        "    if False:",
+        _D153_MIXED,
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: a card run that began before is briefed with Fable",
+        TEASER_RUN,
+        '    return {**fixed, "model": RO.model_now(role, fixed["model"])}',
+        "    return dict(fixed)",
+        "test_the_open_batches_are_briefed_with_fable",
+        FABLE_TESTS,
+    ),
+    Case(
+        "d153: an insert round exported before is briefed with Fable",
+        INSERT_RESEARCH,
+        '        model=RO.model_now(record["role"], record["model"]),',
+        '        model=record["model"],',
+        "test_a_round_exported_before_d153_is_briefed_with_fable",
+        INSERT_TESTS,
+    ),
+    guard(
+        "d153: a wd5 round exported before is briefed with Fable",
+        FIELDS_HANDOFF,
+        "        if rule.name in RULE_ROLE:",
+        "test_the_brief_names_a_model_that_is_a_parameter",
+        "tests/remediation/test_fields_wd5.py",
+    ),
+    Case(
+        "d153: an adversarial round exported before is briefed with Fable",
+        ADVERSARIAL,
+        '        model=RO.model_now(ROLE, record["model"]),',
+        '        model=record["model"],',
+        "test_a_round_exported_before_d153_is_briefed_with_fable",
+        "tests/remediation/test_fields_adversarial.py",
+    ),
+    Case(
+        "d153: the hero review takes a Fable answer",
+        REMEDIATION / "served_image" / "hero_review.py",
+        "REVIEW_MODELS = (REVIEW_MODEL, OH.FABLE_MODEL)",
+        "REVIEW_MODELS = (REVIEW_MODEL,)",
+        "test_a_fable_review_imports_as_an_opus_one_does",
+        "tests/remediation/test_hero_review.py",
+    ),
+    guard(
+        "d153: the hero review takes no third model's answer",
+        REMEDIATION / "served_image" / "hero_review.py",
+        "        if answer.model not in REVIEW_MODELS:",
+        "test_a_sonnet_answer_is_no_review_here",
+        "tests/remediation/test_hero_review.py",
+    ),
+    # ---- the stamp and the disclosure
+    Case(
+        "d153: the Fable stamp is not one of the accepted models",
+        OPUS_HANDOFF,
+        '        "claude-fable-5-2": FABLE_MODEL,\n',
+        "",
+        "test_the_cli_offers_the_claude_models_and_refuses_minimax",
+        "tests/remediation/test_opus_handoff.py",
+    ),
+    Case(
+        "d153: a Fable answer is stamped as another model's",
+        OPUS_HANDOFF,
+        'FABLE_MODEL = "anthropic/claude-fable-5-2 (Claude Code agent)"',
+        'FABLE_MODEL = "anthropic/claude-opus-5-5 (Claude Code agent)"',
+        "test_the_cli_offers_the_claude_models_and_refuses_minimax",
+        "tests/remediation/test_opus_handoff.py",
+    ),
+    Case(
+        "d153: a MiniMax text a Fable answer changed discloses no Fable",
+        P4_MODEL_PY,
+        "        return AI_SYSTEM_FABLE if OH.FABLE_MODEL in named else AI_SYSTEM",
+        "        return AI_SYSTEM",
+        _D153_FOR,
+        "tests/remediation/test_phase4_model.py",
+    ),
+    Case(
+        "d153: an Opus-and-Fable write discloses Fable alone",
+        P4_MODEL_PY,
+        "        frozenset({OH.OPUS_MODEL, OH.FABLE_MODEL}): AI_SYSTEM_CLAUDE_OPUS_FABLE,",
+        "        frozenset({OH.OPUS_MODEL, OH.FABLE_MODEL}): AI_SYSTEM_CLAUDE_FABLE,",
+        _D153_FOR,
+        "tests/remediation/test_phase4_model.py",
+    ),
+    Case(
+        "d153: the Fable disclosures are not accepted",
+        P4_MODEL_PY,
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_FABLE, "
+        "*CLAUDE_DISCLOSURES.values()})",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, "
+        '*(s for s in CLAUDE_DISCLOSURES.values() if "fable" not in s)})',
+        "test_a_provenance_accepts_each_disclosed_ai_system",
+        "tests/remediation/test_phase4_model.py",
+    ),
+    Case(
+        "d153: the shorts note cannot name Claude Fable",
+        SHORTS_RENDER,
+        '_CLAUDE_ID = re.compile(r"claude-(opus|sonnet|haiku|fable)-(\\d+)-(\\d+)")',
+        '_CLAUDE_ID = re.compile(r"claude-(opus|sonnet|haiku)-(\\d+)-(\\d+)")',
+        "test_the_teaser_note_names_claude_fable",
+        SHORTS_NOTE_TESTS,
+    ),
+]
+CASES += D153_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

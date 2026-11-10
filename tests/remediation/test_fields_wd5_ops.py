@@ -192,7 +192,8 @@ class TestTheBrief:
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd5-r0-b0001")
         assert "handoff.py wiki-text --label <label>" in text
-        assert "--model claude-sonnet-5-5 --role field_researcher" in text
+        # the registry's model for the role, as it is: Fable since owner decision D153
+        assert "--model claude-fable-5-2 --role field_researcher" in text
         assert "403 and 429 are a throttle, never a finding" in text
 
     def test_the_older_lanes_briefs_name_no_role_and_no_cache(self, tmp_path: Path) -> None:
@@ -319,6 +320,7 @@ class TestTheRoleOfTheAnswers:
         with pytest.raises(HO.HandoffStepError, match="names no field_researcher role"):
             self.imported(tmp_path, by="adversarial:wd5-r0-b0001")
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_an_answer_whose_stamp_is_not_the_roles_model_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(HO.HandoffStepError, match="registered to claude-sonnet-5-5"):
             self.imported(tmp_path, model=OH.HAIKU_MODEL)

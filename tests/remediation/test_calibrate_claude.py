@@ -24,6 +24,13 @@ import calibrate_claude as CC  # noqa: E402
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 
+#: Proven on the role registry as it stood until owner decision D153 (2026-11-10) put every role on
+#: Fable: a tier move, the hold at the top tier, a release, a candidate trial and a stamp refused
+#: between two roles' models all need roles on different tiers, and no calibration is run on Fable
+#: (D154). `conftest.registry_until_d153` rebuilds that registry from the applied moves; what D153
+#: and D154 changed is tested on the registry as it is (`test_roles_fable.py`).
+pytestmark = pytest.mark.usefixtures("registry_until_d153")
+
 NOW = "2026-10-08T09:00:00+00:00"
 SITE_A = "1f3c04f4-4025-4779-9968-6aa298127478"
 SITE_B = "1f9d65ff-7a7d-4885-85d4-2d581dbc3081"

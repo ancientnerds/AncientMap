@@ -126,6 +126,7 @@ class TestTheExport:
 
 
 class TestTheBriefAndTheShapeCheck:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_brief_names_the_role_its_model_and_the_exact_commands(
         self, out: Path, tmp_path: Path
     ) -> None:
@@ -158,6 +159,7 @@ class TestTheBriefAndTheShapeCheck:
 
 
 class TestTheImport:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_decided_and_held_answers_are_merged_by_site(self, out: Path, tmp_path: Path) -> None:
         record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
         answer_all(
@@ -327,6 +329,7 @@ class TestTheRoleCheck:
         with pytest.raises(R.RoundError, match="recorded under adversarial"):
             run_import(out)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.HAIKU_MODEL, OH.MINIMAX_MODEL])
     def test_an_answer_stamped_by_another_model_than_the_role_s_is_refused(
         self, out: Path, tmp_path: Path, stamp: str
@@ -352,10 +355,12 @@ class TestTheCalibrationGate:
     def gate(self, root: Path, calibration_id: str, role: str = "web_verifier") -> dict[str, Any]:
         return R.require_calibration(root, calibration_id, role, self.STAGE)
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_passed_sealed_verdict_of_the_role_opens_the_gate(self, tmp_path: Path) -> None:
         self.calibrate(tmp_path, "c1", "web_verifier")
         assert self.gate(tmp_path, "c1")["passed"] is True
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_no_verdict_a_failed_verdict_and_another_role_close_it(self, tmp_path: Path) -> None:
         with pytest.raises(R.RoundError, match="has no verdict"):
             self.gate(tmp_path, "c1")
@@ -366,6 +371,7 @@ class TestTheCalibrationGate:
         with pytest.raises(R.RoundError, match="measured role web_verifier, not adversarial"):
             self.gate(tmp_path, "c2", "adversarial")
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_verdict_of_another_model_or_under_another_registry_entry_is_stale(
         self, tmp_path: Path
     ) -> None:
@@ -381,6 +387,7 @@ class TestTheCalibrationGate:
         with pytest.raises(R.RoundError, match="sealed under another registry entry"):
             self.gate(tmp_path, "c5")
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_calibration_of_another_lane_s_pool_does_not_open_the_gate(
         self, tmp_path: Path
     ) -> None:
@@ -388,6 +395,7 @@ class TestTheCalibrationGate:
         with pytest.raises(R.RoundError, match="not on the lane's own toy-web"):
             self.gate(tmp_path, "other")
 
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize(
         ("seal_over", "verdict_over", "match"),
         [
@@ -405,6 +413,37 @@ class TestTheCalibrationGate:
         self.reseal(tmp_path, "w", **seal_over)
         with pytest.raises(R.RoundError, match=match):
             self.gate(tmp_path, "w")
+
+    def test_a_role_that_stands_by_the_owners_decision_imports_without_a_calibration(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        """D153/D154: the web verifier is on Fable and stands by the owner's decision - there is
+        no calibration id to name and no verdict time an answer could precede. An open round holds
+        the Sonnet answers given before the decision and the Fable ones that finish it: both are
+        the role's, and each decision keeps the stamp of the answer it rests on."""
+        record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
+        stamps = dict(zip(sorted(record.batches), (OH.SONNET_MODEL, OH.FABLE_MODEL), strict=True))
+        for batch_id, [site] in record.batches.items():
+            OH.write_answer(
+                tmp_path / "h1", batch_id=batch_id, stage=SPEC.stage, label=site,
+                text=json.dumps({"site_id": site, "ok": True}),
+                answered_by=RO.answered_by(SPEC.role, batch_id), model=stamps[batch_id],
+                now=lambda: NOW,
+            )  # fmt: skip
+        verdict = R.require_calibration(tmp_path / "no-calibration", None, SPEC.role, "toy-web")
+        assert verdict["standing"] == RO.OWNER_STANDING and verdict["owner_decision"] == "D153"
+        assert (verdict["calibration_id"], verdict["agreement"], verdict["decided_at"]) == (
+            None,
+            None,
+            None,
+        )
+        summary = R.import_round(
+            out, SPEC, "r1", decided_at=verdict["decided_at"], http=FakeClient,
+            resolver=resolver_of({}), now=lambda: NOW, pace=0,
+        )  # fmt: skip
+        assert (summary["decided"], summary["held"]) == (2, 0)
+        decisions = R.decisions_by_site(out)
+        assert {decisions[A_ID]["model"], decisions[B_ID]["model"]} == set(stamps.values())
 
     def test_an_answer_given_before_the_calibration_was_decided_is_not_imported(
         self, out: Path, tmp_path: Path

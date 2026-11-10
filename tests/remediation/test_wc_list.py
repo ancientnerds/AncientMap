@@ -217,6 +217,7 @@ def test_a_phase4_text_is_never_trimmed_the_check_answer_refuses_a_cut(tmp_path:
     assert A.parse_check(cut, site_id=SITE_P4, sentences=list(WX.P4_SENTENCES), asked=[1, 2, 3])
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_check_brief_of_a_list_run_is_the_fact_checkers_from_the_registry(
     tmp_path: Path,
 ) -> None:
@@ -300,6 +301,7 @@ def test_a_misaligned_provenance_and_a_retired_site_are_never_asked(built) -> No
     assert population["asked"] == 3 and population["pilot"] == {"sites": 3, "seed": 1}
 
 
+@pytest.mark.usefixtures("registry_until_d153")
 def test_the_verifier_and_the_judge_of_a_list_run_are_lane_wcs_opus_roles(built) -> None:
     root, run, _ = built
     verify = next((root / "handoff" / "wcl-pilot-verify").glob("verify-0001"))

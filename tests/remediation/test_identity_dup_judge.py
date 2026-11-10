@@ -940,6 +940,7 @@ class TestTheRounds:
         summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert summary["held"] == 1 and summary["held_reasons"] == {"shape": 1}
 
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize(
         ("by", "model", "message"),
         [
@@ -962,6 +963,7 @@ class TestTheRounds:
             import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert J.load_decisions(run, J.STAGE_VERDICT) == {}
 
+    @pytest.mark.usefixtures("registry_until_d153")
     @pytest.mark.parametrize(
         ("calibrations", "message"),
         [
@@ -1094,6 +1096,7 @@ class TestTheBriefAndTheCheck:
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         return run
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_brief_names_the_role_the_model_and_the_commands(self, tmp_path: Path) -> None:
         text = J.brief(self.exported(tmp_path), J.STAGE_VERDICT, "r1", "r1-b01")
         assert (
@@ -1102,6 +1105,7 @@ class TestTheBriefAndTheCheck:
         assert "dup_judge.py check-answer --stage dup-verdict --round r1" in text
         assert "403 or 429 is a throttle" in text and "4. Check its shape" in text
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_recheck_brief_names_the_adversarial_role(self, tmp_path: Path) -> None:
         run = self.exported(tmp_path)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
@@ -1122,6 +1126,7 @@ class TestTheBriefAndTheCheck:
             run, J.STAGE_VERDICT, "r1", "r1-b01", role="web_verifier"
         )
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_pilot_judge_may_recheck_and_a_calibration_brief_points_at_its_copy(
         self, tmp_path: Path
     ) -> None:

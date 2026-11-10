@@ -10,7 +10,10 @@ Sonnet 5.5; an answer names the model that really wrote it (`ANSWER_MODELS`), an
 before carry the Opus stamp and stay valid. Owner decision D6, 2026-10-08: Claude only again, a
 role per task (`roles.ROLES`) on Opus, Sonnet or Haiku 5.5; a NEW answer may name only
 `NEW_ANSWER_MODELS`, while the MiniMax stamp of the answers recorded 2026-10-03 to 2026-10-07 stays
-readable. A stage now runs in two halves with the answering in between, done by the orchestrator:
+readable. Owner decision D153, 2026-11-10: every role answers on Fable 5.2 from now on
+(`claude-fable-5-2`, `FABLE_MODEL`; the registry `roles.ROLES` holds every role to it), and the
+answers recorded before keep their stamp and stay valid. A stage now runs in two halves with the
+answering in between, done by the orchestrator:
 
     export   the stage computes the calls it would buy - the exact prompt text, unchanged, so the
              frozen questions stay frozen - and writes them here. No model is called.
@@ -43,8 +46,9 @@ Usage (the orchestrator's side):
         --text-file ANSWER.txt
 
 `--model` is required and has no default: it is the model id the answering agent runs as, as its own
-system prompt names it (`claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5`, the
-`NEW_ANSWER_MODELS`). `--role` names the role the answer is given in (`roles.ROLES`): it is refused
+system prompt names it (`claude-fable-5-2`, the model of every role since owner decision D153, or
+`claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5`: the `NEW_ANSWER_MODELS`). `--role`
+names the role the answer is given in (`roles.ROLES`): it is refused
 when the role's registered model is not `--model`, and it is recorded as `answered_by =
 "<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow. `--candidate-model` (with `--role`)
 records an answer of a candidate-model trial (`roles.candidate_model`): `--model` must be that
@@ -93,6 +97,9 @@ MINIMAX_MODEL = "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
 #: The stamp of an answer by a Haiku agent. Owner decision D6, 2026-10-08: the image prefilter and
 #: the operators run Haiku 5.5 (`roles.ROLES`).
 HAIKU_MODEL = "anthropic/claude-haiku-5-5 (Claude Code agent)"
+#: The stamp of an answer by a Fable agent. Owner decision D153, 2026-11-10: every role answers on
+#: Fable 5.2 from now on (`roles.ROLES`). The answers recorded before keep the stamps above.
+FABLE_MODEL = "anthropic/claude-fable-5-2 (Claude Code agent)"
 #: The model id an agent runs as (as its own system prompt names it) -> the stamp its answer carries.
 #: The only models a RECORDED answer may name: `read_answer` and `validate` accept exactly these
 #: values. The MiniMax entry is here to read the answers recorded 2026-10-03 to 2026-10-07; a new
@@ -102,12 +109,21 @@ ANSWER_MODELS: Mapping[str, str] = MappingProxyType(
         "claude-opus-5-5": OPUS_MODEL,
         "claude-sonnet-5-5": SONNET_MODEL,
         "claude-haiku-5-5": HAIKU_MODEL,
+        "claude-fable-5-2": FABLE_MODEL,
         "MiniMax-M3.1-Flash-Preview": MINIMAX_MODEL,
     }
 )
-#: The model ids a NEW answer may name (owner decision D6, 2026-10-08): `answer --model` offers
-#: exactly these and the briefs list exactly these. Opus first: the order is the briefs' order.
-NEW_ANSWER_MODELS: tuple[str, ...] = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+#: The model ids a NEW answer may name (owner decisions D6, 2026-10-08, and D153, 2026-11-10):
+#: `answer --model` offers exactly these and the briefs list exactly these. Fable first: the order
+#: is the briefs' order, and since D153 Fable is the model of every role - `answer --role` refuses
+#: any other (`roles.require_model`). The three 5.5 ids stay for what names them without a role:
+#: the applied moves of the registry, a candidate trial and the stamps a reader counts as Claude's.
+NEW_ANSWER_MODELS: tuple[str, ...] = (
+    "claude-fable-5-2",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
+)
 #: The model id -> the family its answers are labelled with in evidence that names who judged
 #: (`mechanical/scope_review.judged_by` writes `<family>:<agent>` into a `scope_reason`). Declared
 #: beside the stamps and never split out of the model id: the family is part of the identity, and
@@ -117,6 +133,7 @@ ANSWER_FAMILIES: Mapping[str, str] = MappingProxyType(
         "claude-opus-5-5": "opus",
         "claude-sonnet-5-5": "sonnet",
         "claude-haiku-5-5": "haiku",
+        "claude-fable-5-2": "fable",
         "MiniMax-M3.1-Flash-Preview": "minimax",
     }
 )

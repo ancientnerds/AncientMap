@@ -11,8 +11,9 @@ that its licence/author fields are complete per D18)":
              replaced hero beside it when there is one, the credit fields of the READ row (licence,
              licence URL, author) and what the check that chose the row said. Batches of `BATCH`.
     check-answer  the answer check an agent passes to `opus_handoff.py answer --check`.
-    import   every answer read back against the prompt rebuilt byte for byte, by the Opus stamp only
-             (`OH.OPUS_MODEL`; the lane plan names Opus), into `R/REVIEW.jsonl`, the file
+    import   every answer read back against the prompt rebuilt byte for byte, by the Opus stamp
+             (`OH.OPUS_MODEL`; the lane plan names Opus) or, for an answer given since owner decision
+             D153, the Fable stamp (`REVIEW_MODELS`) and by no other, into `R/REVIEW.jsonl`, the file
              `hero_moves.py emit --review` reads. A missing, malformed or foreign answer refuses the
              whole import: a review is never partial, and nothing is read as an accept.
 
@@ -49,8 +50,11 @@ STAGE = "hero-review"
 BATCH = 8
 REVIEW_FILE = "REVIEW.jsonl"
 REVIEW_SOURCE = "REVIEW_SOURCE.json"
-#: The lane plan of 2026-11-05 names Opus for this review.
+#: The lane plan of 2026-11-05 names Opus for this review. Since owner decision D153 of 2026-11-10
+#: every answer is Fable's, so a review answered from then on carries the Fable stamp; one answered
+#: before keeps its Opus stamp and stays valid. No other stamp is the review's.
 REVIEW_MODEL = OH.OPUS_MODEL
+REVIEW_MODELS = (REVIEW_MODEL, OH.FABLE_MODEL)
 DECISIONS = (HM.ACCEPT, HM.VETO)
 ANSWER_FIELDS = frozenset({"decision", "shows", "reason"})
 
@@ -232,9 +236,10 @@ def import_review(run: Path, handoff: Path) -> dict[str, Any]:
         answer = OH.read_answer(
             handoff, batch_id=batch_of(index), stage=STAGE, label=sid, prompt=prompt_for(line, read)
         )
-        if answer.model != REVIEW_MODEL:
+        if answer.model not in REVIEW_MODELS:
             raise HeroReviewError(
-                f"{sid}: answered by {answer.model!r}; this review is {REVIEW_MODEL!r}'s"
+                f"{sid}: answered by {answer.model!r}; this review is {REVIEW_MODEL!r}'s "
+                f"(or, since D153, {OH.FABLE_MODEL!r}'s)"
             )
         parsed = parse_answer(answer.text)
         lines.append(

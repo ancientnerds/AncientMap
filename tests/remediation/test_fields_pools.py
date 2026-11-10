@@ -40,6 +40,13 @@ from opus_audit import quotes as Q  # noqa: E402
 from tests.remediation import test_fields_handoff as TH  # noqa: E402
 from tests.remediation import test_fields_wd3 as TW  # noqa: E402
 
+#: Proven on the role registry as it stood until owner decision D153 (2026-11-10) put every role on
+#: Fable: a tier move, the hold at the top tier, a release, a candidate trial and a stamp refused
+#: between two roles' models all need roles on different tiers, and no calibration is run on Fable
+#: (D154). `conftest.registry_until_d153` rebuilds that registry from the applied moves; what D153
+#: and D154 changed is tested on the registry as it is (`test_roles_fable.py`).
+pytestmark = pytest.mark.usefixtures("registry_until_d153")
+
 NOW = "2026-10-09T09:00:00+00:00"
 
 
@@ -520,7 +527,8 @@ class TestThePick:
         assert len(manifest) == 6 and {m["stage"] for m in manifest} == {"wd5"}
         assert {m["field"] for m in manifest} == {"period_start"}
         record = HO.read_rounds(out / "run")[0]
-        assert record["model"] == "claude-sonnet-5-5"
+        # the round names the model the wd5 brief names: the registry's as it is (D153: Fable)
+        assert record["model"] == HO.RECHECK_MODEL == "claude-fable-5-2"
         truth = json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
         assert set(truth) == {m["label"] for m in manifest}
         named = next(v for v in truth.values() if v["basis"] == PL.AUDIT_CONFIRMED)
@@ -561,7 +569,7 @@ class TestThePick:
         PL.prepare(root, calibration_id="fr-bp-001", run=out / "run")
         cal_run = D.calibration_run(root / "fr-bp-001")
         assert R.read_rule(cal_run) is R.RECHECK
-        assert HO.read_rounds(cal_run)[0]["model"] == "claude-sonnet-5-5"
+        assert HO.read_rounds(cal_run)[0]["model"] == HO.RECHECK_MODEL == "claude-fable-5-2"
 
 
 # ------------------------------------------------------------------------------ comparing the BP pool

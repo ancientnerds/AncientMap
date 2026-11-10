@@ -35,6 +35,21 @@ A **candidate model** trial (`candidate_model`) calibrates a role with another m
 the registry. Its seal binds the digest of the entry the role would have with the candidate
 (`role_sha256(name, model=...)`), so the verdict stands for the role only after an owner move has
 registered that model: until then the digest does not match the registry and every gate refuses it.
+
+**Fable only** (owner decisions D153 and D154 of 2026-11-10). D153 ends the model mix of D6: every
+role answers on `claude-fable-5-2` (`FABLE`) from now on, each by an owner move of its own under
+D153 (`_d153_move`). D154: no calibration is run on Fable, so such a move rests on no calibration
+(its `evidence` is empty, and must be) and the role stands on Fable by the owner's decision alone,
+with no verdict of its own. Three rules follow, each stated once, here:
+
+* `owner_standing` - a role whose last applied move is its D153 move stands by owner decision. Every
+  gate that asks a role's calibration asks this first and says so in what it returns; a role moved
+  again afterwards stands by its calibration again.
+* `answer_problem` - an answer recorded before the move, under the model the role answered on until
+  then (the move's `from`), keeps its stamp and stays valid. A new one cannot be recorded under that
+  model: `require_model` (the recorder, `opus_handoff.py answer --role`) takes the registered one only.
+* `model_now` - a run or round that fixed a role's model when it was exported goes on with Fable
+  when D153 took the role from exactly that model: its briefs name Fable, its imports accept both.
 """
 
 from __future__ import annotations
@@ -59,6 +74,13 @@ ESCALATION: Mapping[str, str] = MappingProxyType(
         "claude-sonnet-5-5": "claude-opus-5-5",
     }
 )
+#: Owner decision D153 of 2026-11-10 ("only Fable 5.2"): the model of every role from then on. It
+#: is on no tier of `ESCALATION` - nothing moves a role up from it, a failing verdict would be held.
+FABLE = "claude-fable-5-2"
+FABLE_DECISION = "D153"
+#: Owner decision D154 of the same evening: no calibration is run on Fable. A role stands on it by
+#: the owner's decision, with no verdict of its own (`owner_standing`).
+NO_CALIBRATION_DECISION = "D154"
 
 
 class RoleError(ValueError):
@@ -94,16 +116,20 @@ def _registry(*roles: Role) -> Mapping[str, Role]:
 #: D6, role by role. The calibration sets are named in `output/remediation/final-2026-10-08/plans/infra.md`
 #: 3.1c; `calibrate_claude.py seal` binds a role to the concrete cases of its pool.
 ROLES: Mapping[str, Role] = _registry(
+    # Fable 5.2 since owner decision D153 of 2026-11-10 - every role, each by an owner move of its
+    # own (`APPLIED_ESCALATIONS`), effort and pool unchanged, and with no calibration on Fable
+    # (D154, `owner_standing`). The comments below tell how each role came to stand where D153
+    # found it: on the `from` of its D153 move, the model its earlier answers are stamped with.
     # Sonnet since owner decision D36 of 2026-10-09 (`APPLIED_ESCALATIONS`, owner moves): the weekly
     # quota stood at 69 % after one day, and the calibrations measured no Opus advantage. Where a
     # role stood on Opus before that, the tier move up is the earlier record of its chain.
     # Opus since owner decision D46 of 2026-10-19: on Sonnet the checker passed 23 of 39 first
     # drafts of pilot wb-shorts-pilot-2026-10-18 (59 %, gate 70 %); the second pilot measures Opus.
-    Role("card_writer", "claude-opus-5-5", "high", "wb_cards_accepted"),
+    Role("card_writer", "claude-fable-5-2", "high", "wb_cards_accepted"),
     # Effort xhigh from 2026-10-09 (at medium it failed teaser-2026-10-09, hook_pairs ordered right
     # 0.7902 of a required 1.0), medium again on Sonnet under D36. Sonnet failed teaser-2026-10-10
     # (0.8601), so the D6 rule moves it up one tier to Opus, calibrated again in teaser-2026-10-18.
-    Role("hook_rater", "claude-opus-5-5", "medium", "design_run_hand_drawn_60"),
+    Role("hook_rater", "claude-fable-5-2", "medium", "design_run_hand_drawn_60"),
     # Sonnet failed teaser-2026-10-09b (tier move to Opus), Opus showed no gain in teaser-2026-10-09c;
     # D36 put the role back on Sonnet. It answers lane WC only (the check rounds of every WC run kind
     # and lane WN's write round, `wc/cli.py check_role`), and on Sonnet it failed lane WC's own
@@ -112,43 +138,43 @@ ROLES: Mapping[str, Role] = _registry(
     # tier rule) applies the tier move of wc-fc-1 (`APPLIED_ESCALATIONS`); wc-fc-2 named the same
     # move. A move, not a new role: no other lane answers as `fact_checker`. Calibrated again on Opus
     # (wc-fc-1o, -2o, -3o) before its next answer.
-    Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    Role("fact_checker", "claude-fable-5-2", "high", "wb_check_verify_opus"),
     # The shared web verifier: identity, lane E (`wc/prompts_enrich.VERIFIER_ROLE`) and image
     # identity, each calibrated on its own pools (D45). Lane WC's verification has its own role,
     # `wc_web_verifier`, since the WC calibrations wc-wv-1/2 failed it (`SETTLED_TIER_MOVES`).
-    Role("web_verifier", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
+    Role("web_verifier", "claude-fable-5-2", "high", "wb_check_verify_opus"),
     # The card lane's own checkers. Owner decision D40 (after teaser-2026-10-10, in which no Sonnet
     # checker passed and the Haiku trial was weaker) put the card checks on Opus; D45 (2026-10-17)
     # scoped it to the card lane, so `fact_checker` (lane WC) and `web_verifier` (identity, lane E,
     # image identity) stayed on Sonnet then (lane WC's own calibrations moved `fact_checker` on
     # 2026-10-24, see above). New roles, not moves: they are calibrated before first use.
-    Role("card_fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"),
-    Role("card_web_verifier", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    Role("card_fact_checker", "claude-fable-5-2", "high", "wb_check_verify_opus"),
+    Role("card_web_verifier", "claude-fable-5-2", "high", "wb_check_verify_opus"),
     # Lane WC's own web verifier: the verification rounds `verify` and `verify2` of every WC run kind
     # but lane E's (plain, site-list, WN, the D10 re-check, the defect runs; `wc/cli.py verify_role`).
     # As `web_verifier` it failed lane WC's calibrations on Sonnet (wc-wv-1 0.8193 and wc-wv-2 0.8986
     # of a sealed 0.95, tier moves to Opus); following D45 the WC context gets a role of its own on
     # Opus (D51/D6: a failing role moves up) instead of moving the shared one. A new role, not a
     # move: it is calibrated on the WC verify pools (wc-wv-1o, wc-wv-2o) before its first answer.
-    Role("wc_web_verifier", "claude-opus-5-5", "high", "wc_verify_rounds"),
+    Role("wc_web_verifier", "claude-fable-5-2", "high", "wc_verify_rounds"),
     # Sonnet failed fr-general-001 at 0.8636 (tier move to Opus); Opus reached 0.871 in
     # fr-general-002; D36 puts the role back on Sonnet under a release of fr-general-001.
-    Role("field_researcher", "claude-sonnet-5-5", "high", "wd1_wd3_rounds_and_bp_set"),
+    Role("field_researcher", "claude-fable-5-2", "high", "wd1_wd3_rounds_and_bp_set"),
     # The description writer of lane E (`wc/prompts_enrich.py`). It rode on `field_researcher` until
     # that role moved to Opus: the lane's writing was never measured on Opus and stays on Sonnet,
     # under a calibration set of its own, sealed as `enrich-writer`.
-    Role("enrich_writer", "claude-sonnet-5-5", "high", "enrich-writer"),
+    Role("enrich_writer", "claude-fable-5-2", "high", "enrich-writer"),
     # D36: it re-checks every wd5 write, so it is calibrated on Sonnet before use. The shared role of
     # the fields, identity and image lanes (D45, D51: it passed adv-truth-002 on Sonnet, 0.96); it no
     # longer reviews cards - see `card_adversarial` and `SETTLED_TIER_MOVES`.
-    Role("adversarial", "claude-sonnet-5-5", "high", "opus_audit_934"),
+    Role("adversarial", "claude-fable-5-2", "high", "opus_audit_934"),
     # The card lane's own adversarial reviewer: the last stage of the D10 re-check of the cards
     # another model wrote (contract recheck-v1). As `adversarial` it failed the card calibration on
     # Sonnet (teaser-2026-10-10, 0.7907 of 0.9, tier move to Opus) and on Opus before the contradiction
     # rule and DISPUTED were tuned in (teaser-2026-10-09c, 0.72). Following D45 the card context gets
     # a role of its own on Opus (D51/D6: a failing role moves up) instead of moving the shared one; a
     # new role, not a move: it is calibrated on the 50 card cases before its first answer.
-    Role("card_adversarial", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    Role("card_adversarial", "claude-fable-5-2", "high", "wb_check_verify_opus"),
     # Lane WC's own adversarial second check (`wc/cli.py export --adversarial`, D25b): a description
     # sentence a later web check reported contradicted and that the check and the verifier both kept
     # (Leominster eebdcbf3 and the other defects_kept of defects-a1-2026-11-06). The shared
@@ -157,7 +183,7 @@ ROLES: Mapping[str, Role] = _registry(
     # own instead of moving the shared one, which stays on Sonnet for the fields and identity lanes.
     # A new role, not a move: it is calibrated on WC's adjudicated defect checks
     # (`wc/calibration.py`, kind `adversarial`) before its first answer.
-    Role("wc_adversarial", "claude-opus-5-5", "high", "wc_defect_adversarial"),
+    Role("wc_adversarial", "claude-fable-5-2", "high", "wc_defect_adversarial"),
     # Owner decision D103 (2026-11-06) applies the tier moves of the failed image calibration
     # image-roles-v1 (2026-10-25): the prefilter moves from Haiku to Sonnet (photo agreement 0.9167
     # of 0.92, depicts-capable recall 0.9265 of 0.98), the depicts judge from Sonnet to Opus
@@ -167,19 +193,19 @@ ROLES: Mapping[str, Role] = _registry(
     # at Opus first (the probe, 0.9267 and 0.9167 on v2's flawed gold; 10 of its 17 drops a
     # picture of a surviving kind judged not usable, which v2's kind gold does not label) and the
     # tier move v2 named is applied: Opus low, calibrated on the clean kind gold image-roles-v3p.
-    Role("image_prefilter", "claude-opus-5-5", "low", "image_kind_135"),
-    Role("image_depicts", "claude-opus-5-5", "medium", "gallery_audit_calibration_opus"),
+    Role("image_prefilter", "claude-fable-5-2", "low", "image_kind_135"),
+    Role("image_depicts", "claude-fable-5-2", "medium", "gallery_audit_calibration_opus"),
     # The image lane's own hero re-check (D15's served-image recheck, D17 C3, the D10 re-check of the
     # MiniMax picks). As the shared `adversarial` it failed image-roles-v1 on Sonnet (agreement 0.86
     # of 0.95, tier move to Opus); following D45 the image context gets a role of its own on Opus
     # (D51/D103: a failing role moves up) instead of moving the shared one, which stays on Sonnet for
     # the fields and identity lanes. A new role, not a move: it is calibrated on the 200 re-check
     # cases of image-roles-v1 (image-roles-v2) before its first answer.
-    Role("image_adversarial", "claude-opus-5-5", "high", "image_roles_recheck_200"),
-    Role("code_builder", "claude-sonnet-5-5", "high", None),
-    Role("code_review", "claude-sonnet-5-5", "high", None),
-    Role("pilot_judge", "claude-opus-5-5", "xhigh", "canaries_10"),
-    Role("operator", "claude-haiku-5-5", "low", "scripted_dry_run"),
+    Role("image_adversarial", "claude-fable-5-2", "high", "image_roles_recheck_200"),
+    Role("code_builder", "claude-fable-5-2", "high", None),
+    Role("code_review", "claude-fable-5-2", "high", None),
+    Role("pilot_judge", "claude-fable-5-2", "xhigh", "canaries_10"),
+    Role("operator", "claude-fable-5-2", "low", "scripted_dry_run"),
 )
 
 
@@ -213,6 +239,26 @@ def _d36_move(role_name: str, effort: str, why: str) -> Mapping[str, Any]:
             "decision": "D36",
             "reason": f"weekly Claude quota at 69 % after one day (owner, 2026-10-09): {why}",
             "evidence": D36_EVIDENCE,
+        }
+    )
+
+
+def _d153_move(role_name: str, was: str, effort: str) -> Mapping[str, Any]:
+    """One owner move of decision D153 (2026-11-10): the role goes from `was`, the model it
+    answered on until then, to Fable; the effort stays. It rests on no calibration (D154), so its
+    evidence is empty - the one owner move that may be (`_check_owner_move`)."""
+    return MappingProxyType(
+        {
+            "kind": OWNER_KIND,
+            "role": role_name,
+            "from": was,
+            "to": FABLE,
+            "effort": effort,
+            "decision": FABLE_DECISION,
+            "reason": "only Fable 5.2 from now on (owner, 2026-11-10); no calibration was run on "
+            f"Fable, by owner decision {NO_CALIBRATION_DECISION}: the role stands on it by the "
+            "decision alone, with no verdict of its own",
+            "evidence": (),
         }
     )
 
@@ -358,6 +404,27 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
             "below 0.98",
         }
     ),
+    # Owner decision D153 of 2026-11-10: every role, in the order of `ROLES`, from the model the
+    # chain above (or, for a role never moved, its first registration) left it on.
+    _d153_move("card_writer", "claude-opus-5-5", "high"),
+    _d153_move("hook_rater", "claude-opus-5-5", "medium"),
+    _d153_move("fact_checker", "claude-opus-5-5", "high"),
+    _d153_move("web_verifier", "claude-sonnet-5-5", "high"),
+    _d153_move("card_fact_checker", "claude-opus-5-5", "high"),
+    _d153_move("card_web_verifier", "claude-opus-5-5", "high"),
+    _d153_move("wc_web_verifier", "claude-opus-5-5", "high"),
+    _d153_move("field_researcher", "claude-sonnet-5-5", "high"),
+    _d153_move("enrich_writer", "claude-sonnet-5-5", "high"),
+    _d153_move("adversarial", "claude-sonnet-5-5", "high"),
+    _d153_move("card_adversarial", "claude-opus-5-5", "high"),
+    _d153_move("wc_adversarial", "claude-opus-5-5", "high"),
+    _d153_move("image_prefilter", "claude-opus-5-5", "low"),
+    _d153_move("image_depicts", "claude-opus-5-5", "medium"),
+    _d153_move("image_adversarial", "claude-opus-5-5", "high"),
+    _d153_move("code_builder", "claude-sonnet-5-5", "high"),
+    _d153_move("code_review", "claude-sonnet-5-5", "high"),
+    _d153_move("pilot_judge", "claude-opus-5-5", "xhigh"),
+    _d153_move("operator", "claude-haiku-5-5", "low"),
 )
 _ESCALATION_KEYS = frozenset({"role", "from", "to", "calibration_id", "reason"})
 _OWNER_KEYS = frozenset({"kind", "role", "from", "to", "effort", "decision", "reason", "evidence"})
@@ -444,6 +511,16 @@ SETTLED_TIER_MOVES: tuple[Mapping[str, Any], ...] = (
 _SETTLED_KEYS = frozenset({*_ESCALATION_KEYS, "settled_by", "decision", "how"})
 
 
+def _until_fable(moves: tuple[Mapping[str, Any], ...], roles: Mapping[str, Role]) -> dict[str, str]:
+    """Role -> the model it stood on until owner decision D153 took it to Fable: the `from` of its
+    D153 move in `moves`, and for a role without one the model it is registered to."""
+    stood = {name: entry.model for name, entry in roles.items()}
+    for move in moves:
+        if move.get("kind") == OWNER_KIND and move["decision"] == FABLE_DECISION:
+            stood[move["role"]] = move["from"]
+    return stood
+
+
 def check_settled_tier_moves(
     settled: tuple[Mapping[str, Any], ...],
     moves: tuple[Mapping[str, Any], ...],
@@ -452,8 +529,14 @@ def check_settled_tier_moves(
     """Refuse a settled tier move that carries other keys or a blank one, that is not one tier up,
     whose role is not registered where the move started (it moved after all: that is an applied
     move), that `moves` applies too, or whose `settled_by` is not another registered role standing
-    at the model the move named."""
+    at the model the move named.
+
+    A settlement is a record of the tier chain, and that chain ended when owner decision D153 took
+    every role to Fable. So "where a role stands" is here where it stood until then (`_until_fable`:
+    the `from` of its D153 move): the settled role on the model the move started from, the role
+    that took the context over on the model the move named."""
     applied = {(m["role"], m.get("calibration_id")) for m in moves if m.get("kind") != OWNER_KIND}
+    stood = _until_fable(moves, roles)
     for move in settled:
         if set(move) != _SETTLED_KEYS or not all(
             isinstance(v, str) and v.strip() for v in move.values()
@@ -468,19 +551,19 @@ def check_settled_tier_moves(
             raise RoleError(f"a settled tier move names an unregistered role: {name!r}, {taker!r}")
         if move["to"] != next_tier(move["from"]):
             raise RoleError(f"{name}: {move['from']} to {move['to']} is not one tier up")
-        if roles[name].model != move["from"]:
+        if stood[name] != move["from"]:
             raise RoleError(
-                f"{name} is registered to {roles[name].model}, not {move['from']}: a role that "
-                "moved has an applied move, not a settled one"
+                f"{name} stood at {stood[name]} until {FABLE_DECISION}, not at {move['from']}: a "
+                "role that moved has an applied move, not a settled one"
             )
         if (name, move["calibration_id"]) in applied:
             raise RoleError(
                 f"{name}: the tier move of {move['calibration_id']} is applied and settled at once"
             )
-        if taker == name or roles[taker].model != move["to"]:
+        if taker == name or stood[taker] != move["to"]:
             raise RoleError(
                 f"{name}: the tier move of {move['calibration_id']} is settled by {taker}, which is "
-                f"not another role registered to {move['to']}"
+                f"not another role that stood at {move['to']} until {FABLE_DECISION}"
             )
 
 
@@ -495,19 +578,33 @@ def settled_tier_move(name: str, calibration_id: str) -> Mapping[str, Any] | Non
 
 def _check_owner_move(move: Mapping[str, Any]) -> None:
     """An owner move carries exactly `_OWNER_KEYS`: a decision id, two different registered models,
-    a known effort, a reason and at least one calibration it rests on - all non-blank."""
+    a known effort, a reason and at least one calibration it rests on - all non-blank.
+
+    A move under D153 is the one exception, by D154: no calibration is run on Fable, so it rests
+    on none. Its evidence is empty and must be (a D153 move that named a calibration would claim a
+    measurement nobody made), and it ends at Fable."""
     texts = {k: v for k, v in move.items() if k != "evidence"}
     evidence = move.get("evidence")
+    to_fable = move.get("decision") == FABLE_DECISION
     if (
         set(move) != _OWNER_KEYS
         or not all(isinstance(v, str) and v.strip() for v in texts.values())
         or not isinstance(evidence, tuple | list)
-        or not evidence
+        or (not evidence and not to_fable)
         or not all(isinstance(e, str) and e.strip() for e in evidence)
     ):
         raise RoleError(f"an owner move carries exactly {sorted(_OWNER_KEYS)}: {dict(move)}")
     if not _DECISION.fullmatch(move["decision"]):
         raise RoleError(f"{move['role']}: {move['decision']!r} is not an owner decision id (D36)")
+    if to_fable and evidence:
+        raise RoleError(
+            f"{move['role']}: a move under {FABLE_DECISION} rests on no calibration "
+            f"({NO_CALIBRATION_DECISION}: none is run on Fable), but it names {list(evidence)}"
+        )
+    if to_fable and move["to"] != FABLE:
+        raise RoleError(
+            f"{move['role']}: a move under {FABLE_DECISION} ends at {FABLE}, not at {move['to']}"
+        )
     for end in ("from", "to"):
         if move[end] not in OH.NEW_ANSWER_MODELS:
             raise RoleError(
@@ -579,6 +676,59 @@ def last_move(name: str) -> Mapping[str, Any] | None:
     """The last applied move (tier or owner) of role `name`, or `None` for a role never moved."""
     found = [m for m in APPLIED_ESCALATIONS if m["role"] == name]
     return found[-1] if found else None
+
+
+# ---------------------------------------------------------------- Fable only (D153, D154)
+#: How a gate says that a role stands by the owner's decision, in place of `passed` or `released`.
+OWNER_STANDING = (
+    f"owner decision {FABLE_DECISION} (no calibration on {FABLE}: {NO_CALIBRATION_DECISION})"
+)
+
+
+def fable_move(name: str) -> Mapping[str, Any] | None:
+    """The D153 owner move of role `name` while it is the role's last applied move, else `None`: a
+    role moved again afterwards is no longer where that decision put it."""
+    moved = last_move(name)
+    if (
+        moved is not None
+        and moved.get("kind") == OWNER_KIND
+        and moved["decision"] == FABLE_DECISION
+    ):
+        return moved
+    return None
+
+
+def owner_standing(name: str) -> dict[str, str] | None:
+    """How role `name` stands when it stands by the owner's decision and not by a calibration, or
+    `None` when it does not.
+
+    It does when its last applied move is its D153 move: D153 registered it to Fable and D154 says
+    no calibration is run on Fable, so there is no verdict to ask for. Every gate that requires a
+    role's calibration asks this first and hands the record on in place of a verdict's: it names
+    the decision in words and never says `passed`. Where this returns `None` - a role moved again
+    since, or one D153 never moved - the gate asks the calibration exactly as it did before."""
+    entry = role(name)
+    if fable_move(name) is None:
+        return None
+    return {
+        "role": name,
+        "model": entry.model,
+        "standing": OWNER_STANDING,
+        "owner_decision": FABLE_DECISION,
+    }
+
+
+def model_now(name: str, recorded: str) -> str:
+    """The model that answers role `name` now in a run or round that fixed `recorded` for it when
+    it was exported: `recorded`, unless the role's D153 move took it from exactly that model - then
+    Fable (D153: every role answers on Fable from now on, a run that had begun included; what the
+    run was answered before keeps its stamp). A run that recorded another model is not what D153
+    moved and keeps what it recorded."""
+    role(name)
+    moved = fable_move(name)
+    if moved is not None and moved["from"] == recorded:
+        return str(moved["to"])
+    return recorded
 
 
 def require_owner_move(
@@ -655,9 +805,17 @@ def role_of(answered_by_value: str) -> str | None:
 
 def answer_problem(answered_by_value: str, stamp: str) -> str | None:
     """Why an answer is not the role's it names, or `None`. An answer that names no role is not the
-    registry's to judge."""
+    registry's to judge.
+
+    An answer the role gave before owner decision D153 moved it carries the stamp of the model it
+    answered on until then - the `from` of its D153 move - and stays valid (D153: "answers recorded
+    earlier keep their stamp"). That such an answer is an earlier one is the recorder's doing: since
+    the move, `require_model` lets a new answer of the role name Fable only."""
     name = role_of(answered_by_value)
     if name is None:
+        return None
+    moved = fable_move(name)
+    if moved is not None and stamp == OH.ANSWER_MODELS[moved["from"]]:
         return None
     try:
         require_stamp(name, stamp)

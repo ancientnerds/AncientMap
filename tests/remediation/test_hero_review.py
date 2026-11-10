@@ -89,6 +89,21 @@ def test_an_opus_review_imports_into_the_file_emit_reads(tmp_path: Path) -> None
         HR.import_review(run, handoff)
 
 
+def test_a_fable_review_imports_as_an_opus_one_does(tmp_path: Path) -> None:
+    """Owner decision D153 (2026-11-10): every answer is Fable's from then on, so a review answered
+    since carries the Fable stamp; `emit` takes it as a Claude answer stamp's."""
+    run = _planned_run(tmp_path)
+    handoff = tmp_path / "handoff"
+    HR.export(run, handoff, _pictures(tmp_path))
+    _answer_all(handoff, run, model="claude-fable-5-2")
+    out = HR.import_review(run, handoff)
+    assert out["accept"] == 1 and out["veto"] == 0
+    [line] = HM._jsonl(run / HR.REVIEW_FILE)
+    assert line["by"] == OH.FABLE_MODEL
+    record = HM.emit(run, run / HR.REVIEW_FILE)
+    assert record["accepted_sites"] == 1 and record["chunks"] == 1
+
+
 def test_a_veto_passes_through_to_vetoed(tmp_path: Path) -> None:
     run = _planned_run(tmp_path)
     handoff = tmp_path / "handoff"

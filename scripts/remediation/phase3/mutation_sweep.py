@@ -4695,7 +4695,7 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 model: a provenance already in production is refused",
         P4_MODEL,
-        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, *CLAUDE_DISCLOSURES.values()})\n",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_FABLE, *CLAUDE_DISCLOSURES.values()})\n",
         "AI_SYSTEMS = frozenset({AI_SYSTEM})  # mutant\n",
         P4_MODEL_TEST,
         "test_a_provenance_accepts_each_disclosed_ai_system",
@@ -16514,10 +16514,11 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "claude roles: a new answer may name the MiniMax model again",
         OPUS_HANDOFF,
-        'NEW_ANSWER_MODELS: tuple[str, ...] = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")\n',
+        'NEW_ANSWER_MODELS: tuple[str, ...] = (\n    "claude-fable-5-2",\n    "claude-opus-5-5",\n'
+        '    "claude-sonnet-5-5",\n    "claude-haiku-5-5",\n)\n',
         "NEW_ANSWER_MODELS: tuple[str, ...] = tuple(ANSWER_MODELS)  # mutant\n",
         OPUS_HANDOFF_TEST,
-        "test_a_new_answer_may_name_only_the_three_claude_ids",
+        "test_a_new_answer_may_name_only_the_claude_ids",
     ),
     (
         "claude roles: the answer command takes a role whose model it does not run as",
@@ -16674,7 +16675,7 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "claude disclosure (D56): the new exact strings are not accepted",
         P4_MODEL,
-        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, *CLAUDE_DISCLOSURES.values()})\n",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_FABLE, *CLAUDE_DISCLOSURES.values()})\n",
         "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_CLAUDE, AI_SYSTEM_CLAUDE_HAIKU})  # mutant\n",
         P4_MODEL_TEST,
         "test_a_provenance_accepts_each_disclosed_ai_system",
@@ -16690,9 +16691,9 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "claude disclosure: the Haiku-naming string is not accepted",
         P4_MODEL,
-        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, *CLAUDE_DISCLOSURES.values()})\n",
-        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, *CLAUDE_DISCLOSURES.values()} - "
-        "{AI_SYSTEM_CLAUDE_HAIKU})  # mutant\n",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_FABLE, *CLAUDE_DISCLOSURES.values()})\n",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM, AI_SYSTEM_FABLE, "
+        "*CLAUDE_DISCLOSURES.values()} - {AI_SYSTEM_CLAUDE_HAIKU})  # mutant\n",
         P4_MODEL_TEST,
         "test_a_provenance_accepts_each_disclosed_ai_system",
     ),
@@ -26249,8 +26250,8 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "enrich cli: the pilot is approved without the writer's calibration",
         ENRICH_CLI,
-        '        if which == "ENRICH":\n            try:\n                calibration = {',
-        "        if False:  # mutant\n            try:\n                calibration = {",
+        '        if which == "ENRICH":\n            try:\n                calibration = E.writer_standing(',
+        "        if False:  # mutant\n            try:\n                calibration = E.writer_standing(",
         ENRICH_CLI_TEST,
         "test_a_lane_e_pilot_is_not_approved_on_a_writer_that_was_not_calibrated",
     ),

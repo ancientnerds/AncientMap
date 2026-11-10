@@ -510,6 +510,7 @@ class TestTheRestrictedStages:
 
 
 class TestTheRole:
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_the_brief_names_the_role_and_the_recording_command_carries_it(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -535,7 +536,8 @@ class TestTheRole:
         state = ST.load_read(run / "READ.json")
         V.export_check(run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures)
         legacy = V.brief(run, handoff, "check-001")
-        assert "running as claude-sonnet-5-5." in legacy and "--role" not in legacy
+        # no role, the lane's own model: Fable since owner decision D153 (Sonnet until then)
+        assert "running as claude-fable-5-2." in legacy and "--role" not in legacy
 
     def test_a_recheck_export_records_its_role(self, tmp_path: Path) -> None:
         run, _, _ = _recheck_run(
@@ -601,6 +603,7 @@ class TestTheRole:
         with pytest.raises(ST.StateError, match="not in the role image_depicts"):
             V.import_stage(run, V.STAGE_CHECK, "image_depicts")
 
+    @pytest.mark.usefixtures("registry_until_d153")
     def test_a_stamp_that_is_not_the_roles_model_stops_the_import(self, tmp_path: Path) -> None:
         run, handoff, pictures = TS._setup(tmp_path)
         state = ST.load_read(run / "READ.json")

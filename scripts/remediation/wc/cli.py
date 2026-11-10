@@ -2455,8 +2455,9 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     way round. The WC pilot is a **plain** run's: a site-list run (`wc-list`) is approved by it and
     can never be it, so a pilot of Phase-4 texts does not approve plain chunks of March texts (a list
     run may itself be a judged pilot, named after the plain one). Everything else is as above, for
-    each. A lane-E pilot is approved only once the writer's calibration stands as well
-    (`enrich.require_writer_calibration`, read from `enrich.CALIBRATION_ROOT`)."""
+    each. A lane-E pilot is approved only once the writer stands as well (`enrich.writer_standing`:
+    by its calibration, `enrich.require_writer_calibration` read from `enrich.CALIBRATION_ROOT`, or
+    by owner decision D153/D154 - the approval records which)."""
     if not plans:
         raise WcRunError("no WC plan named")
     approvals: list[dict[str, str]] = []
@@ -2511,9 +2512,7 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
         calibration: dict[str, str] = {}
         if which == "ENRICH":
             try:
-                calibration = {
-                    "calibration_sha256": E.require_writer_calibration(E.CALIBRATION_ROOT)
-                }
+                calibration = E.writer_standing(E.CALIBRATION_ROOT)
             except E.EnrichError as exc:
                 raise WcRunError(f"{run}: {exc}") from None
         if which in ("WN", "ENRICH"):
