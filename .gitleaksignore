@@ -969,3 +969,20 @@ b390c17abfc5d502a035cd9c7d4454224c33df22:output/remediation/l5/PAGES.jsonl:gener
 0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:9003
 0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:9004
 0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:9005
+# The same guard-5 premise digests in card-stats wave 2026-11-05 (D14 part A, commit 58ff652; triaged
+# 2026-11-10 after the first push of the commit to origin turned main's gitleaks red): 'api' in Khapia
+# (rows 3790-3795) and Krapina Neanderthal Site (rows 6530-6533), 'key' in Milton Keynes Hoard (rows
+# 7637-7639). Each flagged value is the 32-hex md5 of a site's public card inputs, not a credential.
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:3790
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:3791
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:3792
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:3793
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:3794
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:3795
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:6530
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:6531
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:6532
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:6533
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:7637
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:7638
+58ff6524e418665752577f0ae7c194b5b71de1d6:output/remediation/mechanical_card_stats/2026-11-05/ROLLBACK.sql:generic-api-key:7639
