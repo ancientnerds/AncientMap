@@ -769,10 +769,13 @@ class TestTheDecisions:
             "survivor_name": "New",
             "images": 3,
             "links": 0,
+            "holds": ["images", "name"],
         }
         records = self.build({}, losers=[loser])
         move = next(r for r in records if r["cluster_id"] == "retired-l1")
         assert move["status"] == "complete" and move["source"] == "retired-loser"
+        # the journal's evidence says what is moved, not more
+        assert move["merges"][0]["why"].endswith("still on it: images, name")
         assert (
             move["merges"][0]["target"],
             move["merges"][0]["already_retired"],

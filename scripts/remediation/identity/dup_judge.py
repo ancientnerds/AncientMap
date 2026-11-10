@@ -27,8 +27,8 @@ and sometimes the wrong item. Two model stages decide it, both Claude, both thro
    or `REJECT` (neither). Only a CONFIRMed relation is decided.
 
 `build_decisions` merges both into `DUP_DECISIONS.jsonl`, one record per cluster, plus one per
-already-retired loser that still holds images or links (no model: the survivor is the one its
-`scope_reason` names). A MERGE further apart than `DEFAULT_METRES` is held unless
+already-retired loser that still holds images, links or a name its survivor lacks (no model: the
+survivor is the one its `scope_reason` names). A MERGE further apart than `DEFAULT_METRES` is held unless
 `OVERRIDES.json` gives its loser a limit with a quote (per-pair override, evidence required).
 """
 
@@ -745,8 +745,8 @@ def build_decisions(
                         "name": loser["name"],
                         "target": loser["survivor_id"],
                         "target_name": loser["survivor_name"],
-                        "why": "already retired as duplicate_of its survivor; its images and "
-                        "links still sit on it",
+                        "why": "already retired as duplicate_of its survivor; still on it: "
+                        + ", ".join(loser["holds"]),
                         "quotes": [],
                         "metres": None,
                         "metres_limit": DEFAULT_METRES,

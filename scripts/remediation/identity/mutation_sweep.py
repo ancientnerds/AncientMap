@@ -312,7 +312,7 @@ CASES: list[Case] = [
     swap(
         "loser holds something",
         DUPS,
-        '        if loser["images"] > 0 or loser["links"] > 0\n',
+        "        if holds(loser)\n",
         "        if True\n",
         "test_a_loser_that_holds_nothing_is_not_listed",
         T_DUPS,
@@ -320,9 +320,16 @@ CASES: list[Case] = [
     swap(
         "loser holds links",
         DUPS,
-        '        if loser["images"] > 0 or loser["links"] > 0\n',
-        '        if loser["images"] > 0\n',
+        '    held = [kind for kind in ("images", "links") if loser[kind] > 0]\n',
+        '    held = [kind for kind in ("images",) if loser[kind] > 0]\n',
         "test_a_loser_that_holds_images_or_links_is_listed_with_what_it_holds",
+        T_DUPS,
+    ),
+    guard(
+        "loser holds a name its survivor lacks",
+        DUPS,
+        '    if not loser["name_is_alias_on_survivor"]:',
+        "test_a_loser_whose_name_is_no_name_of_its_survivor_is_listed_for_its_name",
         T_DUPS,
     ),
     swap(

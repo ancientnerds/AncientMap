@@ -15,8 +15,9 @@ Aspendos, Kilmartin) and sometimes the wrong item. It carries the distance, the 
 the description lane, the items and `created_at` of every member, and the edges that put them
 together. The verdict (MERGE, PART_OF, WRONG_ID, DISTINCT) is a later, model-judged stage.
 
-The curated rows already retired as `duplicate_of:<survivor>` that still hold images or links are
-written beside the clusters as `retired_loser` records (22 of 25 hold images, 12 hold links): the
+The curated rows already retired as `duplicate_of:<survivor>` that still hold images or links, or
+whose name is no name row of their survivor, are written beside the clusters as `retired_loser`
+records (22 of 25 hold images, 12 hold links, one - Ciudad Romana de Caparra - only its name): the
 merge lane has to move them.
 
 Output `DUP_CLUSTERS.jsonl`: first the clusters (largest first), then the retired losers.
@@ -135,6 +136,20 @@ def cluster_id(sites: Sequence[str]) -> str:
     return "dup-" + hashlib.sha256("\n".join(sorted(sites)).encode()).hexdigest()[:10]
 
 
+#: What a retired loser can still hold: `name` is its own name, while no name row of its survivor
+#: carries it (the move makes that row an alias of the survivor).
+NAME = "name"
+
+
+def holds(loser: Mapping[str, Any]) -> list[str]:
+    """What the merge lane has to move off a retired loser: its shown images, its content links,
+    and its name while that is no name of its survivor. Empty for a loser that is done."""
+    held = [kind for kind in ("images", "links") if loser[kind] > 0]
+    if not loser["name_is_alias_on_survivor"]:
+        held.append(NAME)
+    return held
+
+
 def build(
     exported: export.Export, bcases: Sequence[Mapping[str, Any]]
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -213,18 +228,15 @@ def build(
     }
 
     losers = [
-        {
-            "record": "retired_loser",
-            **loser,
-            "holds": [k for k in ("images", "links") if loser[k] > 0],
-        }
+        {"record": "retired_loser", **loser, "holds": holds(loser)}
         for loser in exported.losers
-        if loser["images"] > 0 or loser["links"] > 0
+        if holds(loser)
     ]
     counts["retired_losers"] = len(exported.losers)
     counts["retired_losers_holding"] = len(losers)
     counts["retired_losers_holding_images"] = sum(1 for r in losers if r["images"] > 0)
     counts["retired_losers_holding_links"] = sum(1 for r in losers if r["links"] > 0)
+    counts["retired_losers_holding_name"] = sum(1 for r in losers if NAME in r["holds"])
     counts["retired_losers_survivor_not_shown"] = sum(
         1 for r in exported.losers if r["survivor_scope_status"] == "retired"
     )

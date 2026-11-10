@@ -9,8 +9,15 @@ cannot carry is held back, listed and never written.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import shlex
+import shutil
+import subprocess
 import sys
+import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -67,16 +74,39 @@ def lanes(pairs: list[D.WavePair]) -> tuple[L.Lane, L.Lane]:
 
 
 def img(
-    i: int, site: str, url: str, *, hero: bool = False, excluded: bool | None = False, sort: int = 0
+    i: int,
+    site: str,
+    url: str,
+    *,
+    hero: bool = False,
+    excluded: bool | None = False,
+    sort: int = 0,
+    filename: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": i,
         "site_id": site,
         "original_url": url,
+        "filename": filename or f"{i}.webp",
         "is_hero": hero,
         "is_excluded": excluded,
         "sort_order": sort,
     }
+
+
+def sha(content: str) -> str:
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def folders_of(images: Mapping[str, Sequence[Mapping[str, Any]]]) -> dict[str, dict[str, str]]:
+    """The image folders as the rows describe them: every row's file is in the folder of its site,
+    and its bytes are its URL's (two rows of one URL are one picture)."""
+    listing: dict[str, dict[str, str]] = {}
+    for site, rows in images.items():
+        listing.setdefault(D.site_id_short(site), {}).update(
+            {i["filename"]: sha(i["original_url"]) for i in rows}
+        )
+    return listing
 
 
 def link(i: int, site: str, source: str = "topostext", content: str = "1") -> dict[str, Any]:
@@ -124,8 +154,11 @@ def a_read(pairs: list[D.WavePair] | None = None, **over: Any) -> D.Read:
         journal={},
         stamps={},
         read_at="2026-10-10 10:00:00+00",
+        files={},
     )
     read = replace(read, **over)
+    if "files" not in over:
+        read = replace(read, files=folders_of(read.images))
     return with_premises(read, pairs)
 
 
@@ -514,21 +547,28 @@ class TestTheDecidedSurvivorInvariant:
                 says="x", predicate="1 = 0", probe_column="scope_reason", probe_values=("x",)
             )
 
+    def records(self, pairs: Sequence[tuple[str, str]]) -> list[A.ChangeRecord]:
+        return [
+            A.ChangeRecord(site_id=loser, site_name="n", old_value=None, new_value=v, rule="r", condition="c", reason="r", evidence=({"source": "t", "quote": "q"},), premise="p", column=c)
+            for loser, survivor in pairs
+            for c, v in (("scope_status", "retired"), ("scope_reason", f"duplicate_of:{survivor}"))
+        ]  # fmt: skip
+
     def test_probing_reads_the_neighbour_of_the_first_loser_and_a_lonely_one_fails(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         retire = L.dup_merge_retire_lane(WAVE, self.PAIRS)
-        records = [
-            A.ChangeRecord(site_id=LOSER, site_name="Banias", old_value=None, new_value=v, rule="r", condition="c", reason="r", evidence=({"source": "t", "quote": "q"},), premise="p", column=c)
-            for c, v in (("scope_status", "retired"), ("scope_reason", f"duplicate_of:{SURVIVOR}"))
-        ]  # fmt: skip
+        records = self.records([(LOSER, SURVIVOR)])
         asked: list[str] = []
 
         def reader(rows: list[dict[str, str]]) -> Any:
             return lambda: lambda sql: asked.append(sql) or rows
 
         monkeypatch.setattr(A, "psql_json_reader", reader([{"id": self.NEIGHBOUR}]))
-        assert A.neighbour_of(records, retire) == {"neighbour": self.NEIGHBOUR}
+        assert A.neighbour_of(records, retire) == {
+            "neighbour": self.NEIGHBOUR,
+            "neighbour_of": LOSER,
+        }
         assert f"= '{LOSER}'" in asked[0] and f"<> '{SURVIVOR}'" in asked[0]
         monkeypatch.setattr(A, "psql_json_reader", reader([]))
         with pytest.raises(P.PlanError, match="cannot be probed with this plan"):
@@ -539,11 +579,55 @@ class TestTheDecidedSurvivorInvariant:
         assert A.neighbour_of(records, L.DUP_RETIRE) == {}
         # and the probe splices the id in
         cases = {
-            c[0]: c for c in A.probe_cases(records, retire, {"id": "x", "name": "n", "premise": "p", "neighbour": self.NEIGHBOUR})
+            c[0]: c for c in A.probe_cases(records, retire, {"id": "x", "name": "n", "premise": "p", "neighbour": self.NEIGHBOUR, "neighbour_of": LOSER})
         }  # fmt: skip
         assert (
             cases["invariant-survivor-decided"][2][1].new_value == f"duplicate_of:{self.NEIGHBOUR}"
         )
+
+    def test_a_lonely_first_loser_is_passed_over_for_the_first_that_has_a_neighbour(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gap G3: about a third of the duplicates have no other curated site within 2,000 m. The
+        probe takes the first planned loser that has one and corrupts that loser's cell: the
+        neighbour is near it and far from every other planned site."""
+        retire = L.dup_merge_retire_lane(WAVE, self.PAIRS)
+        records = self.records([(LOSER, SURVIVOR), (LOSER2, SURVIVOR2)])
+        asked: list[str] = []
+
+        def answer(sql: str) -> list[dict[str, str]]:
+            asked.append(sql)
+            return [{"id": self.NEIGHBOUR}] if f"= '{LOSER2}'" in sql else []
+
+        monkeypatch.setattr(A, "psql_json_reader", lambda: answer)
+        found = A.neighbour_of(records, retire)
+        assert found == {"neighbour": self.NEIGHBOUR, "neighbour_of": LOSER2}
+        # the losers are asked in plan order, each with its own survivor left out, and every
+        # planned site left out of both readings
+        assert len(asked) == 2 and f"= '{LOSER}'" in asked[0] and f"<> '{SURVIVOR2}'" in asked[1]
+        assert f"'{LOSER2}'" in asked[0].split("NOT IN")[1]
+        assert f"'{LOSER}'" in asked[1].split("NOT IN")[1]
+        probes = A.probe_cases(records, retire, {"id": "x", "name": "n", "premise": "p", **found})
+        mutated = next(p[2] for p in probes if p[0] == "invariant-survivor-decided")
+        changed = [
+            (m.site_id, m.new_value) for m, r in zip(mutated, records, strict=True) if m != r
+        ]
+        assert changed == [(LOSER2, f"duplicate_of:{self.NEIGHBOUR}")]
+        # the three survivor checks need no neighbour: they still corrupt the plan's first loser
+        for suffix in ("survivor-not-curated", "survivor-retired", "survivor-far"):
+            other = next(p[2] for p in probes if p[0] == f"invariant-{suffix}")
+            assert [m.site_id for m, r in zip(other, records, strict=True) if m != r] == [LOSER]
+
+    def test_a_wave_in_which_no_loser_has_a_neighbour_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        retire = L.dup_merge_retire_lane(WAVE, self.PAIRS)
+        records = self.records([(LOSER, SURVIVOR), (LOSER2, SURVIVOR2)])
+        asked: list[str] = []
+        monkeypatch.setattr(A, "psql_json_reader", lambda: lambda sql: asked.append(sql) or [])
+        with pytest.raises(P.PlanError, match="none of the 2 planned site\\(s\\) has another"):
+            A.neighbour_of(records, retire)
+        assert len(asked) == 2  # every loser was asked before the refusal
 
 
 # ------------------------------------------------------------------------------- the checks
@@ -936,8 +1020,9 @@ class TestTheRetirePlan:
         read = after_the_move()
         read = replace(
             read,
-            images={**read.images, LOSER: (img(1, LOSER, "u/unmoved"), img(3, LOSER, "u/shared"))},
+            images={**read.images, LOSER: (img(7, LOSER, "u/unmoved"), img(3, LOSER, "u/shared"))},
         )
+        read = replace(read, files=folders_of(read.images))
         with pytest.raises(
             P.PlanError, match="image\\(s\\) the survivor lacks are still on the loser"
         ):
@@ -1050,6 +1135,8 @@ class TestTheFiles:
         for verb in ("INSERT", "UPDATE", "DELETE", "TRUNCATE", "DROP", "ALTER"):
             assert verb not in script.upper().replace("ON_ERROR_STOP", "")
         assert move.premise_sql in dict(parts)["site"] and retire.premise_sql in dict(parts)["site"]
+        # the filename is what a row's picture is served under: the plans need it
+        assert "w.filename" in dict(parts)["image"]
 
     def test_the_tagged_read_becomes_the_read(self) -> None:
         pairs = [pair()]
@@ -1078,7 +1165,10 @@ class TestTheFiles:
             {"kind": "stamp", "row": {"run_stamp": move.run_stamp, "n": 0}},
             {"kind": "snapshot", "row": {"exported_at": "2026-10-10 10:00:00+00"}},
         ]
-        read = D.parse_read("\n".join(json.dumps(x) for x in lines), pairs, move, retire)
+        folders = {D.site_id_short(LOSER): {"1.webp": sha("u/1")}}
+        text = "\n".join(json.dumps(x) for x in lines)
+        read = D.parse_read(text, pairs, move, retire, folders)
+        assert read.files == folders and read.images[LOSER][0]["filename"] == "1.webp"
         assert read.metres == {LOSER: 289.5} and read.ext[LOSER] == (("wikidata_qid", "Q606295"),)
         assert [i["id"] for i in read.images[LOSER]] == [1] and read.journal[
             (LOSER, "scope_status")
@@ -1094,7 +1184,7 @@ class TestTheFiles:
             + json.dumps({"kind": "snapshot", "row": {"exported_at": "x"}})
         )
         with pytest.raises(P.PlanError, match="kind 'mystery'"):
-            D.parse_read(text, pairs, move, retire)
+            D.parse_read(text, pairs, move, retire, {})
 
     def test_the_plan_files_are_the_lane_s_and_the_rollback_comes_first(
         self, tmp_path: Path
@@ -1416,3 +1506,776 @@ class TestTwoLosersOneSurvivor:
             plan, self.SECOND
         )  # not taken by the held pair
         assert ("unified_site_names", "6", "site_id") in self.cells(plan, self.SECOND)
+
+
+# ------------------------------------------------------------------------------ the pictures
+FOLDER_L, FOLDER_S = D.site_id_short(LOSER), D.site_id_short(SURVIVOR)
+BASH = shutil.which("bash")
+
+
+def _bash_can(probe: str) -> bool:
+    """Whether the local bash runs `probe` in a temp directory: the tests that run the lane's own
+    scripts need what the VPS has, and say so when this machine does not."""
+    if BASH is None:
+        return False
+    with tempfile.TemporaryDirectory() as scratch:
+        done = subprocess.run([BASH, "-s"], input=probe.encode(), capture_output=True, cwd=scratch)
+    return done.returncode == 0
+
+
+#: GNU find and `sha256sum -b -z` (a Windows shell whose `find` is find.exe has neither).
+needs_the_listing_tools = pytest.mark.skipif(
+    not _bash_can("find . -maxdepth 0 -type d -exec sha256sum -b -z --version {} + > /dev/null\n"),
+    reason="no bash with GNU find and sha256sum -b -z on this machine",
+)
+#: A file system with POSIX modes (Git Bash on Windows cannot `mkdir -m 777`: measured 2026-11-10).
+needs_the_copy_tools = pytest.mark.skipif(
+    not _bash_can("mkdir -m 777 x && cp --version > /dev/null && chmod 666 x\n"),
+    reason="no bash that can mkdir -m 777 here (a Windows file system): the copy script cannot run",
+)
+
+
+def entry(name: str, content: str | None = None, row: int = 1) -> dict[str, str]:
+    """One line of FILES.jsonl: the picture `name` of the loser, planned with `content`'s bytes."""
+    return {
+        "row_id": str(row),
+        "filename": name,
+        "source": f"{FOLDER_L}/{name}",
+        "dest": f"{FOLDER_S}/{name}",
+        "sha256": sha(name if content is None else content),
+    }
+
+
+@pytest.fixture
+def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A wiki image tree in a temp directory. `run_on_vps` runs as it is, with one change: what it
+    would hand to `ssh ancientnerds bash -s` goes to the local bash, inside that tree."""
+    root = tmp_path / "wiki"
+    root.mkdir()
+    real = subprocess.run
+
+    def instead_of_ssh(argv: list[str], **kwargs: Any) -> Any:
+        assert argv[0] == "ssh" and argv[-3:] == [D.SSH_HOST, "bash", "-s"], argv
+        return real([BASH, "-s"], cwd=root, **kwargs)
+
+    monkeypatch.setattr(D.subprocess, "run", instead_of_ssh)
+    monkeypatch.setattr(D, "WIKI_TREE", ".")
+    return root
+
+
+def put(root: Path, folder: str, name: str, content: str | None = None) -> Path:
+    (root / folder).mkdir(exist_ok=True)
+    path = root / folder / name
+    path.write_bytes((name if content is None else content).encode())
+    return path
+
+
+class TestAFilenameTheSurvivorUses:
+    """Gap G1: a row's picture is served from `<folder of its site>/<filename>`, and no key keeps
+    two rows of one site off one filename. A row that would land on another picture's filename
+    stays on the loser, like a row whose URL the survivor holds."""
+
+    def images(self) -> dict[str, tuple[dict[str, Any], ...]]:
+        return {
+            LOSER: (img(1, LOSER, "u/1", hero=True, filename="hero.webp"), img(2, LOSER, "u/2")),
+            SURVIVOR: (img(11, SURVIVOR, "u/own", hero=True, filename="hero.webp"),),
+        }
+
+    def test_a_row_whose_filename_a_row_of_the_survivor_uses_stays(self) -> None:
+        cells, counts = D.move_cells(a_read(images=self.images()), pair())
+        # neither the move nor the demotion of row 1: it is not touched at all
+        assert [(c.row_id, c.column) for c in cells if c.table == "wiki_images"] == [
+            ("2", "site_id")
+        ]
+        assert (counts["images"], counts["images_stay"], counts["images_stay_filename"]) == (
+            1,
+            0,
+            1,
+        )
+
+    def test_a_file_no_row_names_keeps_its_name_too(self) -> None:
+        """The folder is asked, not only the rows: 4 of the 272 folders read on 2026-11-10 hold a
+        `hero.webp` no row names."""
+        images = {LOSER: (img(1, LOSER, "u/1", filename="hero.webp"),), SURVIVOR: ()}
+        files = {
+            FOLDER_L: {"hero.webp": sha("u/1")},
+            FOLDER_S: {"hero.webp": sha("another picture")},
+        }
+        cells, counts = D.move_cells(a_read(images=images, files=files), pair())
+        assert [c for c in cells if c.table == "wiki_images"] == []
+        assert counts["images_stay_filename"] == 1
+
+    def test_the_same_file_in_the_survivor_s_folder_is_no_other_picture(self) -> None:
+        images = {LOSER: (img(1, LOSER, "u/1", filename="hero.webp"),), SURVIVOR: ()}
+        files = {FOLDER_L: {"hero.webp": sha("u/1")}, FOLDER_S: {"hero.webp": sha("u/1")}}
+        cells, counts = D.move_cells(a_read(images=images, files=files), pair())
+        assert [(c.row_id, c.column) for c in cells if c.table == "wiki_images"] == [
+            ("1", "site_id")
+        ]
+        assert counts["images_stay_filename"] == 0
+
+    def test_an_image_whose_file_is_not_in_the_loser_s_folder_holds_the_pair(self) -> None:
+        read = a_read(files={FOLDER_L: {"2.webp": sha("u/2")}, FOLDER_S: {}})
+        with pytest.raises(D.Held, match="row 1 names the file '1.webp'.*no picture to carry"):
+            D.move_cells(read, pair())
+        # row 3 stays for its URL and is asked for no file
+        read = a_read(files={FOLDER_L: {"1.webp": sha("u/1"), "2.webp": sha("u/2")}})
+        assert D.move_cells(read, pair())[1]["images"] == 2
+
+    def test_the_plan_counts_the_rows_that_stay_for_their_filename(self) -> None:
+        plan, held, totals = moved(a_read(images=self.images()))
+        assert held == [] and totals["images_stay_filename"] == 1
+        assert plan.counters["images_stay_filename"] == 1
+
+    def test_a_second_loser_meets_the_filename_the_first_one_moved(self) -> None:
+        second = TestTwoLosersOneSurvivor.SECOND
+        pairs = [pair(), pair(second, SURVIVOR, loser_name="banias")]
+        images = {
+            LOSER: (img(1, LOSER, "u/a", filename="plan.webp"),),
+            second: (img(3, second, "u/b", filename="plan.webp"), img(4, second, "u/c")),
+            SURVIVOR: (),
+        }
+        read = a_read(pairs, images=images, links={})
+        move, _ = lanes(pairs)
+        plan, _, totals = D.build_move(read, pairs, move, NOW)
+        assert [(v.site_id, v.row_id) for v in plan.changes if v.table == "wiki_images"] == [
+            (LOSER, "1"),
+            (second, "4"),
+        ]
+        assert totals["images"] == 2 and totals["images_stay_filename"] == 1
+
+    def after(self, loser_extra: dict[str, Any], survivor_extra: tuple[dict[str, Any], ...]):
+        read = after_the_move()
+        images = {
+            LOSER: (*read.images[LOSER], loser_extra),
+            SURVIVOR: (*read.images[SURVIVOR], *survivor_extra),
+        }
+        return replace(read, images=images, files=folders_of(images))
+
+    def test_the_retirement_takes_a_row_that_stayed_for_its_filename(self) -> None:
+        read = self.after(
+            img(7, LOSER, "u/the-loser-s-hero", filename="hero.webp"),
+            (img(12, SURVIVOR, "u/the-survivor-s-hero", filename="hero.webp"),),
+        )
+        plan, held = retired(with_premises(read, [pair()]))
+        assert held == [] and len(plan.changes) == 2
+
+    def test_the_retirement_takes_a_row_whose_name_a_file_without_a_row_uses(self) -> None:
+        read = self.after(img(7, LOSER, "u/the-loser-s-hero", filename="hero.webp"), ())
+        files = {**read.files, FOLDER_S: {**read.files[FOLDER_S], "hero.webp": sha("an old hero")}}
+        plan, held = retired(with_premises(replace(read, files=files), [pair()]))
+        assert held == [] and len(plan.changes) == 2
+
+    def test_a_copied_file_whose_row_is_still_on_the_loser_is_a_move_not_done(self) -> None:
+        """`files --copy` ran, the apply did not: the picture is in both folders and its row on
+        the loser - the survivor lacks it."""
+        read = self.after(img(7, LOSER, "u/unmoved"), ())
+        files = {**read.files, FOLDER_S: {**read.files[FOLDER_S], "7.webp": sha("u/unmoved")}}
+        with pytest.raises(P.PlanError, match="1 image\\(s\\) the survivor lacks"):
+            retired(with_premises(replace(read, files=files), [pair()]))
+
+
+class TestTheFileList:
+    """`FILES.jsonl`: the picture of every image row the move plan moves."""
+
+    def written(self, tmp_path: Path) -> Path:
+        plan, held, _ = moved()
+        return D.write_plan(plan, held, a_read(), [pair()], tmp_path)
+
+    def load(self, directory: Path) -> list[dict[str, str]]:
+        return D.load_files(directory / D.FILES_FILE, directory / "PLAN.jsonl")
+
+    def test_each_moved_image_row_names_its_file_and_where_it_is_served_from(self) -> None:
+        plan, _, _ = moved()
+        assert D.move_files(plan, a_read()) == [
+            {
+                "row_id": str(n),
+                "filename": f"{n}.webp",
+                "source": f"{FOLDER_L}/{n}.webp",
+                "dest": f"{FOLDER_S}/{n}.webp",
+                "sha256": sha(f"u/{n}"),
+            }
+            for n in (1, 2)
+        ]
+
+    def test_the_move_plan_writes_it_and_its_run_puts_the_pictures_first(
+        self, tmp_path: Path
+    ) -> None:
+        directory = self.written(tmp_path)
+        assert [f["row_id"] for f in self.load(directory)] == ["1", "2"]
+        md = (directory / "PLAN.md").read_text(encoding="utf-8")
+        copy = md.index(f"dup_merge.py files --wave {WAVE} --copy")
+        served = md.index(f"dup_merge.py files --wave {WAVE} --served")
+        assert copy < md.index(f"--lane dup-merge-move-{WAVE} --apply") < served
+
+    def test_the_retire_plan_has_no_pictures(self, tmp_path: Path) -> None:
+        plan, held = retired()
+        directory = D.write_plan(plan, held, after_the_move(), [pair()], tmp_path)
+        assert not (directory / D.FILES_FILE).exists()
+        assert "dup_merge.py files" not in (directory / "PLAN.md").read_text(encoding="utf-8")
+
+    def test_a_plan_written_without_its_file_list_is_refused(self, tmp_path: Path) -> None:
+        directory = self.written(tmp_path)
+        (directory / D.FILES_FILE).unlink()
+        with pytest.raises(P.PlanError, match="written without its file list"):
+            self.load(directory)
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            (lambda f: f[:1], "is not the file list of"),
+            (lambda f: [*f, {**f[1], "row_id": "99"}], "is not the file list of"),
+            (lambda f: [{**f[0], "dest": f"{FOLDER_L}/1.webp"}, f[1]], "is not the file list of"),
+            (lambda f: [{**f[0], "dest": f"{FOLDER_S}/x.webp"}, f[1]], "is not one file's"),
+            (lambda f: [{**f[0], "sha256": "not a digest"}, f[1]], "is not one file's"),
+        ],
+    )
+    def test_a_file_list_that_is_not_the_plan_s_is_refused(
+        self, tmp_path: Path, change, message: str
+    ) -> None:
+        directory = self.written(tmp_path)
+        files = change(self.load(directory))
+        (directory / D.FILES_FILE).write_text(
+            "".join(json.dumps(f) + "\n" for f in files), encoding="utf-8"
+        )
+        with pytest.raises(P.PlanError, match=message):
+            self.load(directory)
+
+
+class TestTheListing:
+    def raw(self, *records: str) -> bytes:
+        return b"".join(r.encode() + b"\0" for r in records)
+
+    def test_a_folder_name_that_is_not_eight_hex_is_never_sent(self) -> None:
+        for bad in ("..", "ae2ca7b", "AE2CA7B1", "ae2ca7b1; rm -rf x", "ae2ca7b1\n"):
+            with pytest.raises(P.PlanError, match="is not an image folder"):
+                D.list_script([FOLDER_L, bad])
+
+    def test_the_listing_script_writes_nothing(self) -> None:
+        script = D.list_script([FOLDER_L, FOLDER_S])
+        for word in ("rm ", "mv ", "cp ", "chmod", "mkdir", ">", "tee", "touch"):
+            assert word not in script, word
+        assert f"for d in {FOLDER_L} {FOLDER_S}; do" in script
+
+    def test_a_record_is_a_sha256_a_folder_and_a_filename_as_it_is(self) -> None:
+        raw = self.raw(f"{sha('a')} *{FOLDER_L}/a * b/c.webp", f"{D.LISTED} 2")
+        assert D.parse_listing(raw, [FOLDER_L, FOLDER_S]) == {
+            FOLDER_L: {"a * b/c.webp": sha("a")},
+            FOLDER_S: {},
+        }
+
+    @pytest.mark.parametrize(
+        ("records", "message"),
+        [
+            ((f"{sha('a')} *{FOLDER_L}/a.webp",), "did not finish"),
+            ((f"{sha('a')} *{FOLDER_L}/a.webp", f"{D.LISTED} 2"), "did not finish"),
+            ((), "did not finish"),
+            ((f"{sha('a')} *{FOLDER_S}/a.webp", f"{D.LISTED} 1"), "cannot read"),
+            ((f"{sha('a')[:63]} *{FOLDER_L}/a.webp", f"{D.LISTED} 1"), "cannot read"),
+            ((f"{sha('a')} *{FOLDER_L}/", f"{D.LISTED} 1"), "cannot read"),
+            ((f"{sha('a')}  {FOLDER_L}/a.webp", f"{D.LISTED} 1"), "cannot read"),
+        ],
+    )
+    def test_a_listing_that_cannot_be_read_whole_is_refused(
+        self, records: tuple[str, ...], message: str
+    ) -> None:
+        with pytest.raises(P.PlanError, match=message):
+            D.parse_listing(self.raw(*records), [FOLDER_L])
+
+    def test_a_listing_cut_inside_its_last_record_is_refused(self) -> None:
+        # the closing record without its terminator: read loosely, the file before it would be
+        # taken for the end of the listing and dropped
+        cut = self.raw(f"{sha('a')} *{FOLDER_L}/a.webp", f"{D.LISTED} 1")[:-1]
+        with pytest.raises(P.PlanError, match="did not finish"):
+            D.parse_listing(cut, [FOLDER_L])
+
+    def test_the_wave_s_folders_are_those_of_every_loser_and_survivor(self) -> None:
+        assert D.wave_folders([pair(), pair(LOSER2, SURVIVOR)]) == sorted(
+            {FOLDER_L, FOLDER_S, D.site_id_short(LOSER2)}
+        )
+
+
+class TestTheStateOfAPicture:
+    LISTING = {FOLDER_L: {"a.webp": sha("a.webp")}, FOLDER_S: {}}
+
+    def state(self, there: dict[str, str], listing: dict[str, dict[str, str]] | None = None) -> str:
+        base = listing or self.LISTING
+        return D.file_state(entry("a.webp"), {**base, FOLDER_S: there})
+
+    def test_it_is_in_place_only_with_the_planned_bytes(self) -> None:
+        assert self.state({"a.webp": sha("a.webp")}) == D.IN_PLACE
+        assert self.state({}) == D.TO_COPY
+        assert self.state({"a.webp": sha("another picture")}) == D.DEST_TAKEN
+
+    def test_a_source_that_changed_or_is_gone_is_said_first(self) -> None:
+        changed = {FOLDER_L: {"a.webp": sha("edited")}, FOLDER_S: {}}
+        assert self.state({"a.webp": sha("a.webp")}, changed) == D.SOURCE_CHANGED
+        assert self.state({}, {FOLDER_L: {}, FOLDER_S: {}}) == D.SOURCE_CHANGED
+
+    def test_a_plan_that_moves_no_image_asks_the_vps_nothing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(D, "run_on_vps", lambda script: pytest.fail("asked the VPS"))
+        assert D.file_states([]) == []
+        assert D.copy_files([]) == {"files": 0, "copied": 0, "already_there": 0}
+
+
+class TestTheTransport:
+    def test_a_script_goes_to_bash_on_the_vps_as_utf8_bytes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: dict[str, Any] = {}
+
+        def run(argv: list[str], **kwargs: Any) -> Any:
+            seen.update(argv=argv, **kwargs)
+            return subprocess.CompletedProcess(argv, 0, b"out\0", b"")
+
+        monkeypatch.setattr(D.subprocess, "run", run)
+        assert D.run_on_vps("ls 'Hattuşa Örenyeri'\n") == b"out\0"
+        assert seen["argv"][0] == "ssh" and seen["argv"][-3:] == ["ancientnerds", "bash", "-s"]
+        assert seen["input"] == "ls 'Hattuşa Örenyeri'\n".encode()
+
+    def test_a_failed_script_is_a_refusal_that_says_why(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        failed = subprocess.CompletedProcess([], 7, b"", b"cp: cannot stat 'x'\n")
+        monkeypatch.setattr(D.subprocess, "run", lambda argv, **kwargs: failed)
+        with pytest.raises(P.PlanError, match="exited 7: cp: cannot stat 'x'"):
+            D.run_on_vps("c x y\n")
+
+    def test_a_vps_that_does_not_answer_is_a_refusal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def run(argv: list[str], **kwargs: Any) -> Any:
+            raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+        monkeypatch.setattr(D.subprocess, "run", run)
+        with pytest.raises(P.PlanError, match="did not answer within 5s"):
+            D.run_on_vps("true\n", timeout=5)
+
+
+class TestTheFoldersOnDisk:
+    """The lane's own scripts, run by the local bash in a temp tree: what the VPS would do."""
+
+    NAMES = (
+        "20140415 dodoni016.webp",
+        "Greek_Marble_Muse_Terpsichore,_Late_4th_to_Mid_2nd_BC_(10451853483).webp",
+        "it's 100% $HOME `x` & co.webp",
+        "Hattuşa Örenyeri — Δωδώνη.webp",
+    )
+
+    @needs_the_listing_tools
+    def test_a_listing_is_every_file_of_each_folder_under_its_own_name(self, tree: Path) -> None:
+        for name in self.NAMES:
+            put(tree, FOLDER_L, name)
+        put(tree, FOLDER_S, "hero.webp", "h")
+        (tree / FOLDER_L / "deeper").mkdir()
+        (tree / FOLDER_L / "deeper" / "x.webp").write_bytes(b"x")
+        assert D.read_folders([FOLDER_L, FOLDER_S, "00000000"]) == {
+            FOLDER_L: {name: sha(name) for name in self.NAMES},
+            FOLDER_S: {"hero.webp": sha("h")},
+            "00000000": {},
+        }
+
+    @needs_the_copy_tools
+    def test_the_copy_puts_each_picture_in_place_and_leaves_the_loser_s(self, tree: Path) -> None:
+        files = [entry(name, row=n) for n, name in enumerate(self.NAMES)]
+        for name in self.NAMES:
+            put(tree, FOLDER_L, name)
+        assert D.copy_files(files) == {"files": 4, "copied": 4, "already_there": 0}
+        for name in self.NAMES:
+            assert (tree / FOLDER_S / name).read_bytes() == name.encode()
+            assert (tree / FOLDER_L / name).read_bytes() == name.encode()  # copied, never moved
+        # nothing but the pictures: no partial copy is left behind
+        assert sorted(p.name for p in (tree / FOLDER_S).iterdir()) == sorted(self.NAMES)
+        assert [state for _, state in D.file_states(files)] == [D.IN_PLACE] * 4
+        if os.name != "nt":  # the modes of the tree: the API container writes there as another user
+            assert (tree / FOLDER_S).stat().st_mode & 0o777 == 0o777
+            assert (tree / FOLDER_S / self.NAMES[0]).stat().st_mode & 0o777 == 0o666
+        # a second run finds them and copies nothing
+        assert D.copy_files(files) == {"files": 4, "copied": 0, "already_there": 4}
+
+    @needs_the_copy_tools
+    def test_a_destination_that_holds_another_file_is_never_overwritten(self, tree: Path) -> None:
+        put(tree, FOLDER_L, "a.webp")
+        put(tree, FOLDER_L, "b.webp")
+        other = put(tree, FOLDER_S, "b.webp", "another picture")
+        with pytest.raises(P.PlanError, match="nothing was copied") as refused:
+            D.copy_files([entry("a.webp", row=1), entry("b.webp", row=2)])
+        assert f"{D.DEST_TAKEN}: {FOLDER_L}/b.webp -> {FOLDER_S}/b.webp (row 2)" in str(
+            refused.value
+        )
+        assert other.read_bytes() == b"another picture"
+        assert not (tree / FOLDER_S / "a.webp").exists()  # nothing: not even the free one
+
+    @needs_the_copy_tools
+    def test_a_source_that_is_not_the_planned_file_any_more_is_refused(self, tree: Path) -> None:
+        put(tree, FOLDER_L, "a.webp", "edited since the plan")
+        with pytest.raises(P.PlanError, match="nothing was copied") as refused:
+            D.copy_files([entry("a.webp"), entry("gone.webp", row=2)])
+        assert str(refused.value).count(D.SOURCE_CHANGED) == 2
+        assert not (tree / FOLDER_S).exists()
+
+    @needs_the_copy_tools
+    def test_the_copy_script_itself_replaces_nothing(self, tree: Path) -> None:
+        """The check before the copy is Python's; the script holds on its own."""
+        put(tree, FOLDER_L, "a.webp")
+        other = put(tree, FOLDER_S, "a.webp", "another picture")
+        D.run_on_vps(D.copy_script([entry("a.webp")]))
+        assert other.read_bytes() == b"another picture"
+        assert [p.name for p in (tree / FOLDER_S).iterdir()] == ["a.webp"]
+
+    @needs_the_copy_tools
+    def test_a_copy_that_cannot_be_made_stops_the_script(self, tree: Path) -> None:
+        put(tree, FOLDER_L, "b.webp")
+        with pytest.raises(P.PlanError, match="exited 7"):
+            D.run_on_vps(D.copy_script([entry("b.webp"), entry("a-gone.webp")]))
+        # the copies go in the order of their paths, and the script stopped at the first
+        # failure: the picture after it was not copied, and no partial copy is left
+        assert list((tree / FOLDER_S).iterdir()) == []
+
+    @needs_the_copy_tools
+    def test_a_copy_that_is_not_the_planned_bytes_afterwards_is_refused(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        put(tree, FOLDER_L, "a.webp")
+        real = D.copy_script
+        # a copy that lands as other bytes (here: the script copies a neighbour instead)
+        put(tree, FOLDER_L, "b.webp", "other bytes")
+        monkeypatch.setattr(
+            D, "copy_script", lambda files: real([{**files[0], "source": f"{FOLDER_L}/b.webp"}])
+        )
+        with pytest.raises(P.PlanError, match="after the copy these pictures are not in place"):
+            D.copy_files([entry("a.webp")])
+
+
+class TestServed:
+    def test_each_moved_picture_is_asked_for_under_its_survivor_s_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        asked: list[str] = []
+
+        def status(url: str) -> int:
+            asked.append(url)
+            return 404 if "b%20c" in url else 301 if url.endswith("/moved.webp") else 200
+
+        monkeypatch.setattr(D, "served_status", status)
+        files = [
+            entry("a.webp"),
+            entry("b c.webp", row=2),
+            entry("Ğ%.webp", row=3),
+            entry("moved.webp", row=4),
+        ]
+        # only a 200 is a served picture: a redirect is named like a 404
+        assert D.not_served(files) == [
+            f"404 {D.SERVED_ROOT}/{FOLDER_S}/b%20c.webp",
+            f"301 {D.SERVED_ROOT}/{FOLDER_S}/moved.webp",
+        ]
+        assert f"{D.SERVED_ROOT}/{FOLDER_S}/%C4%9E%25.webp" in asked and len(asked) == 4
+        assert D.SERVED_ROOT == "https://ancientnerds.com/data/images/wiki"
+
+    def test_an_http_error_is_an_answer_and_no_answer_is_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import urllib.error
+
+        class Answer:
+            status = 200
+
+            def __enter__(self) -> Answer:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+        def answers(outcome: Any) -> Any:
+            def urlopen(request: Any, timeout: int) -> Any:
+                assert request.get_method() == "HEAD" and timeout == 60
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+            return urlopen
+
+        url = f"{D.SERVED_ROOT}/{FOLDER_S}/a.webp"
+        monkeypatch.setattr(D.urllib.request, "urlopen", answers(Answer()))
+        assert D.served_status(url) == 200
+        gone = urllib.error.HTTPError(url, 404, "Not Found", None, None)  # type: ignore[arg-type]
+        monkeypatch.setattr(D.urllib.request, "urlopen", answers(gone))
+        assert D.served_status(url) == 404
+        monkeypatch.setattr(D.urllib.request, "urlopen", answers(urllib.error.URLError("down")))
+        with pytest.raises(urllib.error.URLError):
+            D.served_status(url)
+
+
+class TestTheFilesCommand:
+    def wave(self, tmp_path: Path) -> Path:
+        D.write_wave(WAVE, [pair()], tmp_path)
+        plan, held, _ = moved()
+        return D.write_plan(plan, held, a_read(), [pair()], tmp_path)
+
+    def run(self, tmp_path: Path, step: str) -> int:
+        return D.main(["--out", str(tmp_path), "files", "--wave", WAVE, step])
+
+    def test_verify_names_what_is_not_in_place_and_exits_1(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self.wave(tmp_path)
+        listing = {
+            FOLDER_L: {"1.webp": sha("u/1"), "2.webp": sha("u/2")},
+            FOLDER_S: {"1.webp": sha("u/1")},
+        }
+        monkeypatch.setattr(D, "read_folders", lambda folders: listing)
+        assert self.run(tmp_path, "--verify") == 1
+        answer = json.loads(capsys.readouterr().out)
+        assert answer["files"] == 2 and answer["not"] == [
+            f"{D.TO_COPY}: {FOLDER_L}/2.webp -> {FOLDER_S}/2.webp (row 2)"
+        ]
+        listing[FOLDER_S]["2.webp"] = sha("u/2")
+        assert self.run(tmp_path, "--verify") == 0
+        assert json.loads(capsys.readouterr().out)["not"] == []
+
+    def test_served_exits_1_for_a_picture_the_site_does_not_answer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self.wave(tmp_path)
+        monkeypatch.setattr(D, "served_status", lambda url: 404 if url.endswith("/2.webp") else 200)
+        assert self.run(tmp_path, "--served") == 1
+        assert json.loads(capsys.readouterr().out)["not"] == [
+            f"404 {D.SERVED_ROOT}/{FOLDER_S}/2.webp"
+        ]
+        monkeypatch.setattr(D, "served_status", lambda url: 200)
+        assert self.run(tmp_path, "--served") == 0
+
+    def test_a_site_that_cannot_be_reached_is_a_refusal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import urllib.error
+
+        def down(url: str) -> int:
+            raise urllib.error.URLError("no route")
+
+        self.wave(tmp_path)
+        monkeypatch.setattr(D, "served_status", down)
+        assert self.run(tmp_path, "--served") == 1
+        assert "REFUSED" in capsys.readouterr().err
+
+    def test_a_step_is_required_and_a_plan_without_its_list_is_refused(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        directory = self.wave(tmp_path)
+        with pytest.raises(SystemExit):
+            D.main(["--out", str(tmp_path), "files", "--wave", WAVE])
+        (directory / D.FILES_FILE).unlink()
+        assert self.run(tmp_path, "--verify") == 1
+        assert "written without its file list" in capsys.readouterr().err
+
+    @needs_the_copy_tools
+    def test_copy_then_verify_end_to_end(
+        self, tmp_path: Path, tree: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self.wave(tmp_path)
+        for n in (1, 2, 3):
+            put(tree, FOLDER_L, f"{n}.webp", f"u/{n}" if n < 3 else "u/shared")
+        assert self.run(tmp_path, "--verify") == 1
+        capsys.readouterr()
+        assert self.run(tmp_path, "--copy") == 0
+        assert json.loads(capsys.readouterr().out) == {
+            "lane": f"dup-merge-move-{WAVE}",
+            "files": 2,
+            "copied": 2,
+            "already_there": 0,
+        }
+        assert self.run(tmp_path, "--verify") == 0
+        # the row that stays for its URL is not copied
+        assert sorted(p.name for p in (tree / FOLDER_S).iterdir()) == ["1.webp", "2.webp"]
+
+
+class TestTheApplyAsksForThePictures:
+    """`apply.py --apply` of a move: the database cannot see a folder, so the write goes out only
+    when every moved picture is in its survivor's folder (playbook rule: never apply before)."""
+
+    class Reached(Exception):
+        """The apply went on to production."""
+
+    def emitted(self, tmp_path: Path, *, retire: bool = False):
+        if retire:
+            plan, held = retired()
+            read = after_the_move()
+        else:
+            plan, held, _ = moved()
+            read = a_read()
+        directory = D.write_plan(plan, held, read, [pair()], tmp_path)
+        records = A.load_records(directory / "PLAN.jsonl")
+        A.emit(records, directory, plan.lane, plan_path=directory / "PLAN.jsonl")
+        return records, directory, plan.lane
+
+    def production(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def reached(*args: Any, **kwargs: Any) -> Any:
+            raise self.Reached
+
+        monkeypatch.setattr(A, "journal_count", lambda stamp: 0)
+        monkeypatch.setattr(A, "run_psql", reached)
+
+    def test_a_move_whose_pictures_are_not_in_place_is_refused_before_the_write(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records, directory, lane = self.emitted(tmp_path)
+        self.production(monkeypatch)
+        listing = {
+            FOLDER_L: {"1.webp": sha("u/1"), "2.webp": sha("u/2")},
+            FOLDER_S: {"1.webp": sha("u/1")},
+        }
+        monkeypatch.setattr(D, "read_folders", lambda folders: listing)
+        with pytest.raises(P.PlanError, match="1 picture\\(s\\) .* not in place") as refused:
+            A.cmd_apply(records, directory, lane, plan_path=directory / "PLAN.jsonl")
+        assert f"{FOLDER_L}/2.webp -> {FOLDER_S}/2.webp (row 2)" in str(refused.value)
+        assert "files --copy" in str(refused.value)
+
+    def test_a_move_whose_pictures_are_in_place_goes_on(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records, directory, lane = self.emitted(tmp_path)
+        self.production(monkeypatch)
+        both = {"1.webp": sha("u/1"), "2.webp": sha("u/2")}
+        monkeypatch.setattr(D, "read_folders", lambda folders: {FOLDER_L: both, FOLDER_S: both})
+        with pytest.raises(self.Reached):
+            A.cmd_apply(records, directory, lane, plan_path=directory / "PLAN.jsonl")
+
+    def test_a_move_plan_without_its_file_list_is_not_applied(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records, directory, lane = self.emitted(tmp_path)
+        self.production(monkeypatch)
+        (directory / D.FILES_FILE).unlink()
+        with pytest.raises(P.PlanError, match="written without its file list"):
+            A.cmd_apply(records, directory, lane, plan_path=directory / "PLAN.jsonl")
+
+    def test_the_retirement_moves_no_picture_and_is_not_asked(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records, directory, lane = self.emitted(tmp_path, retire=True)
+        self.production(monkeypatch)
+        monkeypatch.setattr(D, "read_folders", lambda folders: pytest.fail("asked for folders"))
+        with pytest.raises(self.Reached):
+            A.cmd_apply(records, directory, lane, plan_path=directory / "PLAN.jsonl")
+
+
+class TestTheCopyDecision:
+    """What `files --copy` sends and when it refuses, on listings it is handed (the scripts
+    themselves run in `TestTheFoldersOnDisk`)."""
+
+    def folders(self, monkeypatch: pytest.MonkeyPatch, *listings: dict[str, dict[str, str]]):
+        """`read_folders` answers the listings in turn; what is sent to the VPS is kept."""
+        answers, sent = list(listings), []
+        monkeypatch.setattr(D, "read_folders", lambda folders: answers.pop(0))
+        monkeypatch.setattr(D, "run_on_vps", lambda script: sent.append(script) or b"")
+        return sent
+
+    def test_only_what_is_missing_is_sent_and_everything_is_read_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source = {"a.webp": sha("a.webp"), "b.webp": sha("b.webp")}
+        sent = self.folders(
+            monkeypatch,
+            {FOLDER_L: source, FOLDER_S: {"a.webp": sha("a.webp")}},
+            {FOLDER_L: source, FOLDER_S: source},
+        )
+        done = D.copy_files([entry("a.webp", row=1), entry("b.webp", row=2)])
+        assert done == {"files": 2, "copied": 1, "already_there": 1}
+        assert len(sent) == 1 and f"c {FOLDER_L}/b.webp {FOLDER_S}/b.webp\n" in sent[0]
+        assert "a.webp" not in sent[0]
+
+    def test_nothing_is_sent_when_a_folder_is_not_as_the_plan_read_it(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source = {"a.webp": sha("a.webp"), "b.webp": sha("b.webp")}
+        taken = {FOLDER_L: source, FOLDER_S: {"b.webp": sha("another picture")}}
+        sent = self.folders(monkeypatch, taken)
+        with pytest.raises(P.PlanError, match="nothing was copied") as refused:
+            D.copy_files([entry("a.webp", row=1), entry("b.webp", row=2)])
+        assert sent == [] and D.DEST_TAKEN in str(refused.value)
+        assert "a.webp" not in str(refused.value)  # only what is wrong is named
+
+    def test_a_copy_that_did_not_land_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        missing = {FOLDER_L: {"a.webp": sha("a.webp")}, FOLDER_S: {}}
+        sent = self.folders(monkeypatch, missing, missing)
+        with pytest.raises(P.PlanError, match="after the copy these pictures are not in place"):
+            D.copy_files([entry("a.webp")])
+        assert len(sent) == 1
+
+    def test_a_filename_travels_quoted_for_the_shell(self) -> None:
+        name = "it's $HOME `x`; rm -rf ~ & co.webp"
+        script = D.copy_script([entry(name), entry(name, row=2)])
+        copies = [line for line in script.splitlines() if line.startswith("c ")]
+        # one copy for the two rows of one file; read as a shell reads it, the line is the two
+        # paths, and nothing of the name stands outside single quotes
+        assert [shlex.split(line) for line in copies] == [
+            ["c", f"{FOLDER_L}/{name}", f"{FOLDER_S}/{name}"]
+        ]
+        assert '"' not in copies[0].replace("'\"'\"'", "")
+        # the copy never replaces a file and leaves no partial one
+        for word in ('if [ -e "$2" ]; then return 0; fi', "mv -n -- ", 'rm -f -- "$2.d14-part"'):
+            assert word in script
+
+
+class TestARowOwnsItsFilename:
+    def test_a_survivor_row_keeps_its_filename_whatever_the_folder_holds(self) -> None:
+        """A row of the survivor names `hero.webp` and its file is not in the folder (or is the
+        same bytes): the loser's row still stays - moved, it would put its file under that row."""
+        images = {
+            LOSER: (img(1, LOSER, "u/1", filename="hero.webp"),),
+            SURVIVOR: (img(11, SURVIVOR, "u/own", filename="hero.webp"),),
+        }
+        for there in ({}, {"hero.webp": sha("u/1")}):
+            files = {FOLDER_L: {"hero.webp": sha("u/1")}, FOLDER_S: there}
+            cells, counts = D.move_cells(a_read(images=images, files=files), pair())
+            assert [c for c in cells if c.table == "wiki_images"] == []
+            assert counts["images_stay_filename"] == 1
+
+
+class TestThePlanCommand:
+    """`plan-move --write` end to end, with the two reads answered from fixtures."""
+
+    def export(self, read: D.Read, move: L.Lane) -> str:
+        lines: list[dict[str, Any]] = [{"kind": "site", "row": row} for row in read.sites.values()]
+        for site, ids in read.ext.items():
+            lines += [{"kind": "ext", "row": {"id": site, "kind": k, "value": v}} for k, v in ids]
+        for kind, rows in (("image", read.images), ("link", read.links), ("name", read.names)):
+            lines += [{"kind": kind, "row": row} for group in rows.values() for row in group]
+        lines += [
+            {"kind": "metres", "row": {"loser": k, "metres": v}} for k, v in read.metres.items()
+        ]
+        lines.append({"kind": "stamp", "row": {"run_stamp": move.run_stamp, "n": 0}})
+        lines.append({"kind": "snapshot", "row": {"exported_at": read.read_at}})
+        return "\n".join(json.dumps(line) for line in lines) + "\n"
+
+    def test_plan_move_reads_the_folders_and_writes_the_file_list(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        D.write_wave(WAVE, [pair()], tmp_path)
+        read = a_read()
+        move, _ = lanes([pair()])
+        asked: list[list[str]] = []
+
+        def write_read(path: Path, *_: Any) -> Path:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(self.export(read, move), encoding="utf-8", newline="\n")
+            return path
+
+        def read_folders(folders: list[str]) -> dict[str, dict[str, str]]:
+            asked.append(list(folders))
+            return {name: dict(read.files.get(name, {})) for name in folders}
+
+        monkeypatch.setattr(D, "write_read", write_read)
+        monkeypatch.setattr(D, "read_folders", read_folders)
+        assert D.main(["--out", str(tmp_path), "plan-move", "--wave", WAVE, "--write"]) == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert (printed["images"], printed["images_stay"], printed["images_stay_filename"]) == (
+            2,
+            1,
+            0,
+        )
+        assert asked == [sorted([FOLDER_L, FOLDER_S])]
+        directory = tmp_path / move.out_dir_name
+        assert json.loads((directory / D.DISK_FILE).read_text(encoding="utf-8")) == read.files
+        files = D.load_files(directory / D.FILES_FILE, directory / "PLAN.jsonl")
+        assert [(f["row_id"], f["sha256"]) for f in files] == [("1", sha("u/1")), ("2", sha("u/2"))]

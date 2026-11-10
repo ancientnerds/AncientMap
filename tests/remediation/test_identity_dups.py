@@ -27,7 +27,7 @@ def loser(**over):
         "links": 0,
         "survivor_images": 0,
         "survivor_links": 0,
-        "name_is_alias_on_survivor": False,
+        "name_is_alias_on_survivor": True,
     }
     row.update(over)
     return row
@@ -174,6 +174,16 @@ class TestTheRetiredLosers:
         assert held == {"l1": ["images", "links"], "l2": ["images"], "l3": ["links"]}
         assert counts["retired_losers_holding_images"] == 2
         assert counts["retired_losers_holding_links"] == 2
+
+    def test_a_loser_whose_name_is_no_name_of_its_survivor_is_listed_for_its_name(self) -> None:
+        """Ciudad Romana de Caparra: no image, no link, and a name its survivor does not carry."""
+        bare = loser(id="l1", name_is_alias_on_survivor=False)
+        both = loser(id="l2", images=2, name_is_alias_on_survivor=False)
+        records, counts = D.build(export_of([site()], losers=[bare, both, loser(id="l3")]), [])
+        held = {r["id"]: r["holds"] for r in records if r["record"] == "retired_loser"}
+        assert held == {"l1": ["name"], "l2": ["images", "name"]}
+        assert counts["retired_losers_holding"] == 2
+        assert counts["retired_losers_holding_name"] == 2
 
     def test_a_loser_whose_survivor_is_retired_too_is_counted(self) -> None:
         _, counts = D.build(

@@ -15,23 +15,33 @@ Owner decision D14 of 2026-10-08: a duplicate is merged - "judged survivor, lose
    content links go to the survivor, a collision stays on the loser, a moved hero that would be a
    second hero is demoted, and the loser's name row becomes an alias of the survivor - in one
    transaction. The plan, its `ROLLBACK.sql` and `PLAN.md` are written from one read-only production
-   snapshot.
-3. **`plan-retire`** - lane `dup-merge-retire-<wave>`: the loser is retired as `duplicate_of:<survivor>`
+   snapshot and one read-only listing of the wave's image folders on the VPS (`DISK.json`).
+3. **`files`** - the pictures of the moved image rows. Every reader serves a row's picture from
+   `/data/images/wiki/<site id, 8 hex>/<filename>`, so a row that changes site needs its file in the
+   survivor's folder: `FILES.jsonl` (written with the move plan) names each one with its sha256,
+   `files --copy` copies them on the VPS (never moves one, never overwrites one), `files --verify`
+   reads that each is there, byte for byte, and `files --served` asks the site for each after the
+   apply. `apply.py --apply` refuses a move whose files are not in place. A row whose filename the
+   survivor's folder uses for another picture (`hero.webp`) stays on the loser, like a URL collision.
+4. **`plan-retire`** - lane `dup-merge-retire-<wave>`: the loser is retired as `duplicate_of:<survivor>`
    (`scope_status` and `scope_reason`, `dup-retire`'s cells and survivor checks), planned from a
    **fresh** read taken after the move was applied - its premise counts what the loser holds then. A
    loser whose move is not complete (a movable row left on it, its name not among the survivor's, a
    live image the survivor does not show) is refused, never retired.
 
 An already-retired loser (`duplicate_of:` since the scope lane or `dup-retire`) has a move and no
-retirement. The reversal is the opposite order: retire first, then move.
+retirement. The reversal is the opposite order: retire first, then move; a copied file stays in the
+survivor's folder, where no row names it after the reversal.
 
 Operator commands (docs in `output/remediation/final-2026-10-08/HANDOVER_IDENTITY_A.md` of the run):
 
     PY=./.venv/Scripts/python.exe
     $PY scripts/remediation/mechanical/dup_merge.py waves --date 2026-10-10
     $PY scripts/remediation/mechanical/dup_merge.py plan-move   --wave 2026-10-10 --write
+    $PY scripts/remediation/mechanical/dup_merge.py files --wave 2026-10-10 --copy
     $PY scripts/remediation/mechanical/apply.py --lane dup-merge-move-2026-10-10 --emit --rehearse \\
         --probe-guards --apply --rehearse-rollback
+    $PY scripts/remediation/mechanical/dup_merge.py files --wave 2026-10-10 --served
     $PY scripts/remediation/mechanical/dup_merge.py plan-retire --wave 2026-10-10 --write
     $PY scripts/remediation/mechanical/apply.py --lane dup-merge-retire-2026-10-10 --emit --rehearse \\
         --probe-guards --apply --rehearse-rollback
@@ -42,7 +52,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
+import shlex
+import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,8 +70,11 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+from prod_write import SSH_HOST, SSH_OPTIONS, jsonl_lines  # noqa: E402
+
 from mechanical import plan as P  # noqa: E402
 from mechanical.lane import (  # noqa: E402
+    DUP_MERGE_MOVE_LANE,
     DUP_RETIRE_METRES,
     DUPLICATE_PREFIX,
     REMEDIATION_ROOT,
@@ -70,6 +89,7 @@ from mechanical.lane import (  # noqa: E402
     sql_literal,
 )
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402
+from pipeline.sites_html_renderer import site_id_short  # noqa: E402
 from pipeline.utils.public_sites import RETIRED  # noqa: E402
 
 log = logging.getLogger("mechanical.dup_merge")
@@ -85,6 +105,21 @@ READ_FILE = "READ.jsonl"
 HELD_FILE = "HELD.jsonl"
 #: The decided pairs a `waves --exclude` left out, written beside each wave's `PAIRS.json`.
 EXCLUDED_FILE = "EXCLUDED.json"
+#: The listing of the wave's image folders a plan was built on, beside its `READ.jsonl`.
+DISK_FILE = "DISK.json"
+#: The picture of every image row a move plan moves: one line per planned `wiki_images.site_id` cell.
+FILES_FILE = "FILES.jsonl"
+#: The wiki image tree on the VPS, `<site id, 8 hex>/<filename>` (`site_id_short`), and the URL the
+#: site serves it under. Every reader builds a row's path from the id of the row's site
+#: (`api/routes/wiki_images.py`, `api/routes/sites_html.py`, `pipeline/static_exporter.py`).
+WIKI_TREE = "/var/www/ancientnerds/public/data/images/wiki"
+SERVED_ROOT = "https://ancientnerds.com/data/images/wiki"
+#: The last record of a folder listing: without it the listing stopped early.
+LISTED = "d14-folders-listed"
+#: A copy is written under this suffix and renamed when it is whole.
+PARTIAL = ".d14-part"
+_FOLDER = re.compile(r"^[0-9a-f]{8}\Z")
+_SHA256 = re.compile(r"^[0-9a-f]{64}\Z")
 
 
 # ------------------------------------------------------------------------------------ the waves
@@ -297,8 +332,8 @@ def read_parts(pairs: Sequence[WavePair], move: Lane, retire: Lane) -> tuple[tup
         f"WHERE e.site_id IN ({ids}) ORDER BY e.site_id, e.kind, e.value"
     )
     images = (
-        "SELECT w.id, w.site_id::text AS site_id, w.original_url, w.is_hero, w.is_excluded, "
-        f"w.sort_order FROM wiki_images w WHERE w.site_id IN ({ids}) ORDER BY w.id"
+        "SELECT w.id, w.site_id::text AS site_id, w.original_url, w.filename, w.is_hero, "
+        f"w.is_excluded, w.sort_order FROM wiki_images w WHERE w.site_id IN ({ids}) ORDER BY w.id"
     )
     links = (
         "SELECT c.id, c.site_id::text AS site_id, c.content_source, c.content_id "
@@ -348,7 +383,8 @@ def read_parts(pairs: Sequence[WavePair], move: Lane, retire: Lane) -> tuple[tup
 
 @dataclass(frozen=True)
 class Read:
-    """The production read the plans rest on."""
+    """The production read the plans rest on, and the listing of the wave's image folders
+    (`files`: folder -> filename -> sha256, `read_folders`)."""
 
     sites: Mapping[str, Mapping[str, Any]]
     ext: Mapping[str, tuple[tuple[str, str], ...]]
@@ -360,6 +396,7 @@ class Read:
     journal: Mapping[tuple[str, str], tuple[P.JournalLink, ...]]
     stamps: Mapping[str, int]
     read_at: str
+    files: Mapping[str, Mapping[str, str]]
 
 
 def _by_site(
@@ -371,9 +408,15 @@ def _by_site(
     return {site: tuple(v) for site, v in out.items()}
 
 
-def parse_read(text: str, pairs: Sequence[WavePair], move: Lane, retire: Lane) -> Read:
+def parse_read(
+    text: str,
+    pairs: Sequence[WavePair],
+    move: Lane,
+    retire: Lane,
+    files: Mapping[str, Mapping[str, str]],
+) -> Read:
     """The tagged read (`plan.parse_tagged_export` refuses a line of another kind and a read
-    without its one snapshot line)."""
+    without its one snapshot line) with the listing of the wave's image folders."""
     kinds = [kind for kind, _sql in read_parts(pairs, move, retire)]
     rows, read_at = P.parse_tagged_export(text, kinds)
     journal: dict[tuple[str, str], list[P.JournalLink]] = {}
@@ -397,12 +440,83 @@ def parse_read(text: str, pairs: Sequence[WavePair], move: Lane, retire: Lane) -
         journal={cell: tuple(links) for cell, links in journal.items()},
         stamps={str(r["run_stamp"]): int(r["n"]) for r in rows["stamp"]},
         read_at=read_at,
+        files=files,
     )
 
 
 def write_read(path: Path, pairs: Sequence[WavePair], move: Lane, retire: Lane) -> Path:
     """Read production (read-only, one snapshot) and keep the answer as it came."""
     return P.write_tagged_export(P.tagged_export_script(read_parts(pairs, move, retire)), path)
+
+
+# ------------------------------------------------------------------------- the image folders
+def wave_folders(pairs: Sequence[WavePair]) -> list[str]:
+    """The image folder of every loser and survivor of the wave."""
+    return sorted({site_id_short(site) for p in pairs for site in (p.loser, p.survivor)})
+
+
+def list_script(folders: Sequence[str]) -> str:
+    """Shell, read-only: the sha256 of every file directly in each of `folders` (a folder that does
+    not exist has none), then one closing record. NUL-terminated records (`sha256sum -b -z`): a
+    filename may hold blanks, quotes and letters of any script (9,499 of the 49,972 stored ones
+    hold more than ASCII letters, digits, blanks and `._(),%-`, read 2026-11-10), and `-z` prints
+    a name as it is; `-b` makes the record the same on every platform (` *` before the path)."""
+    for name in folders:
+        if not _FOLDER.match(name):
+            raise P.PlanError(f"{name!r} is not an image folder (8 hex): refusing to list it")
+    return (
+        f"set -u\ncd {shlex.quote(WIKI_TREE)} || exit 9\n"
+        f"for d in {' '.join(folders)}; do\n"
+        '  if [ -d "$d" ]; then find "$d" -maxdepth 1 -type f -exec sha256sum -b -z {} + || exit 8; fi\n'
+        "done\n"
+        f"printf '{LISTED} %s\\0' {len(folders)}\n"
+    )
+
+
+def parse_listing(raw: bytes, folders: Sequence[str]) -> dict[str, dict[str, str]]:
+    """`list_script`'s answer as folder -> filename -> sha256. A listing without its closing record,
+    or with a record that is no `<sha256> *<folder>/<filename>` of a folder asked for, is refused:
+    a listing that stopped early would read as folders with fewer files."""
+    records = raw.split(b"\0")
+    closing = f"{LISTED} {len(folders)}".encode()
+    if len(records) < 2 or records[-1] != b"" or records[-2] != closing:
+        raise P.PlanError("the folder listing has no closing record: it did not finish")
+    listing: dict[str, dict[str, str]] = {name: {} for name in folders}
+    for record in records[:-2]:
+        digest, _, path = record.decode("utf-8").partition(" *")
+        name, _, filename = path.partition("/")
+        if not _SHA256.match(digest) or name not in listing or not filename:
+            raise P.PlanError(f"the folder listing holds a record it cannot read: {record[:120]!r}")
+        listing[name][filename] = digest
+    return listing
+
+
+def run_on_vps(script: str, *, host: str = SSH_HOST, timeout: int = 900) -> bytes:
+    """Run a shell script on the VPS (`bash -s`, the script as UTF-8 bytes on stdin, like
+    `prod_write.send`) and return what it printed. A non-zero exit and a timeout are refusals: a
+    listing changes nothing, and a copy that stopped is finished by running `files --copy` again
+    (it never overwrites, and every file is read back by its sha256)."""
+    try:
+        proc = subprocess.run(
+            shlex.split(f"ssh {SSH_OPTIONS} {host} bash -s"),
+            input=script.encode("utf-8"),
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise P.PlanError(f"the VPS did not answer within {timeout}s") from exc
+    if proc.returncode != 0:
+        raise P.PlanError(
+            f"the script on the VPS exited {proc.returncode}: "
+            f"{proc.stderr.decode('utf-8', 'replace').strip()}"
+        )
+    return proc.stdout
+
+
+def read_folders(folders: Sequence[str]) -> dict[str, dict[str, str]]:
+    """The image folders as they are on the VPS (read-only): folder -> filename -> sha256."""
+    return parse_listing(run_on_vps(list_script(folders)), folders)
 
 
 # -------------------------------------------------------------------------------- the checks
@@ -517,6 +631,19 @@ def _evidence(
     )
 
 
+def name_taken(read: Read, pair: WavePair, image: Mapping[str, Any]) -> bool:
+    """The survivor's folder uses this image's filename for another picture: a row of the survivor
+    names it (another URL - the same one is a URL collision), or the folder holds a file of that
+    name with other bytes than the loser's. The folder is asked and not only the rows: a folder can
+    hold a file no row names (an old `hero.webp` in 4 of the 272 folders read on 2026-11-10)."""
+    name = image["filename"]
+    if any(i["filename"] == name for i in read.images.get(pair.survivor, ())):
+        return True
+    own = read.files.get(site_id_short(pair.loser), {}).get(name)
+    there = read.files.get(site_id_short(pair.survivor), {}).get(name)
+    return own is not None and there is not None and there != own
+
+
 # -------------------------------------------------------------------------------- the move plan
 @dataclass(frozen=True)
 class MoveCell:
@@ -534,10 +661,12 @@ class MoveCell:
 @dataclass
 class Taken:
     """What the pairs of a wave planned before this one already move onto one survivor: a second
-    loser of the same survivor meets them as collisions (an image URL, a content link, a name key)
-    and as a hero the survivor has by then. Only a pair that is planned in full adds to it."""
+    loser of the same survivor meets them as collisions (an image URL, an image filename, a content
+    link, a name key) and as a hero the survivor has by then. Only a pair that is planned in full
+    adds to it."""
 
     urls: set[str] = field(default_factory=set)
+    filenames: set[str] = field(default_factory=set)
     links: set[tuple[str, str]] = field(default_factory=set)
     names: set[str] = field(default_factory=set)
     hero: bool = False
@@ -551,6 +680,10 @@ def move_cells(
     * an image whose `original_url` the survivor holds stays on the loser (the unique key
       `(site_id, original_url)`); a content link whose `(content_source, content_id)` the survivor
       holds likewise;
+    * an image whose filename the survivor's folder uses for another picture stays on the loser
+      too (`name_taken`): the row is served from `<folder of its site>/<filename>`, no unique key
+      covers the filename, and moved it would show the survivor's picture under its own credit. An
+      image whose file is not in the loser's folder is `Held`: there is no picture to carry;
     * a moved live hero is demoted to a plain image when the survivor already has a live hero, and
       all but one when the survivor has none (`is_hero` true -> false, the first by `sort_order`
       and id stays) - at most one live hero per site is the invariant the lane proves;
@@ -565,6 +698,7 @@ def move_cells(
     counts = {
         "images": 0,
         "images_stay": 0,
+        "images_stay_filename": 0,
         "heroes_demoted": 0,
         "links": 0,
         "links_stay": 0,
@@ -580,6 +714,14 @@ def move_cells(
     for image in sorted(read.images.get(loser, ()), key=lambda i: int(i["id"])):
         if image["original_url"] in s_urls:
             counts["images_stay"] += 1
+            continue
+        if image["filename"] not in read.files.get(site_id_short(loser), {}):
+            raise Held(
+                f"image row {image['id']} names the file {image['filename']!r}, which is not in "
+                f"the loser's folder {site_id_short(loser)}: there is no picture to carry"
+            )
+        if image["filename"] in taken.filenames or name_taken(read, pair, image):
+            counts["images_stay_filename"] += 1
             continue
         moved.append(image)
         counts["images"] += 1
@@ -677,6 +819,7 @@ def move_cells(
         )
         counts["names"] += 1
     taken.urls |= {i["original_url"] for i in moved}
+    taken.filenames |= {i["filename"] for i in moved}
     taken.links |= moved_links
     taken.hero = taken.hero or kept_hero
     if moves_name:
@@ -696,8 +839,9 @@ def build_move(
     held: list[dict[str, Any]] = []
     taken: dict[str, Taken] = {}
     totals = dict.fromkeys(
-        ("pairs", "images", "images_stay", "heroes_demoted", "links", "links_stay", "names"), 0
-    )
+        ("pairs", "images", "images_stay", "images_stay_filename", "heroes_demoted", "links",
+         "links_stay", "names"), 0
+    )  # fmt: skip
     for pair in pairs:
         try:
             loser, survivor = check_pair(read, pair, stamps)
@@ -833,9 +977,14 @@ def build_retire(
 def _complete(
     read: Read, pair: WavePair, loser: Mapping[str, Any], survivor: Mapping[str, Any]
 ) -> None:
-    """The move is complete: what the loser still holds, the survivor holds too."""
+    """The move is complete: what the loser still holds, the survivor holds too - or could not take
+    (an image whose filename the survivor's folder uses for another picture, `name_taken`)."""
     s_urls = {i["original_url"] for i in read.images.get(pair.survivor, ())}
-    left = [i for i in read.images.get(pair.loser, ()) if i["original_url"] not in s_urls]
+    left = [
+        i
+        for i in read.images.get(pair.loser, ())
+        if i["original_url"] not in s_urls and not name_taken(read, pair, i)
+    ]
     if left:
         raise Held(
             f"{len(left)} image(s) the survivor lacks are still on the loser: run the move first"
@@ -887,25 +1036,31 @@ def plan_md(
             *[f"* {h['name']} (`{h['loser']}`): {h['reason']}" for h in held],
             "",
         ]
+    commands = [
+        f"$PY scripts/remediation/mechanical/apply.py --lane {lane.name} {flag}"
+        for flag in (
+            "--check-primitive",
+            "--verify",
+            "--interests",
+            "--emit",
+            "--rehearse",
+            "--probe-guards",
+            "--apply",
+            "--verify",
+            "--rehearse-rollback",
+        )  # fmt: skip
+    ]
+    moved = DUP_MERGE_MOVE_LANE.match(lane.name)
+    if moved is not None:
+        # the pictures go first (the apply refuses without them) and are asked for afterwards
+        files = f"$PY scripts/remediation/mechanical/dup_merge.py files --wave {moved.group(1)}"
+        commands[6:7] = [f"{files} --copy", commands[6], f"{files} --served"]
     lines += [
         "## Run",
         "",
         "```bash",
         "PY=./.venv/Scripts/python.exe",
-        *[
-            f"$PY scripts/remediation/mechanical/apply.py --lane {lane.name} {flag}"
-            for flag in (
-                "--check-primitive",
-                "--verify",
-                "--interests",
-                "--emit",
-                "--rehearse",
-                "--probe-guards",
-                "--apply",
-                "--verify",
-                "--rehearse-rollback",
-            )  # fmt: skip
-        ],
+        *commands,
         "```",
         "",
         "The reversal order is retire, then move.",
@@ -939,9 +1094,178 @@ def write_plan(
         encoding="utf-8",
         newline="\n",
     )
+    if DUP_MERGE_MOVE_LANE.match(plan.lane.name) is not None:
+        (directory / FILES_FILE).write_text(
+            "".join(
+                json.dumps(f, ensure_ascii=False, sort_keys=True) + "\n"
+                for f in move_files(plan, read)
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
     # ROLLBACK before APPLY: apply.py --emit refuses to write an apply without its undo
     P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=directory / "PLAN.jsonl")
     return directory
+
+
+# ---------------------------------------------------------------------------- the moved pictures
+#: What `file_state` says of one planned picture. The first is the state a move may be applied in,
+#: the second is `files --copy`'s work, the last two mean the folders are no longer as the plan
+#: read them.
+IN_PLACE = "in place"
+TO_COPY = "not copied yet"
+SOURCE_CHANGED = "the loser's file is gone or is another file than the plan read"
+DEST_TAKEN = "the survivor's folder holds another file under this name"
+
+
+def move_files(plan: P.Plan, read: Read) -> list[dict[str, str]]:
+    """The picture of each image row the plan moves: where its file is (`source`), where the row is
+    served from after the move (`dest`), both `<folder>/<filename>`, and the sha256 the loser's
+    folder held when the plan was read."""
+    rows = {str(i["id"]): i for images in read.images.values() for i in images}
+    files = []
+    for change in plan.changes:
+        if (change.table, change.column) != ("wiki_images", "site_id"):
+            continue
+        name = rows[str(change.row_id)]["filename"]
+        source, dest = site_id_short(change.site_id), site_id_short(str(change.new_value))
+        files.append(
+            {
+                "row_id": str(change.row_id),
+                "filename": name,
+                "source": f"{source}/{name}",
+                "dest": f"{dest}/{name}",
+                "sha256": read.files[source][name],
+            }
+        )
+    return files
+
+
+def load_files(path: Path, plan_path: Path) -> list[dict[str, str]]:
+    """`FILES.jsonl` of a move plan, held to its `PLAN.jsonl`: one picture per planned
+    `wiki_images.site_id` cell, out of the folder of the cell's old site into the folder of its
+    new one. A plan without the file (written before the file list existed) is refused."""
+    if not path.exists():
+        raise P.PlanError(
+            f"{path} does not exist: the move plan was written without its file list - run "
+            "plan-move --write again (allowed while the lane's stamp has no journal row)"
+        )
+    files = [json.loads(line) for line in jsonl_lines(path.read_text("utf-8")) if line.strip()]
+    cells = [json.loads(line) for line in jsonl_lines(plan_path.read_text("utf-8")) if line.strip()]
+    planned = sorted(
+        (str(c["row_id"]), site_id_short(c["old_value"]), site_id_short(c["new_value"]))
+        for c in cells
+        if (c["row_table"], c["column"]) == ("wiki_images", "site_id")
+    )
+    listed = sorted(
+        (f["row_id"], f["source"].partition("/")[0], f["dest"].partition("/")[0]) for f in files
+    )
+    if planned != listed:
+        raise P.PlanError(
+            f"{path} is not the file list of {plan_path}: {len(listed)} picture(s) for "
+            f"{len(planned)} planned image row(s), or other folders - run plan-move --write again"
+        )
+    for f in files:
+        names = {f["filename"], f["source"].partition("/")[2], f["dest"].partition("/")[2]}
+        if len(names) != 1 or not _SHA256.match(f["sha256"]):
+            raise P.PlanError(f"{path}: the entry of row {f['row_id']} is not one file's")
+    return files
+
+
+def file_state(entry: Mapping[str, str], listing: Mapping[str, Mapping[str, str]]) -> str:
+    """One planned picture against the folders as they are."""
+    source, _, name = entry["source"].partition("/")
+    if listing[source].get(name) != entry["sha256"]:
+        return SOURCE_CHANGED
+    there = listing[entry["dest"].partition("/")[0]].get(name)
+    if there is None:
+        return TO_COPY
+    return IN_PLACE if there == entry["sha256"] else DEST_TAKEN
+
+
+def file_states(files: Sequence[Mapping[str, str]]) -> list[tuple[Mapping[str, str], str]]:
+    """Every planned picture with its state, from one read-only listing of the folders named. A
+    plan that moves no image row asks nothing."""
+    if not files:
+        return []
+    folders = sorted({f[end].partition("/")[0] for f in files for end in ("source", "dest")})
+    listing = read_folders(folders)
+    return [(f, file_state(f, listing)) for f in files]
+
+
+def _named(states: Sequence[tuple[Mapping[str, str], str]]) -> list[str]:
+    return [f"{state}: {f['source']} -> {f['dest']} (row {f['row_id']})" for f, state in states]
+
+
+def files_not_in_place(directory: Path, plan_path: Path) -> list[str]:
+    """One line per picture of the move plan in `directory` that is not in its survivor's folder
+    with the planned bytes: empty when the move can be applied. `apply.py --apply` asks it before
+    the write (`files --verify` prints the same)."""
+    states = file_states(load_files(directory / FILES_FILE, plan_path))
+    return _named([(f, state) for f, state in states if state != IN_PLACE])
+
+
+def copy_script(files: Sequence[Mapping[str, str]]) -> str:
+    """Shell: copy each picture to its destination unless something is there - under a partial name
+    first and renamed when it is whole (`mv -n` replaces nothing). It never moves a file (the
+    rollback and the rows that stay need the loser's) and never overwrites one. A new folder and a
+    new file get the modes of the tree (777 and 666 on all 4,197 folders, read 2026-11-10): the
+    API container writes there as another user than the one that copies."""
+    copies = sorted({(f["source"], f["dest"]) for f in files})
+    return (
+        f"set -u\ncd {shlex.quote(WIKI_TREE)} || exit 9\n"
+        "c() {\n"
+        '  if [ -e "$2" ]; then return 0; fi\n'
+        '  if [ ! -d "${2%%/*}" ]; then mkdir -m 777 "${2%%/*}" || exit 7; fi\n'
+        f'  cp -- "$1" "$2{PARTIAL}" || exit 7\n'
+        f'  chmod 666 "$2{PARTIAL}" || exit 7\n'
+        f'  mv -n -- "$2{PARTIAL}" "$2" || exit 7\n'
+        f'  rm -f -- "$2{PARTIAL}"\n'
+        "}\n" + "".join(f"c {shlex.quote(source)} {shlex.quote(dest)}\n" for source, dest in copies)
+    )
+
+
+def copy_files(files: Sequence[Mapping[str, str]]) -> dict[str, int]:
+    """Put every planned picture into its survivor's folder, read back by its sha256 - or refuse
+    and copy nothing, when a folder is no longer as the plan read it. Running it again is safe: a
+    picture that is in place is left alone."""
+    before = file_states(files)
+    changed = [(f, state) for f, state in before if state in (SOURCE_CHANGED, DEST_TAKEN)]
+    if changed:
+        raise P.PlanError(
+            "the image folders are not as the plan read them, nothing was copied - run plan-move "
+            "--write again (allowed while the lane's stamp has no journal row):"
+            + "".join(f"\n  - {line}" for line in _named(changed))
+        )
+    to_copy = [f for f, state in before if state == TO_COPY]
+    if to_copy:
+        run_on_vps(copy_script(to_copy))
+    after = [(f, state) for f, state in file_states(files) if state != IN_PLACE]
+    if after:
+        raise P.PlanError(
+            "after the copy these pictures are not in place:"
+            + "".join(f"\n  - {line}" for line in _named(after))
+        )
+    return {"files": len(files), "copied": len(to_copy), "already_there": len(files) - len(to_copy)}
+
+
+def served_status(url: str) -> int:
+    """The site's answer to a HEAD for one picture. An HTTP error status is an answer and is
+    returned; a request that got none (no connection, a timeout) raises."""
+    try:
+        with urllib.request.urlopen(  # noqa: S310 - SERVED_ROOT is a fixed https URL
+            urllib.request.Request(url, method="HEAD"), timeout=60
+        ) as answer:
+            return int(answer.status)
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def not_served(files: Sequence[Mapping[str, str]]) -> list[str]:
+    """One line per moved picture the site does not answer 200 for, under the path its row is
+    served from after the move (`/data/images/wiki/<survivor, 8 hex>/<filename>`)."""
+    urls = sorted({f"{SERVED_ROOT}/{urllib.parse.quote(f['dest'])}" for f in files})
+    return [f"{code} {url}" for url in urls if (code := served_status(url)) != 200]
 
 
 # ------------------------------------------------------------------------------------------ CLI
@@ -985,7 +1309,13 @@ def cmd_plan(args: argparse.Namespace, *, kind: str) -> int:
         return 0
     root = args.out or REMEDIATION_ROOT
     read_path = write_read((root / lane.out_dir_name) / READ_FILE, pairs, move, retire)
-    read = parse_read(read_path.read_text(encoding="utf-8"), pairs, move, retire)
+    files = read_folders(wave_folders(pairs))
+    (root / lane.out_dir_name / DISK_FILE).write_text(
+        json.dumps(files, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    read = parse_read(read_path.read_text(encoding="utf-8"), pairs, move, retire, files)
     if kind == "move":
         plan, held, _totals = build_move(read, pairs, move, P._now())
     else:
@@ -993,6 +1323,26 @@ def cmd_plan(args: argparse.Namespace, *, kind: str) -> int:
     write_plan(plan, held, read, pairs, root)
     print(json.dumps({"lane": lane.name, **dict(plan.counters), "held": len(held)}, indent=1))
     return 0
+
+
+def cmd_files(args: argparse.Namespace) -> int:
+    """`files --copy | --verify | --served` for the move plan of a wave. Exit 0 when every picture
+    is where the command asks it to be, 1 when one is not (each is printed) or on a refusal."""
+    pairs = load_wave(args.wave, args.out)
+    move, _retire = _lanes(args.wave, pairs)
+    directory = (args.out or REMEDIATION_ROOT) / move.out_dir_name
+    files = load_files(directory / FILES_FILE, directory / "PLAN.jsonl")
+    if args.copy:
+        print(json.dumps({"lane": move.name, **copy_files(files)}, indent=1))
+        return 0
+    if args.served:
+        asked, problems = "served with HTTP 200", not_served(files)
+    else:
+        asked = "in the survivor's folder with the planned sha256"
+        problems = _named([(f, s) for f, s in file_states(files) if s != IN_PLACE])
+    answer = {"lane": move.name, "files": len(files), "asked": asked, "not": problems}
+    print(json.dumps(answer, ensure_ascii=False, indent=1))
+    return 1 if problems else 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1013,13 +1363,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         cmd.add_argument(
             "--write", action="store_true", help="read production (read-only), write the plan"
         )
+    files = sub.add_parser(
+        "files", help="the pictures of the image rows a wave's move plan moves (FILES.jsonl)"
+    )
+    files.add_argument("--wave", required=True)
+    step = files.add_mutually_exclusive_group(required=True)
+    step.add_argument(
+        "--copy",
+        action="store_true",
+        help="copy each picture into its survivor's folder on the VPS (never moves or "
+        "overwrites one) and read it back by its sha256",
+    )
+    step.add_argument(
+        "--verify", action="store_true", help="read-only: every picture is in place, byte for byte"
+    )
+    step.add_argument(
+        "--served", action="store_true", help="after the apply: the site answers 200 for each"
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
         if args.command == "waves":
             return cmd_waves(args)
+        if args.command == "files":
+            return cmd_files(args)
         return cmd_plan(args, kind="move" if args.command == "plan-move" else "retire")
-    except (P.PlanError, ValueError, FileNotFoundError) as exc:
+    except (P.PlanError, ValueError, FileNotFoundError, urllib.error.URLError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
 

@@ -67,6 +67,7 @@ from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
     CARD_EXACT_LANE,
     CARD_STATS_EXT_LANE,
+    DUP_MERGE_MOVE_LANE,
     DUP_RETIRE_METRES,
     DUPLICATE_PREFIX,
     FIELD_PROV_LANE,
@@ -1502,6 +1503,18 @@ def cmd_apply(
             f"run stamp {lane.run_stamp!r} already journals {already} row(s): this write has "
             "landed, or something else wrote under its stamp - run --verify; never apply twice"
         )
+    if DUP_MERGE_MOVE_LANE.match(lane.name) is not None:
+        # A moved image row is served from the folder of its new site, and the database cannot
+        # see a folder: the write goes out only when every moved picture is in its survivor's
+        # folder already, byte for byte (`dup_merge.py files --copy`; read-only here).
+        from mechanical import dup_merge
+
+        missing = dup_merge.files_not_in_place(out, plan_path)
+        if missing:
+            raise PlanError(
+                f"{len(missing)} picture(s) of the moved image rows are not in place - run "
+                "dup_merge.py files --copy for this wave first:\n  " + "\n  ".join(missing)
+            )
     readback = readback_for(lane)
     print("=== before ===")
     print(run_psql(readback).stdout)
@@ -1797,8 +1810,20 @@ def _cell_probe_cases(
         )
     for invariant in lane.site_invariants:
         # the first planned cell of the invariant's column is given a value that breaks it; a plan
-        # without such a cell cannot probe it, and `cmd_probe_guards` names that
-        index = next((i for i, r in enumerate(records) if r.column == invariant.probe_column), None)
+        # without such a cell cannot probe it, and `cmd_probe_guards` names that. A probe that
+        # names a neighbour corrupts the cell of the site whose neighbour it is (`neighbour_of`):
+        # next to any other planned site the neighbour is far, and the distance check would
+        # refuse the probe before the invariant it is meant for
+        near = any(PROBE_NEIGHBOUR in v for v in invariant.probe_values)
+        index = next(
+            (
+                i
+                for i, r in enumerate(records)
+                if r.column == invariant.probe_column
+                and (not near or r.site_id == foreign["neighbour_of"])
+            ),
+            None,
+        )
         if index is None:
             continue
         chosen = records[index]
@@ -1831,26 +1856,32 @@ def unprobed_invariants(records: Sequence[ChangeRecord], lane: Lane) -> list[str
 
 
 def neighbour_of(records: Sequence[ChangeRecord], lane: Lane) -> dict[str, str]:
-    """`{"neighbour": id}` for a lane whose site invariant probes with `PROBE_NEIGHBOUR`: a curated
-    shown site near the first planned loser, read from production (read-only), else `{}`. A plan
-    with no such site fails here, loudly: the invariant would stay unproven."""
+    """`{"neighbour": id, "neighbour_of": site}` for a lane whose site invariant probes with
+    `PROBE_NEIGHBOUR`: a curated shown site near a planned loser, read from production (read-only),
+    else `{}`. The planned losers are asked in plan order and the first that has such a site is the
+    one the probe corrupts (`probe_cases`): about a third of the duplicates have no other curated
+    site within the distance, and one of them at the head of a plan is no reason to leave the wave
+    unproven. A plan in which no loser has one fails here, loudly: the invariant would stay
+    unproven."""
     wanting = [i for i in lane.site_invariants if any(PROBE_NEIGHBOUR in v for v in i.probe_values)]
     if not wanting:
         return {}
-    cell = next((r for r in records if r.column == wanting[0].probe_column), None)
-    if cell is None:
+    cells = [r for r in records if r.column == wanting[0].probe_column]
+    if not cells:
         return {}
-    survivor = str(cell.new_value).removeprefix(DUPLICATE_PREFIX)
-    sql = survivor_neighbour_sql(
-        cell.site_id, survivor, [r.site_id for r in records], DUP_RETIRE_METRES
-    )
-    rows = psql_json_reader()(sql)
-    if not rows:
-        raise PlanError(
-            f"{cell.site_name} ({cell.site_id}) has no other curated shown site within "
-            f"{DUP_RETIRE_METRES} m: '{wanting[0].says}' cannot be probed with this plan"
+    planned = [r.site_id for r in records]
+    for cell in cells:
+        survivor = str(cell.new_value).removeprefix(DUPLICATE_PREFIX)
+        rows = psql_json_reader()(
+            survivor_neighbour_sql(cell.site_id, survivor, planned, DUP_RETIRE_METRES)
         )
-    return {"neighbour": str(rows[0]["id"])}
+        if not rows:
+            continue
+        return {"neighbour": str(rows[0]["id"]), "neighbour_of": cell.site_id}
+    raise PlanError(
+        f"none of the {len(cells)} planned site(s) has another curated shown site within "
+        f"{DUP_RETIRE_METRES} m: '{wanting[0].says}' cannot be probed with this plan"
+    )
 
 
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
