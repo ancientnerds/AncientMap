@@ -281,5 +281,13 @@ started), the D133 backup deletion.
 | D151 | How the released work runs | **In one go, in this order** (rec): beta label; the runs interrupted on 2026-11-07; D57; D14 B; D20; WC finish; WN; D21; D23/D25; D13; enrichment last. A short report per block; stop only when a block costs more than 25 % above its estimate or a spot check is bad. Enrichment starts with a 100-site pilot and then waits for the owner. D129 (image rest after stage 1) and D131 (card waves a3/a4 after a2's report) keep their owner gates. |
 | D152 | Weekly cap | **2,500 model answers a week** (rec), counted by the orchestrator (Monday to Sunday); then a clean pause until Monday and a status report. |
 
+### The same evening: only Fable 5.2
+
+| # | question | decision |
+| --- | --- | --- |
+| D153 | The model of every answer (D6: Opus/Sonnet/Haiku 5.5 by role, each calibrated) | **Fable 5.2 only** (owner: "wir müssen mal alles auf fable 5.2 umstellen, da kann ich das kontingent zurücksetzen"; "Ich will mit Fable das projekt abschließen! nur mit fable!"). Every role answers on `claude-fable-5-2` from now on; the three Opus verify agents still running were stopped. Supersedes D6's model mix and D36/D40/D45; answers recorded earlier keep their stamp and stay valid. |
+| D154 | Calibration of the roles on Fable (asked: measure each role on its sealed gold first, ~2,000-2,500 answers) | **No calibration runs** (owner: "ich will keinen stempel. verdammt nochmal ich will das projekt endlich abschließen. die datenbankprüfung geht schon seit wochen."). A role stands on Fable by this decision, with no verdict of its own; D148's Fable test of `wc_adversarial` is dropped with it. Orchestrator's reading, not the owner's words: the answer files keep naming the model that really answered (`claude-fable-5-2`), because an import refuses any other name and the record would otherwise be false; that is a code change without a model answer. The journalled write path (backup, rehearsal, read-back, acceptance) stays. |
+| D155 | Weekly cap (D152: 2,500 answers) | **Lifted for Fable** (rec): the owner resets the quota himself; a count per block is still reported, and the stop rule of D151 stays. |
+
 Still the owner's own: reject the L'Anse aux Meadows proposal 01e29c6e in the Radar (D97; status `new` on 2026-11-10),
 the trademark ownership with Matt (D94), the GSC exports (D91), disk C: (23 GB free on 2026-11-10; D135).
