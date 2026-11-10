@@ -28,8 +28,15 @@ and sometimes the wrong item. Two model stages decide it, both Claude, both thro
 
 `build_decisions` merges both into `DUP_DECISIONS.jsonl`, one record per cluster, plus one per
 already-retired loser that still holds images, links or a name its survivor lacks (no model: the
-survivor is the one its `scope_reason` names). A MERGE further apart than `DEFAULT_METRES` is held unless
-`OVERRIDES.json` gives its loser a limit with a quote (per-pair override, evidence required).
+survivor is the one its `scope_reason` names).
+
+A MERGE further apart than `DEFAULT_METRES` (orchestrator decision O14 of 2026-11-10) is merged only
+when verdict and recheck both call the two records one site with quoted evidence - the rule of every
+merge: a MERGE whose quotes the machine finds, CONFIRMed by a recheck whose quotes it finds. The
+distance alone holds nothing; the pair carries its own distance as its limit (`metres_limit`, which
+the merge lanes check), and whatever one of the two readers does not carry is held and listed.
+`OVERRIDES.json` may still give a loser a wider limit with a quote of its own (a per-pair override);
+one that is given and does not carry the distance holds the member.
 """
 
 from __future__ import annotations
@@ -70,6 +77,11 @@ VERDICTS = ("DISTINCT", "MERGE", "PART_OF", "WRONG_ID")
 RECHECK_DECISIONS = ("CONFIRM", "RETARGET", "REJECT")
 #: The default distance a survivor may be at, `lane.DUP_RETIRE_METRES`, the owner-case list's cap.
 DEFAULT_METRES = 2000
+#: The merge lanes measure a pair on PostGIS's sphere (`lane.sphere_metres`, radius 6,371,008.77 m),
+#: this module on 6,371 km (`common.metres`): the lanes read 1.4 mm more per km (Engomi Ancient City
+#: Ruins / Enkomi: 2,057.7165 m here, 2,057.7193 m in production, read 2026-11-10). A limit that is a
+#: pair's own distance is that distance as the lanes read it.
+LANE_SPHERE = 6371008.7714 / 6371000.0
 DUP_DECISIONS = "DUP_DECISIONS.jsonl"
 OVERRIDES_FILE = "OVERRIDES.json"
 DUP_DIR = "dup"
@@ -548,14 +560,22 @@ def decide_verdict(
         if m.verdict == "MERGE" and m.survivor is not None:
             metres = distance[tuple(sorted((site, m.survivor)))]
             if metres > DEFAULT_METRES:
-                granted = _limit(metres, overrides.get(site), library)
-                if granted is None:
-                    reason = reason or (
-                        f"beyond {DEFAULT_METRES} m ({metres:.0f} m): a per-pair override with a "
-                        "quote is the owner's to give (OVERRIDES.json)"
-                    )
+                override = overrides.get(site)
+                if override is None:
+                    # O14: the distance alone holds nothing. The pair's limit is its own distance
+                    # as the lanes will measure it, and the pair is merged only when the recheck
+                    # CONFIRMs it (`build_decisions`).
+                    metres_limit = math.ceil(metres * LANE_SPHERE)
                 else:
-                    metres_limit, limit_evidence = granted
+                    granted = _limit(metres, override, library)
+                    if granted is None:
+                        reason = reason or (
+                            f"beyond {DEFAULT_METRES} m ({metres:.0f} m): the override "
+                            f"{OVERRIDES_FILE} gives this record carries no limit of at least "
+                            "that distance with a quote the machine finds"
+                        )
+                    else:
+                        metres_limit, limit_evidence = granted
         out_members.append(
             {
                 "site_id": site,
@@ -586,13 +606,11 @@ def decide_verdict(
 
 
 def _limit(
-    metres: float, override: Mapping[str, Any] | None, library: Q.Library
+    metres: float, override: Mapping[str, Any], library: Q.Library
 ) -> tuple[int, list[dict[str, str]]] | None:
     """The distance limit an override gives a loser with the evidence that carries it, or `None`:
     it needs a limit at or above the measured distance, and evidence whose quotes the machine
     finds. The limit and its quotes are what the decision, the pair and the plan journal."""
-    if override is None:
-        return None
     limit = int(override["metres_limit"])
     quotes = override.get("evidence") or []
     if limit < math.ceil(metres) or not quotes:
@@ -712,7 +730,10 @@ def build_decisions(
                     "metres": m["metres"],
                 }
                 if m["verdict"] == "MERGE":
-                    # the limit and its evidence are the verdict round's, checked once there
+                    # the limit and its evidence are the verdict round's, checked once there. A
+                    # pair beyond the default without an override (O14) has its distance as its
+                    # limit and no evidence of its own: what carries it is `quotes` above, the
+                    # found quotes of the verdict and of the recheck that CONFIRMed it
                     item["metres_limit"] = m["metres_limit"]
                     item["limit_evidence"] = m["limit_evidence"]
                     merges.append(item)

@@ -635,12 +635,15 @@ def name_taken(read: Read, pair: WavePair, image: Mapping[str, Any]) -> bool:
     """The survivor's folder uses this image's filename for another picture: a row of the survivor
     names it (another URL - the same one is a URL collision), or the folder holds a file of that
     name with other bytes than the loser's. The folder is asked and not only the rows: a folder can
-    hold a file no row names (an old `hero.webp` in 4 of the 272 folders read on 2026-11-10)."""
+    hold a file no row names (an old `hero.webp` in 4 of the 272 folders read on 2026-11-10). The
+    listing holds every folder of the wave (`wave_folders`; a folder that does not exist is listed
+    empty): a read without a pair's folders is no read of the wave and fails here. A row whose own
+    file is not in the loser's folder is none the survivor's folder took the name of."""
     name = image["filename"]
     if any(i["filename"] == name for i in read.images.get(pair.survivor, ())):
         return True
-    own = read.files.get(site_id_short(pair.loser), {}).get(name)
-    there = read.files.get(site_id_short(pair.survivor), {}).get(name)
+    own = read.files[site_id_short(pair.loser)].get(name)
+    there = read.files[site_id_short(pair.survivor)].get(name)
     return own is not None and there is not None and there != own
 
 
@@ -715,7 +718,7 @@ def move_cells(
         if image["original_url"] in s_urls:
             counts["images_stay"] += 1
             continue
-        if image["filename"] not in read.files.get(site_id_short(loser), {}):
+        if image["filename"] not in read.files[site_id_short(loser)]:
             raise Held(
                 f"image row {image['id']} names the file {image['filename']!r}, which is not in "
                 f"the loser's folder {site_id_short(loser)}: there is no picture to carry"
@@ -1082,9 +1085,18 @@ def write_plan(
     pairs: Sequence[WavePair],
     root: Path,
 ) -> Path:
-    """The lane's files in its directory under `root` (`apply.lane_dir` for the default)."""
+    """The lane's files in its directory under `root` (`apply.lane_dir` for the default).
+
+    `DISK.json`, the folder listing the plan was built on, is written here with the plan and not
+    when the folders are read: a re-plan that is refused (a lane that has written) leaves the
+    listing of the applied plan, whose `FILES.jsonl` carries that listing's sha256 values."""
     directory = root / plan.lane.out_dir_name
     directory.mkdir(parents=True, exist_ok=True)
+    (directory / DISK_FILE).write_text(
+        json.dumps(read.files, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     P.write_plan_jsonl(plan, directory / "PLAN.jsonl")
     (directory / "PLAN.md").write_text(
         plan_md(plan, held, read, pairs), encoding="utf-8", newline="\n"
@@ -1310,11 +1322,6 @@ def cmd_plan(args: argparse.Namespace, *, kind: str) -> int:
     root = args.out or REMEDIATION_ROOT
     read_path = write_read((root / lane.out_dir_name) / READ_FILE, pairs, move, retire)
     files = read_folders(wave_folders(pairs))
-    (root / lane.out_dir_name / DISK_FILE).write_text(
-        json.dumps(files, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
     read = parse_read(read_path.read_text(encoding="utf-8"), pairs, move, retire, files)
     if kind == "move":
         plan, held, _totals = build_move(read, pairs, move, P._now())
