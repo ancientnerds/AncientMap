@@ -134,3 +134,152 @@ decided or orchestrator calls, these were open.
 | D64 | Untracked reports in a public repo | **Commit the two reports only** (rec): `docs/reports/2026-10-08-seo-geo-audit.md`, `docs/reports/2026-10-19-stats-seo-auswertung.md`; `docs/ideas.md` moves to a gitignored place. |
 | D65 | Restart after a plan-limit stop | **Heartbeat about every 3 h** (rec): a durable cron job in the Claude Code session resumes the run from the resume point (renewed after its 7-day expiry). |
 | D66 | Owner-only actions during the run | The owner runs the **sudo logrotate install now** (visitor classes push 2a, then 2b >= 48 h later); the GSC checklist stays for later (final report). |
+
+## Follow-up decision of 2026-10-25 (Claude Code session, Opus 5.5)
+
+| # | question | decision |
+| --- | --- | --- |
+| D67 | The token cost of the full close-out (D54: about 25,000-30,000 more model answers, weeks) | **Stop now** (rec): the close-out run ends after the beta-exit work; the DB rest (card waves, WC finish, identity, images D17, the 38 sites, phase 8) waits at a written resume point for a later session. Only the story backbone keeps running on the VPS (MiniMax, no Claude tokens); a short session pushes the beta label once the alt-history stories are done. Supersedes D54's scope and D55/D65 (no heartbeat). |
+| D68 | (2026-10-25) Shypyntsi shows "Undated" although its Wikipedia article dates the Cucuteni-Trypillian settlement to the 5th to early 4th millennium BC (the wd5 re-check held the cell as unclear: Ukrainian sources say 4th-3rd millennium) | **Write the Wikipedia date** (owner, 2026-10-25: "warum ist die scheisse bei uns undated"): the researcher's value -5000 with its found quote goes in through `adversarial.py owner-accept` and a journalled wd5 wave; the re-check's unclear note stays in the evidence. |
+| D69 | (2026-10-25) The other 48 cells the wd5 re-check held as unclear (45 in wd5, 3 in wd5-reask) whose researcher found a quote for the value | **Write them the same way as D68** (rec): `owner-accept` + one journalled wave per run; the 128 rejected cells (a contradicting reputable source) stay unwritten and listed. |
+| D70 | (2026-10-25) 615 of 4,909 shown curated sites still have no period start; the owner's spot check found a dating at once | **Stop now; the next step is a proper dating extractor** (owner): before any further model research, build a deterministic extractor that finds a site's dating whenever a source states one - not only English Wikipedia but the other sources too (other Wikipedia languages, Wikidata date properties, heritage registers, Pleiades and the other connected sources) - and measure its coverage on the 615 undated sites and a gold set first. The close-out run is stopped and counted by the owner as a failure. |
+
+## Owner questionnaire of 2026-11-05 (Claude Code session, Opus 5.5; 43 open questions, answered interactively)
+
+| # | question | decision |
+| --- | --- | --- |
+| D71 | D70 extractor write gate | **Write without a model check** (rec) when the extractor's precision on a sealed gold set is >= 95 % and every cell carries a verbatim quote + source URL; 30 cells shown to the owner before the wave; journalled through the wd5 lane. |
+| D72 | D70 extractor scope | **Fill the 615 undated only** (rec); the comparison against the ~4,294 dated sites is measured and shown as a conflict list, never written. |
+| D73 | Sites the extractor finds nothing for | **Decide after the measurement** (rec); they stay "Undated", the rest list goes to the owner. |
+| D74 | Beta label vs. alt-history stories that never finish | **The label goes once at most ~10 permanently failing alt-history stories remain** (rec); their ids go to the owner, they stay online. |
+| D75 | MiniMax weekly quota priority | **Story backbone first from the reset Mon 2026-11-09** until the 346 alt-history stories are done (rec); afterwards the backbone runs Mon-Wed only, Thu-Sun stays reserve for studio and Lyra. |
+| D76 | Google cliff of 2026-10-20 | **The owner checks GSC "Security & manual actions" and the ancientnerdsdao@gmail.com inbox** and sends the wording (rec). |
+| D77 | Visitor classes push 2b (hidden /index-all/ link, 8773db9) | **Hold until the GSC manual-action check is done** (rec); supersedes D66 for 2b. |
+| D78 | Resume of the DB close-out (D67) | **In stages, owner release per lane with a cost estimate** (rec): first the cheap steps (D14 part A, D48, D49, D57), then card wave A, then the rest. |
+| D79 | Card wave A (1,189 sites) | **Stages, a1 first** (rec): measure the cost per card, spot-check, then the owner decides on a2-a4. |
+| D80 | Lane WC calibrations that failed at the top tier | **Adjudicate the disagreements, release wc-wv-1o; sharpen and re-seal the briefings of fc-2o, wv-2o and the pilot judge** (rec). |
+| D81 | New contradicted description sentences found by card waves (est. 450-750 sites beyond D25's 160) | **Repair them per wave through the D25b mechanism, then rewrite the card** (rec). |
+| D82 | D17 image sources | **Commons only** (rec); sites without a usable Commons image stay imageless and go on the owner list; the D48/D49 rest lists (433 small heroes, 6 strips, 11 without author, Qasr Qaroun) stay live and are searched within D17. |
+| D83 | D13 re-target when the ancient site has no Wikidata item and no enwiki article | **Re-target without ids** (rec): name and text move to the ancient site, source_url = the best scholarly source, no Short. |
+| D84 | D50 country of the Baltic Sea Anomaly | **Empty / international waters, no country page** (rec). |
+| D85 | Theo worker (Q1) | **Off until after the beta label** (rec); then the 14 campaign topics with 1 slot, /theo-write after the first dossier; the 12 old UI requests of 2026-07-05 go to cancelled. |
+| D86 | Paper quality badges from the old M3 score | **Remove the M3 badge** (rec); show "Claim-checked" only where the studio check ran (code + journalled correction). |
+| D87 | YouTube as a whole (Shorts production, Baalbek slice Q2, first full episode, comment agent) | **Deferred** (owner: "youtube zurückstellen", Shorts "weiter warten"); OAuth is set up together with the Shorts release; **no "altered or synthetic content" label**, the AI voice is named in the description only. |
+| D88 | SerpApi November quota | **Use ~50 searches for the cliff diagnosis** (head + brand terms), keep the rest (rec). |
+| D89 | Reaction if Google confirms a scaled/thin-content action | **Wait for the finding**, then decide from Google's example URLs (rec). |
+| D90 | SEO audit 2026-10-08 E1b, E6, E12, E13 | **All four recommendations confirmed** (rec). |
+| D91 | GSC checklist of 2026-10-20 | **Only the exports now** (owner, ~10 min); Soft-404 validation and indexing requests after the cliff is resolved. |
+| D92 | 30-day stats review | **Postponed** (owner); the creator flywheel panel and the mobile globe layout follow after the review (rec); TTFB/CDN stays as is (rec). |
+| D93 | God's-Eye-View layer | **Keep waiting for issue #1005; commit scripts/export_gods_eye_view_layer.py** (rec). |
+| D94 | Trademark "Ancient Nerds" | **First settle the owner with Matt** (owner). |
+| D95 | Matt Cavana's seed DB licence | **Not needed** (owner): the internal release of 2026-10-11 suffices. |
+| D96 | Wikidata item "Ancient Nerds" | **Wait for an independent source** (rec). Training-data policy: rest (rec). |
+| D97 | Prospector queue (1,944 new, 361 needs_decision) | **Plan as its own lane after D70/D57** (rec); the owner rejects L'Anse aux Meadows (01e29c6e) in the Radar now. |
+| D98 | Housekeeping | Offsite sync task (D24) **registered Sun 08:00 + run once**; VPS leftovers **deleted except .env.bak-*** (owner handles those); merged branches deleted, the four unmerged ones (develop, feature/new-ingesters, worktree-phosphor-tinting, chore/2026-10-04-corrections-reversal) **archived as tags, then deleted**; studio Q3-Q17 confirmed; video/src/lyra-haiku/ stays local; NERV redesign rests. |
+
+## Orchestrator decisions under the owner's AFK mandate of 2026-11-05 ("soweit wie möglich autonom, Empfehlungen umsetzen")
+
+These were raised by the wave-1 scouts (output/remediation/final-2026-10-08/D70_EXTRACTOR_DESIGN.md, LANES_PLAN_2026-11-05.md) and decided by the orchestrator (Claude Opus 5.5), not by the owner; the owner may overturn any of them.
+
+| # | question | decision |
+| --- | --- | --- |
+| O1 | D70 range representation: period_end is NULL on all 5,004 curated rows, the page renders "start – end", and the D58 window tests period_end first | **Write only the start** (the earliest anchored start of the highest tier present); the source range with both quotes stays in the journal evidence. Reason: a disagreement about when a site began is not an end of occupation; writing max-start into period_end would tell visitors a wrong end. A cell whose start would move a site outside the D58 scope window is not written; it goes to the owner list. |
+| O2 | D69 vs D70 for the 105 adversarially rejected cells among the 615 | **D70 wins**: the extractor may write them under O1 with every conflicting quote in the evidence. |
+| O3 | D71 "30 cells shown to the owner before the wave" while the owner is AFK | The 30 cells (ranges and period words over-represented) are checked by three independent adversarial agents against the live sources instead, and saved to OWNER_SHOWN.json marked "owner AFK, autonomous mandate 2026-11-05"; the wave goes only if the sealed gold precision is >= 95 % and the spot check finds <= 1 wrong cell of 30. |
+| O4 | D57 insert while a thin-content action is suspected (D76/D89) | **Research and plan now, no insert write** until descriptions (WN) and images exist for the new sites. |
+| O5 | D14 part A scope | The model-free move of the 23 already-retired duplicate losers' images and links, **excluding Tarxien and Dodona** (part B may swap their survivors). |
+| O6 | D80 extent | Release wc-wv-1o; adjudicate the 6 pilot-judge disagreements first; sharpen CHECK/VERIFY/JUDGE briefs and re-seal all WC roles under new ids (~86 Opus answers). |
+| O7 | D81 timing for a1 | After D80 gives wc_web_verifier standing: the a1 defect sites are repaired through D25b, and their a1 cards are held from the first write step and rewritten after the repair. |
+| O8 | Image-role recalibration (image-roles-v1 failed; ~950 answers) | **Not started**: not covered by any release; blocks D15/D17/D59. Cost goes to the owner. |
+| O9 | Weekly backbone restart after the alt-history stories (D75) | A guarded weekly Monday 00:20 UTC cron start is added on the VPS. |
+| O10 | VPS leftovers beyond the listed ones (node_modules-bak-*, sites_dump.dump, 4 untracked scripts, tts_test/, pfps/) | **Left in place** (deletion outside the listed scope); listed for the owner. |
+
+## Owner questionnaire of 2026-11-06 (Claude Code session, Opus 5.5; questions raised by wave 2)
+
+| # | question | decision |
+| --- | --- | --- |
+| D99 | D70 after the deterministic extractor failed (sealed gold 0.7034, spot check 26/30 wrong) | **A Claude agent reads per site** (rec): Sonnet field_researcher proposes a quoted start per undated site, an independent adversarial check verifies; ~1,200-1,500 Sonnet answers. **Pilot of 50 sites first, result shown to the owner** before the rest. O1 (start only, range in the evidence) and the D58 window precheck stay. |
+| D100 | pilot_judge failed its re-seal at Opus (wc-pj-1o2 0.913 with the known error missed; wc-pj-2o2 0.8966 with 2 extra WRONG judged plausibly right) | **Release** (rec): strict rather than lax is the safe side for cards; released on wc-pj-1o2. |
+| D101 | The period word "Neolithic" (and other period words) mapped to one fixed year (-4000) | **A year stated by the same source wins** (rec); a bare period word is used only without a number, and then with a regional start (Near East earlier than Europe). Applies to D57 and the D99 lane. |
+| D102 | GSC manual-action check (D76) | Still open: **the owner checks and sends the wording.** |
+| D103 | Image-role recalibration (image-roles-v1 failed; O8) | **Start the re-test one tier up** (rec), ~950 answers mostly Opus; the cost of the D17/D15/D59 image search itself (~1,500-3,000) is reported separately before it runs. |
+| D104 | D57: 6 vetoed fields (Merv, Mesa Verde, Palmyra, Nan Madol, Pantheon start; Thermopylae coordinates) | **Second research round for the 6 (code + ~15 answers), new plan + Opus review; insert still waits** for text and image (O4). |
+| D105 | Card waves a2-a4 | **Stop after a1 and show the owner cost and quality per card** (rec). |
+| D106 | Disk C: ~96 % full | **Keep only 1 local offsite copy** (VPS keeps 4). |
+| D107 | VPS leftovers (node_modules-bak-*, sites_dump.dump, 4 untracked scripts, tts_test/, pfps/, the two 2026-11-05 d14a backups) | **Delete all except .env.bak-*** (rec); supersedes O10. |
+| D108 | "Claim-checked" badge on SSR paper pages / library cards | **No** (rec), no new design element. |
+| D109 | The 5 novel briefings | **noindex stays** (rec). |
+| D110 | Small items | Cancel Theo request afe7c26a (paused); archive as tags and delete the local branches fix/2026-10-20-reference-linkifier-parens and integrate/wave1, keep feat/visitor-classes-push2 (held by D77); O1-O10 stay in force. |
+
+## Owner answers of 2026-11-06 evening (questions of AFK_REPORT_2026-11-06.md)
+
+| # | question | decision |
+| --- | --- | --- |
+| D111 | D99 pilot failed (7/50 dated, 5 right) | **Improve, then a second pilot of 50 new sites (~80 answers)**: coarse period words (Stone Age, Palaeolithic, Bronze Age without a sub-phase where the table needs one) give no year, a precise epoch is required, a weak single source (unreferenced stub, travel page) does not count, missing epochs (Chimú, Late Roman, ...) get cited starts. Stop after the pilot and show the owner. |
+| D112 | The 5 checked right pilot years (Brean Down, Mawk'allaqta, Karabel, Çimdin Kalesi, Moel y Gest) | **Write them** through the journalled wd5 lane together with the next step; Port Way and Čertova pec are not written. |
+| D113 | D101 detail questions 1-5 | All as recommended: Italy 'Roman' alone gives no year ('Roman imperial' from -27); Germany/Netherlands/Switzerland 'Roman' alone gives no year; fill missing countries and epochs with Wikipedia citations; a read-only list of already written years the old fixed rule may have got wrong; Wikipedia suffices as a citation and the old British middle/late Neolithic and Iron Age values stay. |
+| D114 | Nan Madol start (research 900 AD vs reviewer 1 AD) | **A small third round for this field only** (2 answers), then a new plan and review; insert still waits (O4). |
+| D115 | pfps/ and tts_test/ on the VPS | **Leave them.** |
+| D116 | An image of a genuine part of the site now in a museum (e.g. the Ishtar Gate in Berlin) | **Counts as "shows the site".** |
+| D117 | The image gold of 2026-09-19 has ~40 wrong entries | **A clean re-measurement** with a new, checked gold set (550-950 answers, mostly Opus). |
+| D118 | Image prefilter failed at Sonnet | **Test it at Opus** (~5 answers first). |
+| D119 | Tolerance for "wrong site" in image_depicts | **At most ~2 %**, because the adversarial check views every image afterwards. |
+| D120 | (unchanged) | The image search itself (D17/D15/D59, ~2,500-3,200 answers) starts only after a separate owner release. |
+
+## Owner answers of 2026-11-07 (questions of AFK_REPORT_2026-11-05.md section 3 and AFK_REPORT_2026-11-07.md section 7)
+
+| # | question | decision |
+| --- | --- | --- |
+| D121 | The 166 period-word years of D113_CONFLICT_LIST | **Correct them** (rec): 69 get the regional year, 97 become undated; recomputation only, journalled wave. |
+| D122 | The 301 rule-made years without a source (old site_type rule, D12) | **Reset to undated** (rec), in the same journalled run as D121. |
+| D123 | Bare "Bronze Age" where the table has sub-phases | **Stays without a year** (rec). Countries without a clear Wikipedia start stay without one too. |
+| D124 | Dating of the remaining ~430 sites | **Stop here** (rec); only Eddisbury Hill Fort gets its cited radiocarbon start (12th c. BC) through a 1-2 answer re-ask. |
+| D125 | image_depicts at Opus (false depicts 1.6 % <= 2 %, recall 0.79 < 0.90) | **Release** (rec). |
+| D126 | image prefilter at Opus (0.95 vs 0.98) | **Release** (rec). |
+| D127 | Loose museum finds whose provenance is only on the file page | **Count only when the image itself shows the provenance** (label/inscription); architectural parts always count (D116). Correct the ~10-11 gold cases accordingly. |
+| D128 | image adversarial after D127 | **Release if <= 4 real errors per 100** (rec). |
+| D129 | Image search D17/D15/D59 | **In stages** (rec): first ~150 sites, spot check, cost per image reported; the owner decides the rest. |
+| D130 | D57: Miletus, Panathenaic Stadium, Pella | **A small 4th round** for these 3 fields (rec); insert still waits (O4). |
+| D131 | Card waves a2-a4 (a1: 18.2 answers per written card) | **First make it cheaper, then run a2** and report cost and quality (rec); a3/a4 wait for the owner. |
+| D132 | a1 rest | **Rewrite the 4 weak spot-check cards** (Banwolseong, Rudna Glava, Nakhchivan, Seahenge); the 9 cards blocked by the web.archive.org network block stay, retried later without a new access path. |
+| D133 | VPS backups 2026-11-07_a1-* (3 x ~885 MB) | **Delete after Sunday's offsite copy is verified** (rec). |
+| D134 | WC adversarial role + D18 author backfill (44 heroes) | **Both** (rec): calibrate the adversarial role for lane WC (~30-50 Opus answers) and run the D18 author backfill with a journalled write. |
+| D135 | Disk C: (22 GB free) | The owner declined archiving the old handoff dirs; **he cleans up himself**. Runs must stop and report below 10 GB free. |
+
+## Owner correction of 2026-11-07 (after 988 visible sites showed "Undated")
+
+| # | question | decision |
+| --- | --- | --- |
+| D136 | Sites whose only dating is an epoch word (incl. the coarse words of D111/D123 and the type-rule years reset by D122) | **Use the predefined period bands** (owner: "Ich will die vorgefertigten periods. wir haben doch älter als 4500bc. da kann doch vieles rein."): every epoch maps to the band in which it begins (in the site's country where REGIONAL_STARTS has a value), per the table output/remediation/fields/epoch_bands/EPOCH_BANDS.md; the stored year is the band's edge (`bucket_edge`, as for the 511 band rows of 2026-10-04 and the owner's rule "Neolithic is < 4500 BC"). Coarse words (Stone Age, Palaeolithic, prehistoric, Mesolithic) go to "< 4500 BC"; a bare Bronze Age goes to the band of its regional start. Supersedes D111's/D123's "no year" for epoch words and D122 where the site's own sources, Wikidata P2348 or its own type/name name an epoch. A site with no year and no epoch anywhere stays "Undated". |
+| D137 | (2026-11-07) D136 details after the spot checks (19/50 judged wrong, largely by the band rule itself) | **Write all bands now** (owner: "Egal, schreiben"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word ("prehistoric", "stone age") is read together with the site's own monument type to pick the band where the type names its epoch (owner: "Wenn es 4000 bis 1500 ist haben wir doch auch eine periode dafür"): stone circle/henge/dolmen/long barrow/passage tomb -> Neolithic, round barrow/cairn -> Bronze Age, hillfort -> Iron Age, each with the site's regional start; only without such a type does the coarse word give "< 4500 BC". Obvious reading errors (a period word inside a name of a site its source calls older, finds in the surroundings, a later renewal) are fixed before the write. The owner cleans disk C: himself. |
+| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: "die 60 sites ja"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: "die 2 mittelalter deaktivieren"), through the journalled scope-retire lane. |
+
+## Owner questionnaire of 2026-11-10 (Claude Code session, Fable 5.2; 12 open questions, answered interactively)
+
+Owner: "wir haben noch nicht alles abgeschlossen. stell mir alle offenen fragen." State measured read-only before
+the questions (production, 2026-11-10): 4,907 shown curated sites; 544 without a period start; 955 without a
+thumbnail; 40 without a description; 269 without a card text. Story backbone 2026-11-10 09:36 UTC: 662 stories open,
+4 alt-history stories open, stopped by the quota guard at 29 %. Google referrals 13-30 a day (350-550 before
+2026-10-20). Interrupted on 2026-11-07 by D136 and still released: card wave a2 (verify 200/292 answered), the D132
+redo (write answered, chain open), the D57 plan after round 4 (Opus review open), image stage 1 of D129 (not
+started), the D133 backup deletion.
+
+| # | question | decision |
+| --- | --- | --- |
+| D139 | Beta label (D74: at most ~10 alt-history stories left; 4 open) | **Remove it now** (rec): `closeout/beta-label` (D62 wording B) onto the current main, gates, push. |
+| D140 | GSC manual-action check (D76/D102) | **The owner checked: nothing is reported.** The cliff of 2026-10-20 is therefore an algorithmic site-wide demotion; D89's "decide from Google's example URLs" has no examples to go on. |
+| D141 | Reaction to the algorithmic demotion | **Measure first, then a proposal** (rec): count per page type the thin or automatically produced pages Google knows (sites without text or picture, short stories, list pages) and show the owner the numbers with a proposal; no model answers, nothing changes live. |
+| D142 | Visitor classes push 2b (hidden /index-all/ link, 8773db9; D77) | **Hold until Google has recovered** (rec), also without a reported manual action; supersedes D77's release condition. |
+| D143 | D57: the 37 high-demand sites without a page | **Finish them completely and insert** (rec): description, picture and card per site, then the insert; about 600-950 answers plus the card_stats insert step. No site goes live without text and picture (O4 stays). |
+| D144 | D14 part B (90 duplicate groups, Tarxien, Dodona, Caparra) | **Run it** (rec), about 180 answers. |
+| D145 | Descriptions: what belongs to the close-out | **All four** (the rec was the first two): WC finish and the 141 defects (~1,200-1,400 answers), WN for the 40 shown sites without a description (~200), D21 disputes (~360), enrichment of the thin texts (~5,250). |
+| D146 | Identity: what belongs to the close-out | **D20 scope review with the 5 pending rows (~230), D13 modern-town re-targets (pilot of 20, then 60-150; ~800), D23 clean names with D25 parents (~500)** (the rec was D20 only). **Spoken names (D23) are deferred** while YouTube rests (D87). |
+| D147 | New cards beyond wave A | **Stop after wave A** (rec): the other ~3,700 sites keep their card (D5), the 269 shown sites without a card text stay without one; reopened when the Shorts start. |
+| D148 | `wc_adversarial` failed at Opus (wc-adv-1o: 0.8311 < 0.90; 30 of 37 disagreements keep a sentence the record drops; 1 of 3 known errors missed; held, no higher tier than Opus) | **Test one tier up on Fable 5.2** (owner; the rec was no release): ~220 answers plus the code for a truthful Fable stamp and disclosure. Extends D6 by `claude-fable-5-2` for this role only. |
+| D149 | Baltic Sea Anomaly without a country (D84) has no /sites/ page at all | **Globe only** (rec): no route without a country. |
+| D150 | The three unreviewed single-commit branches (S12) | **Only `fix/2026-10-10-google-no-average` is reviewed and goes live** (rec); `feat/2026-10-07-lyra-haiku-5-5` and `feat/studio` are archived as tags and deleted with their worktrees. |
+| D151 | How the released work runs | **In one go, in this order** (rec): beta label; the runs interrupted on 2026-11-07; D57; D14 B; D20; WC finish; WN; D21; D23/D25; D13; enrichment last. A short report per block; stop only when a block costs more than 25 % above its estimate or a spot check is bad. Enrichment starts with a 100-site pilot and then waits for the owner. D129 (image rest after stage 1) and D131 (card waves a3/a4 after a2's report) keep their owner gates. |
+| D152 | Weekly cap | **2,500 model answers a week** (rec), counted by the orchestrator (Monday to Sunday); then a clean pause until Monday and a status report. |
+
+Still the owner's own: reject the L'Anse aux Meadows proposal 01e29c6e in the Radar (D97; status `new` on 2026-11-10),
+the trademark ownership with Matt (D94), the GSC exports (D91), disk C: (23 GB free on 2026-11-10; D135).

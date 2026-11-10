@@ -134,8 +134,9 @@ class TestTheTransport:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
         text = SG.brief(run, handoff, spec, "b-001")
-        assert "running as claude-haiku-5-5 in the role image_prefilter at effort low" in text
-        assert "--model claude-haiku-5-5 --role image_prefilter" in text
+        # Opus since D118 (the tier move of image-roles-v2)
+        assert "running as claude-opus-5-5 in the role image_prefilter at effort low" in text
+        assert "--model claude-opus-5-5 --role image_prefilter" in text
         assert "check-answer --run-dir" in text and "--stage tiny-stage" in text
         assert "Do not use the web" in text
         with pytest.raises(SG.StageError, match="no batch"):
@@ -180,8 +181,8 @@ class TestTheTransport:
     def test_an_answer_not_stamped_by_the_roles_model_is_refused(self, tmp_path: Path) -> None:
         spec = _tiny_spec()
         run, handoff, _ = _tiny_export(tmp_path, spec)
-        answer_all(handoff, spec, {"q1": '{"ok": true}'}, model=OH.OPUS_MODEL)
-        with pytest.raises(SG.StageError, match="registered to claude-haiku-5-5"):
+        answer_all(handoff, spec, {"q1": '{"ok": true}'}, model=OH.SONNET_MODEL)
+        with pytest.raises(SG.StageError, match="registered to claude-opus-5-5"):
             SG.import_answers(run, handoff, spec)
 
     def test_an_answer_that_names_no_role_is_refused(self, tmp_path: Path) -> None:
@@ -383,7 +384,7 @@ class TestThePrefilter:
         assert [(r["file"], r["survives"]) for r in got] == [("a", True), ("b", False)]
         assert got[0]["answered_by"] == "image_prefilter:pre-0001"
 
-    def test_the_stage_runs_end_to_end_in_the_haiku_role(self, tmp_path: Path) -> None:
+    def test_the_stage_runs_end_to_end_in_the_prefilter_role(self, tmp_path: Path) -> None:
         run, handoff = tmp_path / "run", tmp_path / "handoff"
         questions, pictures = PF.build_questions(_candidates(2), lambda c: jpeg())
         SG.export(run, handoff, PF.SPEC, questions, pictures)
@@ -399,7 +400,7 @@ class TestThePrefilter:
         SG.import_answers(run, handoff, PF.SPEC)
         got = PF.judged(SG.read_results(run, PF.SPEC))
         assert [r["survives"] for r in got] == [True, False]
-        assert RO.role(PF.SPEC.role).model == "claude-haiku-5-5"
+        assert RO.role(PF.SPEC.role).model == "claude-opus-5-5"  # D103 Haiku to Sonnet, D118 to Opus
 
 
 # ========================================================================== depicts
@@ -460,6 +461,16 @@ class TestTheDepictsRole:
         line = DP.JUDGE_LINE
         assert "street" in line and "Museum objects" in line and "generic" in line
         assert "legible sign" in line
+
+    def test_a_genuine_part_of_the_site_in_a_museum_depicts_it(self) -> None:
+        # D116 (2026-11-06): the verdict terms and the judge line say the same about museum pieces
+        assert DP.PROMPT_ID == "image-depicts-v2"
+        assert "a genuine part of this site or a find from it" in DP.VERDICT_TERMS
+        assert "a museum included" in DP.VERDICT_TERMS
+        line = DP.JUDGE_LINE
+        assert "the Ishtar Gate in Berlin for Babylon" in line and "shows the site: depicts" in line
+        assert "nothing in the picture ties to this site" in line and "is other_site" in line
+        assert "with no find context are not the site" not in line
 
     def test_a_site_without_an_article_says_so(self) -> None:
         (q,), _, _ = DP.build_questions(
@@ -543,9 +554,10 @@ class TestTheDepictsRole:
         with pytest.raises(SG.StageError, match="no size recorded"):
             DP.verdict_rows([result], {})
 
-    def test_the_role_is_sonnet_at_medium_effort(self) -> None:
+    def test_the_role_is_opus_at_medium_effort(self) -> None:
+        # D103: the tier move of image-roles-v1 (Sonnet failed every depicts threshold)
         assert (RO.role(DP.SPEC.role).model, RO.role(DP.SPEC.role).effort) == (
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
             "medium",
         )
 
@@ -608,9 +620,11 @@ class TestTheHeroRecheck:
             == "depicts"
         )
 
-    def test_the_role_is_the_adversarial_one_and_each_round_has_its_own_files(self) -> None:
+    def test_the_role_is_the_image_lane_s_own_and_each_round_has_its_own_files(self) -> None:
+        # D45/D103: the image lane's re-check is image_adversarial on Opus, not the shared role
+        assert HR.SPEC.role == "image_adversarial"
         assert (RO.role(HR.SPEC.role).model, RO.role(HR.SPEC.role).effort) == (
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
             "high",
         )
         one, two = HR.spec_for_round(1), HR.spec_for_round(2)
@@ -1056,7 +1070,7 @@ class TestTheWikiCache:
 
 def test_the_hero_recheck_shares_the_served_image_question_and_its_strict_parser() -> None:
     """One re-check, two lanes: the D15 prompt and the D17 prompt are the same text."""
-    assert HR.PROMPT_ID == V.CHECK_PROMPT_V2_ID
+    assert HR.PROMPT_ID == V.CHECK_PROMPT_V3_ID
     assert (
         V.parse_check(
             json.dumps(

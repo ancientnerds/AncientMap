@@ -74,7 +74,9 @@ class TestTheRule:
 
 # ------------------------------------------------------------------------------ the answers
 def checked(field: str, answer: dict[str, Any], rule: R.Rule = RE, **stored: Any) -> Any:
-    return A.check_shape(TA.text(**{field: answer}), [field], TA.line(**stored), rule)[field]
+    # a hillfort in England: the Iron Age starts there at -800 (D101, `pipeline.periods`)
+    line = TA.line("England", **stored)
+    return A.check_shape(TA.text(**{field: answer}), [field], line, rule)[field]
 
 
 class TestTheAnswers:

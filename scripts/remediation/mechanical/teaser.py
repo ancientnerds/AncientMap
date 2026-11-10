@@ -526,6 +526,12 @@ JUDGE_NOT_CLEAN = "judge-not-clean"
 #: newer card was written through the journal after the run seeded the live one. The spelling is
 #: `teaser/run.py`'s `CARD_CHANGED` (a test pins it).
 CARD_CHANGED = "card-changed"
+#: Owner decision D81 with orchestrator decision O7 (2026-11-05): an accepted card whose run found a
+#: contradicted sentence in the very description it was checked against (`DESCRIPTION_DEFECTS.jsonl`,
+#: same `desc_sha256`) is held: the description is repaired through lane WC (D25b) first, and the
+#: card is written afresh by a new run on the repaired text. A defect on another description (one
+#: repaired since) holds nothing.
+DESCRIPTION_DEFECT_HELD = "description-defect-held"
 REFUSAL_MEANING = {
     KEPT: "the site keeps its card: its chain failed or its writer declined its thin description "
     "(owner decision D5) - nothing is written, nothing is cleared",
@@ -534,6 +540,9 @@ REFUSAL_MEANING = {
     "written after the run seeded it): the live card is not cleared on the old verdict",
     JUDGE_NOT_CLEAN: "the run's web judge found a claim of the card CONTRADICTED, DISPUTED or "
     "unproven (owner decision D53): never written - the site keeps its card (D5)",
+    DESCRIPTION_DEFECT_HELD: "the run found a contradicted sentence in the description this card "
+    "was checked against (owner decisions D81, O7): held until lane WC repairs the description, "
+    "then a new run writes the card - the site keeps its card meanwhile",
     NAME_CHANGED: "the card gives its site away against the live name, aliases or country (a name "
     "changed or an alias was added since it was written): write the card again",
     NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
@@ -677,16 +686,23 @@ def classify(
     journal: Mapping[tuple[str, str], Sequence[JournalLink]],
     run: str,
     judged: Mapping[str, Mapping[str, Any]] | None = None,
+    defects: Mapping[str, frozenset[str]] | None = None,
 ) -> tuple[Verdict | None, Verdict | None] | Verdict:
     """One site's two cells - (provenance, card), either `None` when it needs no change - or the
     refusal that lists it. `judged` is the run's judge verdicts by site (`JUDGE.jsonl`), which an
-    accepted version-3 card needs (owner decision D53)."""
+    accepted version-3 card needs (owner decision D53); `defects` is the run's contradicted
+    description sentences, by site the `desc_sha256` values they were found in
+    (`DESCRIPTION_DEFECTS.jsonl`, owner decisions D81/O7)."""
     site_id, name = outcome["site_id"], outcome["name"]
     if outcome["status"] in (KEPT, CONFIRMED):
         return _refused(site_id, name, outcome["status"], REFUSAL_MEANING[outcome["status"]])
     # only a VERIFIED card is written; an OUTCOMES.jsonl from before the verify stage has no key
     if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:
         return _refused(site_id, name, NOT_VERIFIED, "no VERIFIED web verification")
+    if outcome["status"] == ACCEPTED and outcome["desc_sha256"] in (defects or {}).get(
+        site_id, frozenset()
+    ):
+        return _refused(site_id, name, DESCRIPTION_DEFECT_HELD, "DESCRIPTION_DEFECTS names it")
     shorts_card = outcome["status"] == ACCEPTED and outcome["provenance"]["v"] == CP.VERSION_3
     judge_failed = judge_problem(outcome, judged) if shorts_card else None
     if judge_failed is not None:
@@ -814,6 +830,7 @@ def build_step(
     *,
     built_at: str,
     judged: Mapping[str, Mapping[str, Any]] | None = None,
+    defects: Mapping[str, frozenset[str]] | None = None,
 ) -> StepPlan:
     """The two lane plans of one step over `outcomes` (at most 100 sites). Pure."""
     if len(outcomes) > MAX_SITES:
@@ -822,7 +839,7 @@ def build_step(
     card: list[Verdict] = []
     skipped: list[Verdict] = []
     for outcome in sorted(outcomes, key=lambda o: o["site_id"]):
-        decided = classify(outcome, live.get(outcome["site_id"]), journal, run, judged)
+        decided = classify(outcome, live.get(outcome["site_id"]), journal, run, judged, defects)
         if isinstance(decided, Verdict):
             skipped.append(decided)
             continue
@@ -963,6 +980,17 @@ def _read_judged(run: str) -> dict[str, dict[str, Any]] | None:
     return {row["site_id"]: row for row in read_jsonl(path)} if path.exists() else None
 
 
+def _read_defects(run: str) -> dict[str, frozenset[str]]:
+    """The run's contradicted description sentences (`DESCRIPTION_DEFECTS.jsonl`, written by
+    `teaser/run.py outcomes`): by site, the `desc_sha256` values they were found in. A run planned
+    before that file existed has none."""
+    path = RUNS / run / "DESCRIPTION_DEFECTS.jsonl"
+    found: dict[str, set[str]] = {}
+    for row in read_jsonl(path) if path.exists() else []:
+        found.setdefault(row["site_id"], set()).add(row["desc_sha256"])
+    return {site: frozenset(shas) for site, shas in found.items()}
+
+
 def plan_step(
     run: str,
     step: int,
@@ -971,6 +999,7 @@ def plan_step(
     root: Path = ROOT,
     outcomes: Sequence[Mapping[str, Any]] | None = None,
     judged: Mapping[str, Mapping[str, Any]] | None = None,
+    defects: Mapping[str, frozenset[str]] | None = None,
 ) -> dict[str, Any]:
     """Plan step `step` from the run's next outcomes and a fresh read-only production read."""
     steps = read_steps(root)
@@ -999,6 +1028,7 @@ def plan_step(
         journal,
         built_at=datetime.now(UTC).isoformat(),
         judged=_read_judged(run) if outcomes is None else judged,
+        defects=_read_defects(run) if outcomes is None else defects,
     )
     out.mkdir(parents=True)
     (out / "export.jsonl").write_text(text, encoding="utf-8", newline="\n")

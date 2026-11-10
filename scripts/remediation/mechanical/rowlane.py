@@ -675,12 +675,22 @@ def drop_hero_cell(records: Sequence[A.ChangeRecord], lane: Lane) -> ProbeResult
 
 
 def drop_alias_cells(records: Sequence[A.ChangeRecord], lane: Lane) -> ProbeResult:
-    """The loser's name row left on the loser: its survivor never gets the alias."""
-    site = next((r.site_id for r in records if r.table == "unified_site_names"), None)
-    if site is None:
-        return None
-    kept = [r for r in records if not (r.site_id == site and r.table == "unified_site_names")]
-    return kept or None
+    """The loser's name row left on the loser: its survivor never gets the alias.
+
+    Only the name row's `site_id` cell is dropped, and only from a site that keeps another cell in
+    the plan (its `name_type` cell, a moved image or link). The invariant reads the sites the plan
+    names: dropping every cell of a loser whose name is all it moves (an already-retired loser whose
+    images all collide, dup-merge-move-2026-11-05) takes it out of the plan, so the probe would
+    pass the guard it is meant to show refusing. No such site: the invariant is not probed."""
+
+    def is_name_move(r: A.ChangeRecord) -> bool:
+        return r.table == "unified_site_names" and r.column == "site_id"
+
+    for site in dict.fromkeys(r.site_id for r in records if is_name_move(r)):
+        kept = [r for r in records if not (r.site_id == site and is_name_move(r))]
+        if any(r.site_id == site for r in kept):
+            return kept
+    return None
 
 
 PROBES: Mapping[str, Any] = {

@@ -131,21 +131,29 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   verworfen. `scripts/remediation/offsite_sync.py` läuft auf der **Workstation**:
   (1) der neueste `database_*.dump` unter `/var/www/ancientnerds/backups/<dir>/` kommt per scp
   nach `C:/PythonProjects/AncientMap-Offsite/db/` (sha256 per `sha256sum` über ssh und per
-  hashlib, gleich oder Abbruch; `SHA256SUMS` auf beiden Seiten; lokal bleiben die neuesten 2,
-  je 0,9 GB); (2) `output/remediation` des Hauptcheckouts (ohne `*.env`, `handoff/`, `pages/`,
+  hashlib, gleich oder Abbruch; `SHA256SUMS` auf beiden Seiten; lokal bleibt nur der neueste,
+  0,9 GB); (2) `output/remediation` des Hauptcheckouts (ohne `*.env`, `handoff/`, `pages/`,
   `cache/`) geht als `remediation-evidence_<Datum>.tar.gz` nach
-  `backups/remediation-evidence/` (gleiche Prüfung; lokal in `AncientMap-Offsite/evidence/` die
-  neuesten 2, auf dem VPS die neuesten 4). Gemessen 2026-10-08: das Tar ist **2,4 GB** (5,0 GB
-  roh, davon `served_image` 2,0 GB), Bauen 4,4 min. Eine Kopie erscheint erst nach bestandener
+  `backups/remediation-evidence/` (gleiche Prüfung; lokal in `AncientMap-Offsite/evidence/` nur
+  das neueste, auf dem VPS die neuesten 4; Owner D106, 2026-11-06: `KEEP_LOCAL = 1`, weil C: zu
+  96 % voll war). Gemessen 2026-10-08: das Tar war **2,4 GB** (5,0 GB
+  roh, davon `served_image` 2,0 GB), Bauen 4,4 min; gemessen 2026-11-05 ist es **~6,7 GB**
+  (`remediation-evidence_2026-11-05.tar.gz`, 6.719.861.161 Byte); mit einer lokalen Kopie
+  belegt `AncientMap-Offsite/evidence/` ~6,7 GB, während eines Laufs kurz ~13,4 GB (das neue Tar
+  wird gebaut und geprüft, bevor das alte gelöscht wird), also vor dem Lauf ≥ 10 GB frei halten. Eine Kopie erscheint erst nach bestandener
   Prüfung unter ihrem Namen (`.part` davor). Ist der neueste Dump **älter als 26 h**, kopiert der
   Lauf trotzdem, schreibt dann **eine** Zeile `OFFSITE-SYNC STALE: …` nach stderr und endet mit
   Exit 1; der VPS-Cron hat kein `MAILTO`, diese Zeile ist der Alarm für ein ausgefallenes
   nächtliches Backup. Exit 2 = ein Schritt scheiterte (`OFFSITE-SYNC FAILED: …`). `--check-only`
-  beurteilt nur das Alter. Task Scheduler (**nicht eingetragen**, der Owner entscheidet; Vorbild
-  `AncientMap-LaneWatchdog`), wöchentlich sonntags, nach dem 04:15-UTC-Drill auf dem VPS (der
-  Trigger läuft in Ortszeit: 08:00 sind 06:00 UTC im Sommer, 07:00 UTC im Winter):
+  beurteilt nur das Alter. Task Scheduler: **eingetragen** am 2026-11-05 als
+  `AncientMap-OffsiteSync` (Benutzer `marti`), wöchentlich sonntags 08:00 Ortszeit, nach dem
+  04:15-UTC-Drill auf dem VPS (08:00 sind 06:00 UTC im Sommer, 07:00 UTC im Winter); erster Lauf
+  2026-11-05 22:19 von Hand, Ergebnis 0. Er läuft **nur bei angemeldetem Benutzer** (Anmeldemodus
+  „Nur interaktiv“) und **nur am Netzteil** (startet nicht im Akkubetrieb, bricht beim Wechsel auf
+  Akku ab); `StartWhenAvailable` ist aus, ein verpasster Sonntag wird nicht nachgeholt. Prüfen mit
+  `schtasks /Query /TN "AncientMap-OffsiteSync" /V /FO LIST`; angelegt mit
   `schtasks /Create /TN "AncientMap-OffsiteSync" /SC WEEKLY /D SUN /ST 08:00 /TR "C:\PythonProjects\AncientMap\.venv\Scripts\python.exe C:\PythonProjects\AncientMap\scripts\remediation\offsite_sync.py"`
-  (die Workstation muss laufen; ein verpasster Lauf zeigt sich beim nächsten als STALE, wenn
+  (ein verpasster Lauf zeigt sich erst beim nächsten als STALE, wenn
   der Dump dann schon über 26 h alt ist). Vor jeder Schreibwelle zusätzlich auf dem VPS
   `DO_DRILL=1 ./00_backup_and_drill.sh <Datum>_remediation`; der Prune behält nur die neuesten 7
   `_remediation`-Verzeichnisse, einen frühen Pre-Wave-Dump einer langen Kampagne daher am selben

@@ -24,7 +24,14 @@ enforced, not promised:
   verdicts) and the adjudicated pool candidates; **every** foreign row not `depicts`. Failing: Sonnet
   high, then Opus medium.
 * `pilot_judge` (Opus xhigh) **adjudicates** 150 candidates of the MiniMax pool (50 per MiniMax verdict
-  class) with web evidence: that adjudication is the pilot-judge gold, not a measured role.
+  class) with web evidence: that adjudication is the pilot-judge gold, not a measured role. Those
+  candidates are depicts cases (role `image_depicts`, group `adjudicated`, no truth in the sample):
+  the depicts role answers them like every other depicts case, and `export --role pilot_judge` asks
+  the pilot judge the same cases (`cases_for`) in a question of its own - the depicts prompt plus the
+  Commons file and the order to research each candidate on the web, every note naming the page that
+  decided it (`ADJUDICATE_PROMPT`, `parse_adjudication`). Its imported answers (`ADJUDICATE.jsonl`)
+  are the truth of those cases for `image_depicts` (false-depicts rate, precision) and for the
+  `adversarial` cases drawn from them; neither is evaluated before the adjudication is imported.
 * `adversarial` (the hero re-check; Sonnet high since D36 - the map asked for Opus high, and under
   D45/D51 the shared role is calibrated here for the image lane and moves to Opus only if it
   fails): agreement >= 0.95 with the adjudication and the labelled
@@ -35,6 +42,19 @@ enforced, not promised:
 The label noise is real (the Opus C1 calibration of 2026-09-25 scored 0.515 precision against the
 652 labels), so a threshold is on false-`depicts`, and a disagreement is adjudicated, not scored
 against a raw label.
+
+**A slot is not always its role.** The keys of `THRESHOLDS["roles"]` are the calibration's slots;
+the D6 role that answers a slot is its stage's (`slot_role`). Since owner decision D103 (2026-11-06)
+the re-check slot `adversarial` is answered by `image_adversarial` (Opus high): the shared
+`adversarial` failed image-roles-v1 and stays on Sonnet for the other lanes (D45).
+
+**Calibrating again one tier up** (`reseal`, D103): the failed slots of a finished calibration are
+sealed into a new directory beside it with the same threshold numbers and **the same gold, byte for
+byte** (its sha256 must be the one the old directory fixed), once every failed slot's role stands
+where the old verdict's tier move pointed (an applied move, or a settled move whose new role took
+the slot over). Only those slots are measured there; the pilot judge is not asked again - the truth
+of the adjudicated cases is the old directory's `ADJUDICATE.jsonl`, read under the old seal, and
+the pilot judge's registry entry must be the one that made it.
 """
 
 from __future__ import annotations
@@ -44,6 +64,7 @@ import hashlib
 import importlib.util
 import json
 import random
+import re
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -77,6 +98,8 @@ JOBS_FILE = "JOBS.jsonl"
 VERDICTS_DIR = "verdicts"
 #: The C1 calibration's pass over gallery pictures (its `hero` pass judged 50 of them again).
 C1_GALLERY = "gallery"
+#: The group of the depicts cases whose truth is the pilot judge's adjudication.
+ADJUDICATED = "adjudicated"
 
 #: What the map proposes; sealed before the first case is chosen. A number moves only by a new seal.
 THRESHOLDS: dict[str, Any] = {
@@ -123,13 +146,57 @@ DEPICTS_CAL_SPEC = replace(
     export_file="EXPORT_DEPICTS_CAL.json",
     result_file="DEPICTS_CAL.jsonl",
 )
+
+
+def _once(text: str, needle: str, replacement: str) -> str:
+    if text.count(needle) != 1:
+        raise RuntimeError(f"the depicts prompt no longer holds {needle!r} exactly once")
+    return text.replace(needle, replacement)
+
+
+#: The adjudication's research order (the map: "Opus xhigh labels 150 candidates ... with web
+#: evidence"). The depicts prompt tells a judge only the route that named a candidate; the
+#: adjudicator is given the Commons file so that it can read the file page, and is told to look
+#: outside it.
+ADJUDICATION_LINE = """You adjudicate: your verdicts are the truth against which the other judges of these pictures are measured. Research every candidate on the web before you decide - never from the picture and the file name alone. Read its Wikimedia Commons file page (https://commons.wikimedia.org/wiki/File:<the file name, spaces as underscores>): the description, the categories, the coordinates, the source. Then compare what the picture shows with pages about this site from outside Commons: its Wikipedia articles in any language, a heritage register, an excavation report, a museum or university page, other photographs of it. The pages tell you what a picture shows and where it was taken; the rules above still decide, and no page makes a picture depict this site when the picture does not show it."""
+
+#: The depicts prompt with the research order and a note that names its evidence; the answer shape
+#: (and so `_verdicts_of`) is the depicts role's.
+ADJUDICATE_PROMPT = _once(
+    _once(DP.PROMPT, "{judge_line}\n", "{judge_line}\n\n" + ADJUDICATION_LINE + "\n"),
+    '"note": "<what the picture shows and why, at most 30 words>"',
+    '"note": "<what the picture shows and why, at most 60 words, with the URL of each page that '
+    'decided it>"',
+)
+URL = re.compile(r"https?://\S+")
+
+
+def adjudication_line(candidate: Mapping[str, Any]) -> str:
+    """What the adjudicator is told about a candidate: its Commons file, then the route that named it."""
+    return f'Commons file "File:{candidate["file"]}"; found by {DP.source_line(candidate)}'
+
+
+def parse_adjudication(meta: Mapping[str, Any], text: str) -> dict[str, Any]:
+    """The depicts shape (`DP.parse`), and every note names at least one page (an http(s) URL): an
+    adjudication without its web evidence is not the gold the design asks for."""
+    parsed = DP.parse(meta, text)
+    bare = [label for label, entry in parsed["candidates"].items() if not URL.search(entry["note"])]
+    if bare:
+        raise SG.AnswerShapeError(
+            f"{', '.join(bare)}: the note must name the URL of each page that decided it"
+        )
+    return parsed
+
+
 ADJUDICATE_SPEC = replace(
     DP.SPEC,
     name="image-adjudicate",
     role="pilot_judge",
+    prompt_id="image-adjudicate-v1",
     questions_file="QUESTIONS_ADJUDICATE.jsonl",
     export_file="EXPORT_ADJUDICATE.json",
     result_file="ADJUDICATE.jsonl",
+    parse=parse_adjudication,
     what="adjudicate each candidate with web evidence (the pilot-judge gold)",
     web=True,
 )
@@ -145,6 +212,23 @@ ROLE_SPECS: dict[str, SG.Spec] = {
 
 class CalibrationError(ST.StateError):
     """The calibration cannot take this step. Nothing is half-written."""
+
+
+def slot_role(slot: str) -> str:
+    """The registered role (`roles.ROLES`) that answers a calibration slot: its stage's role."""
+    if slot not in ROLE_SPECS:
+        raise CalibrationError(f"{slot!r} is not a slot of the image calibration")
+    return ROLE_SPECS[slot].role
+
+
+def _registry_entry(slot: str) -> dict[str, str]:
+    name = slot_role(slot)
+    return {
+        "role": name,
+        "model": RO.role(name).model,
+        "effort": RO.role(name).effort,
+        "role_sha256": RO.role_sha256(name),
+    }
 
 
 def _now() -> str:
@@ -170,14 +254,7 @@ def thresholds_text() -> str:
     """The sealed document: the thresholds and the registry entry of every calibrated role."""
     document = {
         **THRESHOLDS,
-        "role_registry": {
-            name: {
-                "model": RO.role(name).model,
-                "effort": RO.role(name).effort,
-                "role_sha256": RO.role_sha256(name),
-            }
-            for name in THRESHOLDS["roles"]
-        },
+        "role_registry": {slot: _registry_entry(slot) for slot in THRESHOLDS["roles"]},
         "roles_sha256": RO.registry_sha256(),
     }
     return json.dumps(document, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
@@ -213,8 +290,8 @@ def _log(directory: Path) -> list[dict[str, Any]]:
     ]
 
 
-def sealed(directory: Path) -> tuple[dict[str, Any], str, str]:
-    """`(thresholds, sha256, sealed_at)`, refusing a file the log did not seal and roles that moved."""
+def _sealed_document(directory: Path) -> tuple[dict[str, Any], str, str]:
+    """`(thresholds, sha256, sealed_at)` as the log sealed them, without asking the registry."""
     entries = [e for e in _log(directory) if "thresholds_sha256" in e]
     path = directory / THRESHOLDS_FILE
     if len(entries) != 1 or not path.is_file():
@@ -222,13 +299,31 @@ def sealed(directory: Path) -> tuple[dict[str, Any], str, str]:
     text = path.read_text(encoding="utf-8")
     if _sha(text) != entries[0]["thresholds_sha256"]:
         raise CalibrationError(f"{path} changed after it was sealed")
-    document = json.loads(text)
-    for name, entry in document["role_registry"].items():
-        if RO.role_sha256(name) != entry["role_sha256"]:
+    return json.loads(text), _sha(text), str(entries[0]["sealed_at"])
+
+
+def sealed_role(slot: str, entry: Mapping[str, Any]) -> str:
+    """The role a seal bound a slot to. image-roles-v1 was sealed before the entry named it, when
+    every slot was answered by the role of its own name."""
+    return str(entry["role"]) if "role" in entry else slot
+
+
+def measured_slots(document: Mapping[str, Any]) -> tuple[str, ...]:
+    """The slots a sealed directory measures: a re-seal's `measured`, else every measured slot."""
+    return tuple(document["measured"]) if "measured" in document else MEASURED
+
+
+def sealed(directory: Path) -> tuple[dict[str, Any], str, str]:
+    """`(thresholds, sha256, sealed_at)`, refusing a file the log did not seal and roles that moved
+    (a slot now answered by another role, or its role's registry entry changed)."""
+    document, digest, at = _sealed_document(directory)
+    for slot, entry in document["role_registry"].items():
+        name = sealed_role(slot, entry)
+        if name != slot_role(slot) or RO.role_sha256(name) != entry["role_sha256"]:
             raise CalibrationError(
                 f"the registry entry of role {name} changed after the seal: seal a new directory"
             )
-    return document, _sha(text), str(entries[0]["sealed_at"])
+    return document, digest, at
 
 
 # ------------------------------------------------------------------------------------- the gold
@@ -280,6 +375,129 @@ def fixed_gold(directory: Path) -> tuple[list[dict[str, Any]], str]:
     return [json.loads(line) for line in text.splitlines() if line.strip()], str(
         entries[0]["fixed_at"]
     )
+
+
+def _moved_up(slot: str, old_verdict: Mapping[str, Any]) -> None:
+    """Refuse a failed slot whose role does not stand where the old verdict's tier move pointed:
+    its own role moved there (`APPLIED_ESCALATIONS`), or the move was settled by the role that now
+    answers the slot (`SETTLED_TIER_MOVES`)."""
+    move = old_verdict.get("tier_move")
+    if not move:
+        raise CalibrationError(
+            f"{slot}: the failed verdict names no tier move ({old_verdict.get('held')}): the owner "
+            "decides"
+        )
+    name = slot_role(slot)
+    if name == move["role"]:
+        applied = [
+            m
+            for m in RO.APPLIED_ESCALATIONS
+            if m.get("kind") != RO.OWNER_KIND
+            and m["role"] == name
+            and m["calibration_id"] == move["calibration_id"]
+        ]
+        if not applied or RO.role(name).model != move["to"]:
+            raise CalibrationError(
+                f"{slot}: the tier move of {move['calibration_id']} to {move['to']} is not applied "
+                f"to role {name} (registered to {RO.role(name).model})"
+            )
+        return
+    settled = RO.settled_tier_move(move["role"], move["calibration_id"])
+    if settled is None or settled["settled_by"] != name or RO.role(name).model != move["to"]:
+        raise CalibrationError(
+            f"{slot}: answered by {name}, which did not take over the tier move of "
+            f"{move['role']} in {move['calibration_id']} at {move['to']}"
+        )
+
+
+def reseal(previous: Path, directory: Path, *, now: Callable[[], str] = _now) -> dict[str, Any]:
+    """Seal the failed slots of `previous` again one tier up, in `directory`, on the same gold.
+
+    The thresholds are `previous`'s numbers, the gold its GOLD.jsonl byte for byte; the slots are
+    those whose verdict failed with a tier move, each refused until its role stands at the move's
+    model (`_moved_up`). The pilot judge's entry is sealed too and must be the one that adjudicated
+    in `previous`. Written once: THRESHOLDS.json, GOLD.jsonl, JOBS.jsonl and two log lines."""
+    if directory.resolve().parent != previous.resolve().parent:
+        raise CalibrationError("a re-seal sits beside the calibration it rests on")
+    if (directory / SEAL_LOG).exists() or (directory / GOLD_FILE).exists():
+        raise CalibrationError(f"{directory} is sealed already - a seal is never rewritten")
+    old, old_sha, _ = _sealed_document(previous)
+    cases, _ = fixed_gold(previous)
+    old_gold = (previous / GOLD_FILE).read_text(encoding="utf-8")
+    if gold_text(cases, truth=True) != old_gold:
+        raise CalibrationError(f"{previous / GOLD_FILE} does not round-trip byte for byte")
+    failed = []
+    for slot in measured_slots(old):
+        path = previous / VERDICTS_DIR / f"{slot}.json"
+        if not path.is_file():
+            raise CalibrationError(f"{path} does not exist: {previous.name} is not finished")
+        verdict = json.loads(path.read_text(encoding="utf-8"))
+        if not verdict["passed"]:
+            _moved_up(slot, verdict)
+            failed.append(slot)
+    if not failed:
+        raise CalibrationError(f"{previous.name}: no slot failed, nothing to calibrate again")
+    judge = old["role_registry"].get("pilot_judge")
+    if judge is None or judge["role_sha256"] != RO.role_sha256(slot_role("pilot_judge")):
+        raise CalibrationError(
+            "the pilot judge's registry entry is not the one that adjudicated in "
+            f"{previous.name}: its adjudication is no truth here"
+        )
+    document = {
+        **{key: old[key] for key in ("interval", "seed", "source", "roles")},
+        "version": directory.name,
+        "measured": failed,
+        "rests_on": {
+            "calibration_id": previous.name,
+            "thresholds_sha256": old_sha,
+            "gold_sha256": _sha(old_gold),
+        },
+        "role_registry": {slot: _registry_entry(slot) for slot in [*failed, "pilot_judge"]},
+        "roles_sha256": RO.registry_sha256(),
+    }
+    text = json.dumps(document, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / THRESHOLDS_FILE).write_text(text, encoding="utf-8", newline="\n")
+    with open(directory / SEAL_LOG, "a", encoding="utf-8", newline="\n") as handle:
+        handle.write(
+            json.dumps({"thresholds_sha256": _sha(text), "sealed_at": now()}, sort_keys=True) + "\n"
+        )
+    digest = fix_gold(directory, cases, now=now)
+    return {
+        "thresholds_sha256": _sha(text),
+        "gold_sha256": digest,
+        "measured": failed,
+        "role_registry": document["role_registry"],
+        "rests_on": document["rests_on"],
+    }
+
+
+def adjudication_of(directory: Path, document: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The pilot judge's answers that are the truth of the adjudicated cases: this directory's, or
+    for a re-seal the old directory's, read under the old seal (its thresholds and its gold as the
+    re-seal recorded them, every answer the pilot judge's and given after the old sample was
+    fixed)."""
+    rests = document.get("rests_on")
+    source = directory if rests is None else directory.parent / rests["calibration_id"]
+    if rests is not None:
+        _, old_sha, _ = _sealed_document(source)
+        if old_sha != rests["thresholds_sha256"]:
+            raise CalibrationError(f"{source}: its thresholds are not the ones the re-seal named")
+        if _sha((source / GOLD_FILE).read_text(encoding="utf-8")) != rests["gold_sha256"]:
+            raise CalibrationError(f"{source}: its gold is not the one the re-seal copied")
+    _, fixed_at = fixed_gold(source)
+    rows = SG.read_results(source, ADJUDICATE_SPEC)
+    for row in rows:
+        if row["answered_at"] < fixed_at:
+            raise CalibrationError(
+                f"{row['batch_id']}/{row['label']}: adjudicated before the sample was fixed"
+            )
+        if RO.role_of(row["answered_by"]) != slot_role("pilot_judge"):
+            raise CalibrationError(
+                f"{row['batch_id']}/{row['label']}: answered by {row['answered_by']!r}, not the "
+                "pilot judge"
+            )
+    return rows
 
 
 def stratified(
@@ -610,11 +828,22 @@ def inserted_heroes(state: ST.State, insert_root: Path) -> set[int]:
     }
 
 
+def cases_for(role: str, cases: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The cases `role` is asked: its own, and for the pilot judge the depicts cases it adjudicates
+    (group `adjudicated`; the sample holds no case in the role `pilot_judge`, because the
+    adjudication is the truth of depicts cases, not a role measured on cases of its own). The
+    re-check's cases drawn from them (`rck-adj-...`, role `adversarial`) stay the re-check's."""
+    if role == "pilot_judge":
+        return [c for c in cases if c["role"] == "image_depicts" and c["group"] == ADJUDICATED]
+    return [c for c in cases if c["role"] == role]
+
+
 def questions_for(
     role: str, cases: Sequence[Mapping[str, Any]], read: Callable[[Mapping[str, Any]], bytes]
 ) -> tuple[list[SG.Question], dict[str, bytes]]:
-    """The production questions of `role` over its cases (the very prompts the lane will use)."""
-    mine = [c for c in cases if c["role"] == role]
+    """The production questions of `role` over its cases (the very prompts the lane will use; the
+    pilot judge's are the depicts questions with the adjudication's research order)."""
+    mine = cases_for(role, cases)
     if not mine:
         raise CalibrationError(f"the sample holds no case for role {role}")
     if role == "image_prefilter":
@@ -627,7 +856,17 @@ def questions_for(
             site["candidates"].append(
                 {"file": c["file"], "path": c["path"], "why": c.get("why") or "a Commons picture"}
             )
-        questions, pictures, _ = DP.build_questions(list(by_site.values()), read)
+        if role == "pilot_judge":
+            questions, pictures, left_out = DP.build_questions(
+                list(by_site.values()), read, prompt=ADJUDICATE_PROMPT, line=adjudication_line
+            )
+        else:
+            questions, pictures, left_out = DP.build_questions(list(by_site.values()), read)
+        if left_out:
+            raise CalibrationError(
+                f"{len(left_out)} case(s) of role {role} do not fit one question of their site "
+                f"(first {left_out[0]['site_id']}: {left_out[0]['file']})"
+            )
         return questions, pictures
     if role == "adversarial":
         # a question is labelled by its site: the case id stands in for it, so that two cases of
@@ -848,6 +1087,8 @@ def evaluate(
     thresholds, _, _ = sealed(directory)
     if role not in MEASURED:
         raise CalibrationError(f"role {role} is not measured (the pilot judge is the gold)")
+    if role not in measured_slots(thresholds):
+        raise CalibrationError(f"role {role} is not measured in {directory.name}")
     cases, fixed_at = fixed_gold(directory)
     spec = ROLE_SPECS[role]
     results = SG.read_results(directory, spec)
@@ -857,12 +1098,10 @@ def evaluate(
                 f"{row['batch_id']}/{row['label']}: judged before the sample was fixed"
             )
     cp = cp or clopper_pearson()
-    adjudication = (
-        SG.read_results(directory, ADJUDICATE_SPEC)
-        if role in ("image_depicts", "adversarial")
-        and (directory / ADJUDICATE_SPEC.result_file).is_file()
-        else []
-    )
+    # a case without a truth in the sample takes the pilot judge's: its adjudication must be imported
+    adjudication: list[dict[str, Any]] = []
+    if any(c["truth"] is None for c in cases if c["role"] == role):
+        adjudication = adjudication_of(directory, thresholds)
     if role == "image_prefilter":
         metrics = measure_prefilter(cases, results, cp)
     elif role == "image_depicts":
@@ -872,10 +1111,12 @@ def evaluate(
     else:
         metrics = measure_identity(cases, results, cp)
     failures = decide(role, thresholds, metrics)
+    name = slot_role(role)
     verdict: dict[str, Any] = {
-        "role": role,
-        "model": RO.role(role).model,
-        "effort": RO.role(role).effort,
+        "role": name,
+        "slot": role,
+        "model": RO.role(name).model,
+        "effort": RO.role(name).effort,
         "passed": not failures,
         "failures": failures,
         "metrics": metrics,
@@ -885,7 +1126,7 @@ def evaluate(
     if failures:
         try:
             verdict["tier_move"] = RO.escalation(
-                role, calibration_id=directory.name, reason="; ".join(failures)
+                name, calibration_id=directory.name, reason="; ".join(failures)
             )
         except RO.RoleError as exc:
             verdict["held"] = f"{exc}: the owner decides"
@@ -905,7 +1146,14 @@ def evaluate(
 def cmd_export(directory: Path, role: str, handoff: Path) -> dict[str, Any]:
     from pipeline.video.shorts_select import vlm_bytes
 
-    sealed(directory)
+    document, _, _ = sealed(directory)
+    if role not in measured_slots(document) and role != "pilot_judge":
+        raise CalibrationError(f"role {role} is not asked in {directory.name}")
+    if role == "pilot_judge" and "rests_on" in document:
+        raise CalibrationError(
+            f"{directory.name} takes the adjudication of {document['rests_on']['calibration_id']}: "
+            "the pilot judge is not asked again"
+        )
     cases, _ = fixed_gold(directory)
     spec = ROLE_SPECS[role]
     questions, pictures = questions_for(role, cases, lambda c: vlm_bytes(Path(str(c["path"]))))
@@ -983,9 +1231,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         stream.reconfigure(encoding="utf-8", errors="backslashreplace")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(prog="image_roles/calibrate.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("seal", "gold", "export", "evaluate"):
+    for name in ("seal", "gold", "export", "evaluate", "reseal"):
         command = sub.add_parser(name)
         command.add_argument("--dir", required=True, type=Path)
+    sub.choices["reseal"].add_argument(
+        "--from", dest="previous", required=True, type=Path, help="the failed calibration directory"
+    )
     gold = sub.choices["gold"]
     gold.add_argument("--read", required=True, type=Path, help="a fresh production READ.json")
     gold.add_argument("--c1-dir", required=True, type=Path, help="gallery_audit/calibration-*-opus")
@@ -1020,6 +1271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload: Any = {"thresholds_sha256": seal(args.dir)}
         elif args.command == "gold":
             payload = cmd_gold(args.dir, args)
+        elif args.command == "reseal":
+            payload = reseal(args.previous, args.dir)
         elif args.command == "export":
             payload = cmd_export(args.dir, args.role, args.handoff)
         else:

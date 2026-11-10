@@ -11,6 +11,7 @@ every guard, journals every write, and its undo retires - never deletes.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import sys
@@ -28,6 +29,7 @@ for _p in (REPO, REPO / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 from census.fetch import Fetcher  # noqa: E402
+from fields import handoff as HO  # noqa: E402
 from identity.wiki import article_url  # noqa: E402
 from insert_site import candidates as C  # noqa: E402
 from insert_site import plan as P  # noqa: E402
@@ -35,6 +37,8 @@ from insert_site import research as RS  # noqa: E402
 from insert_site import run as RUN  # noqa: E402
 from insert_site import writer as W  # noqa: E402
 from mechanical.field_prov import sha_of  # noqa: E402
+
+from pipeline import periods as PE  # noqa: E402
 
 COLOSSEUM = "Q10285"
 TERRACOTTA = "Q47672"
@@ -163,7 +167,7 @@ def record(handoff: Path, batch: str, label: str, text: str, *, role: bool = Tru
 
 
 def line() -> dict[str, Any]:
-    return RS.question_line(candidate())
+    return RS.question_line(candidate(), country=None)
 
 
 # ------------------------------------------------------------------------------------ candidates
@@ -473,6 +477,32 @@ class TestTheRounds:
         assert decisions["country"]["value"] == "Italy"
         assert RS.waiting(run) == {}
 
+    def test_a_round_asked_before_a_period_name_came_in_still_imports(
+        self, run: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # d57-2026-11-05: its rounds 0-2 were exported before D113 added three period names, and
+        # import refused every answer as stale; it renders the list of the round's exported_at
+        (added_at, added), *_ = HO.PERIOD_NAMES_ADDED
+        current = RS.FIELD_RULES["period_start"]
+        listed = HO._period_list(PE.PERIODS)
+        monkeypatch.setitem(
+            RS.FIELD_RULES,
+            "period_start",
+            current.replace(listed, HO._period_list(PE.PERIODS.keys() - added)),
+        )
+        monkeypatch.setattr(RS.FH, "now", lambda: "2026-11-05T23:51:55+00:00")
+        handoff, batch = self._export(run, tmp_path)  # asked the list of before D113
+        monkeypatch.setitem(RS.FIELD_RULES, "period_start", current)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        result = RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        assert result["counted"] == len(RS.ASKABLE)
+        # the same round stamped after the addition was asked the new list: its answer is stale
+        rounds = RS.read_rounds(run)
+        rounds[0]["exported_at"] = added_at
+        C.write_jsonl(run / RS.ROUNDS_FILE, rounds)
+        with pytest.raises(OH.HandoffError, match="stale"):
+            RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+
     def test_a_quote_the_page_does_not_hold_is_asked_again(self, run: Path, tmp_path) -> None:
         handoff, batch = self._export(run, tmp_path)
         bad = full_answer(site_type=block("replace", "Amphitheatre", [(WIKI, "an amphitheatre X")]))
@@ -499,6 +529,195 @@ class TestTheRounds:
         assert decision["status"] == RS.EXHAUSTED and RS.waiting(run) == {}
         with pytest.raises(RS.ResearchError, match="last re-ask"):
             RS.export_reask(run, tmp_path / "h-r9")
+
+    @staticmethod
+    def _review(tmp_path: Path, plan_md: Path, vetoes: list[dict[str, Any]]) -> Path:
+        """A pilot_judge plan review recorded through opus_handoff, as the D8 review is."""
+        plan_md.parent.mkdir(parents=True, exist_ok=True)
+        if not plan_md.exists():
+            plan_md.write_text("# the plan\n", encoding="utf-8")
+        handoff = tmp_path / "review"
+        OH.export(handoff, batch_id="rv", stage="plan-review", label="s001", field="plan",
+                  prompt="review the plan")  # fmt: skip
+        text = {
+            "plan_sha256": hashlib.sha256(plan_md.read_bytes()).hexdigest(),
+            "verdict": "veto" if vetoes else "accept",
+            "sites": vetoes,
+            "proposals": [],
+            "notes": "",
+        }
+        OH.write_answer(
+            handoff, batch_id="rv", stage="plan-review", label="s001", text=json.dumps(text),
+            answered_by=RO.answered_by("pilot_judge", "rv"), model=OH.OPUS_MODEL,
+        )  # fmt: skip
+        return handoff / OH.answer_relpath("rv", "plan-review", "s001")
+
+    VETO = {
+        "qid": COLOSSEUM,
+        "name": "Colosseum",
+        "verdict": "veto",
+        "fields": ["period_start"],
+        "reason": "72 is the start of the building work of Vespasian; the review says 70.",
+        "fix": {"period_start": "70"},
+        "fix_sources": [],
+        "note": None,
+    }
+
+    def test_a_vetoed_field_is_asked_again_and_its_old_answer_no_longer_counts(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        """D104: the plan review vetoed counted values. A round asks those fields again, with the
+        review's reason; the vetoed answer never counts again, whatever the new one does."""
+        handoff, batch = self._export(run, tmp_path)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        plan_md = tmp_path / "step" / "PLAN.md"
+        review = self._review(tmp_path, plan_md, [self.VETO])
+        vetoes = RS.read_review(review, plan_md)
+        assert vetoes == {COLOSSEUM: {"period_start": self.VETO["reason"]}}
+        RS.export_reask(run, tmp_path / "h-r1", vetoes=vetoes)
+        r1 = RS.read_rounds(run)[1]
+        assert r1["asked"] == {COLOSSEUM: ["period_start"]} and r1["notes"] == {}
+        assert r1["vetoes"] == vetoes
+        [line_] = OH.manifest(tmp_path / "h-r1")
+        prompt = (tmp_path / "h-r1" / line_["prompt_path"]).read_text(encoding="utf-8")
+        assert (
+            "vetoed" in prompt and "the review says 70" in prompt and "did not count" not in prompt
+        )
+        batch1 = next(iter(r1["batches"]))
+        # a new answer whose quote the page does not hold: the vetoed 72 does not come back
+        bad = block("replace", "70", [(WIKI, "begun in 70 X")])
+        record(tmp_path / "h-r1", batch1, COLOSSEUM, json.dumps({"fields": {"period_start": bad}}))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        assert set(RS.waiting(run)[COLOSSEUM]) == {"period_start"}
+        assert "period_start" not in {
+            f for f, d in RS.read_decisions(run)[COLOSSEUM].items() if d["status"] == RS.COUNTED
+        }
+
+    def test_the_new_round_s_counted_answer_is_the_decision(self, run: Path, tmp_path) -> None:
+        handoff, batch = self._export(run, tmp_path)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        plan_md = tmp_path / "step" / "PLAN.md"
+        vetoes = RS.read_review(self._review(tmp_path, plan_md, [self.VETO]), plan_md)
+        RS.export_reask(run, tmp_path / "h-r1", vetoes=vetoes)
+        batch1 = next(iter(RS.read_rounds(run)[1]["batches"]))
+        again = block(
+            "replace", "72", [(WIKI, "Construction began under the emperor Vespasian in 72 AD")]
+        )
+        record(
+            tmp_path / "h-r1", batch1, COLOSSEUM, json.dumps({"fields": {"period_start": again}})
+        )
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        decision = RS.read_decisions(run)[COLOSSEUM]["period_start"]
+        assert decision["status"] == RS.COUNTED and decision["round"] == 1
+        assert RS.waiting(run) == {}
+
+    OWNER = {
+        "decision": "D114",
+        "questions": {COLOSSEUM: {"period_start": "Is it 70 (begun) or 72 (building work)?"}},
+    }
+
+    def _to_the_last_round(self, run: Path, tmp_path: Path) -> tuple[Path, dict[str, Any]]:
+        """Round 0 counted, then review vetoes until the last re-ask; the last counted again."""
+        handoff, batch = self._export(run, tmp_path)
+        record(handoff, batch, COLOSSEUM, json.dumps(full_answer()))
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        plan_md = tmp_path / "step" / "PLAN.md"
+        vetoes = RS.read_review(self._review(tmp_path, plan_md, [self.VETO]), plan_md)
+        again = block(
+            "replace", "72", [(WIKI, "Construction began under the emperor Vespasian in 72 AD")]
+        )
+        for number in range(1, RS.MAX_ROUND + 1):
+            RS.export_reask(run, tmp_path / f"h-r{number}", vetoes=vetoes)
+            batch_n = next(iter(RS.read_rounds(run)[number]["batches"]))
+            text = json.dumps({"fields": {"period_start": again}})
+            record(tmp_path / f"h-r{number}", batch_n, COLOSSEUM, text)
+            RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        return plan_md, vetoes
+
+    def test_an_owner_round_follows_the_last_reask_and_asks_only_its_fields(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        """D114: after the last re-ask the review vetoed one counted field again. The owner
+        releases one more round for it: the prompt carries the review's reason and the owner's
+        question, the round record names the decision, and the import renders the same prompt."""
+        _, vetoes = self._to_the_last_round(run, tmp_path)
+        with pytest.raises(RS.ResearchError, match="last re-ask"):
+            RS.export_reask(run, tmp_path / "h-rx", vetoes=vetoes)
+        last = RS.MAX_ROUND + 1
+        RS.export_reask(run, tmp_path / "h-owner", vetoes=vetoes, owner=self.OWNER)
+        record_ = RS.read_rounds(run)[last]
+        assert record_["round"] == last and record_["asked"] == {COLOSSEUM: ["period_start"]}
+        assert record_[RS.OWNER_KEY] == self.OWNER and record_["vetoes"] == vetoes
+        [line_] = OH.manifest(tmp_path / "h-owner")
+        prompt = (tmp_path / "h-owner" / line_["prompt_path"]).read_text(encoding="utf-8")
+        assert "the review says 70" in prompt
+        assert "(decision D114): Is it 70 (begun) or 72 (building work)?" in prompt
+        batch = next(iter(record_["batches"]))
+        begun = block("replace", "70", [(WIKI, "Construction began under the emperor Vespasian")])
+        text = json.dumps({"fields": {"period_start": begun}})
+        record(tmp_path / "h-owner", batch, COLOSSEUM, text)
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        decision = RS.read_decisions(run)[COLOSSEUM]["period_start"]
+        # the owner round's answer is the only one that may count; this one's quote states no
+        # year, so the field is exhausted and the vetoed 72 of the earlier rounds stays out
+        assert decision["status"] == RS.EXHAUSTED and RS.waiting(run) == {}
+
+    def test_the_owner_round_s_counted_answer_is_the_decision(self, run: Path, tmp_path) -> None:
+        _, vetoes = self._to_the_last_round(run, tmp_path)
+        RS.export_reask(run, tmp_path / "h-owner", vetoes=vetoes, owner=self.OWNER)
+        batch = next(iter(RS.read_rounds(run)[-1]["batches"]))
+        again = block(
+            "replace", "72", [(WIKI, "Construction began under the emperor Vespasian in 72 AD")]
+        )
+        text = json.dumps({"fields": {"period_start": again}})
+        record(tmp_path / "h-owner", batch, COLOSSEUM, text)
+        RS.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        decision = RS.read_decisions(run)[COLOSSEUM]["period_start"]
+        assert decision["status"] == RS.COUNTED and decision["round"] == RS.MAX_ROUND + 1
+
+    def test_an_owner_round_names_only_vetoed_fields(self, run: Path, tmp_path: Path) -> None:
+        _, vetoes = self._to_the_last_round(run, tmp_path)
+        other = {"decision": "D114", "questions": {COLOSSEUM: {"site_type": "Which type?"}}}
+        with pytest.raises(RS.ResearchError, match="no review vetoed"):
+            RS.export_reask(run, tmp_path / "h-owner", vetoes=vetoes, owner=other)
+        with pytest.raises(RS.ResearchError, match="no review vetoed"):
+            RS.export_reask(run, tmp_path / "h-owner", vetoes={}, owner=self.OWNER)
+
+    @pytest.mark.parametrize(
+        ("data", "why"),
+        [
+            ({"decision": "D114"}, "exactly"),
+            ({"decision": "soon", "questions": {COLOSSEUM: {"period_start": "q"}}}, "no owner"),
+            ({"decision": "D114", "questions": {}}, "at least one"),
+            ({"decision": "D114", "questions": {COLOSSEUM: {"era": "q"}}}, "no field"),
+            ({"decision": "D114", "questions": {COLOSSEUM: {"period_start": " "}}}, "empty"),
+        ],
+    )
+    def test_an_owner_round_file_is_checked(self, tmp_path: Path, data, why) -> None:
+        path = tmp_path / "owner.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match=why):
+            RS.read_owner_round(path)
+
+    def test_a_review_of_another_plan_or_not_by_the_pilot_judge_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        plan_md = tmp_path / "step" / "PLAN.md"
+        review = self._review(tmp_path, plan_md, [self.VETO])
+        plan_md.write_text("# a newer plan\n", encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match="another plan"):
+            RS.read_review(review, plan_md)
+        unknown = {**self.VETO, "fields": ["description"]}
+        plan_md.write_text("# the plan\n", encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match="no field"):
+            RS.read_review(self._review(tmp_path / "b", plan_md, [unknown]), plan_md)
+        data = json.loads(review.read_text(encoding="utf-8"))
+        data["answered_by"] = "field_researcher:rv"
+        review.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(RS.ResearchError, match="pilot_judge"):
+            RS.read_review(review, plan_md)
 
     def test_an_answer_without_the_role_is_refused(self, run: Path, tmp_path: Path) -> None:
         handoff, batch = self._export(run, tmp_path)
@@ -1382,3 +1601,100 @@ class TestTheCommandLine:
 
     def test_a_run_name_lives_under_the_lane_root(self) -> None:
         assert RUN.run_dir("d57-2026-10-24") == C.ROOT / "d57-2026-10-24"
+
+
+# ------------------------------------------------------------------------------------ D101
+class TestThePeriodWordIsRegional:
+    """Owner decision D101 (2026-11-06): a period word's year is its start in the site's country,
+    and a year the source states beats the word. Palmyra (Q5747, Syria) was decided as "neolithic"
+    and written -4000, Britain's start; Syria's Neolithic begins with the PPNA, -10000."""
+
+    PALMYRA = [(WIKI, "Palmyra began as a small Neolithic settlement near the Efqa spring")]
+
+    @staticmethod
+    def anywhere(country: str, lat: float, lon: float) -> dict[str, Any]:
+        return {"agrees": True, "polygon": country}  # the test's point is Rome's, not Palmyra's
+
+    def test_the_country_of_the_same_answer_decides_the_year(self) -> None:
+        answer = full_answer(
+            country=block("replace", "Syria", [(WIKI, "an ancient city in Syria")]),
+            period_start=block("replace", None, self.PALMYRA, period_name="neolithic"),
+        )
+        checked = RS.check_shape(json.dumps(answer), RS.ASKABLE, line())
+        assert checked["period_start"].value == "-10000"
+        assert checked["period_start"].period_name == "neolithic"
+
+    def test_a_reask_reads_the_country_an_earlier_round_counted(self) -> None:
+        answer = {
+            "fields": {
+                "period_start": block("replace", None, self.PALMYRA, period_name="neolithic")
+            }
+        }
+        decided_syria = RS.question_line(candidate(), country="Syria")
+        assert (
+            RS.check_shape(json.dumps(answer), ["period_start"], decided_syria)[
+                "period_start"
+            ].value
+            == "-10000"
+        )
+        # no country counted and none given: the regional word has no year
+        problem = RS.check_shape(json.dumps(answer), ["period_start"], line())["period_start"]
+        assert "needs the site's country" in problem
+
+    def test_a_stated_year_beats_the_period_word(self) -> None:
+        quotes = [(WIKI, "the largest amphitheatre of the Roman Empire, begun in 72 AD")]
+        answer = full_answer(
+            period_start=block("replace", None, quotes, period_name="roman empire"),
+        )
+        problem = RS.check_shape(json.dumps(answer), RS.ASKABLE, line())["period_start"]
+        assert "beats the period word (D101)" in problem
+
+    def test_the_decided_countries_are_the_counted_ones(self, tmp_path: Path) -> None:
+        rows = [
+            {"qid": "Q1", "field": "country", "status": RS.COUNTED, "decision": "replace",
+             "value": "Syria"},
+            {"qid": "Q2", "field": "country", "status": RS.EXHAUSTED, "decision": None,
+             "value": None},
+            {"qid": "Q3", "field": "country", "status": RS.COUNTED, "decision": "unresolved",
+             "value": None},
+            {"qid": "Q1", "field": "name", "status": RS.COUNTED, "decision": "keep",
+             "value": "Palmyra"},
+        ]  # fmt: skip
+        assert RS.decided_countries(tmp_path) == {}
+        C.write_jsonl(tmp_path / RS.DECISIONS_FILE, rows)
+        assert RS.decided_countries(tmp_path) == {"Q1": "Syria"}
+
+    def test_a_new_round_asks_the_d101_text_and_an_old_one_keeps_its_own(self) -> None:
+        fields = ["period_start"]
+        old = RS.render_prompt(candidate(), fields, VOCABULARY)
+        new = RS.render_prompt(candidate(), fields, VOCABULARY, None, HO.D101)
+        assert '"neolithic" -> -4000' in old and "D101" not in old
+        assert "-10000 in Syria or Jordan" in new and "A year beats a period word" in new
+        assert '"neolithic" -> -4000' not in new
+
+    def test_the_plan_writes_the_year_of_the_country_it_writes(self) -> None:
+        syria = decided(
+            country=("country", "replace", "Syria"),
+            period_start=("period_start", "replace", "-10000", None, RS.COUNTED),
+        )
+        syria["period_start"]["period_name"] = "neolithic"
+        [row] = build(decisions=syria, check=self.anywhere).inserts
+        assert row.period_start == -10000 and row.period_name == "< 4500 BC"
+
+    def test_the_plan_refuses_a_year_read_for_another_country(self) -> None:
+        # a value decided before D101 (Britain's -4000) or for a country that did not count
+        stale = decided(
+            country=("country", "replace", "Syria"),
+            period_start=("period_start", "replace", "-4000", None, RS.COUNTED),
+        )
+        stale["period_start"]["period_name"] = "neolithic"
+        step = build(decisions=stale, check=self.anywhere)
+        assert not step.inserts
+        [refusal] = step.refusals
+        assert refusal.reason == "period-country" and "import again" in refusal.detail
+        no_start = decided(
+            period_start=("period_start", "replace", "43", None, RS.COUNTED),
+        )
+        no_start["period_start"]["period_name"] = "roman"  # Italy: Rome's own land, no province
+        [refusal] = build(decisions=no_start).refusals
+        assert refusal.reason == "period-country" and "no cited start for 'Italy'" in refusal.detail

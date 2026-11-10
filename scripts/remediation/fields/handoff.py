@@ -62,6 +62,7 @@ import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -457,11 +458,11 @@ RESEARCH_WD3 = (
 ) + RESEARCH[RESEARCH.index("## Quotes are checked by machine") :]
 
 
-def _period_list() -> str:
+def _period_list(periods: Iterable[str]) -> str:
     """The period names the question accepts, as lines for the prompt. The whole vocabulary is in
     the question on purpose: a name it does not hold is refused by name, so the agent reads the
     refusal against this list instead of guessing a spelling."""
-    names = sorted(P.PERIODS)
+    names = sorted(periods)
     return "\n".join(", ".join(names[start : start + 8]) for start in range(0, len(names), 8))
 
 
@@ -497,7 +498,7 @@ FIELD_RULES_WD4 = {
         'holds for that name ("iron age" -> -800, "neolithic" -> -4000, "victorian" -> 1837). '
         "Never write a year next to a period_name. A name the table does not know is refused, so "
         "use one of these spellings: "
-        f"{_period_list()}\n"
+        f"{_period_list(P.PERIODS)}\n"
         "What still dates nothing: a period a source gives for a whole class of monuments rather "
         'than for this site ("slight univallate hillforts were built from the 8th to the 5th '
         'century BC"), a period a source rejects, or a site a source dates no way: then answer '
@@ -629,6 +630,141 @@ RESEARCH_WD5 = _swap(
 
 ANSWER_FORMAT_WD5 = ANSWER_FORMAT_WD4
 
+#: Owner decision D101 (2026-11-06): a period word writes the start of that period in the site's own
+#: country (`pipeline.periods.REGIONAL_STARTS`), and a year the source states beats the period word
+#: (`answers.date_stated`). A round exported since records `PERIOD_RULE_KEY: D101` (D111 from 2026-11-06 on) and is asked
+#: the sentence below in place of the fixed-table one; a round exported before records no key and
+#: keeps the text it was asked, because import renders every prompt again and compares its hash.
+PERIOD_RULE_KEY = "period_rule"
+D101 = "D101"
+#: Owner decision D111 (2026-11-06, after the D99 pilot dated 7 of 50 sites and 2 of those wrongly):
+#: the D101 sentence plus `_D111_SENTENCE`. A round exported from now on records D111; a D101 round
+#: keeps the text it was asked.
+D111 = "D111"
+PERIOD_RULES = (D101, D111)
+_FIXED_TABLE_SENTENCE = (
+    "The year is then read from a fixed table, not from you: the one start the vocabulary "
+    'holds for that name ("iron age" -> -800, "neolithic" -> -4000, "victorian" -> 1837). '
+)
+_D101_SENTENCE = (
+    "The year is then read from a fixed table, not from you, and it is the start of that period in "
+    'the site\'s own country (owner decision D101): "neolithic" is -10000 in Syria or Jordan and '
+    '-4000 in England, "roman" is 43 in England and -218 in Spain, "victorian" is 1837 everywhere. '
+    "A period that began at different times in different regions is refused for a country the table "
+    "holds no start for: then only a year from a source answers, or unresolved. A year beats a "
+    "period word: when a page you quote states a year, century, millennium or BP age for the START "
+    "of this site, answer with that year and no period_name - a period-word answer whose quote "
+    "states a date is refused (leave out a quote whose date is not the start). "
+)
+#: What D111 adds to the D101 sentence. The four mistakes are the D99 pilot's (PILOT_REPORT.md of
+#: output/remediation/fields/wd5r): Čertova pec and Rock Carvings at Åsli at the Palaeolithic or
+#: Stone Age edge -3,000,000, Bant's Carn at the bare Bronze Age where the infobox says Middle Bronze
+#: Age, Round Loaf from an uncited Russian stub and Tiverton from a community timeline, Petrovaradin
+#: from "the territory of", Port Way from a sentence that only classifies the road. The coarse words
+#: and the countries are `pipeline.periods.COARSE` and `SUBPHASE_REQUIRED`.
+_D111_SENTENCE = (
+    "Owner decision D111 adds four rules. (1) A coarse period word gives no year and is refused: "
+    '"stone age", "palaeolithic" or "paleolithic" without lower, middle or upper, "prehistoric", '
+    '"prehistory", "ancient history", "classical antiquity" (and "ancient" or "antiquity" are no '
+    'names at all); a bare "bronze age" is refused in Britain, Ireland, Türkiye, the Levant, Greece, '
+    "France and Italy, where only the early, middle or late Bronze Age a source names answers. (2) "
+    "Answer the most precise epoch the source gives for the site's own beginning: where the page "
+    "names a phase (Middle Bronze Age, Late Iron Age, Upper Palaeolithic, Late Roman, Chimu), answer "
+    "that phase and never the wider word above it. (3) A weak source alone does not count: a "
+    "Wikipedia stub in any language that cites no publication for the date, or a travel, tourism, "
+    "community, personal or blog page. Read it as a lead and answer from a referenced article, a "
+    "heritage register, a museum or a public body, or a scholarly publication that states the "
+    "start - or answer unresolved. (4) The start is the beginning of THE SITE ITSELF: not of the "
+    "territory, area, parish or modern town it lies in, not of a culture in general, not a first "
+    "mention; and a sentence that only classifies the site (a road in the Roman road numbering "
+    "system, a type of monument) dates nothing when the same source says the site may be older. "
+)
+
+
+#: The names `pipeline.periods.PERIODS` gained after rounds had been asked, each with the moment it
+#: came in (D113: commit 86d9b82, 2026-11-06T15:37:58Z). The period_start rule lists every name
+#: (`_period_list`), so a round exported before an addition was asked the list without it, and its
+#: import renders it so (`period_rule_text`'s `asked_at`, the round's `exported_at`). A name added
+#: to the table from now on is listed here with its commit's time.
+PERIOD_NAMES_ADDED = (("2026-11-06T15:37:58+00:00", frozenset({"chimu", "late roman", "vinca"})),)
+
+
+def _as_listed(text: str, asked_at: str) -> str:
+    """`text` with the period list a round exported at `asked_at` was shown."""
+    when = datetime.fromisoformat(asked_at)
+    later: frozenset[str] = frozenset().union(
+        *(names for at, names in PERIOD_NAMES_ADDED if datetime.fromisoformat(at) > when)
+    )
+    if not later:
+        return text
+    if not later <= P.PERIODS.keys():
+        raise HandoffStepError(
+            f"PERIOD_NAMES_ADDED names {sorted(later - P.PERIODS.keys())}, which the period table "
+            "no longer holds"
+        )
+    current = _period_list(P.PERIODS)
+    if current not in text:
+        return text
+    return _swap(text, current, _period_list(P.PERIODS.keys() - later))
+
+
+def period_rule_text(text: str, period_rule: str | None, asked_at: str | None = None) -> str:
+    """A field rule's text as a round with `period_rule` asks it: the D101 sentence in place of the
+    fixed-table one for a D101 round, the D101 and the D111 sentence for a D111 round, the text
+    unchanged for a round exported before D101 (None).
+    Any other value is refused: a round names the rule it was asked under or none. `asked_at` is
+    the round's `exported_at` when an import renders the round again (the period list as it was
+    then, `PERIOD_NAMES_ADDED`); None renders the list of now, as an export does."""
+    if asked_at is not None:
+        text = _as_listed(text, asked_at)
+    if period_rule is None:
+        return text
+    if period_rule not in PERIOD_RULES:
+        raise HandoffStepError(
+            f"a round's {PERIOD_RULE_KEY} {period_rule!r} is not {D101!r} or {D111!r}"
+        )
+    if _FIXED_TABLE_SENTENCE not in text:
+        return text
+    sentence = _D101_SENTENCE + (_D111_SENTENCE if period_rule == D111 else "")
+    return _swap(text, _FIXED_TABLE_SENTENCE, sentence)
+
+
+#: What a D99 question tells the researcher about its empty start (`OPEN_TEXT["d99-undated"]`). The
+#: mistakes it names are the ones the three independent checkers of the D70 extractor found
+#: (`output/remediation/fields/wd5x/spotcheck-{1,2,3}.json`, 2026-11-06).
+D99_OPEN_TEXT = (
+    "the start is empty (Undated). Owner decision D99 asks you for the START of this site, after a "
+    "machine extractor that read the same sources failed. FIRST run\n"
+    "   ./.venv/Scripts/python.exe scripts/remediation/fields/d99.py sources --label <the label>\n"
+    "It prints what is already on disk for the site, each with the URL to cite: the cached English "
+    "Wikipedia article, the item's articles in other languages, its Wikidata date claims, its "
+    "Pleiades record and the register and other pages earlier passes cited. Read all of it, then "
+    "the web if it states no start. Quote the article as a reader sees it (its prose), never its "
+    "wikitext or infobox source, and never Wikidata: a Wikidata claim is a lead to a page that "
+    "states it.\n"
+    "The start is when THE SITE ITSELF was built, founded, first settled or first used. It is "
+    "never: when it was discovered, excavated, surveyed or first mentioned in a text; a later event "
+    "(a conquest, a Roman colony or refoundation, a mint, a destruction, a peak or 'main period' "
+    "of occupation, 'flourished', 'important in Roman times'); a neighbouring site, a sub-site, a "
+    "find, or a modern town or village of the same name; an upper bound ('4th century AD or "
+    "earlier').\n"
+    "The machine extractor was judged 26 of 30 wrong for these mistakes - do not repeat them: "
+    "(1) 'Roman' written as AD 43 for a site outside Britain (Siponto, Thibilis, Asseria, "
+    "Tilurium, Pompeii); (2) a period word taken from a sentence about something else - a find, "
+    "a neighbour, flint knapping at the spot rather than the monument, or the site's own name "
+    "('Wari Willka'); (3) a hedged pair ('Late Neolithic or Bronze Age') taken as a date; (4) a "
+    "period's edge year written where the source dates the site otherwise (a bowl barrow the "
+    "article dates to 2400-1500 BC is not -2900); (5) a collective entity - a village, parish, "
+    "nature reserve, region or park - dated by a monument inside it; (6) a later phase taken as "
+    "the start where the same article says the place existed earlier (pre-Roman Asseria, the "
+    "Illyrian hill-fort under Roman Tilurium, Palaeolithic Perrin).\n"
+    "Read the WHOLE article for an earlier start before you answer. When the sources give several "
+    "starts of the site itself, answer the earliest one a source states for it and name in your "
+    "reasoning the later dates you set aside. When no source states a start of the site itself, "
+    "answer unresolved and say 'no dating stated' - that is an answer, not a failure"
+)
+
+
 #: A field of a WD3 question is open for one of these reasons (`population.py`).
 OPEN_TEXT = {
     "empty": "the field is empty",
@@ -654,6 +790,9 @@ OPEN_TEXT = {
     "sentence (another language, a period name, a BP age); they read it now. A source that states "
     "the start is an answer - quote it in its own language; the empty field stays empty only when "
     "none can be quoted",
+    # owner decision D99 (2026-11-06): the undated shown sites, asked by a Claude researcher after
+    # the deterministic extractor of D70 failed (gold 0.7034, three spot checks 26-29 of 30 wrong)
+    "d99-undated": D99_OPEN_TEXT,
 }
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).
@@ -884,10 +1023,14 @@ def render_prompt(
     notes: Mapping[str, str] | None = None,
     rule: R.Rule = R.DEFAULT,
     hint: Mapping[str, Any] | None = None,
+    period_rule: str | None = None,
+    asked_at: str | None = None,
 ) -> str:
     """The exact question for one site and `fields` - a pure function of the classified line, of
     the rule the run decides under, of the site's original-import claim (`hint`, `read_hints`, WD4
-    only) and, in a re-ask, of why each field's last answer did not count (`notes`, kept in the
+    only), of the round's `period_rule` (`period_rule_text`: D111, D101 or, for a round exported
+    before D101, None), of when the round was asked (`asked_at`: its `exported_at` on import, None on
+    export) and, in a re-ask, of why each field's last answer did not count (`notes`, kept in the
     round's record)."""
     notes = notes or {}
     fields = [f for f in C.FIELDS if f in fields]
@@ -931,7 +1074,7 @@ def render_prompt(
         if field in notes:
             out.append(texts.retry_note.format(why=notes[field]))
         out.append("")
-        out.append(texts.field_rules[field])
+        out.append(period_rule_text(texts.field_rules[field], period_rule, asked_at))
         vocabulary = definitions(field)
         if vocabulary:
             out.append("")
@@ -993,6 +1136,7 @@ def _export_round(
     batch_size: int = BATCH_SIZE,
 ) -> dict[str, Any]:
     rule = R.read_rule(run)
+    _refuse_machine_rule(run, rule)
     answering = _answering_model(run, model)
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
@@ -1012,7 +1156,12 @@ def _export_round(
                 label=label,
                 field="+".join(fields_of[label]),
                 prompt=render_prompt(
-                    classified[label], fields_of[label], notes.get(label), rule, hints.get(label)
+                    classified[label],
+                    fields_of[label],
+                    notes.get(label),
+                    rule,
+                    hints.get(label),
+                    D111,
                 ),
             )
     record = {
@@ -1023,6 +1172,7 @@ def _export_round(
         "batches": dict(groups),
         "fields": {label: list(fields_of[label]) for label in sorted(fields_of)},
         "notes": {label: dict(notes[label]) for label in sorted(notes)},
+        PERIOD_RULE_KEY: D111,
         "exported_at": H.now(),
     }
     _write_jsonl(run / ROUNDS_FILE, [*rounds, record])
@@ -1266,6 +1416,47 @@ BRIEF_PARTS = {
 }
 
 
+#: A D99 run asks an EMPTY start (no stored value to confirm), so the re-check's warning about the
+#: cached article gives way to what D99 asks: the site's own sources first (`d99.py sources`).
+D99_REPLACED_EVIDENCE = (
+    "This is a re-check of a stored value, so the cached article is never your confirmation of it. "
+    + WR.VERIFIER_RULE
+)
+D99_EVIDENCE = (
+    "This is a D99 dating question (owner decision D99): the start is EMPTY, there is no stored value "
+    "to confirm. Run `./.venv/Scripts/python.exe scripts/remediation/fields/d99.py sources --label "
+    "<label>` first - it prints the site's cached Wikipedia articles, its other-language articles, "
+    "its Wikidata claims, its Pleiades record and the pages earlier passes cited - and read it all. "
+    "The site's own article in any language is a source you may quote for its start; read the WHOLE "
+    "article and its other-language versions for an earlier start before you answer, and where "
+    "reputable sources give different starts for the site itself, answer the earliest one a source "
+    "states and name the others in your reasoning. Request pages one at a time, with the project's "
+    "User-Agent (curl -A 'AncientMapRemediation/1.0 (research; https://ancientnerds.com)'). An HTTP "
+    "403 or 429 is a throttle and NEVER a finding: fetch the page again yourself with curl, or quote "
+    "another page, before you call a source unreachable."
+)
+
+
+def is_d99_run(run: Path) -> bool:
+    """Whether the run was built as a D99 dating run (`population.py build --d99`). A run without
+    RUN.json is a WD1 run (`rule.read_rule`), never a D99 one."""
+    path = run / R.RUN_FILE
+    if not path.exists():
+        return False
+    facts = json.loads(path.read_text(encoding="utf-8"))
+    reask = facts.get("reask")
+    return isinstance(reask, dict) and reask.get("why") == "d99-undated"
+
+
+def _refuse_machine_rule(run: Path, rule: R.Rule) -> None:
+    """A run of a rule no agent answers (`rule.MACHINE_RULES`, the dating extractor's) is neither
+    exported nor imported: its DECISIONS.jsonl is `dating.py run`'s and an import would overwrite it."""
+    if rule.name in R.MACHINE_RULES:
+        raise HandoffStepError(
+            f"{run}: the {rule.name} rule asks no agent - its decisions are written by dating.py"
+        )
+
+
 def brief(run: Path, handoff: Path, batch_id: str) -> str:
     record = _round_of(run, handoff)
     if batch_id not in record["batches"]:
@@ -1282,6 +1473,8 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     if record.get("model"):
         # the round names the model, so the role must not claim to be another one
         parts["role"] = "researcher"
+    if is_d99_run(run):
+        parts["evidence"] = _swap(parts["evidence"], D99_REPLACED_EVIDENCE, D99_EVIDENCE)
     return BRIEF.format(
         batch=batch_id,
         count=len(record["batches"][batch_id]),
@@ -1401,6 +1594,7 @@ def import_rounds(
 ) -> dict[str, Any]:
     """Every round's answers: validated, parsed, quote-checked, decided."""
     rule = R.read_rule(run)
+    _refuse_machine_rule(run, rule)
     if (run / ADV_SELECTED).exists():
         raise HandoffStepError(
             f"{run / ADV_SELECTED} exists: the adversarial re-check was selected from this run's "
@@ -1429,7 +1623,14 @@ def import_rounds(
         for (batch_id, label), line in sorted(manifest.items()):
             fields = record["fields"][label]
             prompt = render_prompt(
-                classified[label], fields, record["notes"].get(label), rule, hints.get(label)
+                classified[label],
+                fields,
+                record["notes"].get(label),
+                rule,
+                hints.get(label),
+                # a round exported before D101 carries no key: it was asked the fixed-table text
+                record.get(PERIOD_RULE_KEY),
+                record["exported_at"],
             )
             if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
                 raise HandoffStepError(

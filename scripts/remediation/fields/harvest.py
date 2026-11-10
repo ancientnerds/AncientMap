@@ -585,6 +585,342 @@ def fetch_urls(
     return {"asked": len(todo), **dict(sorted(kinds.items()))}
 
 
+# ------------------------------------------------------------------------------ the dating sources
+# D70 (2026-11-05, `dating.py`): what the dating extractor reads beyond the files above, fetched for
+# the sites it is run on (`fetch-dating --sites FILE`) and kept in two directories of their own - the
+# contract's files keep their layout:
+#
+#     <root>/wikitext/<lang>/<revid>.json   the wikitext of a cached article at the revision the
+#                                           Wikipedia cache read (`fields/wiki.py`), 50 revisions per
+#                                           request; keyed by the revision, the one thing the cache's
+#                                           page and the fetch share
+#     <root>/wikis/<lang>/<QID>.json        the plain-text extract of the item's article in each
+#                                           readable language (`READ_LANGS`), one per request
+#     <root>/ITEM_LABELS.json               the English label of every item a P2348 (time period)
+#                                           or P793 (significant event) claim names
+#
+# Wikimedia throttles this office IP from four parallel clients on (2026-10-07): every step here is
+# serial, `pace` >= 1 s apart, and refused below that.
+WIKITEXT = "wikitext"
+WIKIS = "wikis"
+ITEM_LABELS_FILE = "ITEM_LABELS.json"
+#: The Wikipedias the extractor reads besides English: the languages `dates.py` reads.
+READ_LANGS = (
+    "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "uk", "cs", "sk", "sl", "hr", "sr", "sh", "bs",
+    "mk", "bg", "hu", "el", "tr", "ro", "ca", "sv", "da", "no", "fi", "id",
+)  # fmt: skip
+LABEL_PROPS = ("P2348", "P793")
+MIN_DATING_PACE = 1.0
+#: Hosts a cited page is not read from as tier 4: their own tiers read them (Wikipedia, Wikidata,
+#: Commons) or they are no source at all (`rule.FORBIDDEN_FAMILIES`).
+_OWN_TIER_HOSTS = re.compile(r"(?:^|\.)(?:wikipedia\.org|wikidata\.org|wikimedia\.org)\Z")
+
+
+def _paced(pace: float) -> None:
+    if pace < MIN_DATING_PACE:
+        raise HarvestError(f"pace {pace}: Wikimedia is asked at most once a second (serially)")
+
+
+def wikitext_path(root: Path, lang: str, revid: Any) -> Path:
+    if not re.fullmatch(r"[a-z-]{2,12}", lang) or not re.fullmatch(r"\d+", str(revid)):
+        raise HarvestError(f"{lang!r}/{revid!r} is no Wikipedia language and revision")
+    return root / WIKITEXT / lang / f"{revid}.json"
+
+
+def load_wikitext(root: Path, lang: str, revid: Any) -> str | None:
+    """The wikitext of a cached revision - None when Wikipedia answered it as gone (a deleted or
+    suppressed revision); a revision never asked raises (`fetch-dating` first)."""
+    path = wikitext_path(root, lang, revid)
+    if not path.exists():
+        raise HarvestError(f"{path} is missing - run `harvest.py fetch-dating` first")
+    record = _read_json(path)
+    return None if record.get("missing") else str(record["wikitext"])
+
+
+def fetch_wikitext(
+    net: Fetcher,
+    root: Path,
+    pages: Iterable[tuple[str, Any]],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+    pace: float = PACE_SECONDS,
+) -> dict[str, int]:
+    """The wikitext of each `(lang, revid)` not yet on disk, 50 revisions per request
+    (`prop=revisions&revids=a|b|..&rvslots=main`); a revision answered as bad is recorded missing."""
+    _paced(pace)
+    todo: dict[str, list[str]] = {}
+    for lang, revid in sorted({(str(lang), str(revid)) for lang, revid in pages}):
+        if not wikitext_path(root, lang, revid).exists():
+            todo.setdefault(lang, []).append(revid)
+    asked = 0
+    for lang, revids in sorted(todo.items()):
+        for chunk in chunked(revids, BATCH):
+            if asked:
+                sleep(pace)
+            asked += 1
+            body = api_json(
+                net,
+                f"https://{lang}.wikipedia.org/w/api.php",
+                {
+                    "action": "query",
+                    "prop": "revisions",
+                    "revids": "|".join(chunk),
+                    "rvprop": "ids|content",
+                    "rvslots": "main",
+                    "format": "json",
+                    "formatversion": "2",
+                },
+                ns=f"fields_{lang}wiki_wikitext",
+            )
+            query = body.get("query") or {}
+            found: dict[str, dict[str, Any]] = {}
+            for page in query.get("pages") or ():
+                for revision in page.get("revisions") or ():
+                    content = ((revision.get("slots") or {}).get("main") or {}).get("content")
+                    found[str(revision["revid"])] = {
+                        "lang": lang,
+                        "revid": int(revision["revid"]),
+                        "title": page.get("title"),
+                        "wikitext": content,
+                        "missing": content is None,
+                    }
+            bad = {str(b.get("revid")) for b in query.get("badrevids", {}).values()} if isinstance(
+                query.get("badrevids"), dict) else set()  # fmt: skip
+            for revid in chunk:
+                if revid in found:
+                    record = found[revid]
+                elif revid in bad:
+                    record = {"lang": lang, "revid": int(revid), "missing": True}
+                else:
+                    raise HarvestError(f"{lang}.wikipedia did not answer for revision {revid}")
+                _write_json(wikitext_path(root, lang, revid), {**record, "fetched_at": now()})
+    return {"revisions": sum(len(v) for v in todo.values()), "requests": asked}
+
+
+def fetch_item_labels(
+    net: Fetcher,
+    root: Path,
+    qids: Iterable[str],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+    pace: float = PACE_SECONDS,
+) -> dict[str, int]:
+    """The English label of every item the harvested items name in `LABEL_PROPS` (ITEM_LABELS.json)."""
+    _paced(pace)
+    path = root / ITEM_LABELS_FILE
+    known: dict[str, Any] = _read_json(path) if path.exists() else {}
+    wanted = sorted(
+        {i for q in set(qids) for prop in LABEL_PROPS for i in item_ids(load_entity(root, q), prop)}
+        - set(known)
+    )
+    for number, chunk in enumerate(chunked(wanted, BATCH)):
+        if number:
+            sleep(pace)
+        body = api_json(
+            net,
+            WIKIDATA_API,
+            {"action": "wbgetentities", "ids": "|".join(chunk), "props": "labels",
+             "languages": "en", "format": "json"},  # fmt: skip
+            ns="fields_wikidata_item_labels",
+        )
+        for qid, entity in _answered(chunk, body.get("entities") or {}).items():
+            known[qid] = {"label": ((entity.get("labels") or {}).get("en") or {}).get("value")}
+    _write_json(path, known)
+    return {"items": len(known), "fetched": len(wanted)}
+
+
+def wikis_path(root: Path, lang: str, qid: str) -> Path:
+    if lang not in READ_LANGS:
+        raise HarvestError(f"{lang!r} is not a language the dating extractor reads")
+    return root / WIKIS / lang / f"{entity_path(root, qid).stem}.json"
+
+
+def read_sitelinks(entity: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """`(lang, title)` of the item's articles in `READ_LANGS`, in that order."""
+    links = entity.get("sitelinks") or {}
+    out = []
+    for lang in READ_LANGS:
+        title = (links.get(f"{lang}wiki") or {}).get("title")
+        if title:
+            out.append((lang, str(title)))
+    return out
+
+
+def load_wikis(
+    root: Path, qid: str, entity: Mapping[str, Any], *, skip: frozenset[str] = frozenset()
+) -> list[tuple[str, dict[str, Any]]]:
+    """The item's other-language articles as fetched, in `READ_LANGS` order, but the languages in
+    `skip` (the Wikipedia cache holds them); a sitelink never fetched raises (`fetch-dating` first)."""
+    out = []
+    for lang, _title in read_sitelinks(entity):
+        if lang in skip:
+            continue
+        path = wikis_path(root, lang, qid)
+        if not path.exists():
+            raise HarvestError(f"{path} is missing - run `harvest.py fetch-dating` first")
+        out.append((lang, _read_json(path)))
+    return out
+
+
+def fetch_wikis(
+    net: Fetcher,
+    root: Path,
+    qids: Iterable[str],
+    *,
+    skip: Mapping[str, frozenset[str]] | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    pace: float = PACE_SECONDS,
+) -> dict[str, int]:
+    """The plain-text extract (sections as `== Heading ==` lines) and the latest revision of each
+    item's article in `READ_LANGS`, one request per article, serially. `skip[qid]` names the
+    languages the Wikipedia cache already holds for the item's site."""
+    _paced(pace)
+    skip = skip or {}
+    asked = 0
+    for qid in sorted(set(qids)):
+        for lang, title in read_sitelinks(load_entity(root, qid)):
+            path = wikis_path(root, lang, qid)
+            if path.exists() or lang in skip.get(qid, frozenset()):
+                continue
+            if asked:
+                sleep(pace)
+            asked += 1
+            body = api_json(
+                net,
+                f"https://{lang}.wikipedia.org/w/api.php",
+                {"action": "query", "prop": "extracts|info", "explaintext": "1",
+                 "exsectionformat": "wiki", "titles": title, "redirects": "1", "format": "json",
+                 "formatversion": "2"},  # fmt: skip
+                ns=f"fields_{lang}wiki_extract",
+            )
+            pages = (body.get("query") or {}).get("pages") or []
+            if len(pages) != 1:
+                raise HarvestError(f"{lang}.wikipedia answered {title!r} with {len(pages)} pages")
+            page = pages[0]
+            _write_json(
+                path,
+                {
+                    "qid": qid,
+                    "lang": lang,
+                    "sitelink": title,
+                    "title": page.get("title"),
+                    "revid": page.get("lastrevid"),
+                    "missing": bool(page.get("missing")) or page.get("extract") is None,
+                    "text": page.get("extract"),
+                    "fetched_at": now(),
+                },
+            )
+    return {"requests": asked}
+
+
+def cited_page_refs(fields_dir: Path) -> dict[str, list[dict[str, Any]]]:
+    """Tier 4 of the extractor: per site, the non-Wikipedia pages the answers of the field runs under
+    `fields_dir` cited (their DECISIONS.jsonl quotes, the adversarial re-check's too) whose fetch is
+    kept (PAGES.jsonl and `pages/` of any run, status 200). A page of a forbidden family
+    (`rule.FORBIDDEN_FAMILIES`) or of Wikipedia, Wikidata or Commons is never one. Each ref names
+    its body; `page_text` reads it."""
+    from fields import answers as A
+    from fields import rule as R
+
+    stored: dict[str, dict[str, Any]] = {}
+    for index in sorted(fields_dir.glob("*/PAGES.jsonl")) + sorted(fields_dir.glob("*/*/PAGES.jsonl")):
+        for raw in index.read_text(encoding="utf-8").splitlines():
+            if not raw.strip():
+                continue
+            meta = json.loads(raw)
+            body = index.parent / "pages" / f"{meta['key']}.body"
+            if meta.get("status") == 200 and body.exists() and meta["url"] not in stored:
+                stored[meta["url"]] = {
+                    "url": meta["url"],
+                    "body": body,
+                    "content_type": meta.get("content_type") or "",
+                    "fetched_at": meta.get("fetched_at"),
+                }
+    out: dict[str, dict[str, dict[str, Any]]] = {}
+    for decisions in sorted(fields_dir.glob("*/DECISIONS.jsonl")):
+        for raw in decisions.read_text(encoding="utf-8").splitlines():
+            if not raw.strip():
+                continue
+            row = json.loads(raw)
+            quotes = list(row.get("quotes") or ())
+            adversarial = row.get("adversarial")
+            if isinstance(adversarial, dict):
+                quotes += list(adversarial.get("quotes") or ())
+                # a rejected cell keeps the researcher's answer, quotes and all, in `original`
+                original = adversarial.get("original")
+                if isinstance(original, dict):
+                    quotes += list(original.get("quotes") or ())
+            for quote in quotes:
+                url = str(quote.get("source") or "").replace("&amp;", "&")
+                host = (urlsplit(url).hostname or "").lower()
+                if url not in stored or _OWN_TIER_HOSTS.search(host):
+                    continue
+                if A.family_of(url, R.EXTRACT) in R.FORBIDDEN_FAMILIES:
+                    continue
+                out.setdefault(str(row["site_id"]), {})[url] = stored[url]
+    return {site: [refs[u] for u in sorted(refs)] for site, refs in out.items()}
+
+
+def page_text(ref: Mapping[str, Any]) -> str | None:
+    """A cited page's text as the quote check reads it (`opus_audit/quotes.page_source`: HTML as its
+    visible text, a PDF through pdftotext), or None when it cannot be read."""
+    from opus_audit import quotes as Q
+
+    source = Q.page_source(str(ref["content_type"]), Path(ref["body"]).read_bytes())
+    if source.failure or not source.texts:
+        return None
+    return source.texts[0][1]
+
+
+def read_site_ids(path: Path) -> list[str]:
+    """`--sites FILE`: JSON lines that carry a `site_id` (the run's UNDATED.jsonl, a gold's
+    GOLD.jsonl and DEV.jsonl)."""
+    if not path.exists():
+        raise HarvestError(f"{path} is missing")
+    ids = [str(json.loads(raw)["site_id"]) for raw in path.read_text(encoding="utf-8").splitlines()
+           if raw.strip()]  # fmt: skip
+    if not ids:
+        raise HarvestError(f"{path} names no site")
+    return sorted(set(ids))
+
+
+def fetch_dating(
+    root: Path,
+    *,
+    net: Fetcher,
+    site_ids: Sequence[str],
+    wiki_cache: Any,
+    sleep: Callable[[float], None] = time.sleep,
+    pace: float = PACE_SECONDS,
+) -> dict[str, Any]:
+    """The dating extractor's sources for `site_ids` (the harvest's entities fetched before):
+    the item labels, the wikitext of each cached article's revision, the other-language extracts.
+    Each step resumable and recorded in HARVEST.json."""
+    _paced(pace)
+    by_id = {s["site_id"]: s for s in read_sites(root)}
+    unknown = sorted(set(site_ids) - set(by_id))
+    if unknown:
+        raise HarvestError(f"{len(unknown)} site(s) are not in {root / SITES_FILE}: {unknown[:3]}")
+    qids = sorted({by_id[s]["qid"] for s in site_ids if by_id[s]["qid"]})
+    pages = [(str(p["lang"]), p["revid"]) for s in site_ids for p in wiki_cache.pages(s)
+             if not p.get("missing") and p.get("revid")]  # fmt: skip
+    cached: dict[str, set[str]] = {}
+    for s in site_ids:
+        if by_id[s]["qid"]:
+            cached.setdefault(by_id[s]["qid"], set()).update(str(p["lang"]) for p in wiki_cache.pages(s))
+    result: dict[str, Any] = {}
+    for step, work in (
+        ("item_labels", lambda: fetch_item_labels(net, root, qids, sleep=sleep, pace=pace)),
+        ("wikitext", lambda: fetch_wikitext(net, root, pages, sleep=sleep, pace=pace)),
+        ("wikis", lambda: fetch_wikis(net, root, qids, sleep=sleep, pace=pace,
+                                      skip={q: frozenset(v) for q, v in cached.items()})),
+    ):  # fmt: skip
+        result[step] = work()
+        _record_step(root, f"dating_{step}", {**result[step], "sites": len(site_ids)})
+        log.info("%s: %s", step, result[step])
+    return result
+
+
 # ------------------------------------------------------------------------------ the run
 def open_fetcher(root: Path) -> Fetcher:
     """The Wikimedia API client: the census Fetcher, with this harvest's cache and agent."""
@@ -667,6 +1003,14 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("fetch", help="items, classes, articles, source URLs (resumable)")
     run.add_argument("--refetch-failed", action="store_true")
     run.add_argument("--pace", type=float, default=PACE_SECONDS)
+    dating = sub.add_parser(
+        "fetch-dating",
+        help="D70: the dating extractor's sources for the listed sites - item labels, the "
+        "wikitext of each cached revision, the other-language extracts (serial, resumable)",
+    )
+    dating.add_argument("--sites", type=Path, nargs="+", required=True,
+                        help="JSON-lines files with a site_id per line (UNDATED, GOLD, DEV, HARD)")  # fmt: skip
+    dating.add_argument("--pace", type=float, default=PACE_SECONDS)
     sub.add_parser("status", help="coverage, from the files only")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -685,6 +1029,14 @@ def main(argv: list[str] | None = None) -> int:
                     client=client,
                     refetch_failed=args.refetch_failed,
                     pace=args.pace,
+                )
+        elif args.command == "fetch-dating":
+            from fields import wiki as W
+
+            site_ids = sorted({s for path in args.sites for s in read_site_ids(path)})
+            with open_fetcher(args.root) as net:
+                result = fetch_dating(
+                    args.root, net=net, site_ids=site_ids, wiki_cache=W.WikiCache(), pace=args.pace
                 )
         else:
             result = status(args.root)

@@ -78,6 +78,13 @@ $PY scripts/remediation/opus_handoff.py validate --dir $H-r0
 $I research import --run $R                                            # fetches every quoted page once
 $I research export-reask --run $R --handoff $H-r1                      # while REASK.json names fields (at most 2 re-asks)
 #    answer, validate, import again; the plan refuses to run while a field waits
+$I research export-reask --run $R --handoff $H-r2 --review A           # D104: + the fields the D8 review A
+#    (the pilot_judge's answer file about step 1's PLAN.md) vetoed; their old answers stop counting.
+#    Move the reviewed step-001 aside first only after the export: the review is checked against its PLAN.md
+$I research export-reask --run $R --handoff $H-r3 --review A --owner-round F  # D114: one owner-released round
+#    past the last re-ask. F = {"decision": "D114", "questions": {QID: {field: question}}}: only those
+#    fields, each vetoed by review A, each asked with the review's reason and the owner's question.
+#    An answer that does not count leaves the field exhausted (no further round).
 
 # 3. the plan (read-only production read): PLAN.jsonl, REFUSALS.jsonl, PLAN.md, STEP.json, ROLLBACK.sql
 $I plan --run $R --step 1

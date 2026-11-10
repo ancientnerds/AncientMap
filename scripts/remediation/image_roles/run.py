@@ -9,6 +9,7 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
     run.py identity-apply  --run-dir C [--stage identity-verify ...]  -> C/POPULATION_2.jsonl
     run.py search          --run-dir C [--judged V ...] [--workers 2]  -> C/CANDIDATES.jsonl
     run.py pictures        --run-dir C                           renderings on disk -> C/PICTURES.jsonl
+    (the three exports below refuse a role that does not stand: `standing.py`, D125-D128)
     run.py prefilter-export --run-dir C --handoff H              Haiku, 640 px, 60 to a question
     run.py brief | check-answer | import  ... --stage image-prefilter
     run.py depicts-export  --run-dir C --handoff H               Sonnet, 1280 px, by site
@@ -65,12 +66,14 @@ from served_image import recheck as RC  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
 from image_roles import calibrate as CAL  # noqa: E402
+from image_roles import clean_gold as CG  # noqa: E402
 from image_roles import depicts as DP  # noqa: E402
 from image_roles import flow as FL  # noqa: E402
 from image_roles import hero_recheck as HR  # noqa: E402
 from image_roles import identity as ID  # noqa: E402
 from image_roles import prefilter as PF  # noqa: E402
 from image_roles import stage as SG  # noqa: E402
+from image_roles import standing as STD  # noqa: E402
 from image_roles.wiki_cache import WikiCache  # noqa: E402
 
 STAGES = {
@@ -81,6 +84,7 @@ STAGES = {
     PF.SPEC.name: PF.SPEC,
     DP.SPEC.name: DP.SPEC,
     HR.SPEC.name: HR.SPEC,
+    **CG.STAGES,
 }
 #: The shared Wikipedia cache, relative to the main checkout (run data is gitignored, a worktree has none).
 WIKI_CACHE = Path("output") / "remediation" / "final-2026-10-08" / "wiki_cache"
@@ -280,13 +284,19 @@ def main(argv: list[str] | None = None) -> int:
         elif command == "pictures":
             _print(cmd_pictures(run))
         elif command == "prefilter-export":
+            STD.require_standing(["image_prefilter"], STD.calibration_root())
             _print(FL.prefilter_export(run, args.handoff, limit=args.limit))
         elif command == "depicts-export":
+            STD.require_standing(["image_depicts"], STD.calibration_root())
             _print(FL.depicts_export(run, args.handoff, cache=_cache(args.wiki_cache)))
         elif command == "recheck-export":
+            STD.require_standing(["adversarial"], STD.calibration_root())
             _print(cmd_recheck_export(run, args))
         elif command == "brief":
-            print(SG.brief(run, args.handoff, _spec(args), args.batch_id))
+            spec = _spec(args)
+            # two labellers answer the same batches of a clean gold (D117): each its own name
+            agent = f"{spec.name}-{args.batch_id}" if spec.name in CG.STAGES else None
+            print(SG.brief(run, args.handoff, spec, args.batch_id, args.round, agent=agent))
         elif command == "check-answer":
             text = args.text_file.read_bytes().decode("utf-8")
             problem = SG.check_answer(

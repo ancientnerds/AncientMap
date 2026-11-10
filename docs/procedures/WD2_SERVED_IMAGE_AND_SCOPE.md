@@ -1588,6 +1588,142 @@ for role in image_prefilter image_depicts adversarial web_verifier; do
 done
 ```
 
+**The pilot judge's adjudication (fixed 2026-10-25).** The sample holds no case in the role
+`pilot_judge`: the 150 MiniMax-pool candidates it adjudicates are depicts cases (role `image_depicts`,
+group `adjudicated`, `truth` null), so `export --role pilot_judge` refused "the sample holds no case
+for role pilot_judge" while it selected by role. It now takes exactly those depicts cases
+(`calibrate.cases_for`; the 50 re-check cases drawn from them, `rck-adj-*`, stay the re-check's) into
+the stage `image-adjudicate`: the depicts prompt and answer shape, plus the candidate's Commons file
+and the order to research each candidate on the web (`ADJUDICATE_PROMPT`, prompt id
+`image-adjudicate-v1`), and `check-answer`/`import` refuse a note that names no URL
+(`parse_adjudication`). On `image-roles-v1` that is 129 questions (one per site) in 22 batches, the
+same picture bytes the depicts role saw. `import` writes `$D/ADJUDICATE.jsonl` (every answer recorded
+as `pilot_judge:<batch>` in Opus's stamp, nothing answered before the sample was fixed). The depicts
+role is **not** asked again: its 344 answers (handoff `image-cal-image_depicts`, 449 candidates, every
+adjudicated one included) are imported as they are, and `evaluate --role image_depicts` takes the
+adjudication as the truth of the 150 (false-`depicts` rate and precision); `evaluate --role
+adversarial` takes it for the 50 `rck-adj-*` cases. Both refuse while `ADJUDICATE.jsonl` is missing
+("import the stage first"), and write no verdict.
+
+```bash
+H=output/remediation/handoff/image-cal-pilot_judge
+$PY $CAL export --dir $D --role pilot_judge --handoff $H            # 129 questions, 22 batches
+$PY scripts/remediation/image_roles/run.py brief --run-dir $D --handoff $H --stage image-adjudicate --batch-id dep-0001
+#   one Opus xhigh agent per batch (dep-0001 .. dep-0022), each given its brief
+$PY scripts/remediation/opus_handoff.py validate --dir $H
+$PY scripts/remediation/image_roles/run.py import --run-dir $D --handoff $H --stage image-adjudicate   # -> $D/ADJUDICATE.jsonl
+$PY scripts/remediation/image_roles/run.py import --run-dir $D --handoff output/remediation/handoff/image-cal-image_depicts --stage image-depicts-calibration
+$PY $CAL evaluate --dir $D --role image_depicts
+$PY $CAL evaluate --dir $D --role adversarial                     # after image-recheck is imported
+```
+
+#### 3.8.5 D103 - the re-test one tier up (`image-roles-v2`, 2026-11-06)
+
+`image-roles-v1` failed three slots on 2026-10-25 (04:49 UTC): `image_prefilter` on Haiku low (photo
+agreement 0.9167 of 0.92, depicts-capable recall 0.9265 of 0.98), `image_depicts` on Sonnet medium
+(sensitivity 0.7267, precision 0.843, false depicts 0.1116 of at most 0.03, 25 foreign rows called
+depicts) and `adversarial` on Sonnet high (agreement 0.86 of 0.95); `web_verifier` passed (23/23).
+Owner decision D103 (2026-11-06): re-test one tier up. Applied in `roles.py`:
+
+* `image_prefilter` -> Sonnet low and `image_depicts` -> Opus medium: tier moves copied from the
+  verdicts into `APPLIED_ESCALATIONS` (both roles answer the image lanes only).
+* The re-check: `adversarial` is shared (WD5, identity), so under D45 it stays on Sonnet and the image
+  lane gets `image_adversarial` (Opus high), a new role that settles the move
+  (`SETTLED_TIER_MOVES`, as `card_adversarial` and `wc_web_verifier` did). `served_image/vision.RECHECK_ROLE`
+  and `hero_recheck.SPEC` bind to it; `web_rules` classifies it as a verifier. The calibration keeps
+  its slot name `adversarial`; `calibrate.slot_role` names the role that answers it, and a seal binds
+  the slot to that role (`role` in `role_registry`).
+
+`calibrate.py reseal --from <old> --dir <new>` seals only the failed slots again, beside the old
+directory, with the same threshold numbers and the old GOLD.jsonl/JOBS.jsonl byte for byte (refused
+unless each failed slot's role stands where its verdict's tier move pointed, and unless the pilot
+judge's registry entry is the one that adjudicated). The pilot judge is not asked again: `evaluate`
+takes the old directory's `ADJUDICATE.jsonl` as the truth, read under the old seal and gold. A slot
+that fails at Opus is held (`held`, no tier move): the owner decides; it is not escalated.
+
+```bash
+D2=output/remediation/calibration/image-roles-v2
+$PY $CAL reseal --from $D --dir $D2      # thresholds 7f6fa3ca..., gold edd21357... (= v1's)
+for role in image_prefilter image_depicts adversarial; do
+    $PY $CAL export --dir $D2 --role $role --handoff output/remediation/handoff/image-cal2-$role
+done
+#   5 prefilter questions (300 pictures, Sonnet), 344 depicts questions in 58 batches (449 candidates,
+#   Opus), 200 re-check questions in 17 batches (Opus, web) - the questions' sha256 are v1's.
+#   Briefs: output/remediation/handoff/image-cal2-<role>-briefs/<batch>.txt (run.py brief).
+$PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output/remediation/handoff/image-cal2-image_prefilter --stage image-prefilter
+$PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output/remediation/handoff/image-cal2-image_depicts --stage image-depicts-calibration
+$PY scripts/remediation/image_roles/run.py import --run-dir $D2 --handoff output/remediation/handoff/image-cal2-adversarial --stage image-recheck --round 1
+for role in image_prefilter image_depicts adversarial; do $PY $CAL evaluate --dir $D2 --role $role; done
+```
+
+#### 3.8.6 D116-D119 - the museum rule, the prefilter probe and the clean gold (`image-roles-v3`, 2026-11-06)
+
+Owner answers of 2026-11-06 evening to the image-roles-v2 report:
+
+* **D116 (museum pieces):** a genuine part of the site now in a museum (the Ishtar Gate in Berlin)
+  shows the site. v1 contradicted itself: its depicts terms counted "an object found at this site",
+  its judge line called every museum object `other_site`, and the 2026-09-19 labels called the
+  Ishtar Gate in Berlin a foreign place. Now one rule in both places: the depicts prompt
+  (`image-depicts-v2`: verdict terms and judge line) and the re-check (`served-check-v3`,
+  `vision._VERDICT_TERMS_D116`, `CHECK_PROMPT_V3`; `hero_recheck.PROMPT_ID` and D15's re-check bind
+  to it). A museum object that nothing in the picture ties to the site stays `other_site`. The first
+  check's frozen prompt (`served-check-v1`) and `served-check-v2` keep their text: their recorded
+  questions are read back against it.
+* **D118 (prefilter at Opus first):** `image_roles/prefilter_probe.py` asks v2's five prefilter
+  questions (300 pictures, byte for byte) of Opus as a candidate-model trial (`--candidate-model
+  claude-opus-5-5`; `stage.brief`/`stage.import_answers` take `candidate_model`), measured against
+  v2's gold beside Sonnet's answers, with the 44 cases Sonnet failed listed one by one. The tier
+  move v2 named (Sonnet -> Opus) is applied only on that evidence; the prefilter is then measured on
+  its own clean gold (`image-roles-v3p`).
+* **D117 (clean gold):** `image_roles/clean_gold.py` - module docstring for the strata and the
+  order. Thresholds and pins (prompt texts strict, module files recorded) sealed before the draw;
+  the draw (no truth) logged before the first label; two Opus xhigh labellers (`pilot_judge`, stages
+  `image-gold-label-a|b`, each its own handoff and agent names) and a third (`-c`) on the binary
+  disputes only; the majority is the truth; 30 labels checked by the orchestrator against the
+  pictures (`SPOTCHECK.jsonl`, an override only with its note); `fix` writes GOLD.jsonl/JOBS.jsonl
+  and draws the 200 re-check cases (100 depicting, 100 not, stratified by group) from the labelled
+  ones. A drawn case whose picture Commons does not serve at 1280 px is voided before the labels,
+  with its reason (`void`; a case on disk is never voided).
+* **D119 (wrong site):** `false_depicts_max` 0.02 (was 0.03), no zero-tolerance foreign rule
+  (`every_foreign_not_depicts` false); the other thresholds as before.
+
+```bash
+CG=scripts/remediation/image_roles/clean_gold.py
+D3=output/remediation/calibration/image-roles-v3
+$PY scripts/remediation/served_image/run.py read --run-dir output/remediation/calibration/image-roles-v3-inputs
+$PY $CG seal --dir $D3 --kind depicts
+$PY $CG draw --dir $D3 --read output/remediation/calibration/image-roles-v3-inputs/READ.json     --wiki-cache output/remediation/final-2026-10-08/wiki_cache     --pool-run output/remediation/candidate_search/candidates-2026-10-06     --exclude-gold output/remediation/calibration/image-roles-v1/GOLD.jsonl     --exclude-heroes output/remediation/calibration/image-roles-v1-inputs/OTHER_SITE_HEROES.jsonl     --insert-root output/remediation/import_hero
+$PY scripts/remediation/candidate_search/repicture.py --old-run output/remediation/candidate_search/candidates-2026-10-06     --need gold --calibration-dir $D3                    # -> REPICTURE_gold-image-roles-v3.jsonl
+$PY $CG void --dir $D3 --case <id> --reason "<why it cannot be shown>"   # only a picture not served
+for w in a b; do $PY $CG label-export --dir $D3 --labeller $w --handoff output/remediation/handoff/image-gold3-label-$w; done
+#   one Opus xhigh agent per batch and labeller (run.py brief --stage image-gold-label-<w>), then
+#   run.py import --run-dir $D3 --handoff ... --stage image-gold-label-<w>
+$PY $CG disputes --dir $D3
+$PY $CG label-export --dir $D3 --labeller c --handoff output/remediation/handoff/image-gold3-label-c
+$PY $CG spotcheck --dir $D3          # the orchestrator writes $D3/SPOTCHECK.jsonl
+$PY $CG fix --dir $D3
+for role in image_depicts adversarial; do $PY $CG export --dir $D3 --role $role --handoff output/remediation/handoff/image-cal3-$role; done
+$PY $CG evaluate --dir $D3 --role image_depicts; $PY $CG disagreements --dir $D3 --role image_depicts
+```
+
+**D118 applied (2026-11-07).** The probe (`calibration/prefilter-probe-d118/PROBE.json`, 5 Opus
+answers on v2's 300 pictures): photo agreement 0.9267 (Sonnet 0.9033, threshold 0.92),
+depicts-capable recall 0.9167 (Sonnet 0.848, threshold 0.98); Opus fixed 16 of Sonnet's 44 failed
+pictures and broke 2. 10 of its 17 recall drops are pictures of a surviving kind it judged not
+usable (a park sign, a 640x114 panorama strip, a blurred slide, banknotes), which v2's kind gold
+(kinds only, the gold D117 replaces) cannot label. The tier move v2 named (Sonnet -> Opus, effort
+low) is applied in `roles.py`, and the prefilter is measured on its own clean kind gold, labelled
+with `usable` too:
+
+```bash
+D3P=output/remediation/calibration/image-roles-v3p
+$PY $CG seal --dir $D3P --kind kind          # after the move: its registry entry is Opus
+$PY $CG draw --dir $D3P --read output/remediation/calibration/image-roles-v3-inputs/READ.json     --wiki-cache output/remediation/final-2026-10-08/wiki_cache     --pool-run output/remediation/candidate_search/candidates-2026-10-06     --exclude-gold output/remediation/calibration/image-roles-v1/GOLD.jsonl $D3/DRAW.jsonl     --exclude-heroes output/remediation/calibration/image-roles-v1-inputs/OTHER_SITE_HEROES.jsonl     --insert-root output/remediation/import_hero
+$PY scripts/remediation/candidate_search/repicture.py --old-run output/remediation/candidate_search/candidates-2026-10-06     --need gold --calibration-dir $D3P
+for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/remediation/handoff/image-kind3-label-$w; done
+# then as for $D3: disputes, label c, spotcheck, fix, export --role image_prefilter, evaluate
+```
+
 ---
 
 ## 4. Tests and the mutation sweep
@@ -1642,7 +1778,11 @@ done
   `img d59 outcomes`, `img gap1`, `img gap3`, and `img d17` for the empty thumbnail the INSERT plan
   keeps as the empty string). Last full run 2026-10-24, after the review fixes:
   320 image cases, 320 fired; `mechanical/mutation_sweep.py wd2` (114 of 114 fired on the first
-  close-out build) was not re-run, because none of its targets changed.
+  close-out build) was not re-run, because none of its targets changed. The pilot judge's
+  adjudication (2026-10-25, section 3.8.4) added ten `img cal:` cases and re-anchored two (`the kind
+  gold has no error`, which had drifted since the C1-pass fix and counted 0, and `an answer before
+  the sample is refused`, which the adjudication's own `answered_at` guard doubled): `img cal:` 36 of
+  36 fired, and the 13 other cases on `calibrate.py` and `depicts.py` 13 of 13; 333 image cases in all.
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source

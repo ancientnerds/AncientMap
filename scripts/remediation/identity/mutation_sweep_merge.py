@@ -853,10 +853,10 @@ CASES: list[Case] = [
         T_ROW,
     ),
     at(
-        "rowlane: an alias probe needs a name row",
+        "rowlane: an alias probe keeps its site in the plan",
         ROWLANE,
-        "    if site is None:",
-        "test_a_plan_without_the_cells_a_probe_needs_names_the_invariants_it_cannot_probe",
+        "        if any(r.site_id == site for r in kept):",
+        "test_the_alias_probe_keeps_its_site_in_the_plan",
         T_ROW,
     ),
     at(

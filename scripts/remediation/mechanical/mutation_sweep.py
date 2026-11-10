@@ -7797,15 +7797,15 @@ WD5_CASES: list[Case] = [
     Case(
         "wd5: the stage is a lane of its own",
         LANE,
-        'FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4|wd5)-',
-        'FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4)-',
+        'FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4|wd5|wd5x)-',
+        'FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4|wd5x)-',
         "test_wd5_is_a_lane_of_its_own",
         WD5_TESTS,
     ),
     Case(
         "wd5: only wd5 may write the residue label",
         LANE,
-        '        cells=FIELDS_CELLS_WD5 if stage == "wd5" else FIELDS_CELLS,',
+        '        cells=FIELDS_CELLS_WD5 if stage in ("wd5", "wd5x") else FIELDS_CELLS,',
         "        cells=FIELDS_CELLS_WD5,",
         "test_only_wd5_may_write_the_residue_label",
         WD5_TESTS,
@@ -7813,7 +7813,7 @@ WD5_CASES: list[Case] = [
     Case(
         "wd5: wd5 may write the residue label",
         LANE,
-        '        cells=FIELDS_CELLS_WD5 if stage == "wd5" else FIELDS_CELLS,',
+        '        cells=FIELDS_CELLS_WD5 if stage in ("wd5", "wd5x") else FIELDS_CELLS,',
         "        cells=FIELDS_CELLS,",
         "test_only_wd5_may_write_the_residue_label",
         WD5_TESTS,
@@ -7821,8 +7821,8 @@ WD5_CASES: list[Case] = [
     Case(
         "wd5: the stage rests on one quote",
         LANE,
-        '    "wd5": "one_source",\n}',
-        '    "wd5": "two_source",\n}',
+        '    "wd5": "one_source",\n    "wd5x"',
+        '    "wd5": "two_source",\n    "wd5x"',
         "test_wd5_is_a_lane_of_its_own",
         WD5_TESTS,
     ),
@@ -8408,8 +8408,8 @@ WD5L_CASES: list[Case] = [
     Case(
         "wd5l: the last century is BC only",
         DATES,
-        "        return [s for _, _, s in raw if not (s.last_century and s.era != BC)]",
-        "        return [s for _, _, s in raw]",
+        "        return [r for r in raw if not (r[2].last_century and r[2].era != BC)]",
+        "        return list(raw)",
         "test_a_quote_does_not_state_what_it_does_not_say",
         DATES_TESTS,
     ),
@@ -11679,7 +11679,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "the chain follows the contract",
-                "    if spec.name == SHORTS:\n        return shorts_progress(site_id, records)",
+                "    if spec.name == SHORTS:\n        return shorts_progress(site_id, records, defect_stop=spec.defect_stop)",
                 "test_every_stage_in_order_to_a_version_3_provenance",
             ),
             (
@@ -12472,7 +12472,7 @@ WD5R_CASES: list[Case] = [
     guard(
         "wd5r: the flags are for stage wd5",
         FIELDS / "population.py",
-        "            if (args.reask_cleared or args.sites is not None) and args.stage != R.RECHECK.stage:",
+        "            if args.reask_cleared and args.stage != R.RECHECK.stage:",
         "test_the_main_refuses_the_flags_of_another_stage",
         WD5R_TESTS,
     ),
@@ -14465,6 +14465,61 @@ D25_OWNER_CASES: list[Case] = [
     ),
 ]  # fmt: skip
 CASES += D25_OWNER_CASES
+
+# ------------------------------------------- D70 (2026-11-05): the dating extractor (lane wd5x)
+DATING = FIELDS / "dating.py"
+DATING_GOLD = FIELDS / "dating_gold.py"
+DATING_TESTS = "tests/remediation/test_fields_dating.py"
+DATING_GOLD_TESTS = "tests/remediation/test_fields_dating_gold.py"
+#: The traps of the design (D70_EXTRACTOR_DESIGN.md section 2) and the gates of D71: each guard of
+#: the extractor, the gold and the wave, and the test that notices it gone. Every label starts with
+#: "wd5x:", so the list runs on its own: `mutation_sweep.py wd5x:`.
+WD5X_CASES: list[Case] = [
+    guard("wd5x: a hedge abstains", DATING, "    if HEDGES.search(low):",
+          "test_a_hedge_abstains_rather_than_lowers", DATING_TESTS),
+    Case("wd5x: a number with a unit is no year", DATING,
+         '    if _word_after(low, located.end) in UNITS:\n        return "unit"\n', "",
+         "test_a_number_with_a_unit_or_without_a_marker_is_no_start", DATING_TESTS),
+    Case("wd5x: an event's date is no start", DATING,
+         '        if cue is None or cue[0] != "start":', "        if cue is None:",
+         "test_an_event_date_is_no_start", DATING_TESTS),
+    guard("wd5x: another subject vetoes the sentence", DATING, "        if other is not None:",
+          "test_a_sub_site_s_date_is_not_the_site_s", DATING_TESTS),
+    Case("wd5x: a prefix vetoes a period word", DATING,
+         "                if any(x <= a < y for x, y in compounds) or PERIOD_PREFIXES.search(low[:a]):",
+         "                if any(x <= a < y for x, y in compounds):",
+         "test_pre_inca_is_no_inca_and_the_site_s_own_name_is_no_period", DATING_TESTS),
+    guard("wd5x: two starts in one sentence abstain", DATING,
+          "    if len({c.bucket for c in dated}) > 1:",
+          "test_two_starts_of_one_sentence_in_two_buckets_abstain", DATING_TESTS),
+    guard("wd5x: a park's founding is no start", DATING, '            if prop == "P571" and modern:',
+          "test_a_park_s_founding_is_no_start", DATING_TESTS),
+    guard("wd5x: a collective entity abstains", DATING, "    if collective is not None:",
+          "test_abstentions_say_why", DATING_TESTS),
+    guard("wd5x: Pleiades' minDate alone is not written", DATING,
+          '    if decisive.kind == PLEIADES and not solo["pleiades"]:',
+          "test_pleiades_min_date_alone_is_not_written", DATING_TESTS),
+    guard("wd5x: a start outside the D58 window is held", DATING, "    if problem is not None:",
+          "test_a_start_outside_the_d58_window_is_held_for_the_owner", DATING_TESTS),
+    guard("wd5x: an unfound decisive quote withdraws the start", DATING,
+          '        if row["decision"] == A.REPLACE and row["quotes"][0]["outcome"] != "found":',
+          "test_a_decisive_quote_not_found_withdraws_the_start", DATING_TESTS),
+    guard("wd5x: the gold is sealed", DATING_GOLD,
+          '    if _sha256(round_dir / GOLD_FILE) != pin or pin != seal["gold_sha256"]:',
+          "test_an_edited_gold_is_refused", DATING_GOLD_TESTS),
+    guard("wd5x: the gold is measured with the frozen code", DATING_GOLD,
+          '    if dict(code) != frozen["code"]:',
+          "test_measure_needs_the_frozen_code_and_runs_once", DATING_GOLD_TESTS),
+    guard("wd5x: the threshold", DATING_GOLD, '    if gold["precision"] < threshold:',
+          "test_the_verdict_fails_below_and_says_why", DATING_GOLD_TESTS),
+    Case("wd5x: the wave needs a passing gold", FIELDS / "plan.py",
+         "        return DG.require_passed(DG.GOLD_ROOT, now)", "        return {}",
+         "test_the_wave_needs_a_passing_gold_of_the_current_code", DATING_GOLD_TESTS),
+    guard("wd5x: the wave needs the shown cells", FIELDS / "plan.py",
+          '    if record["n"] < DT.SHOWN_CELLS or record["wrong"] > DT.SHOWN_MAX_WRONG or not record["go"]:',
+          "test_the_shown_cells_gate", DATING_GOLD_TESTS),
+]  # fmt: skip
+CASES += WD5X_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

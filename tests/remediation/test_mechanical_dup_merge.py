@@ -242,6 +242,47 @@ class TestTheWaves:
             L.load_pairs(WAVE, tmp_path)
 
 
+class TestTheExclusion:
+    """`waves --exclude`: decided pairs left out of the waves with their reason (O5: Tarxien and
+    Dodona wait for part B), recorded beside the wave's PAIRS.json; a bad exclusion is refused."""
+
+    def test_an_excluded_loser_leaves_the_waves_with_its_reason(self) -> None:
+        pairs = [pair(), pair(LOSER2, SURVIVOR2)]
+        kept, excluded = D.exclude_pairs(pairs, [{"loser": LOSER2, "reason": "O5"}])
+        assert kept == [pairs[0]]
+        assert [(e["loser"], e["excluded_because"]) for e in excluded] == [(LOSER2, "O5")]
+
+    @pytest.mark.parametrize(
+        ("exclusions", "message"),
+        [
+            ([{"loser": OTHER, "reason": "x"}], "no decided pair"),
+            ([{"loser": LOSER, "reason": " "}], "needs a loser id and a reason"),
+            ([{"loser": LOSER}], "needs a loser id and a reason"),
+            ([{"loser": LOSER, "reason": "a"}, {"loser": LOSER, "reason": "b"}], "twice"),
+        ],
+    )
+    def test_a_bad_exclusion_is_refused(self, exclusions, message: str) -> None:
+        with pytest.raises(P.PlanError, match=message):
+            D.exclude_pairs([pair()], exclusions)
+
+    def test_the_cli_writes_the_kept_pairs_and_the_excluded_file(self, tmp_path: Path) -> None:
+        run = tmp_path / "root" / "output" / "remediation" / "final-2026-10-08" / "identity"
+        run.mkdir(parents=True)
+        decision = TestTheWaves().decision
+        rows = [decision(LOSER, SURVIVOR), {**decision(LOSER2, SURVIVOR2), "cluster_id": "dup-2"}]
+        (run / "DUP_DECISIONS.jsonl").write_text(
+            "".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8"
+        )
+        exclude = tmp_path / "exclude.json"
+        exclude.write_text(json.dumps([{"loser": LOSER2, "reason": "O5"}]), encoding="utf-8")
+        out = tmp_path / "out"
+        argv = ["--root", str(tmp_path / "root"), "--out", str(out), "waves", "--date", WAVE]
+        assert D.main([*argv, "--exclude", str(exclude)]) == 0
+        assert [p.loser for p in D.load_wave(WAVE, out)] == [LOSER]
+        data = json.loads((L.pairs_path(WAVE, out).with_name(D.EXCLUDED_FILE)).read_text("utf-8"))
+        assert [(e["loser"], e["excluded_because"]) for e in data["excluded"]] == [(LOSER2, "O5")]
+
+
 class TestTheLaneFamily:
     def test_a_pair_is_two_lower_case_uuids_that_differ(self) -> None:
         with pytest.raises(ValueError, match="two lower-case uuids"):

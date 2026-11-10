@@ -14347,3 +14347,160 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   (262 s), freshness 0 differing sites, IndexNow 502 URLs accepted (every page changed on 2026-10-24). The P31 table moved
   with its pin in one commit (`table --write`, 314 classes changed, TABLE_SHA256 fe54e166...); the pre-merge table is
   now a test fixture and a test pins the pinned table as its exact merged form.
+- **D10 re-check of the live MiniMax cards - done 2026-10-24/25** (beta-exit condition 2). card_adversarial calibrated
+  first (teaser-2026-10-24 PASSED, agreement 0.9302). Run `wb-recheck-2026-10-24` (contract recheck-v1, seeded from
+  `wb-cardgap-2026-10-07`): 166 live cards; check (card_fact_checker, 12 canaries) PASS 126 / FAIL 40; verify
+  (card_web_verifier, 126) VERIFIED 73, DISPUTED 28, CONTRADICTED 17, UNPROVEN 8; adversarial (card_adversarial, 73)
+  PASS 64 / FAIL 9; outcomes: **64 confirmed, 102 cleared** (check-failed 40, disputed 28, contradicted 17,
+  adversarial-failed 9, unproven 8). Clears written as lane WB steps **s039** (54 prov + 54 card) and **s040** (48 + 48):
+  backup + drill `2026-10-25_remediation` passed, emit/rehearse/probe-guards/apply (APPLY OK)/verify/rehearse-rollback,
+  accept 0 deviations each; journal recounted 54/54/48/48. Curated sites with a card 4820 -> 4718; the cleared sites get
+  a checked card in the waves. One page (lovevda.it) stayed unreachable through 3 import retries.
+- **WC calibrations on Opus** (after the role moves, `wc-roles` merge): wc-fc-1o PASSED, wc-fc-3o PASSED, wc-fc-2o FAILED
+  (0.8841, both known errors missed), wc-wv-1o FAILED (0.8675 of 0.95), wc-wv-2o FAILED (0.8696); all at the top tier ->
+  held. Next: adjudicate their disagreements against the recorded single-sample gold (the 2026-10-09 lesson) before any
+  release. wc-pj-1o/2o (the X15-sharpened judge, `wc-judge` merge) sealed and prepared. enrich-writer PASSED (1.0).
+
+## 2026-10-25 - Owner: "warum ist Shypyntsi undated" (D68, D69)
+
+- Cause: the wd5 researcher had found the date (enwiki: "5th Millennium to early 4th Millennium BC", value -5000); the
+  Sonnet adversarial re-check called it unclear twice (Ukrainian sources: 4th-3rd millennium) and the lane keeps a held
+  cell empty and lists it in `adv/OWNER.jsonl` - a list that was never put before the owner.
+- New step `adversarial.py owner-accept` (`734554f`, 6 tests): restores the researcher's kept decision (a replace with a
+  found quote) for named cells held as unclear, under a D<n> owner decision; the journal evidence keeps the re-check's
+  verdict and adds the owner's note; a rejected cell is refused.
+- Waves (backup + drill 2026-10-25_remediation, 04:18): **2026-10-25o** (D68, wd5-reask): Shypyntsi period_start -5000,
+  period_name "< 4500 BC" (2 rows); **2026-10-25p** (D69, wd5): 45 sites, 90 rows, 10 steps; **2026-10-25q** (D69,
+  wd5-reask): 3 sites, 6 rows (Chitinamit, Humbleton Hill, New Ditch). All emit/rehearse/probe-guards/apply (APPLY OK)/
+  verify/rehearse-rollback/accept 0 deviations; journal recounted 2/90/6. Only 4 of the 49 period starts were empty
+  before; 45 replaced a stored value with the researcher's sourced one. Shown curated sites without a period start:
+  618 -> 615. Static export rebuilt, IndexNow 135 URLs. The 128 rejected cells stay unwritten.
+
+## 2026-11-06 - Lane d103-images: the image roles one tier up (D103)
+
+- **Recorded late:** the image-role calibration `image-roles-v1` (sealed 2026-10-24 13:12, gold fixed 18:03,
+  972 cases, gold sha256 edd21357...) was evaluated on 2026-10-25 04:49 UTC and **failed three slots**:
+  `image_prefilter` (Haiku low: photo agreement 0.9167 of 0.92, depicts-capable recall 0.9265 of 0.98),
+  `image_depicts` (Sonnet medium: sensitivity 0.7267 of 0.9, precision 0.843 of 0.95, false depicts 0.1116 of
+  at most 0.03, 25 foreign rows called depicts) and `adversarial` (Sonnet high: agreement 0.86 of 0.95, 172/200);
+  `web_verifier` passed (23/23, all wrong links flagged). The verdicts named tier moves Haiku->Sonnet,
+  Sonnet->Opus, Sonnet->Opus. Not logged here then; the moves were not applied (O8: not started, cost to the owner).
+- **Owner decision D103 (2026-11-06):** re-test one tier up. Applied in `roles.py`: `image_prefilter` Sonnet low
+  and `image_depicts` Opus medium as `APPLIED_ESCALATIONS` (copied from the verdicts); the shared `adversarial`
+  stays on Sonnet (D45: WD5/D99 and identity use it) and the image lane's hero re-check gets the new role
+  `image_adversarial` (Opus high), recorded as a `SETTLED_TIER_MOVES` entry of image-roles-v1
+  (precedent `card_adversarial`, `wc_web_verifier`). `served_image/vision.RECHECK_ROLE` and
+  `hero_recheck.SPEC` bind to it, `web_rules` classifies it. `image_roles/calibrate.py` gained `reseal`
+  (the failed slots of a finished calibration sealed again beside it on the same gold byte for byte, the old
+  pilot-judge adjudication as truth) and slot -> role binding in the seal; 12 new mutation-sweep cases
+  (`img d103`), 2 re-anchored, all 345 needles present once and every mutant compiles (the sweep itself was
+  not run: it rewrites files in place and another workflow shares this checkout). Runbook:
+  `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` 3.8.5.
+- **image-roles-v2 sealed** (`reseal --from image-roles-v1`): thresholds sha256 7f6fa3ca..., gold sha256
+  edd21357... (identical to v1), measured slots image_prefilter / image_depicts / adversarial (role
+  image_adversarial). Exported: prefilter 5 questions (300 pictures), depicts 344 questions in 58 batches (449
+  candidates), re-check 200 questions in 17 batches; every questions_sha256 equals v1's (same prompts, same
+  pictures). Answers: by agents through `opus_handoff.py answer` (Sonnet for the prefilter, Opus for the other
+  two), then import, evaluate, a spot check of every disagreement.
+- **image-roles-v2 measured (2026-11-06): all three slots fail again.** 949 answers imported (prefilter 5,
+  depicts 344, re-check 200; 2 re-check answers of rck-01-017 refused at import - an `other_site` basis without a
+  commons.wikimedia.org URL - kept in `image-roles-v2/refused-2026-11-06/` and re-asked once). Root cause: the
+  re-check brief's `check-answer` command lacked `--round 1`, so every re-check agent's shape check failed and the
+  defect surfaced only at import; fixed in `image_roles/stage.py` + `run.py` with 2 CLI tests. Verdicts
+  (`image-roles-v2/verdicts/`, written once):
+  - `image_prefilter` (Sonnet low): photo agreement 0.9033 (>= 0.92), depicts-capable recall 0.848 (>= 0.98) -
+    worse than Haiku in v1. Spot check: mostly real errors (plain site photos and landscapes set unusable /
+    `other`: Scafell Pike, The Wrekin, Mughal Minar, an Olmec head). Tier move recorded: Sonnet -> Opus (not
+    applied: D103 covered one tier, the owner decides).
+  - `image_depicts` (Opus medium): sensitivity 0.7667 (>= 0.9), precision 0.9042 (>= 0.95), false depicts
+    0.0661 (<= 0.03), 13 foreign rows called depicts. Held at the top tier. Spot check of every disagreement: ~26
+    of the 35 missed owner-linked heroes show no site (quinoa plants, a beach, village churches, a manor, a park
+    garden) - the gold is wrong there; 10 of the 13 foreign rows are museum objects of the site itself (Ishtar
+    Gate bricks in Berlin/Istanbul, the Kalabsha Gate in Berlin) - a rule conflict: the depicts prompt counts an
+    object found at the site, the 2026-09-19 labels call it a foreign place; Woodhenge (frn-95516: the concrete
+    post markers are Woodhenge) and the Senegambian circles (frn-63784) are gold errors; real Opus errors: the
+    Stonehenge lidar called Woodhenge, Tiwanaku blocks called Puma Punku, Khapra Kodiya, a few earthworks too
+    strict.
+  - re-check slot `adversarial` (role `image_adversarial`, Opus high): agreement 0.885 (177/200, >= 0.95). Held
+    at the top tier. The 23 disagreements: 7 owner-linked "positives" showing no ancient remains (Carmona and
+    Egtved churches, the Mezquita mihrab for ancient Cordoba, Antibes beach, Klopot village aerial, a cattle
+    photo for Adam's Grave, the Inti Punku trail view of Machu Picchu) - Opus right; 10 museum objects (the same
+    rule conflict); 3 gold errors where Opus is right (Woodhenge markers, Senegambian circles, the 1878 drawing
+    of the Roman baths of Khenchela = Hammam Essalihine); 3 against the pilot judge: Lefke Gate (the photo is the
+    aqueduct wall beside it - a real Opus error), Kinver Edge path and Merano street photo (borderline).
+  - With the gold corrected and the museum-object rule decided as "counts", the re-check would reach 197-199/200
+    and the depicts role would fail only the zero-tolerance foreign rule (2 real errors). Not applied: the gold is
+    sealed byte for byte; a correction is a new calibration. Owner questions O-D103a..d (lane report).
+
+## 2026-11-06 - Lane d117-images, iteration 1: D116 rule, D118 probe exported, D117 clean gold drawn
+
+- **D116 applied (code, no answers):** one museum rule in the depicts prompt (`image-depicts-v2`: the verdict
+  terms count "a genuine part of this site or a find from it, also where it is kept now"; the judge line's
+  museum clause says the same, with the Ishtar Gate in Berlin as its example; a museum object nothing in the
+  picture ties to the site stays `other_site`) and in the re-check (`served-check-v3`, `_VERDICT_TERMS_D116`).
+  `served-check-v1/v2` keep their frozen text. Runbook WD2 3.8.6.
+- **D118 probe exported, not answered:** `prefilter_probe.py export --source image-roles-v2` ->
+  `calibration/prefilter-probe-d118`, handoff `handoff/image-probe-d118-prefilter`: v2's 5 questions
+  (questions_sha256 777a7a73..., equal to v2's), a candidate-model trial of Opus for `image_prefilter`
+  (role stays on Sonnet until the evidence is in).
+- **image-roles-v3 sealed** (thresholds sha256 83f90099..., D119 false_depicts_max 0.02, no zero-foreign
+  rule; prompts and 8 modules pinned) **and drawn** from a fresh read (2026-11-06T15:57:33Z, 4,909 sites,
+  48,918 image rows; read sha256 58f8b4d4...): 418 cases at 130 sites (hero 70, gallery 126, gallery_trap 14,
+  neighbour 51, pair_own 30, pair_other 30 incl. Stonehenge/Woodhenge and Avebury/Silbury Hill, museum 29,
+  pool 68), none of them in image-roles-v1/v2. The 68 pool pictures re-fetched serially at 1 s
+  (`repicture.py --need gold`): 67 on disk, 1 refused (Qasr Qaroun, the search recorded a 960 px URL) and
+  voided with its reason before any label (case pool-e3c855d49896): 417 cases.
+- **Labels exported:** two independent rounds, 129 questions each in 22 batches (handoffs
+  `image-gold3-label-a`, `-b`, role pilot_judge Opus xhigh, web). No answer yet.
+- Mutation sweep: 6 new cases (`img d117`); all 351 needles present once and every mutant compiles.
+
+## 2026-11-07 - Lane d125-images, iteration 1: D125/D126 released, D127 gold audit, D128 not met
+
+- **Code:** `image_roles/standing.py` (new): `release` of a held clean-gold verdict into
+  `<dir>/releases/<slot>.json` (binds verdict, sealed thresholds, fixed gold, the role's registry entry and
+  every evidence file, `calibrate_claude.evidence_records`), the gold's audit trail `GOLD_AUDIT.jsonl`
+  (`correct`: a case corrected once, the sealed GOLD.jsonl untouched), `rescore` of a slot's existing answers
+  against the corrected gold (`verdicts/<slot>.<decision>.json`, no new answer) and `require_standing`, now
+  called by `run.py prefilter-export|depicts-export|recheck-export`. `calibrate_claude.py release` does not
+  fit these directories (its seals are keyed by calibration id in the root THRESHOLDS.json), hence the
+  sibling. Tests `tests/remediation/test_image_standing.py` (16); 14 mutation cases `img d125/d127/d128`.
+- **D125 / D126 released:** `image-roles-v3/releases/image_depicts.json` (decided by "owner (D125)") and
+  `image-roles-v3p/releases/image_prefilter.json` ("owner (D126)"), evidence the clean gold and the
+  orchestrator's checks of every disagreement. `standing.py check`: both stand.
+- **D127 applied to the gold (4 lines, 2 cases x their depicts/re-check rows):** the Perge theatre frieze
+  block (architectural part: not_depicts -> depicts) and the Stabiae milestone (loose find whose provenance the
+  picture does not show: depicts -> not_depicts). The other 9 museum disagreements of the re-check (Harzhorn
+  fitting, Penas de la Cerca sherds and fibula, De Meern chisel, two Assur statues, Dos Pilas plate, the
+  "Memnon" head, both Artemis Orthia cases) were viewed: no legible label or inscription in the picture, so
+  the labellers had already applied the D127 rule and the gold stands. The "~10-11 cases" of the AFK report
+  counted these as corrections towards depicts, which is the opposite of the rule the owner chose.
+- **D128 re-score** (`verdicts/adversarial.D127.json`, 200 existing answers, 0 new): agreement 181/200 =
+  0.905 (CI 0.856-0.942), unchanged. `checks/D128_CHECK.json`: 19 disagreements, all false keeps; 15 real
+  (11 loose finds accepted from the file page, 4 false keeps of landscapes/replicas), 4 with a doubtful gold:
+  **7.5 real errors per 100 > 4. Not released; the hero re-check does not stand, so D129 stage 1 did not
+  start** (no prefilter, depicts or re-check answer spent). Cause: the re-check prompt (`served-check-v3`,
+  `_VERDICT_TERMS_D116`) still counts "an object of this site in a museum" without D127's condition.
+
+## 2026-11-07 - Lane d121-dating-fix: D121, D122, D124 written; card_stats, static export, IndexNow
+
+- **Period-fix wave 2026-11-07** (`period_fix.py`, lane `period-fix-2026-11-07-s001..s005`, backup
+  `backups/2026-11-07_d121`, drill passed): 415 curated sites, every step emitted, rehearsed, guards probed,
+  applied, read back, rollback rehearsed and accepted with 0 deviations. D121: 36 regional years, 78 undated;
+  D122: 301 site_type-rule starts undated (52 of the 166 listed sites are such rows and were taken by D122).
+  0 refused or skipped; the 166 listed rows were re-checked against production right before planning.
+  Journal: 415 `period_start` rows (379 cleared) and 407 `period_name` rows.
+- **D124 Eddisbury Hill Fort** (wave 2026-11-07b, backup `backups/2026-11-07_d124`, drill passed):
+  field_researcher Sonnet high (wd5-r0-b0001) returned -1200 from the University of Liverpool Merrick's Hill
+  page ("...which we have now dated to the 12th century BC", found verbatim), the adversarial check
+  (Sonnet high, adv-r0-b0001) confirmed it. Written Undated -> -1200 / `1500 - 500 BC`, 2 journal rows,
+  accepted with 0 deviations.
+- **card_stats wave 2026-11-07**: 3,616 cells over 907 cards (antiquity 185, mystery 824, total_power 841,
+  rarity_score 824, rarity_tier 261, empires 341, empire_count 340; 41 cards without a description left as
+  the generator leaves them), counterfactual 0 of 59,700 cells differing, guards probed (6 of 6 refused),
+  read back row for row, rollback rehearsed. Confirming re-plan 2026-11-07b: 0 cells.
+- **Static:** `rebuild_static` ok (export 10:06 UTC), `static_export_check.py` 0 differing sites, and the
+  416 touched sites' `p`/`pn` in `index.json` equal the database (416 of 416). IndexNow: 417 URLs (416
+  site pages + `/sites/`) accepted. Live: Eddisbury (-1200, 1500 - 500 BC), Gonnus (-6500), Dobberworth
+  (-2300), Treryn Dinas and Devil's Humps (Undated) show the new values.
+- **Totals:** curated sites without a start 1,008 of 5,004 (all `Undated`); shown curated without a start
+  988 of 4,909 (before the lane: 610). No touched site was retired (D58: an undated site stays in scope).

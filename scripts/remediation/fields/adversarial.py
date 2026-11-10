@@ -287,7 +287,10 @@ def select(
     wanted = math.ceil(round(keep_share * len(keeps), 6))
     sampled = draw.sample(keeps, wanted)
     cells = [
-        packet(d, classified[d["site_id"]], Q.Library(REPO, pages_dir(d, run)), wiki)
+        {
+            **packet(d, classified[d["site_id"]], Q.Library(REPO, pages_dir(d, run)), wiki),
+            HO.PERIOD_RULE_KEY: HO.D111,
+        }
         for d in sorted([*replaces, *sampled], key=key)
     ]
     record = {
@@ -346,6 +349,49 @@ CRITERIA = {
         "hill it lies in, not a list, not a namesake - and be the article's own address."
     ),
 }
+
+#: Owner decision D101 (2026-11-06): the period-word clause of `CRITERIA["period_start"]` as a cell
+#: selected from now on is asked it (`HO.PERIOD_RULE_KEY` in the cell). A cell selected before
+#: carries no key and keeps its text: import renders the prompt again and compares its hash.
+_FIXED_TABLE_CLAUSE = (
+    'a period word (the value is then the year the fixed table gives that period: "iron age" -800, '
+    '"neolithic" -4000)'
+)
+_D101_CLAUSE = (
+    "a period word (the value is then the start the fixed table gives that period in the site's "
+    'country, D101: "neolithic" -10000 in Syria, -4000 in England; "roman" 43 in England, -218 in '
+    "Spain) - and a period word is no answer where the page states a year, century or BP age for "
+    "the site's start: that date is the value"
+)
+#: Owner decision D111 (2026-11-06): what a cell selected from then on is asked beside the D101
+#: clause - the four mistakes of the D99 pilot (`HO._D111_SENTENCE` tells the researcher the same).
+#: The pilot's re-check confirmed Čertova pec at the Palaeolithic edge -3,000,000 and Port Way from
+#: a sentence that only classifies the road; it rejected the others for these reasons.
+_D111_CLAUSE = (
+    ". Under owner decision D111, reject: a coarse period word (stone age, palaeolithic without "
+    "lower, middle or upper, prehistoric, ancient, antiquity), and a bare Bronze Age in Britain, "
+    "Ireland, Türkiye, the Levant, Greece, France or Italy; a wider period word where a page names "
+    "a narrower phase for the site (Middle Bronze Age, Late Iron Age, Late Roman); a start whose "
+    "only source is a weak one - a Wikipedia stub that cites no publication for the date, or a "
+    "travel, tourism, community, personal or blog page; a date of the territory, area or town "
+    "around the site, or a first mention; and a quote that only classifies the site (a road in the "
+    "Roman road numbering system) where the same source says it may be older"
+)
+
+
+def criteria(field: str, period_rule: str | None) -> str:
+    """What to check of `field`, as a cell selected under `period_rule` (D111, D101 or None) is
+    asked it."""
+    text = CRITERIA[field]
+    if field != "period_start" or period_rule is None:
+        return text
+    if period_rule not in HO.PERIOD_RULES:
+        raise AdversarialError(
+            f"a cell's {HO.PERIOD_RULE_KEY} {period_rule!r} is not {HO.D101!r} or {HO.D111!r}"
+        )
+    clause = _D101_CLAUSE + (_D111_CLAUSE if period_rule == HO.D111 else "")
+    return HO._swap(text, _FIXED_TABLE_CLAUSE, clause)
+
 
 QUESTION = """\
 You are the adversarial checker (lane wd5, the re-check) of a curated database of ancient sites. A \
@@ -431,7 +477,8 @@ def render_prompt(cell: Mapping[str, Any], note: str | None = None) -> str:
         ]
     if cell["value_page"]:
         out += ["", f"The page the value names was served: {json.dumps(cell['value_page'])}"]
-    out += ["", "## What to check", "", CRITERIA[field], ""]
+    # a cell selected before D101 carries no key: it was asked the fixed-table clause
+    out += ["", "## What to check", "", criteria(field, cell.get(HO.PERIOD_RULE_KEY)), ""]
     if cell["decision"] == A.KEEP:
         out += [
             "This is a keep: the stored value stands on the quote(s). Check the same things "
@@ -927,6 +974,175 @@ def apply(run: Path) -> dict[str, Any]:
     return {"decisions": len(out), "listed_for_the_owner": len(owner), **record["counts"]}
 
 
+# ------------------------------------------------------------------------------ the owner's word
+OWNER_ACCEPTED_FILE = "OWNER_ACCEPTED.jsonl"
+OWNER_PRE_PREFIX = "DECISIONS.pre-owner-"
+
+
+def owner_accept(run: Path, cells: Sequence[str], *, decision: str, reason: str) -> dict[str, Any]:
+    """The owner's word on held cells: each named cell the re-check left `held` - `unclear`, never a
+    `reject` - gets the researcher's decision back, the one `apply` kept whole in
+    `adversarial.original` with the quotes it found, plus an `owner` note naming the decision; the
+    re-check's own note stays, so the journal's evidence shows both.
+
+    Refused: a run the re-check was not applied to, or whose DECISIONS.jsonl is not the pinned file;
+    a decision that names no owner decision (`D<n>`); a cell that is not in the run, not held, or
+    held on a reject; a researcher decision that is no replace or has no quote it found. The file
+    before is kept as `DECISIONS.pre-owner-<n>.jsonl`, the cells go to `adv/OWNER_ACCEPTED.jsonl`,
+    and APPLIED.json pins the new file (its `owner_accepted` list keeps each earlier pin), so
+    `plan.py wave` plans them like a confirmed cell."""
+    adv = run / HO.ADV_DIR
+    applied = adv / APPLIED_FILE
+    if not applied.exists():
+        raise AdversarialError(f"{applied} is missing: the owner decides on what the re-check held")
+    record = json.loads(applied.read_text(encoding="utf-8"))
+    fields_fn = run / HO.DECISIONS_FILE
+    before = _sha256_text(fields_fn)
+    if before != record["decisions_sha256"]:
+        raise AdversarialError(f"{fields_fn} is not the file APPLIED.json pins")
+    if not (decision[:1] == "D" and decision[1:].isdigit()):
+        raise AdversarialError(f"{decision!r} names no owner decision (D<n>)")
+    if not cells:
+        raise AdversarialError("name at least one cell (<site_id>.<field>)")
+    decisions = HO._read_jsonl(fields_fn)
+    index = {cell_id(d["site_id"], d["field"]): i for i, d in enumerate(decisions)}
+    accepted: list[dict[str, Any]] = []
+    at = H.now()
+    for cell in dict.fromkeys(cells):
+        if cell not in index:
+            raise AdversarialError(f"{cell} is no decided cell of this run")
+        held = decisions[index[cell]]
+        note = held.get("adversarial") or {}
+        # `held` is what `apply` makes of an unclear verdict; a reject is `unresolved` and refused here
+        if held["decision"] != HO.HELD or held.get("via") != ADVERSARIAL:
+            raise AdversarialError(f"{cell} is not held by the re-check ({held['decision']})")
+        original = note["original"]
+        if original["decision"] != A.REPLACE:
+            raise AdversarialError(f"{cell}: the researcher decided {original['decision']}")
+        if not any(q.get("outcome") == "found" for q in original["quotes"]):
+            raise AdversarialError(f"{cell}: the researcher's decision has no quote it found")
+        kept = {k: v for k, v in note.items() if k != "original"}
+        decisions[index[cell]] = {
+            **original,
+            "adversarial": kept,
+            "owner": {"decision": decision, "reason": reason, "at": at},
+        }
+        accepted.append(
+            {
+                "cell": cell,
+                "name": original["name"],
+                "value": original["value"],
+                "decision": decision,
+                "reason": reason,
+                "at": at,
+                "held": kept,
+            }
+        )
+    n = 1 + sum(1 for p in run.glob(f"{OWNER_PRE_PREFIX}*.jsonl"))
+    (run / f"{OWNER_PRE_PREFIX}{n}.jsonl").write_bytes(fields_fn.read_bytes())
+    HO._write_jsonl(fields_fn, decisions)
+    previous = (
+        HO._read_jsonl(adv / OWNER_ACCEPTED_FILE) if (adv / OWNER_ACCEPTED_FILE).exists() else []
+    )
+    HO._write_jsonl(adv / OWNER_ACCEPTED_FILE, [*previous, *accepted])
+    after = _sha256_text(fields_fn)
+    record["owner_accepted"] = [
+        *record.get("owner_accepted", []),
+        {"at": at, "decision": decision, "cells": [a["cell"] for a in accepted],
+         "pre_sha256": before, "decisions_sha256": after},
+    ]  # fmt: skip
+    record["decisions_sha256"] = after
+    _write_json(applied, record)
+    return {"accepted": len(accepted), "cells": [a["cell"] for a in accepted], "decision": decision}
+
+
+OWNER_REJECTED_FILE = "OWNER_REJECTED.jsonl"
+OWNER = "owner"
+
+
+def owner_reject(run: Path, cells: Sequence[str], *, decision: str, reason: str) -> dict[str, Any]:
+    """The owner's veto on confirmed cells (D112, 2026-11-06: of the pilot's seven confirmed starts
+    two are not written): each named `replace` the re-check confirmed becomes `held` with `via`
+    `owner` - neither written nor cleared, listed in the wave's HELD.jsonl - the researcher's
+    decision kept whole in `adversarial.original` beside the re-check's note, plus an `owner` note.
+
+    Refused like `owner_accept`: no applied re-check, a DECISIONS.jsonl that is not the pinned file,
+    a decision that names no owner decision; and a cell that is not in the run or is not a replace
+    the re-check confirmed. The file before is kept as `DECISIONS.pre-owner-<n>.jsonl`, the cells go
+    to `adv/OWNER_REJECTED.jsonl`, APPLIED.json pins the new file (`owner_rejected` keeps the pins)."""
+    adv = run / HO.ADV_DIR
+    applied = adv / APPLIED_FILE
+    if not applied.exists():
+        raise AdversarialError(f"{applied} is missing: the owner vetoes what the check confirmed")
+    record = json.loads(applied.read_text(encoding="utf-8"))
+    fields_fn = run / HO.DECISIONS_FILE
+    before = _sha256_text(fields_fn)
+    if before != record["decisions_sha256"]:
+        raise AdversarialError(f"{fields_fn} is not the file APPLIED.json pins")
+    if not (decision[:1] == "D" and decision[1:].isdigit()):
+        raise AdversarialError(f"{decision!r} names no owner decision (D<n>)")
+    if not cells:
+        raise AdversarialError("name at least one cell (<site_id>.<field>)")
+    decisions = HO._read_jsonl(fields_fn)
+    index = {cell_id(d["site_id"], d["field"]): i for i, d in enumerate(decisions)}
+    rejected: list[dict[str, Any]] = []
+    at = H.now()
+    for cell in dict.fromkeys(cells):
+        if cell not in index:
+            raise AdversarialError(f"{cell} is no decided cell of this run")
+        confirmed = decisions[index[cell]]
+        note = confirmed.get("adversarial") or {}
+        if confirmed["decision"] != A.REPLACE or note.get("verdict") != CONFIRM:
+            raise AdversarialError(
+                f"{cell} is not a replace the re-check confirmed ({confirmed['decision']})"
+            )
+        original = {k: v for k, v in confirmed.items() if k != "adversarial"}
+        decisions[index[cell]] = {
+            **{k: confirmed[k] for k in ("site_id", "name", "field", "status", "stored", "asked")},
+            "decision": HO.HELD,
+            "value": None,
+            "via": OWNER,
+            "round": confirmed["round"],
+            "counted_rounds": [],
+            "answered_by": confirmed["answered_by"],
+            "model": confirmed["model"],
+            "quotes": [],
+            "reasoning": (
+                f"owner {decision} holds it: {reason} | the re-check confirmed "
+                f"{confirmed['value']!r} (round {note['round']}, {note['answered_by']})"
+            ),
+            "value_page": None,
+            "adversarial": {**note, "original": original},
+            "owner": {"decision": decision, "reason": reason, "at": at},
+        }
+        rejected.append(
+            {
+                "cell": cell,
+                "name": confirmed["name"],
+                "value": confirmed["value"],
+                "decision": decision,
+                "reason": reason,
+                "at": at,
+            }
+        )
+    n = 1 + sum(1 for p in run.glob(f"{OWNER_PRE_PREFIX}*.jsonl"))
+    (run / f"{OWNER_PRE_PREFIX}{n}.jsonl").write_bytes(fields_fn.read_bytes())
+    HO._write_jsonl(fields_fn, decisions)
+    previous = (
+        HO._read_jsonl(adv / OWNER_REJECTED_FILE) if (adv / OWNER_REJECTED_FILE).exists() else []
+    )
+    HO._write_jsonl(adv / OWNER_REJECTED_FILE, [*previous, *rejected])
+    after = _sha256_text(fields_fn)
+    record["owner_rejected"] = [
+        *record.get("owner_rejected", []),
+        {"at": at, "decision": decision, "cells": [r["cell"] for r in rejected],
+         "pre_sha256": before, "decisions_sha256": after},
+    ]  # fmt: skip
+    record["decisions_sha256"] = after
+    _write_json(applied, record)
+    return {"rejected": len(rejected), "cells": [r["cell"] for r in rejected], "decision": decision}
+
+
 # ------------------------------------------------------------------------------------------ the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
@@ -939,10 +1155,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         name: sub.add_parser(name)
         for name in (
             "select", "export", "export-reask", "brief", "check-answer", "import", "apply", "status",
+            "owner-accept", "owner-reject",
         )
     }  # fmt: skip
-    for name in ("select", "apply"):
+    for name in ("select", "apply", "owner-accept", "owner-reject"):
         commands[name].add_argument("--run", type=Path, required=True, help="the wd5 run")
+    for name in ("owner-accept", "owner-reject"):
+        commands[name].add_argument(
+            "--cell", action="append", required=True, help="<site_id>.<field>"
+        )
+        commands[name].add_argument("--decision", required=True, help="the owner decision, D<n>")
+        commands[name].add_argument("--reason", required=True)
     for name in ("export", "export-reask", "brief", "check-answer", "import", "status"):
         commands[name].add_argument("--adv", type=Path, required=True, help="the stage directory")
     for name in ("export", "export-reask", "brief", "check-answer"):
@@ -972,6 +1195,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "apply":
             result = apply(HO._resolve(args.run))
+        elif args.command == "owner-accept":
+            result = owner_accept(
+                HO._resolve(args.run), args.cell, decision=args.decision, reason=args.reason
+            )
+        elif args.command == "owner-reject":
+            result = owner_reject(
+                HO._resolve(args.run), args.cell, decision=args.decision, reason=args.reason
+            )
         else:
             adv = HO._resolve(args.adv)
             if args.command == "export":

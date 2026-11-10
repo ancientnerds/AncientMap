@@ -1,5 +1,5 @@
 {
- "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron; 773 since lane WD3's refreshed harvest of 2026-10-01 added Luoyang, Ingapirca and Aramu Muru: former capital, tourist attraction, prefecture-level city of China, portal); without the site_type aliases the merge map (mechanical/site_type_merge.json, sha256 56418e49a550e57e) moved into their targets; pinned by fields/classify.py TABLE_SHA256.",
+ "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron; 773 since lane WD3's refreshed harvest of 2026-10-01 added Luoyang, Ingapirca and Aramu Muru: former capital, tourist attraction, prefecture-level city of China, portal); 775 since the D99 pilot build of 2026-11-06 met the wd5x harvest's cirque (Deir el-Bahari) and street (Moorgate), both containers; without the site_type aliases the merge map (mechanical/site_type_merge.json, sha256 56418e49a550e57e) moved into their targets; pinned by fields/classify.py TABLE_SHA256.",
  "classes": {
   "Q5": {
    "label": "human",
@@ -7486,6 +7486,22 @@
     "Natural feature",
     "Inscription",
     "Megalithic"
+   ]
+  },
+  "Q184368": {
+   "label": "cirque",
+   "kind": "container",
+   "types": [
+    "Natural feature",
+    "Geological interest",
+    "Sacred site"
+   ]
+  },
+  "Q79007": {
+   "label": "street",
+   "kind": "container",
+   "types": [
+    "Road/avenue/trackway"
    ]
   }
  }

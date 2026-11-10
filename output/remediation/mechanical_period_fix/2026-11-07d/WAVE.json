@@ -1,0 +1,1916 @@
+{
+ "wave": "2026-11-07d",
+ "read_at": "2026-11-07 15:19:18.714356+00",
+ "d113_sha256": "",
+ "cited_sha256": "",
+ "bands_sha256": "",
+ "years_sha256": "9322e6d0f937991f416d99b6755aef7b2cfad00a7f001ba58177a65f6b6af977",
+ "counters": {
+  "d122-candidates": 0,
+  "rule:d138-year": 59,
+  "sites": 59,
+  "skip:d137-reading-error": 1
+ },
+ "steps": [
+  [
+   "1009b691-1a57-44e0-9571-2123f4b04e1c",
+   "16e6a769-9879-458f-8f21-35e26549dc66",
+   "3415ea00-bddf-4f1d-bed2-7ce85b6c5871",
+   "3f170e16-175a-4e4c-9717-1f0e32d05e8e",
+   "4235fa73-a58f-400b-a1f6-4998a8d2893f",
+   "49d6b7c5-e692-4e51-845f-304cad53f3af",
+   "4df3dcbd-62d3-4e37-92fe-e79989233f1f",
+   "50debb04-ae49-4d55-9756-bdfb8fbacf9c",
+   "56f6f878-19b8-4098-8e60-347661302422",
+   "58b67d2b-fb58-41b0-b7d3-16c36ca4507a",
+   "58c0a320-200d-42ce-9477-2148736e6a65",
+   "5b27b64f-8c83-4685-8644-8a2076d83322",
+   "7bcdeff1-fd34-4c0d-a32e-d8f812e64a73",
+   "7e23ac5b-3d28-4004-842a-6d3514ddd5ed",
+   "86383b38-f1a1-4f04-9b7e-8a49c3495829",
+   "8a90c0c4-3388-441f-b312-33ba8e8f44fa",
+   "8c39badd-8113-4a71-a041-21d68f47bf58",
+   "8f256d92-11a1-4310-90e2-be5cebfc350e",
+   "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+   "9085faef-619a-4d87-bd91-1f33780fe58f",
+   "953e0154-1d30-4502-953d-4de1ff7bda62",
+   "95af4ca2-80d9-4b18-81d9-05c8477213cb",
+   "9e551c56-dda2-492e-ae6d-fe6896fdce32",
+   "a3542353-6daa-4b24-bb8e-4bf0fb8bb3af",
+   "a597e522-3aeb-4680-bb33-44b2502f8579",
+   "ac5e0ce6-db45-4199-a285-83941a839851",
+   "acb24767-be50-43e6-8ef9-10ff2f9e810a",
+   "b18df6d2-0093-4398-9f14-01360c5dad48",
+   "b2db3feb-e9a8-490b-a0ec-f0549f17d389",
+   "b3b5da82-1302-4f67-841c-28b51e578976",
+   "b42c7181-73fa-48c8-8916-a6fe7b4b74b1",
+   "b6ba249d-9287-4be7-b332-59b9cabe509e",
+   "b8117d4b-647c-4efd-815f-e0a427adf357",
+   "b8aedc17-2215-44c3-b89c-8125050efbd5",
+   "bebaa4d3-fb8e-46a4-b9cb-fe6589925889",
+   "c1980a31-6a2b-4e83-ad99-8f36b6036ff2",
+   "c1c984e7-1391-4153-b140-f9bcd446d759",
+   "c2b44932-6d84-476e-899c-02c744fcadd8",
+   "c4446aa8-4d88-4d40-be5b-129bca6a68aa",
+   "c54e678e-8662-42cd-8875-fc387cc19fad",
+   "c96274da-bdec-445d-a79f-2a43c0688421",
+   "cd66f88c-ac89-4f7e-9ef8-4bf167df259a",
+   "d8e43401-673e-4f9a-902b-90959d10cf93",
+   "db120341-8ea9-4841-9e41-6c9d9df171b3",
+   "db9e04a9-afe5-4541-8ae4-0d7c5b14facc",
+   "dd538ad7-472a-47b0-8a6c-cfc5244134db",
+   "e2aa3754-8d32-4455-bf6d-9077f18d50d2",
+   "e6b26bed-47b7-437b-97ab-60d88a018682",
+   "ec64fd4c-0fa2-4932-9a75-6756b90aed5b",
+   "f05255ff-a8b8-4a49-bb7a-f6fa9806445f",
+   "f057c595-7ea4-42ce-bf5d-734fad5a1e47",
+   "f42a2997-d354-48b1-99b5-1a38cef7d01c",
+   "f54b9147-3f56-4070-9ad5-365b19e3b4f3",
+   "f5da8b37-8247-42a2-91e7-769a85bb4d86",
+   "f6b6e039-36f1-4107-b730-dc2aa34b7a92",
+   "fa63ee12-8c34-4e02-9c52-64b9ddcce64e",
+   "facb2c7f-777a-4eb0-8036-731853847f07",
+   "fe4edbed-be84-4b80-b5de-62ab3e4c88ef",
+   "ffb35fc7-24f7-4722-8036-e4173ac6d8e6"
+  ]
+ ],
+ "decisions": [
+  {
+   "site_id": "1009b691-1a57-44e0-9571-2123f4b04e1c",
+   "name": "Ancient City of Selge",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 346327,
+   "new_start": -1500,
+   "note": "the site's own source states -1300: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1300, output/remediation/fields/wd3/ATTEMPTS.jsonl (minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent))",
+     "url": "https://turkisharchaeonews.net/site/selge",
+     "quote": "If one accepts the second version, Selge history dates back to the Trojan War i.e. the 13th century BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1300: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "16e6a769-9879-458f-8f21-35e26549dc66",
+   "name": "Metropolis, Thessaly",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 346373,
+   "new_start": -500,
+   "note": "the site's own source states -400: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -400, wiki_cache",
+     "url": "https://en.wikipedia.org/w/index.php?title=Metropolis_(Thessaly)&oldid=1345070501",
+     "quote": "Metropolis minted silver coins dated to c. 400-344 BCE bearing the legends «ΜΗΤΡΟΠΟ[ΛΙΤΩΝ]» and «ΜΗΤΡΟΠΟΛ»."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -400: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "3415ea00-bddf-4f1d-bed2-7ce85b6c5871",
+   "name": "Flower's Barrow",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 385092,
+   "new_start": -1500,
+   "note": "the site's own source states -550: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -550, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://en.wikipedia.org/wiki/Flower%27s_Barrow",
+     "quote": "Flower's Barrow is an Iron Age hillfort, built over 2,500 years ago on Rings Hill, above Worbarrow Bay in Dorset on the south coast of England."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -550: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "3f170e16-175a-4e4c-9717-1f0e32d05e8e",
+   "name": "Appolonia Temple Ruins",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 348143,
+   "new_start": -500,
+   "note": "the site's own source states -500: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -500, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Its necropolis contains pillar tombs dating to c. 500 BC, attesting to Lycian origins."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -500: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "4235fa73-a58f-400b-a1f6-4998a8d2893f",
+   "name": "Gärde",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 385728,
+   "new_start": -4501,
+   "note": "the site's own source states -5050: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -5050, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Gärde is a prehistoric archaeological site in Jämtland, Sweden, featuring rock carvings (petroglyphs) created approximately 7,000 years ago."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -5050: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "49d6b7c5-e692-4e51-845f-304cad53f3af",
+   "name": "Alabanda",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 348202,
+   "new_start": -500,
+   "note": "the site's own source states -400: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -400, output/remediation/fields/wd3/ATTEMPTS.jsonl (minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent))",
+     "url": "https://www.livius.org/articles/place/alabanda/",
+     "quote": "Alabanda, seven kilometers west of modern Çine, on the banks of the river Marsyas, was founded in the fourth century BCE."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -400: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "4df3dcbd-62d3-4e37-92fe-e79989233f1f",
+   "name": "La Pintada",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 348218,
+   "new_start": 500,
+   "note": "the site's own source states 700: the band '500 - 1000 AD', its edge 500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 700, output/remediation/fields/wd1-rest/ATTEMPTS.jsonl",
+     "url": "https://mexicounexplained.com/la-pintada-mystery-in-the-desert/",
+     "quote": "Researchers date the earliest artifacts at La Pintada to around 700 AD."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 700: the band '500 - 1000 AD', its edge 500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "50debb04-ae49-4d55-9756-bdfb8fbacf9c",
+   "name": "Siscia",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 348238,
+   "new_start": -500,
+   "note": "the site's own source states -400: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -400, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://hr.wikipedia.org/wiki/Sisak",
+     "quote": "jer se tragovi njegove urbane naseljenosti mogu pratiti sve do 4. stoljeća prije Krista."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -400: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "56f6f878-19b8-4098-8e60-347661302422",
+   "name": "Kinal",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 349019,
+   "new_start": 500,
+   "note": "the site's own source states 600: the band '500 - 1000 AD', its edge 500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 600, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site's major occupational phase dates to the Late Classic period (600-900 AD)."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 600: the band '500 - 1000 AD', its edge 500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "58b67d2b-fb58-41b0-b7d3-16c36ca4507a",
+   "name": "Foel Fenlli",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 385775,
+   "new_start": -1500,
+   "note": "the site's own source states -550: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -550, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://www.megalithic.co.uk/article.php?sid=5973",
+     "quote": "Foel Fenlli (also known as Moel Fenlli) was built during the Iron Age, around 2,500 years ago."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -550: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "58c0a320-200d-42ce-9477-2148736e6a65",
+   "name": "Su Kemeri",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 385777,
+   "new_start": 1,
+   "note": "the site's own source states 101: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 101, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://zenodo.org/records/14577067",
+     "quote": "Phaselis Su Kemeri, MS II. yüzyılda, artan nüfus ve su ihtiyacını karşılamak üzere inşa edilmiş"
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 101: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "5b27b64f-8c83-4685-8644-8a2076d83322",
+   "name": "Bela Palanka",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 99952,
+   "new_start": 1,
+   "note": "the site's own source states 301: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 301, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The patron saint of Romania, Nicetas of Remesiana, was a 4th-century bishop at Remesiana."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 301: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "7bcdeff1-fd34-4c0d-a32e-d8f812e64a73",
+   "name": "Kunturmarka, Pasco",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 101846,
+   "new_start": 1000,
+   "note": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Kunturmarka is a pre-Columbian archaeological settlement in Peru's Pasco Region, dating to 1000–1500 AD."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "7e23ac5b-3d28-4004-842a-6d3514ddd5ed",
+   "name": "Huankarán",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 120190,
+   "new_start": 1000,
+   "note": "the site's own source states 1200: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1200, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Huankarán is a pre-Columbian necropolis and tomb complex located in the Huánuco Region of Peru, dating to the period 1200-1500 AD."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1200: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "86383b38-f1a1-4f04-9b7e-8a49c3495829",
+   "name": "Casteddu di Puzzonu",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 120255,
+   "new_start": -1500,
+   "note": "the site's own source states -1200: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1200, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site was occupied from the middle of the Late Bronze Age through the middle of the Early Iron Age (c. 1200-550 BC)."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1200: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "8a90c0c4-3388-441f-b312-33ba8e8f44fa",
+   "name": "Kvitky",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 350835,
+   "new_start": -4500,
+   "note": "the site's own source states -3600: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -3600, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Kvitky is a Cucuteni-Trypillia culture mega-settlement in Cherkasy Oblast, Ukraine, dating to 3600–3200 BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -3600: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "8c39badd-8113-4a71-a041-21d68f47bf58",
+   "name": "Petroglyph Beach State Historic Park",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 350845,
+   "new_start": -4501,
+   "note": "the site's own source states -6050: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -6050, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The beach and surrounding area date to approximately 8,000 years ago, making it one of the oldest archaeological sites in the region."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -6050: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "8f256d92-11a1-4310-90e2-be5cebfc350e",
+   "name": "Great Serpent Mound",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 350877,
+   "new_start": -500,
+   "note": "the site's own source states -300: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -300, output/remediation/fields/wd1/ATTEMPTS.jsonl",
+     "url": "https://en.wikipedia.org/wiki/Serpent_Mound",
+     "quote": "In 2014, radiocarbon dating determined the mound was built in 300 BCE by the Adena peoples."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -300: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "8fc0c418-49b4-459a-abc9-9c54c09ef5ba",
+   "name": "Salou",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 350883,
+   "new_start": -1500,
+   "note": "the site's own source states -600: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -600, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Salou is an ancient coastal settlement on Catalonia's Costa Daurada, first inhabited by Iberians before becoming a Greek-established port in the 6th century BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -600: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "9085faef-619a-4d87-bd91-1f33780fe58f",
+   "name": "Botley Stone",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 386566,
+   "new_start": -4500,
+   "note": "the site's own source states -4500: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -4500, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Botley Stone is a Neolithic mound or tumulus in Shropshire, England, dating to 4500-3000 BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -4500: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "953e0154-1d30-4502-953d-4de1ff7bda62",
+   "name": "Holm of Papa Chambered Cairn",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 386590,
+   "new_start": -4500,
+   "note": "the site's own source states -3050: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -3050, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://www.historicenvironment.scot/visit-a-place/places/holm-of-papa-westray-chambered-cairn/history/",
+     "quote": "Holm of Papa Westray Chambered Cairn was built 5,000 years ago."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -3050: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "95af4ca2-80d9-4b18-81d9-05c8477213cb",
+   "name": "Al Diwan",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 350927,
+   "new_start": 1,
+   "note": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Al Diwan is a 1st-century AD monument in Madain Saleh, Saudi Arabia, comprising a square chamber carved into a hillside for wind protection."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "9e551c56-dda2-492e-ae6d-fe6896fdce32",
+   "name": "Naveta",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 350977,
+   "new_start": -3000,
+   "note": "the site's own source states -1600: the band '3000 - 1500 BC', its edge -3000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1600, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "A naveta is a form of megalithic chamber tomb unique to Menorca, Spain, dating to the Bronze Age Naviform period (c. 1600-1200 BC)."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1600: the band '3000 - 1500 BC', its edge -3000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "a3542353-6daa-4b24-bb8e-4bf0fb8bb3af",
+   "name": "Markapukyu",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351000,
+   "new_start": 1,
+   "note": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Dating to the Early Horizon period (1–500 AD), the site represents an ancient Andean settlement whose name combines the Quechua words marka meaning 'village' or 'storey' and pukyu meaning 'spring of water'."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "a597e522-3aeb-4680-bb33-44b2502f8579",
+   "name": "Ksaverove",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351767,
+   "new_start": -4500,
+   "note": "the site's own source states -3600: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -3600, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Ksaverove is the site of a Cucuteni-Trypillia culture mega-settlement in Ukraine, dating to approximately 3600-3200 BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -3600: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "ac5e0ce6-db45-4199-a285-83941a839851",
+   "name": "Stapeley Hill",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 386656,
+   "new_start": -1500,
+   "note": "the site's own source states -1050: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1050, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Stapeley Hill in southwest Shropshire is home to Mitchell's Fold, a Bronze Age stone circle constructed over 3,000 years ago from dolerite stones quarried from the hill itself."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1050: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "acb24767-be50-43e6-8ef9-10ff2f9e810a",
+   "name": "Runayoc",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351818,
+   "new_start": 1,
+   "note": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Runayoc is an archaeological settlement dating to 1–500 AD (Early Horizon to Early Intermediate periods), located on a mountain of the same name in the Huancavelica Region of Peru, at an elevation of approximately 3,400 meters (11,200 feet)."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b18df6d2-0093-4398-9f14-01360c5dad48",
+   "name": "Dolno Gradište",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351849,
+   "new_start": 1,
+   "note": "the site's own source states 201: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 201, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Built in the late 3rd to 4th century AD as part of a defensive system against advancing northern tribes, the site sits in territory historically inhabited by the Paeonian tribe of the Derrones."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 201: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b2db3feb-e9a8-490b-a0ec-f0549f17d389",
+   "name": "Bejucal",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351855,
+   "new_start": 1,
+   "note": "the site's own source states 301: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 301, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site dates to the second half of the 4th century AD, during the Early Classic period."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 301: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b3b5da82-1302-4f67-841c-28b51e578976",
+   "name": "Llamuqa",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351863,
+   "new_start": -4501,
+   "note": "the site's own source states -8000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -8000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The complex includes public, domestic, and funerary architecture across multiple sectors, with occupation spanning from the Early Archaic period (c. 8000 BCE) through the Inca era."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -8000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b42c7181-73fa-48c8-8916-a6fe7b4b74b1",
+   "name": "Kerbatch",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351869,
+   "new_start": -500,
+   "note": "the site's own source states -300: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -300, output/remediation/fields/wd3/ATTEMPTS.jsonl (minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent))",
+     "url": "https://fr.wikipedia.org/wiki/Cercles_de_pierres_de_Kerbatch",
+     "quote": "Les éléments archéologiques découverts sur le site datent d'entre le IIIe siècle av. J.-C. et le XVIe siècle"
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -300: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b6ba249d-9287-4be7-b332-59b9cabe509e",
+   "name": "Xerez Cromlech",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351887,
+   "new_start": -4501,
+   "note": "the site's own source states -5000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -5000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The Xerez Cromlech is a megalithic complex dating to the 5th or 4th millennium BCE, located near Monsaraz in the Alentejo region of Portugal, close to the Spanish border."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -5000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b8117d4b-647c-4efd-815f-e0a427adf357",
+   "name": "Schanzenkopf - Spessart",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351897,
+   "new_start": 1,
+   "note": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site contains an earthwork dating from the Roman period between the 1st and 5th centuries AD, representing a fortified position within the historical landscape of the Spessart."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "b8aedc17-2215-44c3-b89c-8125050efbd5",
+   "name": "Ahuila Gencha Machay",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 351901,
+   "new_start": 1,
+   "note": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Ahuila Gencha Machay is a rock art site featuring ancient cave paintings in the Huánuco Region of Peru, dating to 1–500 AD."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "bebaa4d3-fb8e-46a4-b9cb-fe6589925889",
+   "name": "Situs Megalith Talang Kecepol",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 345729,
+   "new_start": -1500,
+   "note": "the site's own source states -1050: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1050, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "It is part of a broader complex of 22 megalithic areas identified by Dutch researcher Van der Hoop, featuring statues, stone mortars, dolmens, and menhirs carved from andesite rock approximately 3,000 years ago."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1050: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "c1980a31-6a2b-4e83-ad99-8f36b6036ff2",
+   "name": "Mane Braz",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 352730,
+   "new_start": -4501,
+   "note": "the site's own source states -5000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -5000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Mane Braz is a Neolithic megalithic tomb complex located 2 km southeast of Erdeven in Brittany, France, dating to approximately 5000-3000 BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -5000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "c1c984e7-1391-4153-b140-f9bcd446d759",
+   "name": "Elche",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 352732,
+   "new_start": -500,
+   "note": "the site's own source states -500: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -500, output/remediation/fields/wd3/ATTEMPTS.jsonl (minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent))",
+     "url": "https://es.wikipedia.org/wiki/Elche",
+     "quote": "En el siglo V a. C. fue fundada la ciudad ibera de Helike."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -500: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "c2b44932-6d84-476e-899c-02c744fcadd8",
+   "name": "Giant's Grave, Cumbria",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 387355,
+   "new_start": -4500,
+   "note": "the site's own source states -4500: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -4500, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Giant's Grave is a pair of standing stones at the foot of Black Combe in Cumbria, England, dating to the Neolithic period (4500–3000 BC)."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -4500: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "c4446aa8-4d88-4d40-be5b-129bca6a68aa",
+   "name": "Chipaw Marka",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 107973,
+   "new_start": 1000,
+   "note": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Occupied during the Late Intermediate Period (c. 1000-1450 AD) and Late Horizon under Inca rule (c. 1450-1532 AD), it features clusters of circular dry-stone enclosures using local andesite with earth mortar, connected by pathways to agricultural terraces."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "c54e678e-8662-42cd-8875-fc387cc19fad",
+   "name": "Llaqta Qulluy, Acoria",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 107998,
+   "new_start": 1000,
+   "note": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site dates to the late pre-Hispanic period (c. 1000-1500 AD) and has been recognized as part of Peru's archaeological heritage."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "c96274da-bdec-445d-a79f-2a43c0688421",
+   "name": "Escoural Cave",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 387385,
+   "new_start": -4501,
+   "note": "the site's own source states -50000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -50000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The earliest vestiges of human occupation date back to 50,000 years B.C., associated with the interior of the cave."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -50000: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "cd66f88c-ac89-4f7e-9ef8-4bf167df259a",
+   "name": "Pozzo Sacro del Predio Canopoli",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 352816,
+   "new_start": -1500,
+   "note": "the site's own source states -1300: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1300, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Dating to approximately 1300 BCE, it is one of the best-preserved well temples in Sardinia."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1300: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "d8e43401-673e-4f9a-902b-90959d10cf93",
+   "name": "Millka",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 353686,
+   "new_start": 1000,
+   "note": "the site's own source states 1200: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1200, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Dating to the Late Intermediate Period (c. 1200-1470 AD), the site contains over 300 residential structures and extensive agricultural terraces adapted to highland conditions."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1200: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "db120341-8ea9-4841-9e41-6c9d9df171b3",
+   "name": "Vasculaghju",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 353711,
+   "new_start": -4501,
+   "note": "the site's own source states -8800: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -8800, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Vasculaghju (also Vasculacciu) is a Neolithic burial and settlement site in the commune of Sotta, southern Corsica, dating from approximately 8800-2000 BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -8800: the band '< 4500 BC', its edge -4501 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "db9e04a9-afe5-4541-8ae4-0d7c5b14facc",
+   "name": "Pirca Pirca, La Libertad",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 125596,
+   "new_start": -1500,
+   "note": "the site's own source states -1500: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1500, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site dates to 1500–500 BC, spanning the Early Horizon to Late Formative periods."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1500: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "dd538ad7-472a-47b0-8a6c-cfc5244134db",
+   "name": "Lungkeng",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 353736,
+   "new_start": -4500,
+   "note": "the site's own source states -4050: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -4050, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "It dates to the pre-ceramic period of Taiwan's prehistoric era, approximately 5,000 to 6,000 years ago, making it one of the earliest known human settlement sites on the island."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -4050: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "e2aa3754-8d32-4455-bf6d-9077f18d50d2",
+   "name": "Ancient Lilaia",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 353759,
+   "new_start": -3000,
+   "note": "the site's own source states -3000: the band '3000 - 1500 BC', its edge -3000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -3000, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://en.wikipedia.org/wiki/Lilaea_(ancient_city)",
+     "quote": "The broader region of Lilaea had been inhabited since the 3rd millennium BCE."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -3000: the band '3000 - 1500 BC', its edge -3000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "e6b26bed-47b7-437b-97ab-60d88a018682",
+   "name": "La Florida (Zacatecas) Shaft Tomb",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 353782,
+   "new_start": 500,
+   "note": "the site's own source states 500: the band '500 - 1000 AD', its edge 500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 500, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "La Florida Shaft Tomb is a significant archaeological necropolis located near the farming village of La Florida in Zacatecas, Mexico, dating from 500-1000 AD."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 500: the band '500 - 1000 AD', its edge 500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "ec64fd4c-0fa2-4932-9a75-6756b90aed5b",
+   "name": "Llaqta Qulluy, Tayacaja",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 111384,
+   "new_start": 1000,
+   "note": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The settlement, located in the community of Llaqta Pata (Llaccta Pata) near Vista Alegre, dates to between 1000 and 1500 AD, with construction intensifying from around 1400 AD during the Inca expansion."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "f05255ff-a8b8-4a49-bb7a-f6fa9806445f",
+   "name": "Ardgroom",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 353851,
+   "new_start": -1500,
+   "note": "the site's own source states -1500: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1500, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Built c. 1000-1500 BC, the circle comprises 11 stones, 9 still upright, with an associated standing stone to the east."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1500: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "f057c595-7ea4-42ce-bf5d-734fad5a1e47",
+   "name": "Usnu Muqu",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 111460,
+   "new_start": 1000,
+   "note": "the site's own source states 1401: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1401, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Built during the 15th-16th centuries, it consists of three superimposed stone platforms reaching 5.3 meters in height over 450 square meters, integrating a natural limestone outcrop exceeding 10 meters."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1401: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "f42a2997-d354-48b1-99b5-1a38cef7d01c",
+   "name": "Tipu",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 111545,
+   "new_start": -500,
+   "note": "the site's own source states -300: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -300, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Tipu is a Maya archaeological site along the Macal River in western Belize near the Guatemala border, occupied from 300 BC to AD 1707."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -300: the band '500 BC - 1 AD', its edge -500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "f54b9147-3f56-4070-9ad5-365b19e3b4f3",
+   "name": "Dumat al-Jandal",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 354419,
+   "new_start": -1500,
+   "note": "the site's own source states -1000: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -1000, output/remediation/fields/wd3/ATTEMPTS.jsonl (minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent))",
+     "url": "https://en.wikipedia.org/wiki/Dumat_al-Jandal",
+     "quote": "The city has a history dating back to the 10th century BC"
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -1000: the band '1500 - 500 BC', its edge -1500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "f5da8b37-8247-42a2-91e7-769a85bb4d86",
+   "name": "Atashgah Of Tbilisi",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 387754,
+   "new_start": 1,
+   "note": "the site's own source states 201: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 201, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Built 3rd-7th c. AD, Atashgah is an ancient Zoroastrian Fire Temple in Tbilisi, Georgia, constructed during the Sasanian era when eastern Georgia was under Persian political and cultural influence."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 201: the band '1 - 500 AD', its edge 1 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "f6b6e039-36f1-4107-b730-dc2aa34b7a92",
+   "name": "Ballymacaldrack Court Tomb",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 387756,
+   "new_start": -4500,
+   "note": "the site's own source states -4000: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -4000, output/remediation/fields/wd5/ATTEMPTS.jsonl (anthropic/claude-sonnet-5-5 (Claude Code agent))",
+     "url": "https://www.communities-ni.gov.uk/heritage-sites/dooeys-cairn",
+     "quote": "Dooey’s Cairn is a Neolithic tomb dating from c.4000-2000 BC."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -4000: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "fa63ee12-8c34-4e02-9c52-64b9ddcce64e",
+   "name": "Carnedd y Saeson and Neighbouring Cairns North-West of Foel Dduarth",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 387766,
+   "new_start": -3000,
+   "note": "the site's own source states -2000: the band '3000 - 1500 BC', its edge -3000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -2000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site is dated to approximately 2000 BC and is a scheduled monument in the Religious, Ritual and Funerary category."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -2000: the band '3000 - 1500 BC', its edge -3000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "facb2c7f-777a-4eb0-8036-731853847f07",
+   "name": "Kunturmarka, Ayacucho",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 112302,
+   "new_start": 1000,
+   "note": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): 1000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "The site dates to approximately 1000-1500 AD and lies within a region historically dominated by the Wari and later Inca civilizations."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states 1000: the band '1000 - 1500 AD', its edge 1000 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "fe4edbed-be84-4b80-b5de-62ab3e4c88ef",
+   "name": "A Figa",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 354484,
+   "new_start": -4500,
+   "note": "the site's own source states -4300: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -4300, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Radiocarbon dating places its primary occupation around 4300-4200 BCE."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -4300: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  },
+  {
+   "site_id": "ffb35fc7-24f7-4722-8036-e4173ac6d8e6",
+   "name": "Cardiccia",
+   "rule": "d138-year",
+   "live_start": null,
+   "journal_id": 354508,
+   "new_start": -4500,
+   "note": "the site's own source states -4000: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)",
+   "evidence": [
+    {
+     "source": "owner decision D138 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D138 | (2026-11-07) The 60 year-stated-only sites of the D137 refine (year from the site's own source, mostly the stored description) and the 2 scope-hold sites | **Write the 60** as the band of their stated year (owner: \"die 60 sites ja\"); **retire Caus Castle and Ayazini Kaya Church** as medieval / out of scope (owner: \"die 2 mittelalter deaktivieren\"), through the journalled scope-retire lane. |"
+    },
+    {
+     "source": "owner decision D137 (2026-11-07)",
+     "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+     "quote": "| D137 | D136 details after the spot checks | **Write all bands now** (owner: \"Egal, schreiben\"). A century/year the site's own source states for the site wins over the epoch start (rec). A coarse word is read together with the site's own monument type. |"
+    },
+    {
+     "source": "the year the site's own source states (D138): -4000, unified_sites",
+     "url": "unified_sites.description",
+     "quote": "Cardiccia is a megalithic dolmen (locally called a stazzona) in the commune of Sartene, southern Corsica, dating to the Late Neolithic or Early Bronze Age (c. 4000-2000 BC)."
+    },
+    {
+     "source": "pipeline/utils/text.py:categorize_period",
+     "url": "pipeline/utils/text.py",
+     "quote": "the site's own source states -4000: the band '4500 - 3000 BC', its edge -4500 (D137 year rule, D138)"
+    }
+   ]
+  }
+ ],
+ "refused": [
+  {
+   "site_id": "f6daed37-710f-4512-a494-bb4ecddd4d2c",
+   "name": "Cave of El Soplao",
+   "reason": "d137-reading-error",
+   "note": "Cave of El Soplao: the only year is the cave's geological formation ('Its formation dates back to the Mesozoic, in particular the Cretaceous period 240 million years ago'), not a date of human use of the site (D137: an obvious reading error is not written)"
+  }
+ ]
+}

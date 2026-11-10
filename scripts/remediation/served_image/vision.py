@@ -94,7 +94,7 @@ NOT_A_PICTURE = "not a picture"
 ALL = "all"
 UNCONFIRMED_ONLY = "unconfirmed"
 #: D15 (2026-10-08): the sites named by `--sites`, checked again with the richer prompt
-#: (`CHECK_PROMPT_V2`). A `region_or_type` verdict keeps the hero here (the owner's 2025 link); only
+#: (`CHECK_PROMPT_V3` since D116). A `region_or_type` verdict keeps the hero here (the owner's 2025 link); only
 #: `other_site` goes on to the replacement stage.
 RECHECK = "recheck"
 POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
@@ -103,7 +103,7 @@ POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
 #: `image-roles-v1` and moved up only if that fails (D45/D51). The export records it; `brief`,
 #: the import and the plan hold the run to it, so an answer by another model cannot drive the swap
 #: of an owner-linked hero.
-RECHECK_ROLE = "adversarial"
+RECHECK_ROLE = "image_adversarial"
 
 QUESTIONS_CHECK = "QUESTIONS_CHECK.jsonl"
 QUESTIONS_REPLACE = "QUESTIONS_REPLACE.jsonl"
@@ -120,6 +120,13 @@ MAX_TEXT = 400
 PRODUCTION_ORIGIN = "https://ancientnerds.com"
 
 _VERDICT_TERMS = """depicts: the picture shows this site itself - its remains, structures, excavation or rock art, or a setting in which the site is recognisable - or an object found at this site. A drawing, plan or reconstruction of this site counts.
+region_or_type: the picture shows only the region, island, landscape, town or country around the site, a view from the site, a map, a generic example of the site's type, a portrait, a museum object that is not from this site, an information panel, plants or animals, or anything else in which this site is not what is shown.
+other_site: the picture shows another archaeological site or monument - a namesake elsewhere, a neighbour, a comparison."""
+
+#: The verdict terms of the re-check from owner decision D116 (2026-11-06) on: a genuine part of the
+#: site now kept in a museum shows the site. `_VERDICT_TERMS` stays the frozen text of the first check
+#: (2026-09-30) and of `served-check-v2`, whose recorded questions are read back against it.
+_VERDICT_TERMS_D116 = """depicts: the picture shows this site itself - its remains, structures, excavation or rock art, or a setting in which the site is recognisable - or a genuine part of this site or a find from it, also where it is kept now: a gate, a relief, a sculpture or an object of this site in a museum (the Ishtar Gate in Berlin for Babylon) depicts it. A drawing, plan or reconstruction of this site counts.
 region_or_type: the picture shows only the region, island, landscape, town or country around the site, a view from the site, a map, a generic example of the site's type, a portrait, a museum object that is not from this site, an information panel, plants or animals, or anything else in which this site is not what is shown.
 other_site: the picture shows another archaeological site or monument - a namesake elsewhere, a neighbour, a comparison."""
 
@@ -159,6 +166,12 @@ Return JSON only, no prose:
 
 """
     + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
+)
+#: The re-check from D116 on: the v2 question with the D116 verdict terms (`_VERDICT_TERMS_D116`).
+CHECK_PROMPT_V3_ID = "served-check-v3"
+CHECK_PROMPT_V3 = CHECK_PROMPT_V2.replace(
+    _VERDICT_TERMS.replace("{", "{{").replace("}", "}}"),
+    _VERDICT_TERMS_D116.replace("{", "{{").replace("}", "}}"),
 )
 
 REPLACE_PROMPT_ID = "served-replace-v2"
@@ -267,12 +280,12 @@ class CheckQuestion:
 
     @property
     def prompt_id(self) -> str:
-        return CHECK_PROMPT_ID if self.context is None else CHECK_PROMPT_V2_ID
+        return CHECK_PROMPT_ID if self.context is None else CHECK_PROMPT_V3_ID
 
     def prompt(self) -> str:
         if self.context is not None:
             ctx = self.context
-            return CHECK_PROMPT_V2.format(
+            return CHECK_PROMPT_V3.format(
                 name=self.name,
                 site_type=self.site_type,
                 country=self.country,
@@ -590,7 +603,7 @@ def export_check(
     `sites` restricts the population to the sites named (each must be a pre-checked site that
     serves an image) and is recorded in `EXPORT_CHECK.json`, so the plan examines those sites and
     no others. The `recheck` population (D15) needs `sites` and the `context` of every one of them
-    (`recheck.build_context`), and asks the richer prompt (`CHECK_PROMPT_V2`); the other populations
+    (`recheck.build_context`), and asks the richer prompt (`CHECK_PROMPT_V3`, D116); the other populations
     take no context."""
     if population not in POPULATIONS:
         raise ST.StateError(f"population {population!r} is not one of {list(POPULATIONS)}")
@@ -677,7 +690,7 @@ def export_check(
         "handoff": str(handoff),
         "population": population,
         "role": population_role(population),
-        "prompt_id": CHECK_PROMPT_V2_ID if context is not None else CHECK_PROMPT_ID,
+        "prompt_id": CHECK_PROMPT_V3_ID if context is not None else CHECK_PROMPT_ID,
         "sites": None if sites is None else list(sites),
         "questions": len(questions),
         "questions_sha256": digest,

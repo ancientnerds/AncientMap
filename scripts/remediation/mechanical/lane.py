@@ -2038,6 +2038,9 @@ SITE_TYPE_MERGE_LANE = re.compile(r"^site-type-merge-(\d{4}-\d{2}-\d{2}[a-z]?)-s
 #: The five card_stats columns no generator fills (`mechanical/card_stats_ext.py`, D25 "fill the dead
 #: card_stats columns from the Wikidata ids"): `card-stats-ext-<wave>-sNNN`, at most 100 sites a step.
 CARD_STATS_EXT_LANE = re.compile(r"^card-stats-ext-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+#: Owner decisions D121/D122/D124 (2026-11-07): the period correction (`mechanical/period_fix.py`),
+#: `period-fix-<wave>-sNNN`, at most 100 sites a step, the period pair of the wd5 cells.
+PERIOD_FIX_LANE = re.compile(r"^period-fix-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
 
 # ------------------------------------------------------------ the WD1/WD3 structured-field lanes
 #: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
@@ -2049,8 +2052,10 @@ CARD_STATS_EXT_LANE = re.compile(r"^card-stats-ext-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\
 #: WD3's question with WD3's rules, plus a named period as a value) write through the same cells and
 #: invariants as `fields-wd3-<wave>-s<NNN>` and `fields-wd4-<wave>-s<NNN>`: a stamp, a test id, a
 #: table and a directory of their own, so no step of one lane can be mistaken for a step of another.
-FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4|wd5)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
-FIELDS_STAGES = ("wd1", "wd3", "wd4", "wd5")
+FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4|wd5|wd5x)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+#: wd5x (D70, 2026-11-05) is the dating extractor's lane: `fields/dating.py` decides, no agent; it
+#: fills an empty `period_start` with its label, every cell one verbatim quote and its URL.
+FIELDS_STAGES = ("wd1", "wd3", "wd4", "wd5", "wd5x")
 #: Where each stage's waves live: `output/remediation/<FIELDS_ROOTS[stage]>/<wave>/sNNN`.
 FIELDS_ROOTS = {stage: f"fields/{stage}/write" for stage in FIELDS_STAGES}
 #: The journal's `confidence` of a stage's writes: WD1 rests on two quotes of two source families,
@@ -2063,7 +2068,11 @@ FIELDS_CONFIDENCE = {
     "wd3": "one_source",
     "wd4": "one_source",
     "wd5": "one_source",
+    "wd5x": "one_source",
 }
+#: The test id of a stage's journal rows, where it is not `<STAGE>/structured-fields` (design
+#: D70_EXTRACTOR_DESIGN.md section 8: the extractor's rows say what made them).
+FIELDS_TEST_IDS = {"wd5x": "WD5X/dating-extractor"}
 _BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
 
 #: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -
@@ -2137,7 +2146,7 @@ _GEOM_NOT_POINT = Residual(
 
 
 def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
-    """Step `step` of the `stage` (`wd1`, `wd3`, `wd4` or `wd5`) wave `wave` (a date label,
+    """Step `step` of the `stage` (`wd1`, `wd3`, `wd4`, `wd5` or `wd5x`) wave `wave` (a date label,
     `2026-09-27` or `2026-09-27b`)."""
     name = f"fields-{stage}-{wave}-s{step:03d}"
     if FIELDS_LANE.match(name) is None or step < 1:
@@ -2148,7 +2157,7 @@ def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
         name=name,
         key_prefix=name,
         run_stamp=f"{wave}_fields-{stage}-s{step:03d}",
-        test_id=f"{stage.upper()}/structured-fields",
+        test_id=FIELDS_TEST_IDS.get(stage, f"{stage.upper()}/structured-fields"),
         confidence=FIELDS_CONFIDENCE[stage],
         label=f"{stage.upper()} field correction",
         plan_table=f"_fields_{stage}_plan",
@@ -2157,7 +2166,7 @@ def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
         rehearsal_residual=_PERIOD_MISMATCH,
         lock_timeout=LOCK_TIMEOUT,
         statement_timeout=STATEMENT_TIMEOUT,
-        cells=FIELDS_CELLS_WD5 if stage == "wd5" else FIELDS_CELLS,
+        cells=FIELDS_CELLS_WD5 if stage in ("wd5", "wd5x") else FIELDS_CELLS,
         site_invariants=FIELDS_INVARIANTS,
     )
 
@@ -3118,6 +3127,10 @@ def resolve_lane(name: str) -> Lane:
         from mechanical.card_stats_ext import lane_of as ext_lane_of
 
         return ext_lane_of(name)
+    if PERIOD_FIX_LANE.match(name):
+        from mechanical.period_fix import lane_of as period_fix_lane_of
+
+        return period_fix_lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

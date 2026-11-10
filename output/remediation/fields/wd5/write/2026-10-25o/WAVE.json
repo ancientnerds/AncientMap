@@ -1,0 +1,63 @@
+{
+ "built_at": "2026-10-25T07:32:46+00:00",
+ "calibrations": [
+  {
+   "calibration_id": "fr-general-001",
+   "comparison": "fields-decided",
+   "decided_by": "owner (D36)",
+   "owner_decision": "D36",
+   "role": "field_researcher",
+   "standing": "released (owner decision D36)"
+  },
+  {
+   "calibration_id": "fr-bp-001",
+   "comparison": "bp-bucket",
+   "role": "field_researcher",
+   "standing": "passed"
+  },
+  {
+   "calibration_id": "adv-truth-002",
+   "comparison": "adv-known-truth",
+   "role": "adversarial",
+   "standing": "passed"
+  }
+ ],
+ "classified_sha256": "508f99ecfb180fac2e40192b40c1a00ffb6ac3074e03f3a4f88ee7265ccb8d8d",
+ "decisions_sha256": "f8ab2b591a3fe73f7c75b910dc39c26bd08fe55a6a0740e0b538a74e185f171c",
+ "derived_sha256": null,
+ "held": 64,
+ "rule": "recheck",
+ "run": "output/remediation/fields/wd5-reask",
+ "sites": 25,
+ "stage": "wd5",
+ "steps": [
+  [
+   "08886555-0ddd-40e1-bfe7-0322a41079ea",
+   "192076c0-4d8f-4217-a193-ecfffb6a5a50",
+   "1bb82113-962e-4782-9e83-9e3f19470949",
+   "1ff140bb-47dc-44c9-93bb-c47dda258591",
+   "2851ba0a-1403-47b9-a605-deb3735046ca",
+   "353f7688-f230-41ef-a181-8bd9341448cf",
+   "3db38675-ded2-42a9-968f-b22744e5faff",
+   "41aca9cf-1bfc-4ef6-90e2-3de22ff55604",
+   "474c3e7d-ee4a-4c29-a62e-9ef87ca12ea0",
+   "57fdae55-1910-4354-b9d3-76d7525c6bc7",
+   "58e730c7-6ec4-44a4-97e8-d2f75d9a1c9e",
+   "5c3a138c-7052-4cb4-a482-10df27239b2e",
+   "6cf72484-5b8f-44b0-acfe-fd70ebfa5f26",
+   "6e1bc7d5-624c-41c8-b69b-e64917ae5164",
+   "72ca2dcc-e6fc-44a2-93b1-c575e50929dc",
+   "83cbd9c5-1962-4f95-8f49-eeb525af234f",
+   "8b90f9f0-db52-4d17-a699-e70fc6e5c2ae",
+   "a3a38d98-16fc-464f-bbeb-c027813ef202",
+   "b373de6a-8294-4c8b-88e5-8b4bf920d359",
+   "d2dd6e95-7f9a-4d6c-bd8e-a00f39d1f1f5",
+   "dce4d9db-1bf4-4430-b5e6-2e13e63e4813",
+   "eaf2f471-84d2-4661-8781-6a81241b11fb",
+   "f927f3d3-7149-4786-94ac-412652b5123f",
+   "fa63ee12-8c34-4e02-9c52-64b9ddcce64e",
+   "fe7d7ee7-ca93-4cf5-93d8-0cc80564ccd8"
+  ]
+ ],
+ "wave": "2026-10-25o"
+}

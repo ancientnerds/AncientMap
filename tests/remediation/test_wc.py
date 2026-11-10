@@ -819,14 +819,36 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: `WIKI_CACHE_NOTE` re-pinned 2026-10-09 (calibration teaser-2026-10-09b/c): it carries
 #: `web_rules.CONTRADICTION_RULE` (what a contradiction is, what is none, and that a claim reputable
 #: sources dispute is disputed, never contradicted). A brief is no part of an exported prompt.
+#: JUDGE_QUESTION and JUDGE_BRIEF re-pinned 2026-10-25 (orchestrator decision X15, precedent D52):
+#: the pilot judge failed wc-pj-1/2 by calling a kept sentence a scholarly source contradicts
+#: UNSUPPORTED and a text whose definite phrase lost its referent coherent. The question decides in
+#: three steps - each kept sentence under `web_rules.CONTRADICTION_RULE` with WRONG, UNSUPPORTED and
+#: SUPPORTED told apart and the claim's tense part of it, each dropped sentence, then coherence with
+#: what makes a text incoherent named. No judge round was open (every pilot's is imported), so no
+#: exported answer went stale; a calibration seal binds the new bytes (`wc/calibration.py`).
+#: JUDGE_QUESTION re-pinned the same day, before any seal of it: its examples were replaced by ones
+#: that match no unit of the pools wc-pj-1o/2o re-run (a recalibration on those pools must not hand
+#: the judge their known errors), and the contradiction rule's DISPUTED is mapped onto this answer
+#: format, which has none.
+#: CHECK_BRIEF and VERIFY_BRIEF re-pinned 2026-11-05 (owner decision D80, orchestrator decision O6):
+#: the Opus calibrations wc-fc-2o and wc-wv-2o failed at the top tier; the briefs carry checks against
+#: the failure modes the adjudication of 2026-10-25 named (word against quote, settled against hedged,
+#: search and trim before a drop, a lost referent; for the verifier UNSUPPORTED only after a wide
+#: search, the stored article no witness, each sentence on its own claims, a real disagreement). A
+#: brief is no part of an exported prompt: no answer goes stale. The re-seals bind the new bytes.
+#: JUDGE_BRIEF re-pinned 2026-11-06 (D80, O6): the adjudication of the six disagreements of
+#: wc-pj-1o/2o (`calibration/wc-pj-adjudication-2026-11-05`) named five failure modes (a present
+#: state not checked for destruction, a figure not checked against other measures, an attribution not
+#: checked against the literature, UNSUPPORTED after too narrow a search, a definite phrase not traced
+#: to its antecedent); the brief carries a check against each. The re-seals are wc-pj-1o2/2o2.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
-    "CHECK_BRIEF": "df2eaa3e04a08c70a223f04e54eb8b5164e895c86c134e1badb12b54d69e7b55",
+    "CHECK_BRIEF": "8a779ead21e737b91aad81e15cf4853a9f23f86f050c118f5221626aa62466dc",
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
-    "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
-    "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
-    "JUDGE_BRIEF": "84e03f52b104ee213367dd18958fca4cf6d49927a6b26573cc446b89d504a95d",
+    "VERIFY_BRIEF": "a74b7213caceb2cbcc373429dad4f6a1ec42a0e89d1acce8773ceac7f7c06d0d",
+    "JUDGE_QUESTION": "cfedf7e933a6a7ab7214e71ac7597049dd006c5e5e5dbe0f62dc064666baefdb",
+    "JUDGE_BRIEF": "b6f16823792ad9d590ad48a0809ef4e2258871be6d5db33101c520e9421f55fe",
     "WIKI_CACHE_NOTE": "f3bcd218d96ac2a764f33854083ca1f1c2d5df36576c3fac821869b39f1b00ee",
     "WIKI_CACHE_NOTE_WRITER": "746aa07c4f69f99ee1f7c19c91ccfffb7ea5ad427bc282479f9be71bb05fec1d",
 }
@@ -1285,6 +1307,138 @@ def test_the_pilot_judge_sees_the_kept_text_with_its_quotes_and_the_drops(tmp_pa
         "--answered-by opus-wc-judge-judge-0001" in judge
         and "--model claude-opus-5-5 --role pilot_judge" in judge
     )
+
+
+def test_the_judge_question_tells_wrong_from_unsupported_and_makes_coherence_a_step(
+    tmp_path: Path,
+) -> None:
+    """X15 (2026-10-25): every exported judge question carries the lanes' contradiction rule
+    verbatim, says that a contradiction as worded is WRONG and UNSUPPORTED only the absence of any
+    reputable statement either way, keeps a claim's tense part of it (D52), and decides coherence in
+    a step of its own that names what makes a text incoherent - after the kept text with each
+    trimmed sentence's old wording and the dropped sentences, so that a reference to what a cut took
+    away can be seen. The gate it feeds is not lowered."""
+    import web_rules as WR
+
+    run, handoff = _judge_run(tmp_path)
+    lines = {line["label"]: line for line in OH.manifest(handoff)}
+    prompt = (handoff / lines[FX.SITE_A]["prompt_path"]).read_text(encoding="utf-8")
+    assert WR.CONTRADICTION_RULE in prompt
+    for rule in (
+        "WRONG: a reputable source contradicts a claim as the sentence words it; give that quote.",
+        "This answer has no DISPUTED verdict",
+        "This answer format has no DISPUTED: a claim on which reputable sources disagree, stated "
+        "without the hedge they share, is WRONG, with the quote of the source that disputes it",
+        "make sure they state the same fact",
+        "UNSUPPORTED: no reputable, independent source you found states the claim either way",
+        "when you find no support, keep searching for a contradiction before you decide",
+        "is WRONG, not UNSUPPORTED",
+        "leave a claim SUPPORTED",
+        'its "still", "today" or "now", and every qualifier and hedge are part of the claim',
+        "STEP 3 - coherence, a step of its own",
+        "also when a reader could now take it to mean something that is still in the text",
+        "(b) a sentence that now says something else than it said in the old text;",
+        "or that ends mid-sentence",
+        "(d) the text contradicts itself: a kept sentence states something that another kept "
+        "sentence denies",
+        "(e) the kept sentences describe two different sites",
+        "a text of SUPPORTED sentences can be incoherent",
+    ):
+        assert rule in prompt, rule
+    order = [prompt.index(mark) for mark in ("    trimmed from:", "DROPPED SENTENCES", "STEP 1")]
+    assert order == sorted(order)
+    assert prompt.index("STEP 1") < prompt.index("STEP 2") < prompt.index("STEP 3")
+    brief = C.judge_brief(run, handoff, "judge-0001")
+    assert "for each kept sentence search for what contradicts it as well as" in brief
+    assert C.J_THRESHOLDS == {"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}
+
+
+#: Examples the judge question carried in its first X15 wording, each a unit of the pools the
+#: recalibration wc-pj-1o/2o re-runs (wc-pilot-2026-09-27 judge-0002, wc-pilot-2026-09-27b
+#: judge-0001/0004): a judge graded on those pools must not be pointed at their known errors or their
+#: disagreements. The rules stay; the examples are drawn from no unit of the pools.
+POOL_EXAMPLES = (
+    '"carved" where the sources say "built"',
+    "passage tomb-style",
+    '"unique"',
+    "a route's length and a straight-line distance",
+    "an arch's span and a bridge's length",
+    "a founding and a first mention",
+    "the complex",
+    # the adjudicated disagreements of wc-pj-1o/2o (D80/O6, 2026-11-06): their own wording
+    "stands",
+    "the monument",
+    "26 km",
+    "the Seine",
+)
+
+
+def test_the_judge_question_points_at_no_unit_of_the_recalibrated_pools() -> None:
+    """The rules a pool's known errors need - a single word of how something was made is a claim, a
+    uniqueness or style claim needs a source that states it and a search for one that disputes it,
+    two sources disagree only when they state the same fact - are there, without the pools' own
+    wording as their examples."""
+    text = P.JUDGE_QUESTION
+    for example in POOL_EXAMPLES:
+        assert example not in text, example
+    for rule in (
+        "also a single word that says how, by whom or from what something was made",
+        "a superlative or uniqueness claim",
+        "a style or cultural attribution",
+        "needs a source that states exactly that and a search for a source that disputes or qualifies",
+        "make sure they state the same fact",
+    ):
+        assert rule in " ".join(text.split()), rule
+
+
+#: The checks each sharpened brief must carry (D80/O6): one phrase per failure mode the adjudication
+#: of wc-fc-2o and wc-wv-1o/2o named.
+BRIEF_CHECKS = {
+    "CHECK_BRIEF": (
+        "Word against quote.",
+        "A sentence that uses another such word than its sources use is not supported as worded",
+        "Settled against hedged.",
+        "Search before you drop, and trim before you drop.",
+        "the answer is KEEP_TRIMMED with a legal rule-5 piece, not DROP",
+        "What stays must still read.",
+        "was written about what is gone",
+    ),
+    "VERIFY_BRIEF": (
+        "UNSUPPORTED is the verdict of a search, not of the first pages.",
+        "is a throttle and never a finding",
+        "The stored article is no witness on either side.",
+        "WRONG with that source's quote - not UNSUPPORTED, and not a disagreement between the two",
+        "Each sentence on its own claims.",
+        "Every word is a claim.",
+        "A real disagreement.",
+        "make sure both state the same fact",
+    ),
+    # the adjudication of wc-pj-1o/2o (2026-11-06)
+    "JUDGE_BRIEF": (
+        "A present state is a claim that it still holds.",
+        "search excavation reports, heritage registers and protection decisions for its destruction",
+        "A figure against other measures.",
+        "the sentence is WRONG, even when an official page and the stored article agree with it",
+        "An attribution against the literature.",
+        "an attribution the sources dispute, stated without their hedge, is WRONG",
+        "UNSUPPORTED is the verdict of a search, not of the first pages.",
+        "is a throttle and never a finding",
+        "Trace every referent.",
+        '"coherent" is false, however naturally the phrase still reads',
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(BRIEF_CHECKS))
+def test_the_check_and_verify_briefs_carry_the_calibrations_failure_modes(name: str) -> None:
+    """D80/O6: the briefs of the re-sealed fact checker, web verifier and pilot judge name the checks
+    against the errors the adjudicated Opus calibrations made, without the recalibrated pools' own
+    wording."""
+    text = " ".join(getattr(P, name).split())
+    for check in BRIEF_CHECKS[name]:
+        assert check in text, check
+    for example in POOL_EXAMPLES:
+        assert example not in text, example
 
 
 def test_the_pilot_passes_only_below_every_threshold(tmp_path: Path) -> None:

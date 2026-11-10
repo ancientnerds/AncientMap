@@ -28,6 +28,13 @@ Three rules share every module of this package (`answers`, `handoff`, `plan`, th
   restored from the journal. The answer kinds are WD4's, and `answers.states_year` reads a date in
   years before the present (BP).
 
+* **extract** (lane wd5x, owner decisions D70-D73 and the orchestrator's O1/O2 of 2026-11-05): no
+  agent answers. The deterministic dating extractor (`dating.py`) reads a start from what the site's
+  sources print - every cell one verbatim quote and its URL, one source suffices - and **fills,
+  never clears**: only an empty `period_start` of the run's population (the undated sites), with its
+  label. Its gates are not a calibration and a re-check but a sealed gold measurement
+  (`dating_gold.py`, D71: >= 95 %) and the shown cells (`OWNER_SHOWN.json`, D71/O3) - `plan.py wave`.
+
 A run without `RUN.json` is a WD1 run: the files of those runs were written before the switch
 existed, and their prompts are pinned by hash - `read_rule` names the default instead of guessing.
 """
@@ -124,7 +131,12 @@ TWO_FAMILIES = Rule("two-families", "wd1", 2, 2, frozenset(), True, False)
 ONE_FAMILY = Rule("one-family", "wd3", 1, 1, FORBIDDEN_FAMILIES, False, True)
 ONE_FAMILY_PERIOD = Rule("one-family-period", "wd4", 1, 1, FORBIDDEN_FAMILIES, False, True)
 RECHECK = Rule("recheck", "wd5", 1, 1, FORBIDDEN_FAMILIES, False, False, True)
-RULES = {rule.name: rule for rule in (TWO_FAMILIES, ONE_FAMILY, ONE_FAMILY_PERIOD, RECHECK)}
+EXTRACT = Rule("extract", "wd5x", 1, 1, FORBIDDEN_FAMILIES, clearable=False, fill_only=True)
+RULES = {
+    rule.name: rule for rule in (TWO_FAMILIES, ONE_FAMILY, ONE_FAMILY_PERIOD, RECHECK, EXTRACT)
+}
+#: The rules no agent answers under: no question, no brief (`handoff.TEXTS` holds none for them).
+MACHINE_RULES = frozenset({EXTRACT.name})
 BY_STAGE = {rule.stage: rule for rule in RULES.values()}
 #: The rule of a run without `RUN.json`: WD1's, the lane whose runs predate the file.
 DEFAULT = TWO_FAMILIES

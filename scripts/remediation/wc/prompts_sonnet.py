@@ -245,6 +245,17 @@ JUDGE_QUESTION_WN = _derive(
     ),
     ("removed from the old description)", "written, then removed)"),
     ("the checker's quotes or your own", "the writer's quotes or your own"),
+    ("Read what the checker's pages say", "Read what the writer's pages say"),
+    # X15's coherence step: a written text has no old sentence a piece was cut from
+    (
+        "and compare each with the old sentence it was cut from (where one is shown) and with the "
+        "dropped sentences.",
+        "and compare them with the dropped sentences.",
+    ),
+    (
+        "(b) a sentence that now says something else than it said in the old text;",
+        "(b) a sentence that says something else once a dropped sentence before it is gone;",
+    ),
     (
         "Sources follow the same rules as the check:",
         "Sources follow the same rules as the writer's:",

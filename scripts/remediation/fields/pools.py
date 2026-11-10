@@ -1107,8 +1107,8 @@ COMPARATORS: dict[str, CC.Comparator] = {
 
 def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
     """`calibrate_claude.prepare`, then what the pool's tools read in the calibration run that the
-    generic registration does not copy: the round's `notes` and `model` (the import re-renders every
-    prompt with them) and - for the adversarial pool - the frozen cells."""
+    generic registration does not copy: the round's `notes`, `model` and `period_rule` (the import
+    re-renders every prompt with them) and - for the adversarial pool - the frozen cells."""
     report = CC.prepare(root, calibration_id=calibration_id, run=run)
     calibration_run = Path(report["calibration_run"])
     rounds_path = calibration_run / HO.ROUNDS_FILE
@@ -1116,6 +1116,8 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
     source, _ = D._source_round(run, Path(CC._sealed(root, calibration_id)["handoff"]))
     round_.setdefault("notes", {})
     round_.setdefault("model", source.get("model"))
+    if HO.PERIOD_RULE_KEY in source:  # a round exported since D101 is asked its period sentence
+        round_.setdefault(HO.PERIOD_RULE_KEY, source[HO.PERIOD_RULE_KEY])
     HO._write_jsonl(rounds_path, [round_])
     if (run / AD.CELLS_FILE).exists():
         shutil.copyfile(run / AD.CELLS_FILE, calibration_run / AD.CELLS_FILE)

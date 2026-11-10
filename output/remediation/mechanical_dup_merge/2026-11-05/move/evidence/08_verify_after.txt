@@ -1,0 +1,18 @@
+                                                                              metric                                                                              | value 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------
+ curated sites                                                                                                                                                    | 5004
+ curated sites with more than one live hero                                                                                                                       | 0
+ journal rows for the rollback stamp                                                                                                                              | 0
+ journal rows for this run on non-curated sites                                                                                                                   | 0
+ journal rows for this run outside wiki_images.site_id, wiki_images.is_hero, site_content_links.site_id, unified_site_names.site_id, unified_site_names.name_type | 0
+ journal rows for this run stamp                                                                                                                                  | 52
+ journal rows for this run with no site_id_ref                                                                                                                    | 0
+ journal rows for this test id                                                                                                                                    | 52
+ retired duplicates still holding an image or a content link                                                                                                      | 23
+ retired duplicates whose name is not among the names of their survivor                                                                                           | 1
+ retired duplicates whose survivor is retired or not curated                                                                                                      | 0
+ site_content_links rows of curated sites                                                                                                                         | 16029
+ unified_site_names rows of curated sites                                                                                                                         | 50949
+ wiki_images rows of curated sites                                                                                                                                | 49970
+
+

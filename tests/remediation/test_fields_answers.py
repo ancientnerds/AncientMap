@@ -20,7 +20,7 @@ WIKI = "https://en.wikipedia.org/wiki/Temple_of_Hephaestus"
 REGISTER = "https://www.odysseus.culture.gr/h/2/eh255.jsp?obj_id=912"
 
 
-def line(**fields: Any) -> dict[str, Any]:
+def line(country: str = "Greece", **fields: Any) -> dict[str, Any]:
     stored = {
         "coordinates": "37.9755, 23.7215",
         "period_start": -449,
@@ -31,6 +31,7 @@ def line(**fields: Any) -> dict[str, Any]:
     return {
         "site_id": "0025b0ba-fd74-4c08-96e3-acc17956aa44",
         "name": "Temple of Hephaestus",
+        "country": country,
         "fields": {name: {"stored": value} for name, value in stored.items()},
     }
 

@@ -205,10 +205,10 @@ For each question:
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is judged):
-   ./.venv/Scripts/python.exe scripts/remediation/image_roles/run.py check-answer --run-dir {run} --handoff {handoff} --stage {stage} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
+   ./.venv/Scripts/python.exe scripts/remediation/image_roles/run.py check-answer --run-dir {run} --handoff {handoff} --stage {stage}{round} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
-   ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} --model {model} --role {role} --text-file {scratch}/<label>.json
+   ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} --stage {stage} --label <label> --answered-by {agent} --model {model} --role {role}{candidate} --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
@@ -222,25 +222,47 @@ def _shown(path: Path) -> str:
     return path.resolve().as_posix()
 
 
-def brief(run: Path, handoff: Path, spec: Spec, batch_id: str) -> str:
-    """The instruction of one batch's agent, running as the stage's role (`roles.ROLES`)."""
+def brief(
+    run: Path,
+    handoff: Path,
+    spec: Spec,
+    batch_id: str,
+    round_number: int | None = None,
+    *,
+    candidate_model: str | None = None,
+    agent: str | None = None,
+) -> str:
+    """The instruction of one batch's agent, running as the stage's role (`roles.ROLES`).
+
+    `round_number` is the round of a stage with one file set per round (the re-check): its
+    check-answer command must name it, or the check reads the unrounded export record and refuses
+    every answer (image-roles-v2, 2026-11-06: 17 re-check briefs without `--round 1`).
+    `candidate_model` makes it the brief of a candidate-model trial (`roles.candidate_model`): the
+    agent runs as that model and records with `--candidate-model`, the role stays registered.
+    `agent` is the name the answers are recorded under (default: the batch id); two labellers of
+    the same questions need two names, or their answers could not be told apart."""
     _record(run, spec)
     labels = [label for batch, label in load_questions(run, spec) if batch == batch_id]
     if not labels:
         raise StageError(f"{batch_id} is no batch of {spec.name}")
     entry = RO.role(spec.role)
+    if candidate_model is not None:
+        RO.candidate_model(spec.role, candidate_model)
     shown = _shown(handoff)
     return BRIEF.format(
         batch=batch_id,
+        agent=agent or batch_id,
         stage=spec.name,
         what=spec.what,
-        model=entry.model,
+        model=entry.model if candidate_model is None else candidate_model,
         role=spec.role,
+        candidate="" if candidate_model is None else f" --candidate-model {candidate_model}",
         effort=entry.effort,
         count=len(labels),
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
+        round="" if round_number is None else f" --round {round_number}",
         web=f"{WEB_ALLOWED} {WR.rule_for_role(spec.role)}" if spec.web else NO_WEB,
         named=CACHE_FILES if spec.web else "",
     )
@@ -264,14 +286,20 @@ def check_answer(
 
 
 # ------------------------------------------------------------------------------------- import
-def import_answers(run: Path, handoff: Path, spec: Spec) -> dict[str, Any]:
+def import_answers(
+    run: Path, handoff: Path, spec: Spec, *, candidate_model: str | None = None
+) -> dict[str, Any]:
     """Every answer of the stage, validated and parsed, into `spec.result_file` (written once).
 
     Refused, by name: a handoff other than the exported one, a questions file that is not the one
     exported, a validation with missing/stale/malformed/orphan answers, a prompt the manifest does
     not name, a picture that is not the one shown, an answer that is not the stage's role's (its
     `answered_by` names another role or carries another model's stamp) and any answer out of shape
-    - all the shape problems at once, none of them repaired."""
+    - all the shape problems at once, none of them repaired. With `candidate_model` the answers are
+    a candidate-model trial's: each in the stage's role and stamped by that candidate
+    (`roles.require_candidate_stamp`), never by the role's registered model."""
+    if candidate_model is not None:
+        RO.candidate_model(spec.role, candidate_model)
     record = _record(run, spec)
     if Path(record["handoff"]).resolve() != handoff.resolve():
         raise StageError(f"{handoff} is not the handoff {spec.name} was exported to")
@@ -298,7 +326,14 @@ def import_answers(run: Path, handoff: Path, spec: Spec) -> dict[str, Any]:
         answer = OH.read_answer(
             handoff, batch_id=batch_id, stage=spec.name, label=label, prompt=question.prompt
         )
-        wrong = RO.answer_problem(answer.answered_by, answer.model)
+        if candidate_model is None:
+            wrong = RO.answer_problem(answer.answered_by, answer.model)
+        else:
+            try:
+                RO.require_candidate_stamp(candidate_model, answer.model)
+                wrong = None
+            except RO.RoleError as exc:
+                wrong = str(exc)
         if wrong is not None:
             raise StageError(f"{batch_id}/{label}: {wrong}")
         if RO.role_of(answer.answered_by) != spec.role:

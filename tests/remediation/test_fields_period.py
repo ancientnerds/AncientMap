@@ -46,7 +46,7 @@ def period_answer(
     block = TA.block(
         decision,
         value,
-        IRON if quotes is None else quotes,
+        PERIOD_ONLY if quotes is None else quotes,
         reasoning="the page calls it an Iron Age hillfort",
     )
     if name is not None:
@@ -54,11 +54,14 @@ def period_answer(
     return block
 
 
-def checked(answer: dict[str, Any], rule: R.Rule = PERIOD, **stored: Any) -> Any:
-    """One period_start answer, checked under `rule` (the default: the period run)."""
-    return A.check_shape(TA.text(period_start=answer), ["period_start"], TA.line(**stored), rule)[
-        "period_start"
-    ]
+def checked(
+    answer: dict[str, Any], rule: R.Rule = PERIOD, country: str = "England", **stored: Any
+) -> Any:
+    """One period_start answer, checked under `rule` (the default: the period run), for a site in
+    `country` (England: an Iron Age hillfort there starts at -800, D101)."""
+    return A.check_shape(
+        TA.text(period_start=answer), ["period_start"], TA.line(country, **stored), rule
+    )["period_start"]
 
 
 # ------------------------------------------------------------------------------ the rule
@@ -81,7 +84,9 @@ class TestTheRule:
         assert R.TWO_FAMILIES.clearable and not R.TWO_FAMILIES.fill_only
         assert R.ONE_FAMILY.min_quotes == 1 and not R.ONE_FAMILY.clearable
         assert R.DEFAULT is R.TWO_FAMILIES
-        assert sorted(R.RULES) == ["one-family", "one-family-period", "recheck", "two-families"]
+        assert sorted(R.RULES) == [
+            "extract", "one-family", "one-family-period", "recheck", "two-families"
+        ]
 
     def test_the_run_pins_its_own_rule(self, tmp_path: Path) -> None:
         R.write_run(tmp_path, PERIOD, built_at="t")
@@ -106,11 +111,26 @@ class TestTheAnswerShape:
         quotes = {
             "neolithic": [(WIKI, "a Neolithic causeway enclosure")],
             "Victorian": [(WIKI, "built in the Victorian era")],
-            "the Prehistory": [(WIKI, "a site of the Prehistory")],
+            "the Roman period": [(WIKI, "a villa of the Roman period")],
         }
         for name, said in quotes.items():
             answer = checked(period_answer(name, said), period_start=None)
-            assert answer.value == str(P.start_year(name)), name
+            assert answer.value == str(P.start_year(name, country="England")), name
+
+    def test_a_coarse_period_word_is_no_answer(self) -> None:
+        # owner decision D111: "the Prehistory", "Stone Age", a bare "Palaeolithic" and an England
+        # "Bronze Age" without its phase name no start a site has
+        for name, said in (
+            ("the Prehistory", "a site of the Prehistory"),
+            ("Stone Age", "a Stone Age rock carving"),
+            ("Palaeolithic", "multiple habitation phases during the Palaeolithic period"),
+        ):
+            problem = checked(period_answer(name, [(WIKI, said)]), period_start=None)
+            assert isinstance(problem, str) and "too coarse" in problem, name
+        problem = checked(
+            period_answer("bronze age", [(WIKI, "a Bronze Age entrance grave")]), period_start=None
+        )
+        assert isinstance(problem, str) and "needs its sub-phase" in problem
 
     def test_an_invented_year_for_a_period_word_is_refused(self) -> None:
         # the table is the authority: one year for one name, so an agent's own is never read
@@ -172,9 +192,14 @@ class TestThePeriodChecks:
         assert "no quote names iron age" in checked(
             period_answer(quotes=named_elsewhere), period_start=None
         )
-        # one quote names it, the others only have to carry a date
+        # one quote names it; a second quote that dates is no longer a companion but the answer
+        # itself: a stated date beats the period word (D101)
         both = [(WIKI, "an Iron Age hillfort"), (REGISTER, "a fort of the 2nd century")]
-        assert checked(period_answer(quotes=both), period_start=None).decision == "replace"
+        assert "beats the period word (D101)" in checked(
+            period_answer(quotes=both), period_start=None
+        )
+        two_names = [(WIKI, "an Iron Age hillfort"), (REGISTER, "the Iron Age fort on the hill")]
+        assert checked(period_answer(quotes=two_names), period_start=None).decision == "replace"
 
     def test_the_bucket_comparison_runs_on_the_derived_year(self) -> None:
         # the stored value is -449, the Iron Age's -800 is in another bucket
@@ -308,8 +333,9 @@ class TestTheQuestion:
         assert "vocabulary" in problem
 
     def test_every_rule_has_its_own_texts_and_brief(self) -> None:
-        assert set(HO.TEXTS) == set(R.RULES)
-        assert set(HO.BRIEF_PARTS) == set(R.RULES)
+        # the dating extractor's rule asks no agent (D70): no question, no brief
+        assert set(HO.TEXTS) == set(R.RULES) - R.MACHINE_RULES
+        assert set(HO.BRIEF_PARTS) == set(R.RULES) - R.MACHINE_RULES
         assert HO.TEXTS[PERIOD.name].field_rules is HO.FIELD_RULES_WD4
         assert HO.TEXTS[R.ONE_FAMILY.name].field_rules is HO.FIELD_RULES_WD3
         assert HO.TEXTS[R.TWO_FAMILIES.name].field_rules is HO.FIELD_RULES
@@ -390,3 +416,115 @@ class TestTheOriginalImportHint:
         bare_band[A.PERIOD_KEY] = HINT["period"]
         assert "vocabulary knows" in checked(bare_band, PERIOD, period_start=None)
         assert A.PERIOD_KEY not in HO.FIELD_RULES_WD4["coordinates"]
+
+
+# ------------------------------------------------------------------------------ D101
+class TestTheRegionalStartAndTheStatedYear:
+    """Owner decision D101 (2026-11-06): a year the same source states beats a bare period word, and
+    a bare period word writes the start of that period in the site's own country."""
+
+    def test_a_year_the_source_states_beats_the_period_word(self) -> None:
+        # "an Iron Age hillfort, occupied from c. 800 BC": the page gives the year - that is the
+        # answer, and the period word is refused beside it
+        problem = checked(period_answer(quotes=IRON), period_start=None)
+        assert "states the year 800 BC" in problem and "beats the period word (D101)" in problem
+        year = checked(TA.block("replace", "-800", IRON), period_start=None)
+        assert year.decision == "replace" and year.value == "-800" and year.period_name is None
+
+    def test_every_way_of_stating_a_date_beats_the_word(self) -> None:
+        for quote in (
+            "an Iron Age hillfort of the 4th century BC",
+            "an Iron Age hillfort built in the 2nd millennium BC",
+            "an Iron Age hillfort, 2,800 years ago",
+            "an Iron Age hillfort, rebuilt in AD 122",
+        ):
+            assert "(D101)" in checked(period_answer(quotes=[(WIKI, quote)]), period_start=None), quote
+
+    def test_a_number_without_an_era_is_no_stated_date(self) -> None:
+        # a modern year or a site number says nothing about an ancient start
+        for quote in ("an Iron Age hillfort excavated in 1923", "Site 3 is an Iron Age hillfort"):
+            answer = checked(period_answer(quotes=[(WIKI, quote)]), period_start=None)
+            assert answer.decision == "replace" and answer.value == "-800", quote
+        assert A.date_stated("an Iron Age hillfort excavated in 1923") is None
+
+    def test_the_near_eastern_neolithic_is_not_britain_s(self) -> None:
+        quotes = [(WIKI, "a Neolithic settlement near the spring")]
+        levant = checked(period_answer("neolithic", quotes), country="Syria", period_start=None)
+        britain = checked(period_answer("neolithic", quotes), country="England", period_start=None)
+        assert (levant.value, britain.value) == ("-10000", "-4000")
+
+    def test_roman_is_the_roman_period_of_the_province(self) -> None:
+        quotes = [(WIKI, "a Roman villa on the river")]
+        britain = checked(period_answer("roman", quotes), country="England", period_start=None)
+        hispania = checked(period_answer("roman", quotes), country="Spain", period_start=None)
+        assert (britain.value, hispania.value) == ("43", "-218")
+
+    def test_a_country_without_a_cited_start_refuses_the_period_word(self) -> None:
+        quotes = [(WIKI, "a Roman villa on the hill")]
+        problem = checked(period_answer("roman", quotes), country="Italy", period_start=None)
+        assert "no cited start for 'Italy'" in problem
+
+    def test_the_keep_decision_compares_the_regional_year(self) -> None:
+        # Syria's Neolithic is in "< 4500 BC": a stored -5000 is kept, a stored -4000 replaced
+        quotes = [(WIKI, "a Neolithic settlement near the spring")]
+        kept = checked(
+            period_answer("neolithic", quotes, decision="keep"), country="Syria", period_start=-5000
+        )
+        assert kept.decision == "keep" and kept.value == "-10000"
+        assert "that is replace" in checked(
+            period_answer("neolithic", quotes, decision="keep"), country="Syria", period_start=-4000
+        )
+
+    def test_a_new_round_is_asked_the_d101_text_and_an_old_one_keeps_its_own(self) -> None:
+        # import renders every prompt again and compares its hash: a round exported before D101
+        # (no key) keeps the fixed-table sentence it was asked
+        rule = HO.FIELD_RULES_WD5["period_start"]
+        assert HO.period_rule_text(rule, None) == rule
+        assert '"neolithic" -> -4000' in rule
+        new = HO.period_rule_text(rule, HO.D101)
+        assert '"neolithic" -> -4000' not in new
+        assert "-10000 in Syria or Jordan" in new and "A year beats a period word" in new
+        # a field without the sentence is asked as before; an unknown rule is refused
+        assert HO.period_rule_text(HO.FIELD_RULES_WD5["site_type"], HO.D101) == (
+            HO.FIELD_RULES_WD5["site_type"]
+        )
+        with pytest.raises(HO.HandoffStepError, match="is not 'D101'"):
+            HO.period_rule_text(rule, "D999")
+
+    def test_a_round_asked_before_a_period_name_came_in_is_rendered_without_it(self) -> None:
+        # D113 added three names to the table; the rounds exported before were asked the list
+        # without them, and their import must render that list or every answer reads as stale
+        rule = HO.FIELD_RULES_WD5["period_start"]
+        (added_at, added), *_ = HO.PERIOD_NAMES_ADDED
+        assert added == {"chimu", "late roman", "vinca"} and added <= P.PERIODS.keys()
+        now = HO.period_rule_text(rule, HO.D101)
+        assert HO.period_rule_text(rule, HO.D101, added_at) == now  # asked at the commit: new list
+        assert HO.period_rule_text(rule, HO.D101, "2026-11-06T16:00:00+00:00") == now
+        before = HO.period_rule_text(rule, HO.D101, "2026-11-05T23:51:55+00:00")
+        assert before != now
+        assert ", vinca, " in now and "vinca" not in before and "chimu" not in before
+        assert before == now.replace(
+            HO._period_list(P.PERIODS), HO._period_list(P.PERIODS.keys() - added)
+        )
+        # the pre-D101 text is pinned the same way; a field without the list is unchanged
+        assert "vinca" not in HO.period_rule_text(rule, None, "2026-11-01T00:00:00+00:00")
+        site_type = HO.FIELD_RULES_WD5["site_type"]
+        assert HO.period_rule_text(site_type, HO.D101, "2026-11-01T00:00:00+00:00") == site_type
+
+    def test_a_listed_name_the_table_lost_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            HO, "PERIOD_NAMES_ADDED", (("2026-11-06T15:37:58+00:00", frozenset({"atlantean"})),)
+        )
+        with pytest.raises(HO.HandoffStepError, match="atlantean"):
+            HO.period_rule_text(
+                HO.FIELD_RULES_WD5["period_start"], HO.D101, "2026-11-01T00:00:00+00:00"
+            )
+
+    def test_the_adversarial_check_of_a_new_cell_reads_the_regional_start(self) -> None:
+        from fields import adversarial as AD
+
+        old = AD.criteria("period_start", None)
+        assert old == AD.CRITERIA["period_start"] and '"neolithic" -4000' in old
+        new = AD.criteria("period_start", HO.D101)
+        assert '"neolithic" -10000 in Syria' in new and "that date is the value" in new
+        assert AD.criteria("coordinates", HO.D101) == AD.CRITERIA["coordinates"]
