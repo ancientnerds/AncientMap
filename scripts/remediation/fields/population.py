@@ -52,6 +52,13 @@ without a source *behind a value the database holds*, not the empty ones (`reche
 A field whose newest journal row is another lane's sourced write is never asked, whatever else
 says so. The question shows the stored value, why it is asked and what stands (`open[field]["made"]`).
 
+A **listed-point** run (`build --stage wd5 --sites FILE --point`, built into `wd5-point/<label>`)
+asks the stored point of each listed site again and nothing else, under the reason `listed-point`:
+the orchestrator names a point a later finding puts in doubt (the close-out's follow-up 1: Sybaris
+on the Traeis holds the point of Sybaris). A listed point a source stands behind is refused
+(`check_listed_points`). It is a wd5 run otherwise: a `replace` moves the point, anything else
+leaves it and is listed.
+
 **Lane wd5x** (`rule.EXTRACT`, D70-D73 of 2026-10-25/11-05) asks no agent: the dating extractor
 (`dating.py run`) reads the run's population. It is built from `--sites FILE` (the undated sites, each
 with the reason it is listed) and nothing else: `period_start` is the one open field of each, and a
@@ -97,9 +104,13 @@ WHY_READER_GAP = "reader-gap"
 #: 2026-11-06): an undated shown site asked for its start by a Claude researcher, after the
 #: deterministic extractor of D70 failed its gold (0.7034).
 WHY_D99 = "d99-undated"
+#: The reason of a listed-point run (`build --stage wd5 --sites FILE --point`): the stored point of
+#: a site the orchestrator names, asked once more (follow-up 1 of the close-out of 2026-10-24:
+#: Sybaris on the Traeis holds the point of Sybaris).
+WHY_LISTED_POINT = "listed-point"
 WHYS = (
     WHY_EMPTY, WHY_UNRESOLVED, WHY_HELD, WHY_UNSOURCED,
-    WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT, WHY_READER_GAP, WHY_D99,
+    WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT, WHY_READER_GAP, WHY_D99, WHY_LISTED_POINT,
 )  # fmt: skip
 HELD = "held"  # `handoff.HELD`, the import's decision for a field whose pages could not be read
 
@@ -626,6 +637,12 @@ READER_GAP_BP, READER_GAP_STATEMENT = "bp-age", "dated-statement"
 READER_GAP_PERIOD, READER_GAP_LISTED = "period-name", "listed"
 #: The kind a D99 run records for each of its listed sites.
 READER_GAP_D99 = "d99"
+#: The kind a listed-point run records for each of its listed sites.
+READER_GAP_POINT = "listed-point"
+#: Where the listed-point runs are built under `fields_dir`, one directory per run
+#: (`wd5-point/<label>`): the final owner list reads every run it finds there
+#: (`owner_list_final.field_run_names`).
+POINT_RUNS = "wd5-point"
 #: What an answer says when a machine reader, not the sources, is why it gave up: "none states it
 #: in a form the check reads", "the checker cannot read ...", "not a period name this lane's table
 #: holds". The three periods wd5's pilot cleared to Undated (2026-10-09) said it in these words.
@@ -744,6 +761,49 @@ def reader_gap_fields(
     return {"period_start": opened}, None
 
 
+def listed_point_fields(
+    answers: Sequence[tuple[str, Mapping[str, Any]]], *, listed: str | None
+) -> dict[str, dict[str, Any]]:
+    """The one field a listed-point run asks of a site, `{"coordinates": {"why", "wd1", "made"}}`,
+    or none for a site the list does not name. What stands is the orchestrator's reason and, where
+    a pass answered the point before, its latest answer (`answers`, oldest first) - a lead, not
+    evidence. `check_listed_points` has refused every listed point a source stands behind."""
+    if listed is None:
+        return {}
+    note = f"the orchestrator named this site's stored point for a second look: {listed}"
+    if answers:
+        run, latest = answers[-1]
+        said = str(latest["reasoning"])[:READER_GAP_SHOWN_CHARS]
+        note += f". The pass of {run} answered {latest['decision']}: {said}"
+    opened = {"why": WHY_LISTED_POINT, "wd1": None, "made": note, "reader_gap": READER_GAP_POINT}
+    return {"coordinates": opened}
+
+
+def check_listed_points(
+    listed: Mapping[str, str],
+    stored: Mapping[str, Mapping[str, Any]],
+    made: Mapping[tuple[str, str], Mapping[str, Any]],
+    answers: Mapping[tuple[str, str], Sequence[tuple[str, Mapping[str, Any]]]],
+) -> None:
+    """Refuses (every offender named, nothing written) a listed site whose point cannot be asked
+    again: no curated site of the export, a retired one, a point whose newest journal row is another
+    lane's sourced write, and a point the latest answer about it kept on a quoted source."""
+    refused = []
+    for site in sorted(listed):
+        row = stored.get(site)
+        said = answers.get((site, "coordinates"), ())
+        if row is None:
+            refused.append(f"{site}: not a curated site of {C.STORED_FILE}")
+        elif row["scope_status"] == "retired":
+            refused.append(f"{site}: retired")
+        elif field_kind(made_kinds(row, made, site), "coordinates") == SOURCED:
+            refused.append(f"{site}: its point was written by another lane's sourced write")
+        elif said and said[-1][1]["decision"] == A.KEEP:
+            refused.append(f"{site}: the pass of {said[-1][0]} kept its point on a quoted source")
+    if refused:
+        raise PopulationError("the listed point(s) cannot be asked again: " + "; ".join(refused))
+
+
 def read_listed(path: Path) -> dict[str, str]:
     """`--sites FILE`: one JSON object per line, `{"site_id": <id>, "reason": <text>}`. A line of
     another shape, an empty reason, a site named twice and an empty file are refused."""
@@ -774,7 +834,8 @@ class Reask:
     orchestrator listed with their reasons (`--sites`) and the sites an earlier reader-gap run
     decided (`already`, never asked twice). `why` is the reason the listed sites are asked under:
     `WHY_READER_GAP`, or `WHY_D99` for a D99 dating run (no detection, nothing skipped as already
-    re-asked: D99 asks every undated site afresh)."""
+    re-asked: D99 asks every undated site afresh), or `WHY_LISTED_POINT` for a listed-point run,
+    which asks `coordinates` instead of `period_start` and nothing else (the same two limits)."""
 
     answers: Mapping[tuple[str, str], Sequence[tuple[str, Mapping[str, Any]]]]
     detect: bool
@@ -867,7 +928,8 @@ def build(
     `reask` (stage wd5 only) makes the run a **reader-gap** run: it asks `period_start` and nothing
     else, of the empty periods a counted Claude answer left `unresolved` although it names a dated
     value (`reader_gap_fields`) and of the sites the orchestrator listed. It is one run: no pilot,
-    no `without`.
+    no `without`. A `reask` under `WHY_LISTED_POINT` is a **listed-point** run: it asks the stored
+    point of each listed site and nothing else (`listed_point_fields`).
 
     `listed` (stage wd5x, and only there) is the population of a dating-extractor run: the listed
     sites with their reasons, each asked `period_start` alone (`extract_fields`)."""
@@ -896,6 +958,12 @@ def build(
         raise PopulationError(
             "a D99 run asks its listed sites only: no --reask-cleared, no sites skipped as re-asked"
         )
+    point = reask if reask is not None and reask.why == WHY_LISTED_POINT else None
+    if point is not None and (point.detect or point.already):
+        raise PopulationError(
+            "a listed-point run asks the points of its listed sites only: no --reask-cleared, no "
+            "sites skipped as re-asked"
+        )
     if (out / "ROUNDS.jsonl").exists():
         raise PopulationError(f"{out} was asked already (ROUNDS.jsonl): a run is built once")
     stored_all = C.read_stored(out)  # refused here, before anything is pinned, when it is missing
@@ -904,7 +972,9 @@ def build(
     made = read_made(out) if rule.recheck or extract else {}
     if listed is not None:
         check_listed(listed, stored_all, made)
-    if reask is not None:
+    if point is not None:
+        check_listed_points(point.listed, stored_all, made, point.answers)
+    elif reask is not None:
         check_listed(reask.listed, stored_all, made)
         again = sorted(set(reask.listed) & reask.already)
         if again:
@@ -922,6 +992,12 @@ def build(
         site = str(line["site_id"])
         if listed is not None:
             opened, wrong = extract_fields(listed.get(site)), []
+        elif point is not None:
+            wrong = []
+            opened = listed_point_fields(
+                point.answers.get((site, "coordinates"), ()), listed=point.listed.get(site)
+            )
+            gap_asked.update(o["reader_gap"] for o in opened.values())
         elif reask is not None:
             wrong = []
             if site in reask.already:
@@ -968,7 +1044,7 @@ def build(
             "detect": reask.detect,
             "listed": dict(sorted(reask.listed.items())),
             "reads": list(REASK_HISTORY_RUNS),
-            **({"why": WHY_D99} if reask.why == WHY_D99 else {}),
+            **({"why": reask.why} if reask.why != WHY_READER_GAP else {}),
         },
         pilot=None if pilot is None else {"size": pilot[0], "seed": pilot[1]},
         without=None if without is None else _shown(without),
@@ -1085,6 +1161,13 @@ def main(argv: list[str] | None = None) -> int:
         help="stage wd5 with --sites: a D99 dating run (owner decision D99) - each listed undated "
         "site is asked its start afresh, under the reason d99-undated; no --reask-cleared",
     )
+    run.add_argument(
+        "--point",
+        action="store_true",
+        help="stage wd5 with --sites: a listed-point run - each listed site is asked its stored "
+        f"point again, under the reason listed-point; --out is {POINT_RUNS}/<label> under the "
+        "fields directory; no --reask-cleared, no --d99",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
@@ -1103,16 +1186,31 @@ def main(argv: list[str] | None = None) -> int:
                 args.stage != R.RECHECK.stage or args.sites is None or args.reask_cleared
             ):
                 parser.error("--d99 is a stage wd5 run of --sites, without --reask-cleared")
+            if args.point and (
+                args.stage != R.RECHECK.stage
+                or args.sites is None
+                or args.reask_cleared
+                or args.d99
+            ):
+                parser.error(
+                    "--point is a stage wd5 run of --sites, without --reask-cleared and --d99"
+                )
+            if args.point and args.out.resolve().parent.name != POINT_RUNS:
+                parser.error(
+                    f"a listed-point run is built into <fields>/{POINT_RUNS}/<label> (--out): the "
+                    "final owner list reads the runs it finds there"
+                )
             listed = {} if args.sites is None else read_listed(args.sites)
             wd1 = read_wd1(*wd1_files(args.wd1_dir))
             reask = None
             if not extract and (args.reask_cleared or args.sites is not None):
+                afresh = args.d99 or args.point
                 reask = Reask(
                     read_answers(wd1, args.wd1_dir, REASK_HISTORY_RUNS),
                     args.reask_cleared,
                     listed,
-                    frozenset() if args.d99 else decided_by_reask(args.wd1_dir),
-                    WHY_D99 if args.d99 else WHY_READER_GAP,
+                    frozenset() if afresh else decided_by_reask(args.wd1_dir),
+                    WHY_D99 if args.d99 else WHY_LISTED_POINT if args.point else WHY_READER_GAP,
                 )
             result = build(
                 args.root,

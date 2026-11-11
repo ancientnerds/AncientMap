@@ -14505,7 +14505,7 @@ D25_OWNER_CASES: list[Case] = [
              "        if rel in known or rel in OUT_OF_SCOPE:",
              "test_an_owner_list_no_source_covers_is_named"),
             ("the field runs' own lists are rebuilt",
-             '        if parts[0] == "fields" and len(parts) in (3, 4) and parts[1] in FIELD_RUNS:',
+             "        if _of_a_field_run(rel, runs):",
              "test_an_owner_list_no_source_covers_is_named"),
             ("a cache is never an owner list", "            if name in SKIP_PARTS:",
              "test_an_owner_list_no_source_covers_is_named"),
@@ -15325,6 +15325,283 @@ D50_UNRETIRE_CASES: list[Case] = [
     ),
 ]
 CASES += D50_UNRETIRE_CASES
+
+# ---------------- phase 8 close-out (2026-11-11): the owner list's sources, the listed-point run
+#: Code gaps phase8-closeout#2 (every owner artefact a source or out of scope; the follow-ups a
+#: source) and #3 (one named site's coordinates asked again). Every label starts with "p8 owner:"
+#: or "p8 point:", so `mutation_sweep.py "p8 "` runs exactly these.
+POINT_TESTS = "tests/remediation/test_fields_listed_point.py"
+_P8_RUN_FILES = "test_a_file_deeper_in_a_run_or_of_a_run_of_a_similar_name_is_not_the_runs"
+_P8_POINT_RUNS = "test_a_listed_point_run_is_found_and_read_after_every_other_run"
+_P8_SAME_POINT = "test_a_record_at_another_records_point_is_open_until_it_moves"
+_P8_OTHER_TEXT = "test_a_record_under_another_records_text_is_open_until_the_text_is_its_own"
+_P8_NO_HERO = "test_a_record_without_a_hero_is_open_unless_image_none_lists_it"
+_P8_RETIRED = "test_a_follow_up_of_a_retired_or_gone_site_is_closed"
+_P8_UNCHECKED = "test_a_follow_up_without_a_check_stays_open_while_its_site_is_shown"
+_P8_SOURCE = "test_the_follow_ups_are_a_source_whose_open_rows_are_listed"
+_P8_MISSING = "test_missing_follow_ups_are_named_and_refused_when_final"
+_P8_ASKABLE = "test_a_listed_point_must_be_askable"
+_P8_POINT_RUN = "test_the_run_asks_the_point_of_the_listed_site_and_nothing_else"
+
+P8_CASES: list[Case] = [
+    # -- #2: which artefacts are a field run's own
+    Case(
+        "p8 owner: a file deeper in a run is not the run's",
+        OWNER_FINAL,
+        '        rel.startswith(f"fields/{run}/") and rel.count("/") - run.count("/") in (2, 3)',
+        '        rel.startswith(f"fields/{run}/")',
+        _P8_RUN_FILES,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a run of a similar name is another run",
+        OWNER_FINAL,
+        '        rel.startswith(f"fields/{run}/") and rel.count("/") - run.count("/") in (2, 3)',
+        '        rel.startswith(f"fields/{run}") and rel.count("/") - run.count("/") in (2, 3)',
+        _P8_RUN_FILES,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a listed-point run is a field run",
+        OWNER_FINAL,
+        '    return (*FIELD_RUNS, *(f"{POINT_RUNS}/{label}" for label in labels))',
+        "    return FIELD_RUNS",
+        _P8_POINT_RUNS,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a directory without RUN.json is no run",
+        OWNER_FINAL,
+        'sorted(p.parent.name for p in (root / "fields" / POINT_RUNS).glob(f"*/{R.RUN_FILE}"))',
+        'sorted(p.name for p in (root / "fields" / POINT_RUNS).glob("*"))',
+        _P8_POINT_RUNS,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: the listed-point runs are built",
+        OWNER_FINAL,
+        "    for name in field_run_names(root):",
+        "    for name in FIELD_RUNS:",
+        _P8_POINT_RUNS,
+        OWNER_FINAL_TESTS,
+    ),
+    # -- #2: the follow-ups
+    Case(
+        "p8 owner: a follow-up's point is compared as numbers",
+        OWNER_FINAL,
+        '    if float(site["lat"]) == float(other["lat"]) and float(site["lon"]) == float(other["lon"]):',
+        '    if site["lat"] == other["lat"] and site["lon"] == other["lon"]:',
+        _P8_SAME_POINT,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: one moved coordinate is another point",
+        OWNER_FINAL,
+        '    if float(site["lat"]) == float(other["lat"]) and float(site["lon"]) == float(other["lon"]):',
+        '    if float(site["lat"]) == float(other["lat"]) or float(site["lon"]) == float(other["lon"]):',
+        _P8_SAME_POINT,
+        OWNER_FINAL_TESTS,
+    ),
+    guard(
+        "p8 owner: another record's text keeps the follow-up open",
+        OWNER_FINAL,
+        '    if str(site["description_start"] or "").startswith(DHAR_TICHITT_TEXT):',
+        _P8_OTHER_TEXT,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: image-none closes the picture follow-up",
+        OWNER_FINAL,
+        '    if site["hero"] is None and TOPIC_OF["image-none"].test(site) is None:',
+        '    if site["hero"] is None:',
+        _P8_NO_HERO,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a hero closes the picture follow-up",
+        OWNER_FINAL,
+        '    if site["hero"] is None and TOPIC_OF["image-none"].test(site) is None:',
+        '    if TOPIC_OF["image-none"].test(site) is None:',
+        _P8_NO_HERO,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a follow-up of a retired site is closed",
+        OWNER_FINAL,
+        '        if site is None or site["scope_status"] == RETIRED:\n            closed[site_id]',
+        '        if site is None:\n            closed[site_id]',
+        _P8_RETIRED,
+        OWNER_FINAL_TESTS,
+    ),
+    guard(
+        "p8 owner: a closed follow-up is not listed",
+        OWNER_FINAL,
+        "        if check is not None and left is None:",
+        _P8_SAME_POINT,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a follow-up without a check stays open",
+        OWNER_FINAL,
+        "        left = FOLLOWUP_UNCHECKED if check is None else check.left(site, sites)",
+        "        left = None if check is None else check.left(site, sites)",
+        _P8_UNCHECKED,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: the open follow-ups are rows of the list",
+        OWNER_FINAL,
+        "        rows += still\n",
+        "",
+        _P8_SOURCE,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: missing follow-ups are a missing source",
+        OWNER_FINAL,
+        "        missing.append(FOLLOWUPS)",
+        "        pass",
+        _P8_MISSING,
+        OWNER_FINAL_TESTS,
+    ),
+    # -- #3: which listed points are asked
+    Case(
+        "p8 point: an unknown site is refused",
+        FIELDS / "population.py",
+        "        if row is None:\n            refused.append(",
+        "        if False:\n            refused.append(",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a retired site is refused",
+        FIELDS / "population.py",
+        '        elif row["scope_status"] == "retired":\n            refused.append(',
+        "        elif False:\n            refused.append(",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: another lane's sourced point is not asked",
+        FIELDS / "population.py",
+        '        elif field_kind(made_kinds(row, made, site), "coordinates") == SOURCED:',
+        "        elif False:",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a kept point is not asked",
+        FIELDS / "population.py",
+        '        elif said and said[-1][1]["decision"] == A.KEEP:',
+        "        elif False:",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the latest answer says whether a point was kept",
+        FIELDS / "population.py",
+        '        elif said and said[-1][1]["decision"] == A.KEEP:',
+        '        elif said and said[0][1]["decision"] == A.KEEP:',
+        "test_a_point_no_source_stands_behind_may_be_asked_again",
+        POINT_TESTS,
+    ),
+    guard(
+        "p8 point: a listed point that cannot be asked refuses",
+        FIELDS / "population.py",
+        "    if refused:",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the listed points are checked before the run is pinned",
+        FIELDS / "population.py",
+        "        check_listed_points(point.listed, stored_all, made, point.answers)",
+        "        pass",
+        "test_a_listed_point_a_source_stands_behind_refuses_before_anything_is_written",
+        POINT_TESTS,
+    ),
+    # -- #3: what the run asks
+    Case(
+        "p8 point: a listed-point run asks the point, not the period",
+        FIELDS / "population.py",
+        "    point = reask if reask is not None and reask.why == WHY_LISTED_POINT else None",
+        "    point = None",
+        _P8_POINT_RUN,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a site the list does not name is not asked",
+        FIELDS / "population.py",
+        "    if listed is None:\n        return {}\n    note = ",
+        "    if False:\n        return {}\n    note = ",
+        "test_a_site_the_list_does_not_name_is_not_asked",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the latest answer is the lead",
+        FIELDS / "population.py",
+        "        run, latest = answers[-1]\n        said = ",
+        "        run, latest = answers[0]\n        said = ",
+        "test_the_latest_answer_about_the_point_is_shown_as_a_lead",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the run records its reason",
+        FIELDS / "population.py",
+        '            **({"why": reask.why} if reask.why != WHY_READER_GAP else {}),',
+        '            **({"why": WHY_D99} if reask.why == WHY_D99 else {}),',
+        _P8_POINT_RUN,
+        POINT_TESTS,
+    ),
+    guard(
+        "p8 point: a listed-point run neither detects nor skips",
+        FIELDS / "population.py",
+        "    if point is not None and (point.detect or point.already):",
+        "test_a_listed_point_run_neither_detects_nor_skips",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: --point needs its stage and its list",
+        FIELDS / "population.py",
+        "            if args.point and (\n                args.stage != R.RECHECK.stage\n",
+        "            if False and (\n                args.stage != R.RECHECK.stage\n",
+        "test_the_main_refuses_point_without_its_flags",
+        POINT_TESTS,
+    ),
+    guard(
+        "p8 point: the run is built where the owner list reads it",
+        FIELDS / "population.py",
+        "            if args.point and args.out.resolve().parent.name != POINT_RUNS:",
+        "test_the_main_builds_a_listed_point_run_only_where_the_owner_list_reads_it",
+        POINT_TESTS,
+    ),
+    # -- #3: the question and the write plan
+    Case(
+        "p8 point: the question names the reason to the agent",
+        FIELDS / "handoff.py",
+        '    "listed-point": "the stored point is asked once more',
+        '    "listed-point-x": "the stored point is asked once more',
+        "test_the_question_names_the_reason_to_the_agent",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a sourced answer replaces a listed point",
+        FIELDS / "plan.py",
+        "    POP.WHY_LISTED_POINT: (POP.MINIMAX, None),\n",
+        "",
+        "test_a_sourced_point_replaces_the_listed_one",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: another lane's sourced point is never replaced",
+        FIELDS / "plan.py",
+        "    POP.WHY_LISTED_POINT: (POP.MINIMAX, None),",
+        "    POP.WHY_LISTED_POINT: (POP.MINIMAX, None, POP.SOURCED),",
+        "test_a_point_another_lane_sourced_since_is_not_replaced",
+        POINT_TESTS,
+    ),
+]  # fmt: skip
+CASES += P8_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

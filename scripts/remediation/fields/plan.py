@@ -67,8 +67,9 @@ the journal (`population.made_sql`, the step's sites): its newest row's evidence
 a MiniMax model, and the question named the field open for a reason (`line["open"][field]["why"]`).
 
 * `replace` is written onto an empty field, or onto a value that is `rule-made` (a rule made it),
-  `minimax-answered` (a MiniMax agent wrote it, or decided it and left it) or an `unsourced-point`
-  (nothing sourced the stored point); another lane's sourced write is never replaced
+  `minimax-answered` (a MiniMax agent wrote it, or decided it and left it), an `unsourced-point`
+  (nothing sourced the stored point) or a `listed-point` (a listed-point run's question, the same
+  for a point the orchestrator named); another lane's sourced write is never replaced
   (`sourced-value`);
 * `unresolved` on a start a rule made clears it to NULL with the label `Undated` (D12, "unsourced ->
   Undated") - only a rule-made start; on a value a MiniMax agent wrote it **restores** the journal's
@@ -161,6 +162,7 @@ REPLACEABLE = {
     POP.WHY_RULE_MADE: (POP.RULE,),
     POP.WHY_MINIMAX: (POP.MINIMAX, None),
     POP.WHY_UNSOURCED_POINT: (POP.MINIMAX, None),
+    POP.WHY_LISTED_POINT: (POP.MINIMAX, None),
 }
 
 LIVE_SQL = """\
