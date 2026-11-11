@@ -39,9 +39,17 @@ excluded row of the site already holds (unhiding it needs a judgement of its own
 `CANDIDATE_REFUSALS.jsonl`, never skipped. `outcomes` states per site of a D59 run where it stands
 (`D59_OUTCOMES.jsonl`) and lists every site that keeps its uncredited hotlink with the reason
 (`D59_OWNER_LIST.jsonl`; the floor refusals are the owner question of the runbook).
+`research-outcomes` does the same for a D17 research run (`D17_OUTCOMES.jsonl`,
+`D17_OWNER_LIST.jsonl`: every site the run leaves without a picture, with the reason - D82).
+
+The INSERT lane's end of a confirmed file is read here for all three (`insert_state`), and so are
+the picks it refused for a reason that lies in the file (`refused_files`): the image roles then try
+the site's next-ranked `depicts` (`run.py recheck-export | write-targets --insert-run I`), and
+`null-plan` empties no thumbnail while such a candidate is untried.
 
     d59.py candidates     --run-dir C [--min-width 800 --min-height 300]
     d59.py outcomes       --run-dir C [--insert-run I ...]
+    d59.py research-outcomes --run-dir C [--insert-run I ...]   (C = a D17 research run)
     d59.py null-read      --run-dir N          (N = output/remediation/d59/d59-thumb-<date>)
     d59.py null-plan      --run-dir N --research-run C [C ...] [--insert-run I ...]
     chunk_writer.py N/chunks/chunk-NNN --check | --rehearse | --apply | --readback | --rehearse-rollback
@@ -78,6 +86,7 @@ from served_image import state as ST  # noqa: E402
 from image_roles import flow as FL  # noqa: E402
 from image_roles import prefilter as PF  # noqa: E402
 from image_roles import stage as SG  # noqa: E402
+from image_roles import targets as TG  # noqa: E402
 
 #: The route a D59 candidate carries: the site's own thumbnail, not a search hit.
 ROUTE = "d59_thumbnail"
@@ -95,6 +104,9 @@ EXPECTED = "EXPECTED.jsonl"
 SUMMARY = "PLAN_SUMMARY.json"
 OUTCOMES = "D59_OUTCOMES.jsonl"
 OWNER_LIST = "D59_OWNER_LIST.jsonl"
+#: The same two files of a D17 research run (`research_outcomes`).
+D17_OUTCOMES = "D17_OUTCOMES.jsonl"
+D17_OWNER_LIST = "D17_OWNER_LIST.jsonl"
 
 #: The research outcomes `research_outcome` names.
 TARGET, NO_CANDIDATE, NONE_CONFIRMED = "target", "no_candidate", "none_confirmed"
@@ -103,6 +115,12 @@ NOT_CLAIMED, NOT_PLANNED, PLANNED, REFUSED = "not_claimed", "not_planned", "plan
 #: INSERT refusals that speak of another state of the site than the one read now: the INSERT is
 #: planned again from a fresh read, the thumbnail is not emptied on them.
 STALE_INSERT_REASONS = frozenset({"retired", "d59_thumbnail_moved"})
+#: INSERT refusals that lie in the file and not in the site (`import_hero/insert.py`): the fetch
+#: refused it for good (a credit its licence demands and the file lacks, an original below the
+#: floor, an upscale, a file type it does not take - the line in `FETCH_FAILURES.jsonl` says which)
+#: or a row of the site already holds it. Another file of the site can still get its row, so the
+#: site's next-ranked `depicts` is tried (`targets.pick_round`).
+FILE_REFUSALS = frozenset({"not_fetched", "already_holds_the_file"})
 #: The INSERT lane's record files (`import_hero/run.py`).
 INSERT_CLAIMS = "IMPORT_CLAIMS.json"
 INSERT_SEEDS = "IMPORT_HERO_REFUSALS.jsonl"
@@ -253,11 +271,17 @@ def _jsonl_or_empty(path: Path) -> list[dict[str, Any]]:
     return FL._jsonl(path) if path.is_file() else []
 
 
-def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
+def research_outcome(run: Path, site_id: str, *, count_left_out: bool = False) -> tuple[str, str]:
     """What the research run `run` found for one site: `(TARGET, file)`, `(NO_CANDIDATE, why)` or
     `(NONE_CONFIRMED, counts)`. Refused while the run has not written its targets, does not hold the
     site, or left a candidate of it unjudged - an empty thumbnail must rest on a finished search. A
-    D59 run has no prefilter (`flow.skips_prefilter`): every fetched candidate needs its verdict."""
+    D59 run has no prefilter (`flow.skips_prefilter`): every fetched candidate needs its verdict.
+
+    A candidate the depicts stage left out (a site with more survivors than one question holds,
+    `DEPICTS_LEFT_OUT.jsonl`) is refused by name too, unless `count_left_out`: the outcome list of a
+    run states it as it stands and counts such a candidate as never judged. A `depicts` a re-check
+    confirmed at a site without a target is a pick the INSERT lane refused for good
+    (`targets.pick_round`), and is counted as that."""
     if site_id not in {str(s["site_id"]) for s in FL._population(run)}:
         raise D59Error(f"{site_id} is not in the population of {run.name}")
     if not (run / CJ.TARGETS).is_file():
@@ -299,11 +323,14 @@ def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
         for r in _jsonl_or_empty(run / "DEPICTS_LEFT_OUT.jsonl")
         if str(r["site_id"]) == site_id
     }
+    confirmed = {file for sid, file in CJ.confirmed_by_recheck(run) if sid == site_id}
     counts = {
         "not fetched": 0,
         "prefilter dropped": 0,
+        "left out of the depicts stage, never judged": 0,
         "not depicts": 0,
         "depicts, not confirmed": 0,
+        "confirmed, refused by the INSERT lane": 0,
     }
     for candidate in candidates:
         file = str(candidate["file"])
@@ -316,11 +343,17 @@ def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
         elif not skip_prefilter and not prefiltered[file]["survives"]:
             counts["prefilter dropped"] += 1
         elif file in left_out:
-            raise D59Error(f"{site_id}: {file!r} was left out of the depicts stage - ask it first")
+            if not count_left_out:
+                raise D59Error(
+                    f"{site_id}: {file!r} was left out of the depicts stage - ask it first"
+                )
+            counts["left out of the depicts stage, never judged"] += 1
         elif file not in verdicts:
             raise D59Error(f"{site_id}: {file!r} has no depicts verdict - the research is not done")
         elif verdicts[file] != CJ.DEPICTS:
             counts["not depicts"] += 1
+        elif file in confirmed:
+            counts["confirmed, refused by the INSERT lane"] += 1
         else:
             counts["depicts, not confirmed"] += 1
     detail = ", ".join(f"{n} {what}" for what, n in counts.items() if n)
@@ -328,35 +361,23 @@ def research_outcome(run: Path, site_id: str) -> tuple[str, str]:
 
 
 # ------------------------------------------------------------------------- the INSERT outcome
-def insert_state(
-    insert_runs: Sequence[Path], site_id: str, file: str
-) -> tuple[str, str, dict[str, Any]]:
-    """What the INSERT runs did with the confirmed `file` of one site: `(state, detail, evidence)`.
-
-    `NOT_CLAIMED` - no run claims the site (`insert-claims` never ran for it); `NOT_PLANNED` - a run
-    claims it and its `insert-plan` has not decided it; `PLANNED` - a chunk of the run plans the row;
-    `REFUSED` - the run's plan refused it, with the lane's reason (and, for `not_fetched`, the
-    fetch's own failure line). Refused outright: two runs claiming one site, or a claim of another
-    file than the research confirmed."""
-    claimed: list[Path] = []
-    for run in insert_runs:
-        seeds = _jsonl_or_empty(run / INSERT_SEEDS)
-        if any(
-            str(s.get("site_id")) == site_id and s.get("reason") == "no_target_row" for s in seeds
-        ):
-            claimed.append(run)
+def claims_of(run: Path) -> dict[str, str]:
+    """`{site id: the URL claimed}` of the sites an INSERT run claims a first row for (its
+    `no_target_row` seeds, `judge.insert_claims`)."""
+    claimed = {
+        str(s.get("site_id"))
+        for s in _jsonl_or_empty(run / INSERT_SEEDS)
+        if s.get("reason") == "no_target_row"
+    }
     if not claimed:
-        return NOT_CLAIMED, "no INSERT run given claims the site", {}
-    if len(claimed) > 1:
-        raise D59Error(f"{site_id} is claimed by two INSERT runs ({claimed[0].name}, ...)")
-    run = claimed[0]
+        return {}
     claims = json.loads((run / INSERT_CLAIMS).read_text(encoding="utf-8"))
-    url = str((claims.get(site_id) or {}).get("image") or "")
-    if ST.file_of_url(url) != ST.canonical_file(file):
-        raise D59Error(
-            f"{site_id}: {run.name} claims {url!r}, the research confirmed {file!r} - the claim is "
-            "not the research's"
-        )
+    return {sid: str((claims.get(sid) or {}).get("image") or "") for sid in sorted(claimed)}
+
+
+def claim_state(run: Path, site_id: str, url: str) -> tuple[str, str, dict[str, Any]]:
+    """What one INSERT run did with its claim of `url` for the site: `(state, detail, evidence)`,
+    `PLANNED`, `NOT_PLANNED` or `REFUSED` as `insert_state` words them."""
     evidence: dict[str, Any] = {"source": f"import_hero/{run.name}", "claimed": url}
     for chunk in sorted(run.glob("chunk-0*")):
         for row in _jsonl_or_empty(chunk / "INSERT.jsonl"):
@@ -381,6 +402,64 @@ def insert_state(
     return NOT_PLANNED, f"{run.name}'s insert-plan neither planned nor refused it", evidence
 
 
+def insert_state(
+    insert_runs: Sequence[Path], site_id: str, file: str
+) -> tuple[str, str, dict[str, Any]]:
+    """What the INSERT runs did with the confirmed `file` of one site: `(state, detail, evidence)`.
+
+    `NOT_CLAIMED` - no run claims the file for the site (`insert-claims` never ran for it);
+    `NOT_PLANNED` - a run claims it and its `insert-plan` has not decided it; `PLANNED` - a chunk
+    of the run plans the row; `REFUSED` - the run's plan refused it, with the lane's reason (and,
+    for `not_fetched`, the fetch's own failure line). Refused outright: two runs claiming the file,
+    or a run claiming another file of the site - unless that run refused its claim for a reason
+    that lies in the file (`FILE_REFUSALS`): then `file` is the site's next pick, tried after it
+    (`targets.pick_round`), and the earlier run says nothing about it."""
+    mine: list[tuple[Path, str]] = []
+    for run in insert_runs:
+        url = claims_of(run).get(site_id)
+        if url is None:
+            continue
+        if ST.file_of_url(url) == ST.canonical_file(file):
+            mine.append((run, url))
+            continue
+        state, why, _ = claim_state(run, site_id, url)
+        if state != REFUSED or why not in FILE_REFUSALS:
+            raise D59Error(
+                f"{site_id}: {run.name} claims {url!r}, the research confirmed {file!r} - the "
+                "claim is not the research's"
+            )
+    if not mine:
+        return NOT_CLAIMED, "no INSERT run given claims the file for the site", {}
+    if len(mine) > 1:
+        raise D59Error(
+            f"{site_id}: {file!r} is claimed by two INSERT runs ({mine[0][0].name}, ...)"
+        )
+    return claim_state(mine[0][0], site_id, mine[0][1])
+
+
+def refused_files(insert_runs: Sequence[Path]) -> dict[tuple[str, str], str]:
+    """`{(site id, file in title form): reason}` of every claim an INSERT run refused for good for
+    a reason that lies in the file (`FILE_REFUSALS`): the picks `targets.pick_round` passes over."""
+    out: dict[tuple[str, str], str] = {}
+    for run in insert_runs:
+        for site_id, url in claims_of(run).items():
+            state, why, _ = claim_state(run, site_id, url)
+            file = ST.file_of_url(url)
+            if state == REFUSED and why in FILE_REFUSALS and file is not None:
+                out[(site_id, file)] = f"{run.name}: {why}"
+    return out
+
+
+def untried_pick(run: Path, site_id: str, refused: Mapping[tuple[str, str], str]) -> str | None:
+    """The `depicts` file of the site the INSERT lane has still to try once `refused` is passed
+    over - its confirmed pick, or the one that waits for its re-check - or None when the site has
+    none left."""
+    state = TG.pick_round(FL._jsonl(run / FL.VERDICTS), FL.recheck_results(run), refused)
+    if site_id in state.confirmed:
+        return str(state.confirmed[site_id]["file"])
+    return next((str(r["file"]) for r in state.to_check if str(r["site_id"]) == site_id), None)
+
+
 def _population_thumbnail(research: Path, site_id: str) -> str | None:
     for site in FL._population(research):
         if str(site["site_id"]) == site_id:
@@ -394,7 +473,10 @@ def null_plan(
 ) -> dict[str, Any]:
     """The NULL writes of the third-party thumbnails D59 empties: no research run found a picture,
     or the INSERT lane refused the confirmed one for good. Every other state of a read site is
-    refused by name (see the module docstring); the summary is written first, the chunks last."""
+    refused by name (see the module docstring) - also a site whose confirmed file was refused for
+    a reason that lies in the file while another `depicts` of it has not been tried
+    (`untried_pick`): a thumbnail is emptied only when the research has nothing left to offer. The
+    summary is written first, the chunks last."""
     out = run / CHUNKS
     if out.exists():
         raise D59Error(f"{out} holds a plan already - a delivered plan is never replaced")
@@ -408,6 +490,7 @@ def null_plan(
             if sid in by_run:
                 raise D59Error(f"{sid} is in two research runs")
             by_run[sid] = research
+    refused = refused_files(insert_runs)
     changes: list[CW.Change] = []
     expected: list[dict[str, Any]] = []
     basis: dict[str, int] = {}
@@ -442,6 +525,14 @@ def null_plan(
                     f"{sid}: {insert['source']} refused the row as {why!r}, which speaks of another "
                     "state of the site - plan the INSERT again from a fresh read"
                 )
+            if why in FILE_REFUSALS:
+                waiting = untried_pick(research, sid, refused)
+                if waiting is not None:
+                    raise D59Error(
+                        f"{sid}: the INSERT lane refused {detail!r} ({why}) and the site's next "
+                        f"depicts {waiting!r} is not tried yet - `run.py recheck-export "
+                        "--insert-run`, `write-targets --insert-run` and its INSERT wave first"
+                    )
             evidence.append(insert)
             reason = (
                 f"the site's only picture was a third-party hotlink without a credit; the D17 "
@@ -552,6 +643,79 @@ def outcomes(run: Path, insert_runs: Sequence[Path] = ()) -> dict[str, Any]:
     return {"sites": len(lines), "outcomes": counts, "owner_list": len(owner)}
 
 
+#: Why a D17 site without a confirmed picture stays without one, before the run's own detail.
+D17_REASONS = {
+    NO_CANDIDATE: "the search found no Commons candidate",
+    NONE_CONFIRMED: "no candidate was confirmed to show the site",
+}
+
+
+def unwritten(
+    run: Path,
+    site_id: str,
+    file: str,
+    insert_runs: Sequence[Path],
+    refused: Mapping[tuple[str, str], str],
+) -> tuple[dict[str, str], str | None]:
+    """The INSERT state of a site's confirmed `file` as outcome keys, and why the site is still
+    without it - None once an INSERT run plans the row. A refusal carries the fetch's own failure
+    line, and says so when another `depicts` of the site has not been tried (`untried_pick`)."""
+    state, why, evidence = insert_state(insert_runs, site_id, file)
+    keys = {"insert": state, "insert_detail": why}
+    if state == PLANNED:
+        return keys, None
+    if state in (NOT_CLAIMED, NOT_PLANNED):
+        return keys, f"the confirmed file {file!r} was not written ({state}: {why})"
+    reason = f"the INSERT lane refused the confirmed file {file!r}: {why}"
+    if "fetch_failure" in evidence:
+        reason += f" ({evidence['fetch_failure']})"
+    next_pick = untried_pick(run, site_id, refused) if why in FILE_REFUSALS else None
+    if next_pick is not None:
+        reason += f"; the site's next depicts {next_pick!r} is not tried yet"
+    return keys, reason
+
+
+def research_outcomes(run: Path, insert_runs: Sequence[Path] = ()) -> dict[str, Any]:
+    """Where every site of a D17 research run stands: `D17_OUTCOMES.jsonl` (one line per site) and
+    `D17_OWNER_LIST.jsonl` - every site the run leaves without a picture, with the reason (D82: no
+    usable Commons picture = the site stays without one and goes on the owner list). A site is off
+    the list only when an INSERT run plans its confirmed file; `owner_list_final.py` reads the list
+    and sets a row aside once production shows a picture. Like `outcomes` a statement about the run
+    as it stands - rewritten by every call - and refused while the targets are not written or a
+    candidate still waits for its prefilter or depicts answer; a candidate the depicts stage left
+    out is counted as never judged."""
+    if FL.skips_prefilter(run):
+        raise D59Error(f"{run.name} is a D59 candidate run: `outcomes` states it")
+    refused = refused_files(insert_runs)
+    lines: list[dict[str, Any]] = []
+    owner: list[dict[str, Any]] = []
+    for site in FL._population(run):
+        sid = str(site["site_id"])
+        line: dict[str, Any] = {
+            "site_id": sid,
+            "name": site.get("name"),
+            "country": site.get("country"),
+            "thumbnail_url": site.get("thumbnail_url"),
+        }
+        outcome, detail = research_outcome(run, sid, count_left_out=True)
+        line |= {"research": outcome, "detail": detail}
+        if outcome in D17_REASONS:
+            reason: str | None = f"{D17_REASONS[outcome]} ({detail})"
+        else:
+            keys, reason = unwritten(run, sid, detail, insert_runs, refused)
+            line |= keys
+        lines.append(line)
+        if reason is not None:
+            owner.append(line | {"reason": reason})
+    for name, rows in ((D17_OUTCOMES, lines), (D17_OWNER_LIST, owner)):
+        (run / name).write_text(ST.jsonl_text(rows), encoding="utf-8", newline="\n")
+    counts: dict[str, int] = {}
+    for line in lines:
+        key = f"target:{line['insert']}" if "insert" in line else line["research"]
+        counts[key] = counts.get(key, 0) + 1
+    return {"sites": len(lines), "outcomes": counts, "owner_list": len(owner)}
+
+
 # ----------------------------------------------------------------------------------- the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
@@ -562,12 +726,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("candidates", "outcomes", "null-read", "null-plan", "null-accept"):
+    for name in (
+        "candidates",
+        "outcomes",
+        "research-outcomes",
+        "null-read",
+        "null-plan",
+        "null-accept",
+    ):
         sub.add_parser(name).add_argument("--run-dir", required=True, type=Path)
     sub.choices["candidates"].add_argument("--min-width", type=int, default=IH.OWNER_FLOOR_WIDTH)
     sub.choices["candidates"].add_argument("--min-height", type=int, default=IH.OWNER_FLOOR_HEIGHT)
     sub.choices["null-plan"].add_argument("--research-run", required=True, type=Path, nargs="+")
-    for name in ("null-plan", "outcomes"):
+    for name in ("null-plan", "outcomes", "research-outcomes"):
         sub.choices[name].add_argument("--insert-run", type=Path, nargs="*", default=[])
     sub.choices["null-accept"].add_argument("--chunk", required=True, type=Path)
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -581,6 +752,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "outcomes":
             payload = outcomes(run, args.insert_run)
+        elif args.command == "research-outcomes":
+            payload = research_outcomes(run, args.insert_run)
         elif args.command == "null-read":
             lane_for(run)
             data = {

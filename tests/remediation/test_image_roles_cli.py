@@ -145,6 +145,58 @@ class TestTheOtherCommands:
         assert CLI.main(["identity-apply", "--run-dir", str(tmp_path)]) == 1
         assert "at least one --stage" in capsys.readouterr().err
 
+    def _pool_picks(self, tmp_path: Path, heroes: dict[str, list[tuple[int, str]]]) -> list[str]:
+        """A stage whose one site (`a`) holds an old target without a rendering, which the
+        re-download gave up on, and a served run whose read shows `heroes`."""
+        from tests.remediation.test_candidate_routes import _pool_run
+        from tests.remediation.test_image_flow import read_line, served_state
+
+        old = _pool_run(tmp_path)
+        for picture in (old / "pictures").iterdir():
+            picture.unlink()
+        line = {"site_id": "a", "file": "Here.jpg", "status": "refused", "reason": "960 px"}
+        (old / "REPICTURE_recheck.jsonl").write_text(json.dumps(line) + "\n", encoding="utf-8")
+        run = tmp_path / "stage"
+        FL.write_population(run, [read_line("a", "Site a")])
+        served_state(tmp_path, heroes)
+        return ["pool-picks", "--run-dir", str(run), "--old-run", str(old), "--served-run",
+                str(tmp_path / "served"), "--out", str(tmp_path / "d10" / "POOL_PICKS.jsonl")]  # fmt: skip
+
+    def test_pool_picks_names_the_target_it_could_not_show_beside_its_picks(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        argv = self._pool_picks(tmp_path, {"a": []})
+        assert CLI.main(argv) == 0
+        printed = json.loads(capsys.readouterr().out)
+        left = {"site_id": "a", "file": "Here.jpg", "reason": "refused: 960 px"}
+        assert printed["picks"] == 0 and printed["left_out"] == [left]
+        out = tmp_path / "d10" / "POOL_PICKS.jsonl"
+        assert out.read_text(encoding="utf-8") == ""
+        beside = CLI.left_out_file(out)
+        assert beside.name == "POOL_PICKS_LEFT_OUT.jsonl"
+        assert [json.loads(x) for x in beside.read_text(encoding="utf-8").splitlines()] == [left]
+        assert CLI.main(argv) == 1  # both files are written once
+        assert "written once" in capsys.readouterr().err
+
+    def test_pool_picks_writes_neither_file_when_one_of_them_exists(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        argv = self._pool_picks(tmp_path, {"a": []})
+        out = tmp_path / "d10" / "POOL_PICKS.jsonl"
+        CLI.left_out_file(out).parent.mkdir()
+        CLI.left_out_file(out).write_text("", encoding="utf-8")
+        assert CLI.main(argv) == 1
+        assert "POOL_PICKS_LEFT_OUT.jsonl exists" in capsys.readouterr().err
+        assert not out.exists()
+
+    def test_pool_picks_stop_on_a_live_hero_without_a_rendering(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        argv = self._pool_picks(tmp_path, {"a": [(5, "Here.jpg")]})
+        assert CLI.main(argv) == 1
+        assert "the picture of target 'Here.jpg' is gone" in capsys.readouterr().err
+        assert not (tmp_path / "d10").exists()
+
     def test_the_search_floor_defaults_to_the_owners(self) -> None:
         args = CLI.build_parser().parse_args(["search", "--run-dir", "r"])
         assert (args.min_width, args.min_height, args.workers) == (800, 300, 1)

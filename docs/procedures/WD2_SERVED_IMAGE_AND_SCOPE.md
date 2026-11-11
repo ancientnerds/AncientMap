@@ -1801,8 +1801,8 @@ Owner answers of 2026-11-06 evening to the image-roles-v2 report:
   its judge line called every museum object `other_site`, and the 2026-09-19 labels called the
   Ishtar Gate in Berlin a foreign place. Now one rule in both places: the depicts prompt
   (`image-depicts-v2`: verdict terms and judge line) and the re-check (`served-check-v3`,
-  `vision._VERDICT_TERMS_D116`, `CHECK_PROMPT_V3`; `hero_recheck.PROMPT_ID` and D15's re-check bind
-  to it). A museum object that nothing in the picture ties to the site stays `other_site`. The first
+  `vision._VERDICT_TERMS_D116`, `CHECK_PROMPT_V3`; `hero_recheck.PROMPT_ID` and D15's re-check bound
+  to it until D127's `served-check-v4`, section 3.8.7). A museum object that nothing in the picture ties to the site stays `other_site`. The first
   check's frozen prompt (`served-check-v1`) and `served-check-v2` keep their text: their recorded
   questions are read back against it.
 * **D118 (prefilter at Opus first):** `image_roles/prefilter_probe.py` asks v2's five prefilter
@@ -1859,6 +1859,98 @@ $PY scripts/remediation/candidate_search/repicture.py --old-run output/remediati
 for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/remediation/handoff/image-kind3-label-$w; done
 # then as for $D3: disputes, label c, spotcheck, fix, export --role image_prefilter, evaluate
 ```
+
+#### 3.8.7 The four code gaps of the lane scouts (2026-11-11): D127 in the re-check, part F in a stage run, the next candidate, the D17 outcome list
+
+**The re-check asks `served-check-v4` (D127).** `served-check-v3` counted every "object of this site
+in a museum"; on the clean gold that was 11 of the re-check's 15 real errors in 200 cases. v4
+(`vision._VERDICT_TERMS_D127`, `CHECK_PROMPT_V4`) keeps D116 for an architectural part (a gate, a
+wall, a frieze, a relief, a mosaic, a sculpture: always the site) and lets a loose find (a coin, a
+vessel, a tool, a figurine, a tablet, a stele or milestone on its own) count only when the picture
+itself shows where it comes from - a label, a caption, an inscription naming the site; what only the
+file page, its categories or a catalogue say does not count, and such a find is `region_or_type`.
+Both re-checks ask it: D15's check stage and the hero re-check (`vision.RECHECK_PROMPT_ID`,
+`hero_recheck.PROMPT_ID`). The replace prompt (`served-replace-v2`) is unchanged.
+
+How a version moves, so that a recorded round stays what it was:
+
+* a version's text never changes (`RECHECK_PROMPTS`, each sha256 pinned in
+  `test_served_image_recheck.py`); a changed rule is a new id beside the old ones;
+* a D15 question records the version it asks (`recheck_prompt_id` in `QUESTIONS_CHECK.jsonl`) and
+  its import renders it from that version's text - so a check stage exported under v3 is answered
+  and imported under this code as v3 (a question without the key was exported before v4 and asked
+  v3, `RECHECK_PROMPT_UNNAMED`); a version the code does not hold is refused by name;
+* a hero re-check round records the exact text of every question and its version in
+  `EXPORT_RECHECK_NN.json`; its import stamps that recorded version on the rows
+  (`stage.import_answers`), not the code's of the day.
+
+The sealed calibrations (`image-roles-v3`) pin v3's text, which is unchanged; no calibration is run
+on v4 (D154). `clean_gold.prompt_pins` still names v3: a new clean gold would have to pin the
+version its re-check questions ask first.
+
+**Part F in a D17 stage run.** The D10 re-check of the heroes MiniMax picked runs in the first
+stage's run directory, whose candidates come from a fresh search and not from the old pool. Two
+refusals assumed a pool run and are narrowed to what the output needs:
+
+* `denied` refuses an old `depicts` Claude has not judged only when it is a **live hero** of the
+  read (`pool.denied_pairs`): the denial names live heroes only, and a stage's own search need not
+  find an old file again. A live hero that is an old target still needs its re-check row.
+* `pool-picks` leaves out, by name, an old target whose rendering the re-download recorded as `gone`
+  or `refused` (`repicture.unobtainable` over `OLD/REPICTURE_recheck.jsonl`) **and** that no page
+  serves - Qasr Qaroun Temple (`3ac3c796`): the site shows nothing, its old target is stored at
+  960 px, a width the lane does not show. It writes them beside the picks
+  (`<out>_LEFT_OUT.jsonl`, also when empty) and prints them. A live hero without a rendering, and
+  any missing rendering the re-download has not given up on, still stop the step.
+* `pool-picks` does not ask again a target this run's re-check holds a row for (the stage
+  re-checked it as its own pick, or an earlier pool round did): it is named in the same file with
+  that verdict, which `denied` reads. One candidate judged twice with two verdicts would stop every
+  later step of the run (`targets.judged_by_recheck`).
+
+**The next candidate after a final INSERT refusal.** A confirmed pick can fail at the INSERT lane
+for a reason that lies in the file: `not_fetched` with its line in `FETCH_FAILURES.jsonl` (a credit
+the licence demands and the file lacks, an original below the floor, an upscale, a file type) or
+`already_holds_the_file` (`d59.FILE_REFUSALS`). The site then goes on with its next-ranked `depicts`
+exactly as after a rejection by the re-check (`targets.pick_round`); a refusal that speaks of the
+site (`retired`, `d59_thumbnail_moved`, ...) passes nothing over. After the wave's `insert-plan`
+and before `prune-pictures`:
+
+```bash
+$PY $RUN recheck-export --run-dir $C --handoff <H>-rckN --insert-run $I   # REFUSED "no site waits" = nothing to retry
+#   the round's agents, then: run.py import --run-dir $C --handoff <H>-rckN --stage image-recheck --round N
+$PY $RUN write-targets  --run-dir $C --insert-run $I    # TARGETS.jsonl again: the next pick, or no line
+#   then a new INSERT run (<I>b) for the sites that have a new target, from the target check on
+```
+
+From the first retry on, every `recheck-export` and `write-targets` of the run names every INSERT
+run of it: `TARGETS.jsonl` is the list of picks the INSERT lane has still to try, written again by
+each call, and a call without the runs would name the refused file once more (the INSERT lane would
+refuse it again; `d59.insert_state` refuses the mixed state by name). A transient fetch failure is
+fetched again before `insert-plan`: every recorded `not_fetched` counts as final. `null-plan`
+empties no third-party thumbnail while a `depicts` of the site is untried
+(`REFUSED: ... the site's next depicts '<file>' is not tried yet`).
+
+**The outcome list of a D17 run.** `d59.py research-outcomes` is `outcomes` for a D17 research run:
+
+```bash
+$PY $D59 research-outcomes --run-dir $C --insert-run $I [<I>b ...]    # after the stage's last INSERT wave
+```
+
+It writes `D17_OUTCOMES.jsonl` (one line per site: `target`, `no_candidate` or `none_confirmed`, the
+counts, and for a target the INSERT's state) and `D17_OWNER_LIST.jsonl`: every site the run leaves
+without a picture, with the reason - the search's refusal, the counts of what was judged (a
+candidate left out of the depicts stage is counted as never judged), the INSERT lane's refusal with
+the fetch's own reason, or a confirmed file no run wrote. A site is off the list only when an INSERT
+run plans its row. Like `outcomes` it is rewritten by every call and refused while the targets are
+not written or a candidate still waits for an answer.
+
+`owner_list_final.py` reads the image lanes' lists by glob (`RUN_LISTS`): every
+`candidate_search/*/D17_OWNER_LIST.jsonl` (topic `image-research-none`, open while the site has no
+live image row), every `candidate_search/*/D59_OWNER_LIST.jsonl` (`image-hotlink-uncredited`, open
+while the site shows only its thumbnail) and the last `served_image/hero-moves-*/OWNER_LIST.jsonl`
+(`hero-problem-kept`; each plan lists the whole population, so earlier ones are registered and not
+read). Every shown site without any picture has to carry a research row: the report names the ones
+without (`image_none_unresearched`) and `build --final` refuses them, as it refuses a lane without
+any list.
 
 ---
 
@@ -1948,6 +2040,19 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   root. `mechanical/mutation_sweep.py "wd2 transfer"`: 42 cases, 42 fired (2026-11-11). Not
   covered offline: ssh and scp themselves - the section 3.7 measurement of 2026-11-11 is their
   proof.
+* The four gaps of section 3.8.7 (2026-11-11): `test_served_image_recheck.py` (D127's terms, the
+  pinned text of every re-check version, a question rendered in the version it recorded, a check
+  stage exported before v4 imported as v3), `test_image_roles.py` (the hero re-check's text is its
+  version's, an import stamps the exported version, a pick the INSERT lane refused passes the site
+  on), `test_candidate_routes.py` and `test_image_flow.py` (an old `depicts` no page serves needs no
+  judgement, the targets left out of the pool picks, the next candidate from the refusal to the
+  rewritten targets, also through the command line), `test_repicture.py` (what a need gave up on),
+  `test_image_roles_cli.py` (`pool-picks` and its two files), `test_d59_thumbnails.py` (the picks
+  refused for the file, the run that claims the next pick, no NULL while a `depicts` is untried, the
+  D17 outcomes and owner list) and `test_owner_list_final.py` (the run lists, the last hero plan, the
+  research reason `--final` asks for). `image_roles/mutation_sweep.py "img a5"`: 33 cases, and
+  `mechanical/mutation_sweep.py "d25-owner: a5"`: 10 cases (the numbers of the last run are in the
+  commit that added them).
 
 ---
 

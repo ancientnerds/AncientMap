@@ -97,8 +97,10 @@ def test_the_re_check_and_the_depicts_judge_share_the_d116_museum_rule() -> None
     from image_roles import hero_recheck as HR
     from served_image import vision as V
 
-    assert HR.PROMPT_ID == V.CHECK_PROMPT_V3_ID == "served-check-v3"
+    # D127 (served-check-v4) keeps D116's rule for an architectural part and narrows a loose find
+    assert V.CHECK_PROMPT_V3_ID == "served-check-v3" and HR.PROMPT_ID == V.RECHECK_PROMPT_ID
     assert "the Ishtar Gate in Berlin for Babylon" in V.CHECK_PROMPT_V3
+    assert "the Ishtar Gate in Berlin for Babylon" in V.RECHECK_PROMPTS[HR.PROMPT_ID]
     assert "the Ishtar Gate in Berlin for Babylon" in DP.JUDGE_LINE
     # the first check's frozen text keeps its old terms (its recorded questions are read back)
     assert "Ishtar" not in V.CHECK_PROMPT and "Ishtar" not in V.CHECK_PROMPT_V2

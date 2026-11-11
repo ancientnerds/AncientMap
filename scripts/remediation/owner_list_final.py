@@ -22,6 +22,16 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
   those rows already (`FIELDS_WD5.md` section 5: "the owner list shows them as `unresolved`").
 * **The identity lanes' lists** (`LANE_LISTS`): the retarget and scope-window results
   (`identity/run.py ... result`), whose rows carry a state and a reason.
+* **The image lanes' run lists** (`RUN_LISTS`): every lane run writes its own list into its own
+  dated run directory, so they are found by a glob. The picture research's
+  (`candidate_search/*/D17_OWNER_LIST.jsonl`, `image_roles/d59.py research-outcomes`: why a site
+  was left without a picture - D17/D82) and the hotlinked Commons thumbnails'
+  (`.../D59_OWNER_LIST.jsonl`, `d59.py outcomes` - D59) are read from every run; of the hero moves'
+  (`served_image/hero-moves-*/OWNER_LIST.jsonl` - D48/D49) only the last plan's, because each plan
+  lists the whole population from a fresh read. A row is open while production still says so: a
+  research row while the site has no live image row, a hotlink row while it shows only its
+  thumbnail. **Every shown site without any picture has to carry a research row**: the ones
+  without are named (`image_none_unresearched`) and `--final` refuses them.
 * **Production** (`TOPICS`): what stays empty on a shown curated site - no description, no card,
   an old card the shorts-v1 lane kept (D5), no picture, a thumbnail without any gallery row, a small
   hero a larger live row could replace (D48) or one without the credit its licence asks for, no type, no period, a rule-made period, an
@@ -52,8 +62,9 @@ a field row whose stored value production no longer holds was answered by a late
 (`superseded`). Both are counted, never listed.
 
 Every `OWNER_LIST.jsonl` / `OWNER.jsonl` under `output/remediation` that no source covers is named in
-the report (`unregistered`). `--final` refuses while a source is missing, a list is unregistered or an
-open field row is still `pending`; without it the report names them.
+the report (`unregistered`). `--final` refuses while a source is missing, a list is unregistered, an
+open field row is still `pending` or a site without a picture carries no research row; without it
+the report names them.
 
     $PY scripts/remediation/owner_list_final.py build [--final]
 """
@@ -144,6 +155,64 @@ LANE_LISTS: tuple[LaneList, ...] = (
 
 
 @dataclass(frozen=True)
+class RunList:
+    """An owner list every run of a lane leaves in its own dated run directory: the glob that
+    finds them (relative to output/remediation), the topic of their rows and the decision behind
+    it, how a row words its reason, and whether production still says a row is open (`still_open`,
+    asked of the site's production row; a row that fails it was answered by a later write).
+    `latest_only`: each run lists the lane's whole population from a fresh read, so only the last
+    run's list (by run-directory name) is read - the earlier ones are registered, not listed."""
+
+    name: str
+    pattern: str
+    topic: str
+    title: str
+    decision: str
+    reason: Callable[[Mapping[str, Any]], str]
+    still_open: Callable[[Mapping[str, Any]], bool]
+    latest_only: bool = False
+
+
+def _blank(value: Any) -> bool:
+    return value is None or not str(value).strip()
+
+
+#: The image lanes' lists (owner decisions D17/D82, D59, D48/D49). `image-research-none` is the
+#: reason of an `image-none` site: every shown site without a picture has to carry one (`build`).
+RESEARCH_TOPIC = "image-research-none"
+RUN_LISTS: tuple[RunList, ...] = (
+    RunList(
+        "images-d17",
+        "candidate_search/*/D17_OWNER_LIST.jsonl",
+        RESEARCH_TOPIC,
+        "no usable Commons picture: why the picture research left the site without one",
+        "D17/D82",
+        lambda row: str(row["reason"]),
+        lambda site: site["images"] == 0,
+    ),
+    RunList(
+        "images-d59",
+        "candidate_search/*/D59_OWNER_LIST.jsonl",
+        "image-hotlink-uncredited",
+        "a hotlinked Commons thumbnail that keeps no stored credit",
+        "D59",
+        lambda row: str(row["reason"]),
+        lambda site: site["images"] == 0 and not _blank(site["thumbnail_url"]),
+    ),
+    RunList(
+        "hero-moves",
+        "served_image/hero-moves-*/OWNER_LIST.jsonl",
+        "hero-problem-kept",
+        "a strip, uncredited, unflagged or hotlinked hero no checked row could replace",
+        "D48/D49",
+        lambda row: f"{', '.join(row['problems'])}: {row['reason']}",
+        lambda site: True,
+        latest_only=True,
+    ),
+)
+
+
+@dataclass(frozen=True)
 class Topic:
     """One thing production can say stays empty, and the decision that leaves it so."""
 
@@ -151,10 +220,6 @@ class Topic:
     title: str
     decision: str
     test: Callable[[Mapping[str, Any]], str | None]
-
-
-def _blank(value: Any) -> bool:
-    return value is None or not str(value).strip()
 
 
 def _small(hero: Mapping[str, Any] | None) -> bool:
@@ -491,6 +556,53 @@ def lane_rows(
     return out, aside
 
 
+def run_list_paths(root: Path, lane: RunList) -> tuple[list[Path], list[Path]]:
+    """`(the lists read, every list found)` of a run-list lane under `root`, by run-directory
+    name: every one, or - `latest_only` - the last."""
+    found = sorted(root.glob(lane.pattern))
+    return (found[-1:] if lane.latest_only else found), found
+
+
+def run_list_rows(
+    lane: RunList,
+    run_name: str,
+    rows: Iterable[Mapping[str, Any]],
+    sites: Mapping[str, Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """A run list's rows that are still open: the site is shown and production still says what the
+    list says (`still_open`: a D17 site still shows no picture, a D59 site still only its
+    thumbnail). The source names the run. Pure."""
+    out: list[dict[str, Any]] = []
+    aside: Counter[str] = Counter()
+    for row in rows:
+        site = sites.get(str(row["site_id"]))
+        if site is None or site["scope_status"] == RETIRED:
+            aside["retired-or-gone"] += 1
+            continue
+        if not lane.still_open(site):
+            aside["superseded"] += 1
+            continue
+        source = f"{lane.name}:{run_name}"
+        out.append(_row(site, lane.topic, source, "listed", lane.reason(row), lane.decision))
+    return out, aside
+
+
+def unresearched(
+    sites: Iterable[Mapping[str, Any]], rows: Iterable[Mapping[str, Any]]
+) -> list[str]:
+    """The shown sites without any picture (`image-none`) that no picture-research list gives a
+    reason for (`RESEARCH_TOPIC`): D17 researches every such site, so each has to carry one."""
+    reasoned = {r["site_id"] for r in rows if r["topic"] == RESEARCH_TOPIC}
+    test = TOPIC_OF["image-none"].test
+    return sorted(
+        str(s["site_id"])
+        for s in sites
+        if s["scope_status"] != RETIRED
+        and test(s) is not None
+        and str(s["site_id"]) not in reasoned
+    )
+
+
 def owner_artefacts(root: Path) -> list[str]:
     """Every owner-facing file or directory under `root` (`OWNER_NAME`), caches left out; a
     matching directory is named once, not descended into."""
@@ -572,15 +684,31 @@ def build(
         open_rows, aside = lane_rows(lane, listed, sites)
         rows += open_rows
         set_aside[f"{lane.name}:retired-or-gone"] += aside
+    registered = [lane.path for lane in LANE_LISTS]
+    run_lists: dict[str, list[str]] = {}
+    for run_lane in RUN_LISTS:
+        read_paths, found = run_list_paths(root, run_lane)
+        registered += [p.relative_to(root).as_posix() for p in found]
+        run_lists[run_lane.name] = [p.relative_to(root).as_posix() for p in read_paths]
+        if not found:
+            missing.append(run_lane.pattern)
+        for path in read_paths:
+            listed = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x]
+            open_rows, run_aside = run_list_rows(run_lane, path.parent.name, listed, sites)
+            rows += open_rows
+            for key, n in run_aside.items():
+                set_aside[f"{run_lane.name}:{key}"] += n
     rows += production_rows(sites.values())
-    unregistered = unregistered_lists(root, (lane.path for lane in LANE_LISTS))
+    unregistered = unregistered_lists(root, registered)
+    without_reason = unresearched(sites.values(), rows)
     # a run's `pending` cell whose value production no longer holds was written by a step the run's
     # files do not show (WD3's 2026-10-04 wave kept no WAVE.json): only an open one is pending
     pending = sum(1 for r in rows if r["state"] == OL.PENDING)
-    if final and (missing or unregistered or pending):
+    if final and (missing or unregistered or pending or without_reason):
         raise OwnerListFinalError(
             f"not final: missing {missing}, unregistered {unregistered}, {pending} pending field "
-            "question(s)"
+            f"question(s), {len(without_reason)} site(s) without a picture that no picture "
+            f"research lists (first {without_reason[:3]})"
         )
     rows.sort(
         key=lambda r: (r["topic"], str(r["country"]), str(r["name"]), r["site_id"], r["source"])
@@ -594,6 +722,8 @@ def build(
         "set_aside": dict(sorted(set_aside.items())),
         "missing": missing,
         "unregistered": unregistered,
+        "run_lists": run_lists,
+        "image_none_unresearched": without_reason,
         "out_of_scope": {k: v for k, v in OUT_OF_SCOPE.items() if (root / k).exists()},
         "hero_sizes": hero_sizes(sites.values()),
         "pending": pending,
@@ -611,6 +741,9 @@ def _title(topic: str) -> tuple[str, str]:
     for lane in LANE_LISTS:
         if lane.topic == topic:
             return f"{lane.name} (lane list)", lane.decision
+    for run_lane in RUN_LISTS:
+        if run_lane.topic == topic:
+            return run_lane.title, run_lane.decision
     field = topic.removeprefix("field-")
     return f"{field}: a field the research could not source (it stays as it is)", "D10/D12/D19"
 
@@ -658,6 +791,18 @@ def render(result: Mapping[str, Any]) -> str:
             "",
             f"**{result['pending']} pending field question(s)** (state `pending`): the list is "
             "final only without them.",
+        ]
+    read_lists = [path for paths in result["run_lists"].values() for path in paths]
+    if read_lists:
+        out += ["", "Run lists read: " + ", ".join(f"`{path}`" for path in read_lists) + "."]
+    if result["image_none_unresearched"]:
+        named = ", ".join(f"`{s}`" for s in result["image_none_unresearched"][:20])
+        out += [
+            "",
+            f"**{len(result['image_none_unresearched'])} site(s) without a picture carry no "
+            f"reason** (no picture-research list names them; D17 researches every one): {named}"
+            + (" ..." if len(result["image_none_unresearched"]) > 20 else "")
+            + ". The list is final only without them.",
         ]
     for topic in result["counts"]:
         title, decision = _title(topic)

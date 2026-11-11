@@ -19,6 +19,12 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
     (a calibration directory uses the same three commands with --stage image-prefilter,
      image-depicts-calibration, image-adjudicate, image-recheck or identity-verify)
     run.py write-targets   --run-dir C                           -> C/TARGETS.jsonl (confirmed picks)
+    (after an INSERT run I refused a confirmed pick for a reason that lies in the file - a missing
+     credit, an upscale, a file type, a file a row already holds - the site's next-ranked depicts is
+     tried, before the pictures are pruned:
+     run.py recheck-export --run-dir C --handoff H --insert-run I    the next round, those sites
+     run.py write-targets  --run-dir C --insert-run I                C/TARGETS.jsonl, written again
+     then a new INSERT run for the new targets; from then on both commands name every INSERT run)
     run.py prune-pictures  --run-dir C                           delete the pictures, keep their hashes
 
 The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run.
@@ -29,7 +35,11 @@ the ones a step needs again, with a manifest, before the step runs:
     run.py pool            --run-dir C --old-run OLD             -> C/PICTURES.jsonl (pictures on disk)
     run.py pool-picks      --run-dir C --old-run OLD --served-run S --out FILE
                                        the old targets of the population's sites and the old targets
-                                       that are live heroes in S/READ.json (the written ones) as picks
+                                       that are live heroes in S/READ.json (the written ones) as picks;
+                                       beside FILE, <FILE stem>_LEFT_OUT.jsonl names the targets not
+                                       asked: one the run's re-check judged already, and one no page
+                                       serves whose rendering the re-download gave up on (OLD/
+                                       REPICTURE_recheck.jsonl); a live hero without a rendering stops
     run.py recheck-export  --run-dir C --handoff H --picks FILE  the old targets re-checked
     run.py denied          --run-dir C --old-run OLD --served-run S
                                        the heroes MiniMax put on a page and Claude does not confirm
@@ -56,6 +66,7 @@ import research_web  # noqa: E402
 import roles as RO  # noqa: E402
 from candidate_search import judge_run as JR  # noqa: E402
 from candidate_search import population as PP  # noqa: E402
+from candidate_search import repicture as RP  # noqa: E402
 from gallery_audit import persist_verdicts as pv  # noqa: E402
 from identity import common as IC  # noqa: E402
 from identity import entities as IE  # noqa: E402
@@ -67,6 +78,7 @@ from served_image import state as ST  # noqa: E402
 
 from image_roles import calibrate as CAL  # noqa: E402
 from image_roles import clean_gold as CG  # noqa: E402
+from image_roles import d59 as D59  # noqa: E402
 from image_roles import depicts as DP  # noqa: E402
 from image_roles import flow as FL  # noqa: E402
 from image_roles import hero_recheck as HR  # noqa: E402
@@ -179,7 +191,39 @@ def cmd_import(run: Path, args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_recheck_export(run: Path, args: argparse.Namespace) -> dict[str, Any]:
     picks = None if args.picks is None else FL._jsonl(args.picks)
-    return FL.recheck_export(run, args.handoff, cache=_cache(args.wiki_cache), picks=picks)
+    return FL.recheck_export(
+        run,
+        args.handoff,
+        cache=_cache(args.wiki_cache),
+        picks=picks,
+        refused=D59.refused_files(args.insert_run),
+    )
+
+
+def left_out_file(out: Path) -> Path:
+    """Where `pool-picks` names the targets it could not show, beside its picks."""
+    return out.with_name(f"{out.stem}_LEFT_OUT.jsonl")
+
+
+def cmd_pool_picks(run: Path, args: argparse.Namespace) -> dict[str, Any]:
+    """The picks and, beside them, the old targets left out by name (`flow.pool_picks`): both
+    files are written once, the second also when it is empty."""
+    state = ST.load_read(args.served_run / "READ.json")
+    picks, left_out = FL.pool_picks(
+        run, args.old_run, state, RP.unobtainable(args.old_run, "recheck")
+    )
+    beside = left_out_file(args.out)
+    for path in (args.out, beside):
+        if path.exists():
+            raise ST.StateError(f"{path} exists - a recorded file is written once")
+    ST.write_text_once(args.out, ST.jsonl_text(picks))
+    ST.write_text_once(beside, ST.jsonl_text(left_out))
+    return {
+        "picks": len(picks),
+        "file": str(args.out),
+        "left_out": left_out,
+        "left_out_file": str(beside),
+    }
 
 
 def cmd_denied(run: Path, args: argparse.Namespace) -> dict[str, Any]:
@@ -236,6 +280,16 @@ def build_parser() -> argparse.ArgumentParser:
     commands["search"].add_argument("--limit", type=int, default=None)
     commands["prefilter-export"].add_argument("--limit", type=int, default=None)
     commands["recheck-export"].add_argument("--picks", type=Path, default=None)
+    for name in ("recheck-export", "write-targets"):
+        commands[name].add_argument(
+            "--insert-run",
+            type=Path,
+            nargs="*",
+            default=[],
+            help="the INSERT run(s) of this run's targets: a confirmed pick one of them refused "
+            "for a reason that lies in the file is passed over, and the site's next-ranked "
+            "depicts is tried (name every one of them, each time, from the first refusal on)",
+        )
     for name in (
         "identity-export",
         "prefilter-export",
@@ -307,15 +361,13 @@ def main(argv: list[str] | None = None) -> int:
         elif command == "import":
             _print(cmd_import(run, args))
         elif command == "write-targets":
-            _print(FL.write_targets(run))
+            _print(FL.write_targets(run, D59.refused_files(args.insert_run)))
         elif command == "prune-pictures":
             _print(FL.prune_pictures(run))
         elif command == "pool":
             _print(FL.pool(run, args.old_run))
         elif command == "pool-picks":
-            picks = FL.pool_picks(run, args.old_run, ST.load_read(args.served_run / "READ.json"))
-            ST.write_text_once(args.out, ST.jsonl_text(picks))
-            _print({"picks": len(picks), "file": str(args.out)})
+            _print(cmd_pool_picks(run, args))
         else:
             _print(cmd_denied(run, args))
     except (ST.StateError, RO.RoleError, InputError, FileNotFoundError) as exc:

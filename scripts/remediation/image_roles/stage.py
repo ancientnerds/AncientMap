@@ -297,7 +297,11 @@ def import_answers(
     `answered_by` names another role or carries another model's stamp) and any answer out of shape
     - all the shape problems at once, none of them repaired. With `candidate_model` the answers are
     a candidate-model trial's: each in the stage's role and stamped by that candidate
-    (`roles.require_candidate_stamp`), never by the role's registered model."""
+    (`roles.require_candidate_stamp`), never by the role's registered model.
+
+    Every row carries the prompt version of the export record (`prompt_id`) and the sha256 of the
+    recorded prompt text: the questions are read from the run, never rebuilt, so a stage exported
+    under an earlier version of its prompt imports as it was asked."""
     if candidate_model is not None:
         RO.candidate_model(spec.role, candidate_model)
     record = _record(run, spec)
@@ -349,7 +353,9 @@ def import_answers(
             {
                 "batch_id": batch_id,
                 "label": label,
-                "prompt_id": spec.prompt_id,
+                # the version the questions were exported under, not the code's of today: an
+                # import after a prompt moved on still reads the recorded text, and says so
+                "prompt_id": record["prompt_id"],
                 "prompt_sha256": line["prompt_sha256"],
                 "answered_by": answer.answered_by,
                 "answered_at": answer.answered_at,

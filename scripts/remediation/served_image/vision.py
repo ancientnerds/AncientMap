@@ -94,7 +94,7 @@ NOT_A_PICTURE = "not a picture"
 ALL = "all"
 UNCONFIRMED_ONLY = "unconfirmed"
 #: D15 (2026-10-08): the sites named by `--sites`, checked again with the richer prompt
-#: (`CHECK_PROMPT_V3` since D116). A `region_or_type` verdict keeps the hero here (the owner's 2025 link); only
+#: (`RECHECK_PROMPT_ID`: `CHECK_PROMPT_V4` since D127). A `region_or_type` verdict keeps the hero here (the owner's 2025 link); only
 #: `other_site` goes on to the replacement stage.
 RECHECK = "recheck"
 POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
@@ -128,6 +128,15 @@ other_site: the picture shows another archaeological site or monument - a namesa
 #: (2026-09-30) and of `served-check-v2`, whose recorded questions are read back against it.
 _VERDICT_TERMS_D116 = """depicts: the picture shows this site itself - its remains, structures, excavation or rock art, or a setting in which the site is recognisable - or a genuine part of this site or a find from it, also where it is kept now: a gate, a relief, a sculpture or an object of this site in a museum (the Ishtar Gate in Berlin for Babylon) depicts it. A drawing, plan or reconstruction of this site counts.
 region_or_type: the picture shows only the region, island, landscape, town or country around the site, a view from the site, a map, a generic example of the site's type, a portrait, a museum object that is not from this site, an information panel, plants or animals, or anything else in which this site is not what is shown.
+other_site: the picture shows another archaeological site or monument - a namesake elsewhere, a neighbour, a comparison."""
+
+#: The verdict terms of the re-check from owner decision D127 (2026-11-07) on: an architectural part
+#: of the site in a museum always shows the site (D116); a loose find shows it only when the picture
+#: itself shows where it comes from. `_VERDICT_TERMS_D116` stays the frozen text of
+#: `served-check-v3`: on the clean gold it let a loose find pass on its file page alone, 11 of the 15
+#: real errors of the re-check in 200 cases.
+_VERDICT_TERMS_D127 = """depicts: the picture shows this site itself - its remains, structures, excavation or rock art, or a setting in which the site is recognisable - or a genuine architectural part of this site, also where it is kept now: a gate, a wall, a frieze, a relief, a mosaic or a sculpture taken from this site and kept in a museum (the Ishtar Gate in Berlin for Babylon) depicts it. A loose find from this site in a museum or a collection - a coin, a vessel, a tool, a figurine, a tablet, a stele or a milestone standing on its own - depicts it only when the picture itself shows where it comes from: a label, a caption or an inscription in the picture that names this site. What only the file page, its categories or a catalogue say about where a loose find comes from does not make the picture show this site. A drawing, plan or reconstruction of this site counts.
+region_or_type: the picture shows only the region, island, landscape, town or country around the site, a view from the site, a map, a generic example of the site's type, a portrait, a museum object that is not from this site, a loose find from this site whose provenance the picture itself does not show, an information panel, plants or animals, or anything else in which this site is not what is shown.
 other_site: the picture shows another archaeological site or monument - a namesake elsewhere, a neighbour, a comparison."""
 
 CHECK_PROMPT_ID = "served-check-v1"
@@ -173,6 +182,24 @@ CHECK_PROMPT_V3 = CHECK_PROMPT_V2.replace(
     _VERDICT_TERMS.replace("{", "{{").replace("}", "}}"),
     _VERDICT_TERMS_D116.replace("{", "{{").replace("}", "}}"),
 )
+#: The re-check from D127 on: the same question with the D127 verdict terms (`_VERDICT_TERMS_D127`).
+CHECK_PROMPT_V4_ID = "served-check-v4"
+CHECK_PROMPT_V4 = CHECK_PROMPT_V3.replace(
+    _VERDICT_TERMS_D116.replace("{", "{{").replace("}", "}}"),
+    _VERDICT_TERMS_D127.replace("{", "{{").replace("}", "}}"),
+)
+#: The versions of the re-check a recorded question can name, each with its frozen text. A question
+#: records the version it asked (`CheckQuestion.recheck_prompt_id`) and is rendered from that text
+#: ever after, so a round exported under one version is checked and imported as it was asked when
+#: the next version is the code's.
+RECHECK_PROMPTS = {CHECK_PROMPT_V3_ID: CHECK_PROMPT_V3, CHECK_PROMPT_V4_ID: CHECK_PROMPT_V4}
+#: The version a re-check question exported now asks (D15's check stage and the hero re-check).
+RECHECK_PROMPT_ID = CHECK_PROMPT_V4_ID
+#: The version of a recorded D15 re-check question that names none: it was exported by the code
+#: before `served-check-v4`, whose questions carried no version and asked `served-check-v3` (no D15
+#: re-check was exported under `served-check-v2`: until 2026-11-11 the lane's only check export is
+#: the first check of 2026-09-30, and D116 moved the code to v3 on 2026-11-06).
+RECHECK_PROMPT_UNNAMED = CHECK_PROMPT_V3_ID
 
 REPLACE_PROMPT_ID = "served-replace-v2"
 REPLACE_PROMPT = (
@@ -277,15 +304,26 @@ class CheckQuestion:
     #: A recheck's context (`recheck.CONTEXT_KEYS`); None for the first check, whose prompt is
     #: byte for byte the one of 2026-09-30.
     context: Mapping[str, Any] | None = None
+    #: The version of the re-check this question asks (a key of `RECHECK_PROMPTS`), recorded with
+    #: it; None for the first check, and for a re-check recorded before the questions named their
+    #: version (`RECHECK_PROMPT_UNNAMED`).
+    recheck_prompt_id: str | None = None
 
     @property
     def prompt_id(self) -> str:
-        return CHECK_PROMPT_ID if self.context is None else CHECK_PROMPT_V3_ID
+        if self.context is None:
+            return CHECK_PROMPT_ID
+        return self.recheck_prompt_id or RECHECK_PROMPT_UNNAMED
 
     def prompt(self) -> str:
         if self.context is not None:
             ctx = self.context
-            return CHECK_PROMPT_V3.format(
+            if self.prompt_id not in RECHECK_PROMPTS:
+                raise ST.StateError(
+                    f"{self.batch_id}/{self.site_id}: the question asks {self.prompt_id!r}, a "
+                    f"re-check version this code does not hold ({sorted(RECHECK_PROMPTS)})"
+                )
+            return RECHECK_PROMPTS[self.prompt_id].format(
                 name=self.name,
                 site_type=self.site_type,
                 country=self.country,
@@ -603,8 +641,8 @@ def export_check(
     `sites` restricts the population to the sites named (each must be a pre-checked site that
     serves an image) and is recorded in `EXPORT_CHECK.json`, so the plan examines those sites and
     no others. The `recheck` population (D15) needs `sites` and the `context` of every one of them
-    (`recheck.build_context`), and asks the richer prompt (`CHECK_PROMPT_V3`, D116); the other populations
-    take no context."""
+    (`recheck.build_context`), and asks the richer prompt (`RECHECK_PROMPT_ID`: `CHECK_PROMPT_V4`,
+    D127), which every question records; the other populations take no context."""
     if population not in POPULATIONS:
         raise ST.StateError(f"population {population!r} is not one of {list(POPULATIONS)}")
     if not 1 <= per_batch <= CHECK_PER_BATCH:
@@ -668,6 +706,7 @@ def export_check(
             jpeg_sha256=digest,
             repair=repair,
             context=None if context is None else dict(context[sid]),
+            recheck_prompt_id=None if context is None else RECHECK_PROMPT_ID,
         )
         OH.export(
             handoff,
@@ -690,7 +729,7 @@ def export_check(
         "handoff": str(handoff),
         "population": population,
         "role": population_role(population),
-        "prompt_id": CHECK_PROMPT_V3_ID if context is not None else CHECK_PROMPT_ID,
+        "prompt_id": RECHECK_PROMPT_ID if context is not None else CHECK_PROMPT_ID,
         "sites": None if sites is None else list(sites),
         "questions": len(questions),
         "questions_sha256": digest,

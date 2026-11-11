@@ -295,9 +295,9 @@ class TestThePrompt:
         assert "re-check" not in q.prompt()
 
     def test_the_recheck_carries_the_context_the_first_check_lacked(self) -> None:
-        q = _question(context=_context(THASOS))
+        q = _question(context=_context(THASOS), recheck_prompt_id=V.RECHECK_PROMPT_ID)
         prompt = q.prompt()
-        assert q.prompt_id == "served-check-v3"
+        assert q.prompt_id == V.RECHECK_PROMPT_ID == "served-check-v4"
         for part in (
             "re-check a verdict",
             "other_site: a view of a different island",
@@ -311,9 +311,61 @@ class TestThePrompt:
             "commons.wikimedia.org/...",
         ):
             assert part in prompt, part
-        # the verdict terms are D116's: a genuine part of the site in a museum depicts it
-        assert V._VERDICT_TERMS_D116 in prompt and V._VERDICT_TERMS not in prompt
+        # the verdict terms are D127's: an architectural part of the site in a museum depicts it
+        # (D116), a loose find only when the picture itself shows where it comes from
+        assert V._VERDICT_TERMS_D127 in prompt
+        assert V._VERDICT_TERMS_D116 not in prompt and V._VERDICT_TERMS not in prompt
         assert "the Ishtar Gate in Berlin for Babylon" in prompt
+
+    def test_d127_a_loose_find_counts_only_when_the_picture_shows_its_provenance(self) -> None:
+        terms = V._VERDICT_TERMS_D127
+        depicts, region, other = terms.split("\n")
+        assert depicts.startswith("depicts: ") and region.startswith("region_or_type: ")
+        assert "a genuine architectural part of this site, also where it is kept now" in depicts
+        assert (
+            "A loose find from this site in a museum or a collection - a coin, a vessel, a tool, "
+            "a figurine, a tablet, a stele or a milestone standing on its own - depicts it only "
+            "when the picture itself shows where it comes from: a label, a caption or an "
+            "inscription in the picture that names this site." in depicts
+        )
+        assert "What only the file page, its categories or a catalogue say" in depicts
+        assert (
+            "a loose find from this site whose provenance the picture itself does not show"
+            in region
+        )
+        # the other two verdicts' remaining words and the question around them are v3's
+        assert other == V._VERDICT_TERMS_D116.split("\n")[2]
+        asked = V._VERDICT_TERMS_D127.replace("{", "{{").replace("}", "}}")
+        assert V.CHECK_PROMPT_V4.endswith(asked)
+        assert V.CHECK_PROMPT_V4[: -len(asked)] == V.CHECK_PROMPT_V3[: -len(V._VERDICT_TERMS_D116)]
+
+    def test_a_version_of_the_recheck_never_changes_its_text(self) -> None:
+        """A recorded round is read back against the text of its version: a changed rule is a new
+        version beside the old ones (`RECHECK_PROMPTS`), never an edit of one."""
+        assert {name: V.prompt_sha256(text) for name, text in V.RECHECK_PROMPTS.items()} == {
+            "served-check-v3": "aa0c8de3f2b6cdf63efb1a37e68542ecd5fcb5b1f58a047f6ad36c97be4f38b6",
+            "served-check-v4": "f6f67de9779872944aa602bd15e2e22700147fb55509f74c84f9ef19d8a6c2a4",
+        }
+        assert V.prompt_sha256(V.CHECK_PROMPT) == (
+            "a96ac7880303e3855c634ee5afb006f23eb04e215029f299d79f9bb61d25497b"
+        )
+        assert V.RECHECK_PROMPT_ID in V.RECHECK_PROMPTS
+
+    def test_a_recorded_recheck_is_rendered_in_the_version_it_asked(self) -> None:
+        # a question recorded before the questions named their version asked served-check-v3
+        unnamed = _question(context=_context(THASOS))
+        assert unnamed.prompt_id == "served-check-v3"
+        assert V._VERDICT_TERMS_D116 in unnamed.prompt()
+        assert V._VERDICT_TERMS_D127 not in unnamed.prompt()
+        named = _question(context=_context(THASOS), recheck_prompt_id="served-check-v3")
+        assert named.prompt() == unnamed.prompt()
+        new = _question(context=_context(THASOS), recheck_prompt_id="served-check-v4")
+        assert new.prompt() != unnamed.prompt() and new.prompt_id == "served-check-v4"
+
+    def test_a_recheck_version_the_code_does_not_hold_is_refused(self) -> None:
+        q = _question(context=_context(THASOS), recheck_prompt_id="served-check-v9")
+        with pytest.raises(ST.StateError, match="a re-check version this code does not hold"):
+            q.prompt()
 
     def test_a_missing_part_of_the_context_reads_none(self) -> None:
         q = _question(
@@ -325,10 +377,11 @@ class TestThePrompt:
         assert "by hand in 2025: none" in q.prompt()
 
     def test_the_question_round_trips_through_its_record(self) -> None:
-        q = _question(context=_context(THASOS))
+        q = _question(context=_context(THASOS), recheck_prompt_id=V.RECHECK_PROMPT_ID)
+        assert q.as_json()["recheck_prompt_id"] == "served-check-v4"
         assert V.CheckQuestion(**q.as_json()) == q
         old = _question().as_json()
-        del old["context"]
+        del old["context"], old["recheck_prompt_id"]
         assert V.CheckQuestion(**old).prompt() == _question().prompt()
 
 
@@ -445,9 +498,58 @@ class TestTheRestrictedStages:
         rows = {r["site_id"]: r for r in V.read_jsonl(run / V.QUESTIONS_CHECK)}
         assert set(rows) == set(SITES)
         assert rows[THASOS]["context"]["earlier_verdict"] == "other_site"
+        assert {r["recheck_prompt_id"] for r in rows.values()} == {"served-check-v4"}
+        record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
+        assert record["prompt_id"] == "served-check-v4"
         checks = {r["site_id"]: r for r in V.read_jsonl(run / V.CHECK)}
-        assert {r["prompt_id"] for r in checks.values() if r["prompt_id"]} == {"served-check-v3"}
+        assert {r["prompt_id"] for r in checks.values() if r["prompt_id"]} == {"served-check-v4"}
         assert checks[THASOS]["answered_by"].startswith("image_adversarial:")
+
+    def test_a_recheck_exported_before_v4_is_imported_as_it_was_asked(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A D15 check stage exported by the code before `served-check-v4` - its questions name no
+        version, its prompts are v3's - is answered and imported by this code: every prompt is
+        rendered from v3's frozen text and the rows say `served-check-v3`."""
+        run, handoff, pictures = TS._setup(tmp_path, gone={"https://example.org/relief.jpg": "404"})
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        ctx = {sid: _context(sid) for sid in SITES}
+        with monkeypatch.context() as before:
+            before.setattr(V, "RECHECK_PROMPT_ID", V.CHECK_PROMPT_V3_ID)
+            V.export_check(
+                run, handoff, state, pre, pictures, population=V.RECHECK, sites=SITES, context=ctx
+            )
+        # the record as that code wrote it: no version in a question
+        old = [
+            {k: v for k, v in row.items() if k != "recheck_prompt_id"}
+            for row in V.read_jsonl(run / V.QUESTIONS_CHECK)
+        ]
+        text = ST.jsonl_text(old)
+        (run / V.QUESTIONS_CHECK).write_text(text, encoding="utf-8", newline="\n")
+        record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
+        assert record["prompt_id"] == "served-check-v3"
+        record["questions_sha256"] = ST.sha256_text(text)
+        (run / V.EXPORT_CHECK).write_text(ST.json_text(record), encoding="utf-8", newline="\n")
+        prompt = (handoff / "check-001" / V.STAGE_CHECK / f"{THASOS}.prompt.txt").read_text(
+            encoding="utf-8"
+        )
+        assert V._VERDICT_TERMS_D116 in prompt and V._VERDICT_TERMS_D127 not in prompt
+        for line in OH.manifest(handoff):
+            OH.write_answer(
+                handoff,
+                batch_id=line["batch_id"],
+                stage=V.STAGE_CHECK,
+                label=line["label"],
+                text=_answer("depicts"),
+                answered_by=f"image_adversarial:{line['batch_id']}",
+                model=OH.ANSWER_MODELS[RO.role("image_adversarial").model],
+                now=lambda: "2026-11-11T03:00:00+00:00",
+            )
+        assert V.RECHECK_PROMPT_ID == "served-check-v4"
+        assert V.import_stage(run, V.STAGE_CHECK)["answers"] == len(SITES)
+        rows = V.read_jsonl(run / V.CHECK)
+        assert {r["prompt_id"] for r in rows if r["prompt_id"]} == {"served-check-v3"}
 
     def test_only_a_confirmed_other_site_goes_on_to_the_replacement_stage(
         self, tmp_path: Path
