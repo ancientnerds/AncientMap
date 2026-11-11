@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +173,7 @@ def put(
     text: str,
     role: str,
     model: str | None = None,
+    now: Callable[[], str] | None = None,
 ) -> None:
     OH.write_answer(
         handoff,
@@ -181,6 +183,7 @@ def put(
         text=text,
         answered_by=RO.answered_by(role, R.agent_name(batch_id)),
         model=OH.ANSWER_MODELS[model or RO.role(role).model],
+        **({} if now is None else {"now": now}),
     )
 
 
@@ -194,13 +197,14 @@ def answer_round(
     role: str | None = None,
     canary_role: str | None = None,
     model: str | None = None,
+    now: Callable[[], str] | None = None,
 ) -> None:
     record = R._round(run, stage)
     assert record is not None
     chosen = role or R.SHORTS_SPEC.roles[stage]
     for batch_id, members in record["batches"].items():
         for site_id in members:
-            put(handoff, stage, batch_id, site_id, answers[site_id], chosen, model)
+            put(handoff, stage, batch_id, site_id, answers[site_id], chosen, model, now)
         if batch_id in record.get("canaries", {}):
             put(
                 handoff,
@@ -210,6 +214,7 @@ def answer_round(
                 canary,
                 canary_role or chosen,
                 model,
+                now,
             )
 
 

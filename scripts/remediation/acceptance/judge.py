@@ -68,6 +68,7 @@ for _path in (
 
 import opus_handoff as OH  # noqa: E402
 import persist_verdicts as pv  # noqa: E402
+import roles as RO  # noqa: E402
 from mechanical.lane import sql_literal  # noqa: E402
 from mechanical.plan import PlanError, parse_tagged_export  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
@@ -530,7 +531,7 @@ For each question:
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
---model <the model id you run as: claude-fable-5-2> \
+--model <the model id you run as: {model}> \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -551,6 +552,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
+        model=RO.ROLELESS_MODEL,
     )
 
 

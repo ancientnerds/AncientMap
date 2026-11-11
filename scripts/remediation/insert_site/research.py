@@ -721,7 +721,9 @@ def read_review(answer_path: Path, plan_md: Path) -> dict[str, dict[str, str]]:
         raise ResearchError(
             f"{answer_path}: answered by {data['answered_by']!r}, not {REVIEW_ROLE}"
         )
-    role_problem = RO.answer_problem(data["answered_by"], data["model"])
+    role_problem = RO.answer_problem(
+        data["answered_by"], data["model"], answered_at=data["answered_at"]
+    )
     if role_problem is not None:
         raise ResearchError(f"{answer_path}: {role_problem}")
     review = load_object(data["text"], REVIEW_KEYS)
@@ -809,8 +811,9 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         scratch=f"{shown}-scratch/{batch_id}",
         run=run.resolve().as_posix(),
         stage=STAGE,
-        # the model the round's role answers with now: Fable for a round exported before owner
-        # decision D153 took the role from the model the round recorded (`roles.model_now`)
+        # the model the round's role answers with now: the current one for a round exported before
+        # an owner move without calibration (D153, D157) took the role from the model the round
+        # recorded (`roles.model_now`)
         model=RO.model_now(record["role"], record["model"]),
         role=record["role"],
     )

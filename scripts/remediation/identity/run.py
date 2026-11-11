@@ -21,7 +21,7 @@ probe-guards, apply, read-back, rehearse-rollback.
     $PY $I/run.py --lane L check-answer --stage S --round r1 --batch-id B --label SITE --text-file F
     $PY $H validate --dir DIR                        # every question answered, in shape, by the role
     $PY $I/run.py --lane L import --stage S --round r1 --calibration ID       # needs a passed verdict
-    #   (no --calibration for a role that stands by owner decision D153/D154: every role on Fable)
+    #   (no --calibration for a role that stands by owner decision D157/D154: every role on Opus)
     $PY $I/run.py --lane L export-reask --stage S --handoff DIR2              # the held sites, r2/r3
     $PY $I/run.py --lane L status --stage S
 
@@ -266,7 +266,7 @@ def cmd_stage(args: argparse.Namespace, run: Path) -> int:
             Path(args.calibration_root), args.calibration, spec.role, CAL.spec_of(spec.lane).stage
         )
         summary = R.import_round(out, spec, args.round, decided_at=verdict["decided_at"])
-        # how the role stands: by its passed calibration, or by the owner's decision (D153/D154),
+        # how the role stands: by its passed calibration, or by the owner's decision (D157/D154),
         # which has no calibration id and no agreement to print
         standing = verdict["standing"] if "owner_decision" in verdict else CC.PASSED
         _print(
@@ -732,7 +732,7 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument(
         "--calibration",
         help="the calibration id of the stage's role; not named for a role that stands by owner "
-        "decision D153/D154 (roles.owner_standing), required for any other",
+        "decision D157/D154 (roles.owner_standing), required for any other",
     )
     importer.add_argument("--calibration-root", type=Path, default=CC.CALIBRATION_ROOT)
     stage_command("status", "rounds and decisions of a stage")

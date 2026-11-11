@@ -555,7 +555,7 @@ def role_problems(rows: Sequence[Mapping[str, Any]], role: str) -> list[str]:
         if RO.role_of(row["answered_by"]) != role:
             problems.append(f"{who}: not in the role {role}")
             continue
-        wrong = RO.answer_problem(row["answered_by"], row["model"])
+        wrong = RO.answer_problem(row["answered_by"], row["model"], answered_at=row["answered_at"])
         if wrong is not None:
             problems.append(f"{who}: {wrong}")
     return problems
@@ -992,12 +992,13 @@ def check_answer(run: Path, handoff: Path, batch_id: str, label: str, text: str)
     return None
 
 
-#: The model the answering agents of this lane run as when a brief names no role: Fable 5.2 since
-#: owner decision D153 (2026-11-10; until then Sonnet 5.5, the `image_depicts` role of D6). It must
+#: The model the answering agents of this lane run as when a brief names no role: the model the
+#: latest owner move without calibration put every role on (`roles.ROLELESS_MODEL`: Opus 5.5 since
+#: D157, Fable 5.2 under D153, Sonnet 5.5 before - the `image_depicts` role of D6). It must
 #: be one `opus_handoff.NEW_ANSWER_MODELS`, or the recording command of the brief would be refused.
 #: The answers of 2026-09-30 keep their Sonnet stamp and the MiniMax ones of 2026-10-03 to
 #: 2026-10-07 stay valid for reading.
-ANSWER_MODEL = "claude-fable-5-2"
+ANSWER_MODEL = RO.ROLELESS_MODEL
 #: The population of a claim-only run: the sites that serve nothing while their Wikidata item
 #: claims a file. The sites that serve an image were judged by the 2026-09-30 run and delivered;
 #: this plan may not touch them, and says so instead of claiming them for its own.
@@ -1119,7 +1120,9 @@ def import_stage(run: Path, stage: str, role: str | None = None) -> dict[str, An
                 if hashlib.sha256(shown.read_bytes()).hexdigest() != c.jpeg_sha256:
                     raise ST.StateError(f"{shown} is not the picture candidate {c.label} showed")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
-        problem = RO.answer_problem(answer.answered_by, answer.model)
+        problem = RO.answer_problem(
+            answer.answered_by, answer.model, answered_at=answer.answered_at
+        )
         if problem is not None:
             raise ST.StateError(f"{batch_id}/{label}: {problem}")
         if role is not None and RO.role_of(answer.answered_by) != role:

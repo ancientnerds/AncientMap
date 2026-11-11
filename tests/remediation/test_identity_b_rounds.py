@@ -33,6 +33,10 @@ from tests.remediation.identity_b_fixtures import (  # noqa: E402
 )
 
 PAGE = "https://example.org/page"
+#: An answer recorded before owner decision D153, one under it (Fable) and one after D157 (Opus).
+BEFORE_D153 = "2026-11-10T12:00:00+00:00"
+UNDER_D153 = "2026-11-11T10:00:00+00:00"
+AFTER_D157 = "2026-11-11T18:00:00+00:00"
 
 
 def render(ctx: dict[str, Any], earlier: str | None) -> str:
@@ -417,21 +421,23 @@ class TestTheCalibrationGate:
     def test_a_role_that_stands_by_the_owners_decision_imports_without_a_calibration(
         self, out: Path, tmp_path: Path
     ) -> None:
-        """D153/D154: the web verifier is on Fable and stands by the owner's decision - there is
-        no calibration id to name and no verdict time an answer could precede. An open round holds
-        the Sonnet answers given before the decision and the Fable ones that finish it: both are
-        the role's, and each decision keeps the stamp of the answer it rests on."""
+        """D153/D154 and D157: the web verifier stands by the owner's decision - there is no
+        calibration id to name and no verdict time an answer could precede. An open round holds the
+        Fable answers given under D153 and the Opus ones that finish it after D157: both are the
+        role's, and each decision keeps the stamp of the answer it rests on."""
         record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
-        stamps = dict(zip(sorted(record.batches), (OH.SONNET_MODEL, OH.FABLE_MODEL), strict=True))
+        stamps = dict(zip(sorted(record.batches), (OH.FABLE_MODEL, OH.OPUS_MODEL), strict=True))
+        times = dict(zip(sorted(record.batches), (UNDER_D153, AFTER_D157), strict=True))
         for batch_id, [site] in record.batches.items():
             OH.write_answer(
                 tmp_path / "h1", batch_id=batch_id, stage=SPEC.stage, label=site,
                 text=json.dumps({"site_id": site, "ok": True}),
                 answered_by=RO.answered_by(SPEC.role, batch_id), model=stamps[batch_id],
-                now=lambda: NOW,
+                now=lambda batch_id=batch_id: times[batch_id],
             )  # fmt: skip
         verdict = R.require_calibration(tmp_path / "no-calibration", None, SPEC.role, "toy-web")
-        assert verdict["standing"] == RO.OWNER_STANDING and verdict["owner_decision"] == "D153"
+        assert verdict["standing"] == RO.owner_standing_text("D157")
+        assert verdict["owner_decision"] == "D157"
         assert (verdict["calibration_id"], verdict["agreement"], verdict["decided_at"]) == (
             None,
             None,
@@ -445,6 +451,30 @@ class TestTheCalibrationGate:
         decisions = R.decisions_by_site(out)
         assert {decisions[A_ID]["model"], decisions[B_ID]["model"]} == set(stamps.values())
 
+    def test_an_answer_from_before_the_owners_standing_is_not_imported(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        """Rule 2 at the gate: the owner's standing covers what was answered since D153 put the role
+        on Fable. A Sonnet answer of the web verifier from before was written on a model that stood
+        by a calibration this gate did not ask: the import stops, nothing is decided."""
+        record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
+        stamps = dict(zip(sorted(record.batches), (OH.SONNET_MODEL, OH.OPUS_MODEL), strict=True))
+        times = dict(zip(sorted(record.batches), (BEFORE_D153, AFTER_D157), strict=True))
+        for batch_id, [site] in record.batches.items():
+            OH.write_answer(
+                tmp_path / "h1", batch_id=batch_id, stage=SPEC.stage, label=site,
+                text=json.dumps({"site_id": site, "ok": True}),
+                answered_by=RO.answered_by(SPEC.role, batch_id), model=stamps[batch_id],
+                now=lambda batch_id=batch_id: times[batch_id],
+            )  # fmt: skip
+        verdict = R.require_calibration(tmp_path / "no-calibration", None, SPEC.role, "toy-web")
+        with pytest.raises(R.RoundError, match="before role web_verifier stood by the owner's"):
+            R.import_round(
+                out, SPEC, "r1", decided_at=verdict["decided_at"], http=FakeClient,
+                resolver=resolver_of({}), now=lambda: NOW, pace=0,
+            )  # fmt: skip
+        assert R.decisions_by_site(out) == {}
+
     def test_an_answer_given_before_the_calibration_was_decided_is_not_imported(
         self, out: Path, tmp_path: Path
     ) -> None:
@@ -453,7 +483,7 @@ class TestTheCalibrationGate:
         answer_all(tmp_path / "h1", record, SPEC, yes)
         with pytest.raises(R.RoundError, match="2 answer.s. were given before the calibration"):
             R.import_round(
-                out, SPEC, "r1", decided_at="2026-10-09T02:00:01+00:00", http=FakeClient,
+                out, SPEC, "r1", decided_at="2026-11-12T02:00:01+00:00", http=FakeClient,
                 resolver=resolver_of({}), now=lambda: NOW, pace=0,
             )  # fmt: skip
         assert not (out / R.DECISIONS_FILE).exists()

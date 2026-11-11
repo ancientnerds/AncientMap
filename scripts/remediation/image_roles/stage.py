@@ -327,7 +327,9 @@ def import_answers(
             handoff, batch_id=batch_id, stage=spec.name, label=label, prompt=question.prompt
         )
         if candidate_model is None:
-            wrong = RO.answer_problem(answer.answered_by, answer.model)
+            wrong = RO.answer_problem(
+                answer.answered_by, answer.model, answered_at=answer.answered_at
+            )
         else:
             try:
                 RO.require_candidate_stamp(candidate_model, answer.model)

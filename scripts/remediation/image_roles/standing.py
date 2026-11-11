@@ -21,8 +21,9 @@ verdicts, and this module is their record:
 
 `require_standing` is the gate the image lane's exports call (`run.py`): a slot stands when its
 verdict passed or a release still rests on the verdict, the seal, the gold, the registry entry and
-the evidence it was made on - or, since owner decisions D153 and D154 of 2026-11-10 (every role on
-Fable 5.2, no calibration run on it), when its role stands by that decision
+the evidence it was made on - or, since owner decisions D153 (2026-11-10, Fable 5.2) and D157
+(2026-11-11, Opus 5.5) moved every role with no calibration run (D154), when its role stands by
+that decision
 (`roles.owner_standing`), which the gate asks first and names in what it returns. Nothing here
 calls a model.
 
@@ -271,8 +272,8 @@ def standing(directory: Path, slot: str) -> dict[str, Any]:
     """How `slot` stands in `directory`: its verdict passed, or a release still rests on what it was
     made on. Refused otherwise, naming what is missing or what moved.
 
-    A slot whose role stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable,
-    D154 says no calibration is run there) has no verdict of its own: the answer is that decision,
+    A slot whose role stands by the owner's decision (`roles.owner_standing`: D153 and D157 moved
+    it with no calibration, D154) has no verdict of its own: the answer is that decision,
     in words, and the directory - sealed for the role's earlier model - is not asked."""
     by_owner = RO.owner_standing(CAL.slot_role(slot))
     if by_owner is not None:

@@ -104,14 +104,15 @@ def test_the_answer_models_are_opus_sonnet_haiku_and_the_recorded_minimax() -> N
 
 def test_a_new_answer_may_name_only_the_claude_ids() -> None:
     """D6: new answers are Claude's. The MiniMax id stays in `ANSWER_MODELS` so the answers already
-    recorded can be read and validated, but nothing new may name it. D153: Fable first - it is the
-    model of every role, and the registry holds a role's answer to it; the three 5.5 ids stay for
-    the applied moves, a candidate trial and the stamps a reader counts as Claude's."""
+    recorded can be read and validated, but nothing new may name it. D157: Opus first - it is the
+    model of every role again, and the registry holds a role's answer to it; the other ids stay for
+    the applied moves (D153's Fable among them), a candidate trial and the stamps a reader counts as
+    Claude's."""
     assert OH.NEW_ANSWER_MODELS == (
-        "claude-fable-5-2",
         "claude-opus-5-5",
         "claude-sonnet-5-5",
         "claude-haiku-5-5",
+        "claude-fable-5-2",
     )
     assert set(OH.NEW_ANSWER_MODELS) < set(OH.ANSWER_MODELS)
     assert set(OH.ANSWER_MODELS) - set(OH.NEW_ANSWER_MODELS) == {"MiniMax-M3.1-Flash-Preview"}

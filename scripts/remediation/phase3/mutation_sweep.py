@@ -16514,8 +16514,8 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "claude roles: a new answer may name the MiniMax model again",
         OPUS_HANDOFF,
-        'NEW_ANSWER_MODELS: tuple[str, ...] = (\n    "claude-fable-5-2",\n    "claude-opus-5-5",\n'
-        '    "claude-sonnet-5-5",\n    "claude-haiku-5-5",\n)\n',
+        'NEW_ANSWER_MODELS: tuple[str, ...] = (\n    "claude-opus-5-5",\n    "claude-sonnet-5-5",\n'
+        '    "claude-haiku-5-5",\n    "claude-fable-5-2",\n)\n',
         "NEW_ANSWER_MODELS: tuple[str, ...] = tuple(ANSWER_MODELS)  # mutant\n",
         OPUS_HANDOFF_TEST,
         "test_a_new_answer_may_name_only_the_claude_ids",
@@ -25909,8 +25909,10 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "enrich enrich: an answer of another model than the role's is counted",
         ENRICH_MODULE,
-        "    problem = RO.answer_problem(answer.answered_by, answer.model)\n    if problem is not None:\n",
-        "    problem = RO.answer_problem(answer.answered_by, answer.model)\n    if False:  # mutant\n",
+        "    problem = RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)\n"
+        "    if problem is not None:\n",
+        "    problem = RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)\n"
+        "    if False:  # mutant\n",
         ENRICH_CLI_TEST,
         ENRICH_ROLES_TEST,
     ),

@@ -679,8 +679,9 @@ def brief(adv: Path, handoff: Path, batch_id: str) -> str:
         scratch=f"{shown}-scratch/{batch_id}",
         adv=HO._shown(adv),
         stage=STAGE,
-        # the model the role answers with now: Fable for a round exported before owner decision
-        # D153 took the role from the model the round recorded (`roles.model_now`)
+        # the model the role answers with now: the current one for a round exported before an
+        # owner move without calibration (D153, D157) took the role from the model the round
+        # recorded (`roles.model_now`)
         model=RO.model_now(ROLE, record["model"]),
         role=ROLE,
     )
@@ -695,7 +696,7 @@ def role_problem(answer: OH.Answer) -> str | None:
             f"without `--role {ROLE}`, so nothing says the registry's model wrote it - delete it "
             "and answer again"
         )
-    return RO.answer_problem(answer.answered_by, answer.model)
+    return RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)
 
 
 def _attempts(adv: Path, cells: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:

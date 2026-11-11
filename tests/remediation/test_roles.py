@@ -162,11 +162,12 @@ def test_the_agent_part_is_one_plain_name(agent: str) -> None:
 
 
 def test_an_answer_naming_a_role_must_carry_that_roles_stamp() -> None:
-    assert RO.answer_problem("pilot_judge:b1", OH.OPUS_MODEL) is None
-    problem = RO.answer_problem("pilot_judge:b1", OH.SONNET_MODEL)
+    at = "2026-10-09T02:00:00+00:00"
+    assert RO.answer_problem("pilot_judge:b1", OH.OPUS_MODEL, answered_at=at) is None
+    problem = RO.answer_problem("pilot_judge:b1", OH.SONNET_MODEL, answered_at=at)
     assert problem is not None and "pilot_judge" in problem and OH.SONNET_MODEL in problem
     # an answer that names no role is not the registry's to judge
-    assert RO.answer_problem("teaser-w-001", OH.SONNET_MODEL) is None
+    assert RO.answer_problem("teaser-w-001", OH.SONNET_MODEL, answered_at=at) is None
 
 
 # ------------------------------------------------------------------------------- escalation
@@ -739,22 +740,23 @@ def test_answer_with_a_role_records_the_role_in_answered_by(tmp_path: Path) -> N
     text.write_text("VERDICT: SUPPORTED\n", encoding="utf-8")
 
     done = _run(
-        _answer_argv(tmp_path, text, "--model", "claude-fable-5-2", "--role", "enrich_writer")
+        _answer_argv(tmp_path, text, "--model", "claude-opus-5-5", "--role", "enrich_writer")
     )
 
     assert done.returncode == 0, done.stderr
     stored = _stored(tmp_path)
     assert stored["answered_by"] == "enrich_writer:agent-7"
-    assert stored["model"] == OH.FABLE_MODEL
+    assert stored["model"] == OH.OPUS_MODEL
     assert set(stored) == OH.ANSWER_KEYS  # the frozen shape did not grow
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"])
+@pytest.mark.parametrize("model", ["claude-fable-5-2", "claude-sonnet-5-5", "claude-haiku-5-5"])
 def test_answer_with_a_role_refuses_a_model_that_is_not_the_registered_one(
     tmp_path: Path, model: str
 ) -> None:
-    """Since D153 the registered model of every role is Fable: the recorder refuses each 5.5 model
-    for a role's new answer - Sonnet too, on which this role answered until the decision."""
+    """Since D157 the registered model of every role is Opus: the recorder refuses every other
+    model for a role's new answer - Fable too, on which it answered under D153, and Sonnet, on
+    which this role answered until then."""
     _handoff_with_a_question(tmp_path)
     text = tmp_path / "a.txt"
     text.write_text("VERDICT: SUPPORTED\n", encoding="utf-8")
@@ -762,7 +764,7 @@ def test_answer_with_a_role_refuses_a_model_that_is_not_the_registered_one(
     refused = _run(_answer_argv(tmp_path, text, "--model", model, "--role", "enrich_writer"))
 
     assert refused.returncode == 2
-    assert "role enrich_writer is registered to claude-fable-5-2" in refused.stderr
+    assert "role enrich_writer is registered to claude-opus-5-5" in refused.stderr
     assert f"not {model}" in refused.stderr
     assert not (tmp_path / OH.answer_relpath("batch-0001", "check", "site-1")).exists()
 
@@ -810,7 +812,10 @@ def test_answer_of_a_candidate_trial_records_the_role_and_the_candidates_stamp(
     assert stored["model"] == OH.ANSWER_MODELS["claude-haiku-5-5"]
     assert set(stored) == OH.ANSWER_KEYS
     # a trial answer is not the registered role's: the registry's own stamp check says so
-    assert RO.answer_problem(stored["answered_by"], stored["model"]) is not None
+    assert (
+        RO.answer_problem(stored["answered_by"], stored["model"], answered_at=stored["answered_at"])
+        is not None
+    )
 
 
 def test_a_candidate_trial_answer_needs_a_role(tmp_path: Path) -> None:
@@ -828,7 +833,9 @@ def test_a_candidate_trial_answer_needs_a_role(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("model", "candidate", "message"),
     [
-        ("claude-fable-5-2", "claude-fable-5-2", "is the registered model of web_verifier"),
+        ("claude-opus-5-5", "claude-opus-5-5", "is the registered model of web_verifier"),
+        ("claude-fable-5-2", "claude-fable-5-2", "owner decision D157 took web_verifier from"),
+        ("claude-sonnet-5-5", "claude-sonnet-5-5", "owner decision D153 took web_verifier from"),
         ("claude-sonnet-5-5", "claude-haiku-5-5", "is not the candidate model claude-haiku-5-5"),
     ],
 )

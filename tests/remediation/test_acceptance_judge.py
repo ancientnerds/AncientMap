@@ -484,6 +484,6 @@ def test_the_brief_names_the_batch_its_directory_and_both_commands(tmp_path: Pat
     assert f"--answered-by {batch}" in brief and "--stage s1" in brief
     assert "opus_handoff.py answer" in brief and "judge.py check-answer" in brief
     assert (
-        "--model <the model id you run as: claude-fable-5-2>" in brief
+        "--model <the model id you run as: claude-opus-5-5>" in brief
     )  # an agent names the model it runs as (owner decision 2026-10-01)
     assert "CANARIES" not in brief and "canary" not in brief.lower()

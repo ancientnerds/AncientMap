@@ -1089,7 +1089,7 @@ class TestTheStages:
         text = V.brief(run, handoff, "check-001")
         assert "--stage served-check" in text and "Read tool" in text and "4 question(s)" in text
         assert (
-            "--model <the model id you run as: claude-fable-5-2>" in text
+            "--model <the model id you run as: claude-opus-5-5>" in text
         )  # an agent names the model it runs as (owner decision D153, 2026-11-10: Fable only)
         assert (
             V.ANSWER_MODEL in OH.NEW_ANSWER_MODELS

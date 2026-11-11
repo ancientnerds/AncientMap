@@ -23,6 +23,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from fields import carry as CA  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import handoff as HO  # noqa: E402
@@ -51,9 +52,11 @@ def wd5_run(tmp_path: Path, *lines: dict[str, Any], rule: R.Rule = R.RECHECK) ->
 
 
 def record(handoff: Path, label: str, text: str, *, by: str = "field_researcher:wd5-r0-b0001",
-           model: str = OH.SONNET_MODEL, batch: str = "wd5-r0-b0001") -> None:  # fmt: skip
+           model: str | None = None, batch: str = "wd5-r0-b0001") -> None:  # fmt: skip
+    """Recorded now, so by default stamped with the model the registry gives the role now."""
+    stamp = model or OH.ANSWER_MODELS[RO.role(RO.role_of(by) or "field_researcher").model]
     OH.write_answer(handoff, batch_id=batch, stage=STAGE, label=label, text=text,
-                    answered_by=by, model=model)  # fmt: skip
+                    answered_by=by, model=stamp)  # fmt: skip
 
 
 def answer(**fields: Any) -> str:
@@ -192,8 +195,8 @@ class TestTheBrief:
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd5-r0-b0001")
         assert "handoff.py wiki-text --label <label>" in text
-        # the registry's model for the role, as it is: Fable since owner decision D153
-        assert "--model claude-fable-5-2 --role field_researcher" in text
+        # the registry's model for the role, as it is: Opus since owner decision D157
+        assert "--model claude-opus-5-5 --role field_researcher" in text
         assert "403 and 429 are a throttle, never a finding" in text
 
     def test_the_older_lanes_briefs_name_no_role_and_no_cache(self, tmp_path: Path) -> None:
@@ -201,7 +204,7 @@ class TestTheBrief:
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd4-r0-b0001")
         assert "--role" not in text and "wiki-text" not in text
-        assert "--model claude-sonnet-5-5 --text-file" in text
+        assert "--model claude-opus-5-5 --text-file" in text
 
 
 # ------------------------------------------------------------------------------ carried cells

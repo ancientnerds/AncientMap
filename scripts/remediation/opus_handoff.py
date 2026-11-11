@@ -10,9 +10,10 @@ Sonnet 5.5; an answer names the model that really wrote it (`ANSWER_MODELS`), an
 before carry the Opus stamp and stay valid. Owner decision D6, 2026-10-08: Claude only again, a
 role per task (`roles.ROLES`) on Opus, Sonnet or Haiku 5.5; a NEW answer may name only
 `NEW_ANSWER_MODELS`, while the MiniMax stamp of the answers recorded 2026-10-03 to 2026-10-07 stays
-readable. Owner decision D153, 2026-11-10: every role answers on Fable 5.2 from now on
-(`claude-fable-5-2`, `FABLE_MODEL`; the registry `roles.ROLES` holds every role to it), and the
-answers recorded before keep their stamp and stay valid. A stage now runs in two halves with the
+readable. Owner decision D153, 2026-11-10: every role answers on Fable 5.2 (`claude-fable-5-2`,
+`FABLE_MODEL`); owner decision D157, 2026-11-11: the Fable quota is used up, every role answers on
+Opus 5.5 again (the registry `roles.ROLES` holds every role to it). Both moved every role without a
+calibration (D154); the answers recorded before each move keep their stamp and stay valid. A stage now runs in two halves with the
 answering in between, done by the orchestrator:
 
     export   the stage computes the calls it would buy - the exact prompt text, unchanged, so the
@@ -46,13 +47,16 @@ Usage (the orchestrator's side):
         --text-file ANSWER.txt
 
 `--model` is required and has no default: it is the model id the answering agent runs as, as its own
-system prompt names it (`claude-fable-5-2`, the model of every role since owner decision D153, or
-`claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5`: the `NEW_ANSWER_MODELS`). `--role`
+system prompt names it (`claude-opus-5-5`, the model of every role since owner decision D157,
+`claude-sonnet-5-5`, `claude-haiku-5-5` or `claude-fable-5-2`: the `NEW_ANSWER_MODELS`). `--role`
 names the role the answer is given in (`roles.ROLES`): it is refused
 when the role's registered model is not `--model`, and it is recorded as `answered_by =
-"<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow. `--candidate-model` (with `--role`)
+"<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow. Without `--role`, an
+`--answered-by` that reads as `<role>:<agent>` of a registered role is refused: it would record an
+answer of the role that no `--role` check let through. `--candidate-model` (with `--role`)
 records an answer of a candidate-model trial (`roles.candidate_model`): `--model` must be that
-candidate, which is not the role's registered model; the role stays registered as it was.
+candidate, which is not the role's registered model nor one an owner move without calibration took
+the role from; the role stays registered as it was.
 
 `--check "COMMAND"` runs the lane's own answer check (its `check-answer`) before anything is written
 and records the answer only when the command exits 0 (`run_answer_check`: the command is split like
@@ -97,8 +101,9 @@ MINIMAX_MODEL = "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
 #: The stamp of an answer by a Haiku agent. Owner decision D6, 2026-10-08: the image prefilter and
 #: the operators run Haiku 5.5 (`roles.ROLES`).
 HAIKU_MODEL = "anthropic/claude-haiku-5-5 (Claude Code agent)"
-#: The stamp of an answer by a Fable agent. Owner decision D153, 2026-11-10: every role answers on
-#: Fable 5.2 from now on (`roles.ROLES`). The answers recorded before keep the stamps above.
+#: The stamp of an answer by a Fable agent. Owner decision D153, 2026-11-10: every role answered on
+#: Fable 5.2 (`roles.ROLES`) until owner decision D157, 2026-11-11, put every role on Opus 5.5
+#: again. The answers recorded before either move keep their stamps.
 FABLE_MODEL = "anthropic/claude-fable-5-2 (Claude Code agent)"
 #: The model id an agent runs as (as its own system prompt names it) -> the stamp its answer carries.
 #: The only models a RECORDED answer may name: `read_answer` and `validate` accept exactly these
@@ -113,16 +118,17 @@ ANSWER_MODELS: Mapping[str, str] = MappingProxyType(
         "MiniMax-M3.1-Flash-Preview": MINIMAX_MODEL,
     }
 )
-#: The model ids a NEW answer may name (owner decisions D6, 2026-10-08, and D153, 2026-11-10):
-#: `answer --model` offers exactly these and the briefs list exactly these. Fable first: the order
-#: is the briefs' order, and since D153 Fable is the model of every role - `answer --role` refuses
-#: any other (`roles.require_model`). The three 5.5 ids stay for what names them without a role:
-#: the applied moves of the registry, a candidate trial and the stamps a reader counts as Claude's.
+#: The model ids a NEW answer may name (owner decisions D6, 2026-10-08, D153, 2026-11-10, and
+#: D157, 2026-11-11): `answer --model` offers exactly these and the briefs list exactly these. Opus
+#: first: the order is the briefs' order, and since D157 Opus is the model of every role -
+#: `answer --role` refuses any other (`roles.require_model`). The other ids stay for what names them
+#: without a role: the applied moves of the registry, a candidate trial and the stamps a reader
+#: counts as Claude's.
 NEW_ANSWER_MODELS: tuple[str, ...] = (
-    "claude-fable-5-2",
     "claude-opus-5-5",
     "claude-sonnet-5-5",
     "claude-haiku-5-5",
+    "claude-fable-5-2",
 )
 #: The model id -> the family its answers are labelled with in evidence that names who judged
 #: (`mechanical/scope_review.judged_by` writes `<family>:<agent>` into a `scope_reason`). Declared
@@ -607,6 +613,15 @@ def main(argv: Iterable[str] | None = None) -> int:
             answered_by = roles.answered_by(args.role, args.answered_by)
         except roles.RoleError as exc:
             parser.error(str(exc))
+    else:
+        import roles  # here, not above: roles reads this module's stamps
+
+        named = roles.role_of(args.answered_by)
+        if named is not None:
+            parser.error(
+                f"--answered-by {args.answered_by!r} names role {named}: record it with "
+                f"--role {named} and a plain agent name, so the role's model is checked"
+            )
     if args.check is not None:
         try:
             run_answer_check(args.check)

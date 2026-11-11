@@ -39,7 +39,7 @@ A, B, C = (
     "bbbbbbbb-0000-4000-8000-000000000002",
     "cccccccc-0000-4000-8000-000000000003",
 )
-NOW = "2026-10-09T03:00:00+00:00"
+NOW = "2026-11-12T03:00:00+00:00"  # after D157: the registry's model answers
 
 
 def jpeg() -> bytes:

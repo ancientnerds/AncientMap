@@ -76,6 +76,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
+import roles as RO  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from phase3.run import InputError, read_jsonl  # noqa: E402 - the one JSONL reader
 from served_image.precheck import Harvest, load_harvest  # noqa: E402
@@ -574,7 +575,7 @@ from pages you read - copy them, never paraphrase.
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
---model <the model id you run as: claude-fable-5-2> \
+--model <the model id you run as: {model}> \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -597,6 +598,7 @@ def brief(out: Path, round_no: int, batch_id: str) -> str:
         round=round_no,
         stage=STAGE,
         out=out.resolve().as_posix(),
+        model=RO.ROLELESS_MODEL,
     )
 
 

@@ -438,8 +438,8 @@ def require_writer_calibration(root: Path) -> str:
 def writer_standing(root: Path) -> dict[str, str]:
     """How the writer role stands for the approval of a lane-E pilot, as the approval records it.
 
-    By the owner's decision when `roles.owner_standing` says so (D153 put the role on Fable, D154
-    says no calibration is run there): `{"writer_standing": <that decision, in words>}` - there is
+    By the owner's decision when `roles.owner_standing` says so (D153 and D157 moved the role with
+    no calibration, D154): `{"writer_standing": <that decision, in words>}` - there is
     no verdict whose sha256 could be named. Otherwise by its calibration:
     `{"calibration_sha256": ...}` of the passed verdict (`require_writer_calibration`), or
     `EnrichError`."""
@@ -461,6 +461,6 @@ def require_role(answer: OH.Answer, role: str, where: str) -> None:
             f"{where}: {answer.answered_by!r} does not name the role {role!r} - record the answer "
             f"with opus_handoff.py answer --role {role} --model {RO.role(role).model}"
         )
-    problem = RO.answer_problem(answer.answered_by, answer.model)
+    problem = RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)
     if problem is not None:
         raise EnrichError(f"{where}: {problem}")

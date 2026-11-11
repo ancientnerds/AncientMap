@@ -12,8 +12,9 @@ that its licence/author fields are complete per D18)":
              licence URL, author) and what the check that chose the row said. Batches of `BATCH`.
     check-answer  the answer check an agent passes to `opus_handoff.py answer --check`.
     import   every answer read back against the prompt rebuilt byte for byte, by the Opus stamp
-             (`OH.OPUS_MODEL`; the lane plan names Opus) or, for an answer given since owner decision
-             D153, the Fable stamp (`REVIEW_MODELS`) and by no other, into `R/REVIEW.jsonl`, the file
+             (`OH.OPUS_MODEL`; the lane plan names Opus, and owner decision D157 put every answer on
+             Opus again) or, for an answer given under owner decision D153, the Fable stamp
+             (`REVIEW_MODELS`) and by no other, into `R/REVIEW.jsonl`, the file
              `hero_moves.py emit --review` reads. A missing, malformed or foreign answer refuses the
              whole import: a review is never partial, and nothing is read as an accept.
 
@@ -50,9 +51,10 @@ STAGE = "hero-review"
 BATCH = 8
 REVIEW_FILE = "REVIEW.jsonl"
 REVIEW_SOURCE = "REVIEW_SOURCE.json"
-#: The lane plan of 2026-11-05 names Opus for this review. Since owner decision D153 of 2026-11-10
-#: every answer is Fable's, so a review answered from then on carries the Fable stamp; one answered
-#: before keeps its Opus stamp and stays valid. No other stamp is the review's.
+#: The lane plan of 2026-11-05 names Opus for this review. Under owner decision D153 of 2026-11-10
+#: every answer was Fable's, so a review answered then carries the Fable stamp; owner decision D157
+#: of 2026-11-11 put every answer on Opus again. Each keeps its stamp and stays valid. No other
+#: stamp is the review's.
 REVIEW_MODEL = OH.OPUS_MODEL
 REVIEW_MODELS = (REVIEW_MODEL, OH.FABLE_MODEL)
 DECISIONS = (HM.ACCEPT, HM.VETO)

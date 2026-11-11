@@ -26,13 +26,17 @@ calibration against already-answered batches has passed.
 D6 (2026-10-08) limits a new answer to `opus_handoff.NEW_ANSWER_MODELS` (Claude ids only) and
 `fields/handoff.py` refuses every other stamp at import, so the WD5 main run, the card pilot and the
 image lanes need a Claude Code session (they are driven by Claude agents, not by an API call from the
-code). **Since owner decisions D153 and D154 (2026-11-10) every role answers on `claude-fable-5-2`**:
-`roles.ROLES` registers all 19 roles to it, each by an owner move in `roles.APPLIED_ESCALATIONS`, and
-`opus_handoff.py answer --role` refuses any other model. No calibration is run on Fable: a role stands
-by the decision (`roles.owner_standing`, which every calibration gate asks first). An answer recorded
-before keeps its Opus, Sonnet or Haiku stamp and stays valid (`roles.answer_problem`), and a run that
-began before goes on with Fable (`roles.model_now`). This supersedes the model mix of D6 and
-D36/D40/D45. D44 keeps D6 closed to MiniMax.
+code). **Since owner decision D157 (2026-11-11; the Fable quota was used up) every role answers on
+`claude-opus-5-5`**, after D153/D154 (2026-11-10) had put every role on `claude-fable-5-2`:
+`roles.ROLES` registers all 19 roles to Opus, each by an owner move per decision in
+`roles.APPLIED_ESCALATIONS` (`roles.UNCALIBRATED_DECISIONS`: owner moves without calibration, each
+with the time it took effect), and `opus_handoff.py answer --role` refuses any other model. No
+calibration is run (D154): a role stands by the decision (`roles.owner_standing`, which every
+calibration gate asks first). An answer keeps the stamp of the model its role stood on when it was
+recorded (`roles.answer_problem` via `answered_at`): Opus, Sonnet or Haiku before D153, Fable between
+D153 and D157, Opus after; a run that began before goes on with Opus (`roles.model_now`). Briefs
+without a role offer `roles.ROLELESS_MODEL`. This supersedes the model mix of D6 and D36/D40/D45. D44
+keeps D6 closed to MiniMax.
 
 ## Code Quality Standards
 

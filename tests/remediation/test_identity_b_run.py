@@ -285,7 +285,7 @@ class TestTheScopeLane:
     def test_the_import_names_the_owners_decision_and_asks_no_calibration(
         self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """D153/D154: the stage's role is on Fable and stands by the owner's decision. `import`
+        """D157/D154: the stage's role is on Opus and stands by the owner's decision. `import`
         takes no `--calibration`, reads no verdict (the calibration root is empty) and prints how
         the role stands in words, with no calibration id and no agreement."""
         run = tree / "identity"
@@ -296,7 +296,7 @@ class TestTheScopeLane:
         go(tree, "--lane", "scope-window", "export", "--stage", "scope-window-web",
            "--handoff", str(handoff))  # fmt: skip
         out = R.stage_dir(run, SJ.web_spec())
-        assert SJ.web_spec().model == "claude-fable-5-2"
+        assert SJ.web_spec().model == "claude-opus-5-5"
         answer_all(
             handoff, R.find_round(out, "r1"), SJ.web_spec(), {TS.FORT: TS.answer("OUT_OF_WINDOW")}
         )
@@ -308,7 +308,7 @@ class TestTheScopeLane:
         assert code == 0, printed.err
         summary = json.loads(printed.out)
         assert (
-            summary["standing"] == "owner decision D153 (no calibration on claude-fable-5-2: D154)"
+            summary["standing"] == "owner decision D157 (no calibration on claude-opus-5-5: D154)"
         )
         assert (summary["calibration"], summary["agreement"]) == (None, None)
         assert (out / R.DECISIONS_FILE).exists()
@@ -344,11 +344,11 @@ class TestTheScopeLane:
             "c",
             "web_verifier",
             "scope-window-web",
-            decided_at="2026-10-10T00:00:00+00:00",
+            decided_at="2026-11-13T00:00:00+00:00",
         )
         capsys.readouterr()
         assert go(tree, *importing) == 1
-        assert "given before the calibration was decided (2026-10-10" in capsys.readouterr().err
+        assert "given before the calibration was decided (2026-11-13" in capsys.readouterr().err
         assert not (out / R.DECISIONS_FILE).exists()
         # a calibration measured on the retarget lane's questions is no gate of the scope window
         write_calibration(tree / "cal", "other", "web_verifier", "retarget-web")

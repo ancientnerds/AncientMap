@@ -26,9 +26,9 @@ import roles as RO  # noqa: E402
 from identity import rounds as R  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
-NOW = "2026-10-09T02:00:00+00:00"
+NOW = "2026-11-12T02:00:00+00:00"
 #: When a test calibration was decided: before `NOW`, the time its answers are given.
-DECIDED_AT = "2026-10-09T01:00:00+00:00"
+DECIDED_AT = "2026-11-12T01:00:00+00:00"
 ENT = "https://www.wikidata.org/wiki/Special:EntityData/{}.json"
 WP = "https://en.wikipedia.org/wiki/"
 

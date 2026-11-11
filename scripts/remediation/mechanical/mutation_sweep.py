@@ -8948,7 +8948,7 @@ WD5_ADV_CASES: list[Case] = [
     Case(
         "wd5-adv: an answer must carry the role's model",
         FIELDS_HANDOFF,
-        "    return RO.answer_problem(answer.answered_by, answer.model)",
+        "    return RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)",
         "    return None",
         "test_an_answer_whose_stamp_is_not_the_roles_model_is_refused",
         OPS_TESTS,
@@ -9334,7 +9334,7 @@ WD5_ADV_CASES: list[Case] = [
     Case(
         "wd5-adv: an answer must carry the adversarial role's model",
         ADVERSARIAL,
-        "    return RO.answer_problem(answer.answered_by, answer.model)",
+        "    return RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)",
         "    return None",
         "test_an_answer_stamped_with_another_model_is_refused",
         ADV_TESTS,
@@ -9775,12 +9775,13 @@ WD5_ADV_CASES: list[Case] = [
         ROLES_TESTS,
     ),
     Case(
-        # since owner decision D153 the registry holds Fable for every role; where the writer
-        # stood until then is the `from` of its D153 move, which the test's registry is built from
+        # since owner decisions D153 and D157 the registry holds one model for every role; where
+        # the writer stood until then is the `from` of its D153 move, which the test's registry is
+        # built from
         "wd5-adv: the lane E writer follows the researcher to Opus",
         ROLES_PY,
-        '    _d153_move("enrich_writer", "claude-sonnet-5-5", "high"),',
-        '    _d153_move("enrich_writer", "claude-opus-5-5", "high"),',
+        '    _uncalibrated_move("D153", "enrich_writer", "claude-sonnet-5-5", "high"),',
+        '    _uncalibrated_move("D153", "enrich_writer", "claude-opus-5-5", "high"),',
         "test_the_enrich_writer_stays_on_sonnet_under_its_own_calibration_set",
         ROLES_TESTS,
     ),
@@ -11776,12 +11777,12 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "an answer is bound to its role",
-                '        if spec.roles:\n            why = role_problem(roles, spec.roles[stage], answer.answered_by, answer.model)\n            if why is not None:\n                raise RunError(f"{batch_id}/{site_id}: {why}")',
+                '        if spec.roles:\n            why = role_problem(\n                roles,\n                spec.roles[stage],\n                answer.answered_by,\n                answer.model,\n                answered_at=answer.answered_at,\n            )\n            if why is not None:\n                raise RunError(f"{batch_id}/{site_id}: {why}")',
                 "test_an_answer_not_given_in_a_role_is_refused",
             ),
             (
                 "a canary answer is bound to its role",
-                "        if spec.roles:\n            why = role_problem(roles, spec.roles[stage], answer.answered_by, answer.model)\n            if why is not None:\n                raise RunError(f\"{batch_id}/{canary['label']}: {why}\")",
+                "        if spec.roles:\n            why = role_problem(\n                roles,\n                spec.roles[stage],\n                answer.answered_by,\n                answer.model,\n                answered_at=answer.answered_at,\n            )\n            if why is not None:\n                raise RunError(f\"{batch_id}/{canary['label']}: {why}\")",
                 "test_the_canary_answer_must_be_in_the_role_too",
             ),
             (
@@ -11900,7 +11901,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "the judge is bound to its role",
-                "            if spec.roles:\n                why = role_problem(roles, JUDGE_ROLE",
+                "            if spec.roles:\n                why = role_problem(\n                    roles,\n                    JUDGE_ROLE,",
                 "test_the_pilots_judge_answers_in_its_role",
             ),
         )
@@ -14524,45 +14525,56 @@ WD5X_CASES: list[Case] = [
 CASES += WD5X_CASES
 
 
-# ---------------- owner decisions D153 and D154 (2026-11-10): every role on Fable 5.2, by an owner
-# move that rests on no calibration; a role stands by the decision (`roles.owner_standing`), an
-# answer recorded before keeps its stamp (`roles.answer_problem`) and a run that began before goes
-# on with Fable (`roles.model_now`). Every label starts with "d153:", so the group runs on its own:
-# `mutation_sweep.py d153:`. The guards `roles.py` runs at import (the chain, the settlements) have
-# no case here: a mutant of one stops the import of every test, which proves nothing about any.
+# ---------------- owner moves without calibration: decisions D153 and D154 (2026-11-10, every role
+# on Fable 5.2) and D157 (2026-11-11, every role on Opus 5.5), each an owner move per role that rests
+# on no calibration and records when it took effect (`roles.UNCALIBRATED_DECISIONS`); a role stands
+# by the decision (`roles.owner_standing`, held to its window by `standing_problem`), an answer's
+# stamp is the model its role stood on when it was recorded (`roles.answer_problem`, `model_at`) and
+# a run that began before goes on with the current model (`roles.model_now`, `run_model_at`). Every
+# label starts with "d153:", so the group runs on its own: `mutation_sweep.py d153:`. The guards
+# `roles.py` runs at import (the chain, the settlements, the decision table) have no case here: a
+# mutant of one stops the import of every test, which proves nothing about any.
 FABLE_TESTS = "tests/remediation/test_roles_fable.py"
 SHORTS_NOTE_TESTS = "tests/pipeline/video/test_shorts.py"
 P4_MODEL_PY = REPO / "scripts/remediation/phase4/model4.py"
 REMEDIATION = REPO / "scripts/remediation"
-_D153_STANDS = "test_a_role_moved_again_after_d153_stands_by_its_calibration_again"
+_D153_STANDS = "test_a_role_moved_again_after_d157_stands_by_its_calibration_again"
 _D153_NO_DECISION = "test_no_role_stood_by_an_owner_decision_before_d153"
-_D153_MOVE = "test_a_d153_move_rests_on_no_calibration_and_may_not_name_one"
-_D153_STAMP = "test_an_answer_recorded_before_the_move_keeps_its_stamp_and_stays_valid"
-_D153_RUN = "test_a_run_that_recorded_the_roles_earlier_model_goes_on_with_fable"
+_D153_MOVE = "test_a_move_without_calibration_rests_on_none_and_may_not_name_one"
+_D153_STAMP = "test_each_stamp_is_valid_in_its_own_window_only"
+_D153_RUN = "test_a_run_that_recorded_an_earlier_model_goes_on_with_opus"
+_D153_WINDOW = "test_a_run_takes_each_model_in_its_window"
 _D153_IDENTITY = "test_the_identity_gates_name_the_decision_and_ask_no_calibration_id"
 _D153_GATES = "test_every_gate_still_refuses_a_role_that_stands_by_no_decision"
-_D153_MIXED = "test_a_round_answered_partly_by_opus_and_partly_by_fable_imports"
+_D153_MIXED = "test_a_round_answered_by_opus_then_fable_then_opus_imports"
 _D153_FOR = "test_ai_system_for_names_fable_alone_or_beside_the_earlier_models"
 D153_CASES: list[Case] = [
     # ---- roles.py: the move
     guard(
-        "d153: a D153 move names no calibration",
+        "d153: a move without calibration names none",
         ROLES_PY,
-        "    if to_fable and evidence:",
+        "        if evidence:",
         _D153_MOVE,
         FABLE_TESTS,
     ),
     guard(
-        "d153: a D153 move ends at Fable",
+        "d153: a move without calibration ends at its decision's model",
         ROLES_PY,
-        '    if to_fable and move["to"] != FABLE:',
+        '        if move["to"] != made["to"]:',
+        _D153_MOVE,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: a move without calibration took effect at its decision's time",
+        ROLES_PY,
+        '        if move["at"] != made["at"]:',
         _D153_MOVE,
         FABLE_TESTS,
     ),
     Case(
-        "d153: only a D153 move may rest on no calibration",
+        "d153: only a move without calibration may rest on none",
         ROLES_PY,
-        "        or (not evidence and not to_fable)",
+        "        or (not evidence and not without)",
         "        or False",
         _D153_MOVE,
         FABLE_TESTS,
@@ -14570,63 +14582,74 @@ D153_CASES: list[Case] = [
     Case(
         "d153: the enrich writer stood on Sonnet when D153 found it",
         ROLES_PY,
-        '    _d153_move("enrich_writer", "claude-sonnet-5-5", "high"),',
-        '    _d153_move("enrich_writer", "claude-opus-5-5", "high"),',
-        "test_each_role_got_there_by_an_owner_move_of_its_own_under_d153",
+        '    _uncalibrated_move("D153", "enrich_writer", "claude-sonnet-5-5", "high"),',
+        '    _uncalibrated_move("D153", "enrich_writer", "claude-opus-5-5", "high"),',
+        "test_each_role_got_there_by_an_owner_move_of_its_own_under_each_decision",
         FABLE_TESTS,
     ),
-    # ---- roles.py: the three rules
-    Case(
-        "d153: the decision covers a role only while its D153 move is its last",
+    # ---- roles.py: the rules
+    guard(
+        "d153: the decisions cover a role only while one of them is its last move",
         ROLES_PY,
-        '        and moved["decision"] == FABLE_DECISION',
-        "        and True",
+        "        if not uncalibrated(move):",
         _D153_STANDS,
         FABLE_TESTS,
     ),
-    Case(
-        "d153: a tier move is no owner decision",
+    guard(
+        "d153: a role without such a move stands by no decision",
         ROLES_PY,
-        '        and moved.get("kind") == OWNER_KIND',
-        "        and True",
+        "    if not tail:",
         _D153_NO_DECISION,
         FABLE_TESTS,
     ),
     guard(
-        "d153: a role without its D153 move stands by no decision",
+        "d153: the standing covers only what was answered since it began",
         ROLES_PY,
-        "    if fable_move(name) is None:",
-        _D153_NO_DECISION,
-        FABLE_TESTS,
-    ),
-    guard(
-        "d153: an earlier answer keeps its stamp",
-        ROLES_PY,
-        '    if moved is not None and stamp == OH.ANSWER_MODELS[moved["from"]]:',
-        _D153_STAMP,
+        '    if _time(answered_at) < _time(standing["since"]):',
+        "test_the_standing_covers_the_answers_recorded_since_it_began",
         FABLE_TESTS,
     ),
     Case(
-        "d153: only the role's own earlier stamp is kept",
+        "d153: a stamp is judged by the time it was recorded",
         ROLES_PY,
-        '    if moved is not None and stamp == OH.ANSWER_MODELS[moved["from"]]:',
-        "    if moved is not None and stamp in OH.ANSWER_MODELS.values():",
+        "    model = model_at(name, answered_at)",
+        "    model = role(name).model",
         _D153_STAMP,
         FABLE_TESTS,
     ),
     guard(
-        "d153: a run that recorded the earlier model goes on with Fable",
+        "d153: an answer recorded before a move keeps the earlier model's stamp",
         ROLES_PY,
-        '    if moved is not None and moved["from"] == recorded:',
-        _D153_RUN,
+        '        if move["role"] == name and uncalibrated(move) and when < _time(move["at"]):',
+        _D153_STAMP,
         FABLE_TESTS,
     ),
-    Case(
+    guard(
+        "d153: a trial cannot take a model an owner move took the role from",
+        ROLES_PY,
+        "    if taken:",
+        "test_a_candidate_trial_cannot_take_a_model_an_owner_move_took_the_role_from",
+        FABLE_TESTS,
+    ),
+    guard(
         "d153: a run that recorded another model is not moved",
         ROLES_PY,
-        '    if moved is not None and moved["from"] == recorded:',
-        "    if moved is not None:",
+        "    if start is None:",
         _D153_RUN,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: a run takes each model in its window",
+        ROLES_PY,
+        '        if answered_at is None or _time(answered_at) >= _time(move["at"]):',
+        _D153_WINDOW,
+        FABLE_TESTS,
+    ),
+    guard(
+        "d153: the recorder refuses a role written into answered_by",
+        OPUS_HANDOFF,
+        "        if named is not None:",
+        "test_the_recorder_refuses_a_role_written_into_answered_by",
         FABLE_TESTS,
     ),
     # ---- the gates: each asks `owner_standing` first, and still asks its calibration otherwise
@@ -14665,6 +14688,13 @@ D153_CASES: list[Case] = [
         _D153_GATES,
         FABLE_TESTS,
     ),
+    guard(
+        "d153: an import under the decision refuses an answer from before its standing",
+        REMEDIATION / "identity" / "rounds.py",
+        "        if before:",
+        "test_an_answer_from_before_the_owners_standing_is_not_imported",
+        "tests/remediation/test_identity_b_rounds.py",
+    ),
     Case(
         "d153: an import under the decision has no calibration time",
         REMEDIATION / "identity" / "rounds.py",
@@ -14697,42 +14727,42 @@ D153_CASES: list[Case] = [
     ),
     # ---- a run or round that began before the decision
     Case(
-        "d153: a card run that began before takes the Fable answers",
+        "d153: a card run that began before takes each answer in its window",
         TEASER_RUN,
-        '    if stamp == OH.ANSWER_MODELS[RO.model_now(role, roles[role]["model"])]:',
-        "    if False:",
+        "    model = RO.run_model_at(role, recorded, answered_at)",
+        "    model = recorded",
         _D153_MIXED,
         FABLE_TESTS,
     ),
     Case(
-        "d153: a card run that began before is briefed with Fable",
+        "d153: a card run that began before is briefed with the current model",
         TEASER_RUN,
         '    return {**fixed, "model": RO.model_now(role, fixed["model"])}',
         "    return dict(fixed)",
-        "test_the_open_batches_are_briefed_with_fable",
+        "test_the_open_batches_are_briefed_with_opus",
         FABLE_TESTS,
     ),
     Case(
-        "d153: an insert round exported before is briefed with Fable",
+        "d153: an insert round exported before is briefed with the current model",
         INSERT_RESEARCH,
         '        model=RO.model_now(record["role"], record["model"]),',
         '        model=record["model"],',
-        "test_a_round_exported_before_d153_is_briefed_with_fable",
+        "test_a_round_exported_before_d153_is_briefed_with_opus",
         INSERT_TESTS,
     ),
     guard(
-        "d153: a wd5 round exported before is briefed with Fable",
+        "d153: a wd5 round exported before is briefed with the current model",
         FIELDS_HANDOFF,
         "        if rule.name in RULE_ROLE:",
         "test_the_brief_names_a_model_that_is_a_parameter",
         "tests/remediation/test_fields_wd5.py",
     ),
     Case(
-        "d153: an adversarial round exported before is briefed with Fable",
+        "d153: an adversarial round exported before is briefed with the current model",
         ADVERSARIAL,
         '        model=RO.model_now(ROLE, record["model"]),',
         '        model=record["model"],',
-        "test_a_round_exported_before_d153_is_briefed_with_fable",
+        "test_a_round_exported_before_d153_is_briefed_with_opus",
         "tests/remediation/test_fields_adversarial.py",
     ),
     Case(

@@ -317,7 +317,7 @@ class TestTheQuestion:
         assert A.PERIOD_KEY in prompt and "lane WD4" in prompt
         text = HO.brief(run, handoff, "wd4-r0-b0001")
         assert "of the WD4 structured-field fill" in text and "--stage wd4" in text
-        assert "--model claude-sonnet-5-5" in text
+        assert "--model claude-opus-5-5" in text
         assert text == HO.brief(run, handoff, "wd4-r0-b0001")
 
     def test_check_answer_reads_a_period_word(self, run: Path, tmp_path: Path) -> None:

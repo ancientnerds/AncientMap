@@ -286,12 +286,13 @@ class TestTheExportAndTheBrief:
         the round's model and nothing else. It used to say "You are Sonnet researcher" and record
         `claude-sonnet-5-5` whatever answered - measured 2026-10-04, that is what put a false
         stamp on eight WD3 answers, and a lane answered by another model would repeat it. The
-        default is still the rule's own id, so an unchanged run exports an unchanged brief."""
+        default is the lanes' researcher role's current model (`fields/handoff.RECHECK_MODEL`)."""
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd3-r0-b0001")
         assert "You are researcher wd3-r0-b0001 of the WD3 structured-field fill" in text
-        assert "--model claude-sonnet-5-5 --text-file" in text and "--stage wd3" in text
-        assert "claude-opus-5-5" not in text and 'source is "unresolved"' in text
+        # the default is the lanes' researcher role's current model (D157: Opus), never written out
+        assert "--model claude-opus-5-5 --text-file" in text and "--stage wd3" in text
+        assert "claude-sonnet-5-5" not in text and 'source is "unresolved"' in text
         assert "Sonnet researcher" not in text
         assert "Never ancientnerds.com" in text
         assert "h-r0-scratch/wd3-r0-b0001/<label>.json" in text

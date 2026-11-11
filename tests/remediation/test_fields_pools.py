@@ -527,8 +527,8 @@ class TestThePick:
         assert len(manifest) == 6 and {m["stage"] for m in manifest} == {"wd5"}
         assert {m["field"] for m in manifest} == {"period_start"}
         record = HO.read_rounds(out / "run")[0]
-        # the round names the model the wd5 brief names: the registry's as it is (D153: Fable)
-        assert record["model"] == HO.RECHECK_MODEL == "claude-fable-5-2"
+        # the round names the model the wd5 brief names: the registry's as it is (D157: Opus)
+        assert record["model"] == HO.RECHECK_MODEL == "claude-opus-5-5"
         truth = json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
         assert set(truth) == {m["label"] for m in manifest}
         named = next(v for v in truth.values() if v["basis"] == PL.AUDIT_CONFIRMED)
@@ -569,7 +569,7 @@ class TestThePick:
         PL.prepare(root, calibration_id="fr-bp-001", run=out / "run")
         cal_run = D.calibration_run(root / "fr-bp-001")
         assert R.read_rule(cal_run) is R.RECHECK
-        assert HO.read_rounds(cal_run)[0]["model"] == HO.RECHECK_MODEL == "claude-fable-5-2"
+        assert HO.read_rounds(cal_run)[0]["model"] == HO.RECHECK_MODEL == "claude-opus-5-5"
 
 
 # ------------------------------------------------------------------------------ comparing the BP pool

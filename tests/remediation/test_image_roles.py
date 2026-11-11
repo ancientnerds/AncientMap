@@ -37,7 +37,7 @@ from image_roles import wiki_cache as WC  # noqa: E402
 from served_image import state as ST  # noqa: E402
 from served_image import vision as V  # noqa: E402
 
-NOW = "2026-10-09T03:00:00+00:00"
+NOW = "2026-11-12T03:00:00+00:00"  # after D157: the registry's model answers
 
 
 @functools.cache

@@ -1,10 +1,14 @@
-"""Fable only: owner decisions D153 and D154 of 2026-11-10, on the role registry as it is.
+"""Owner moves without calibration: owner decisions D153 and D154 of 2026-11-10 and D157 of
+2026-11-11, on the role registry as it is.
 
-D153: every role answers on `claude-fable-5-2` from now on; the answers recorded before keep their
-stamp and stay valid. D154: no calibration is run on Fable - a role stands on it by the owner's
-decision, with no verdict of its own. `roles.py` holds the three rules that follow (`owner_standing`,
-`answer_problem`, `model_now`); every gate and every brief asks them. These tests prove the rules,
-each gate that asks the first one, and a run that began before the decision going on with Fable.
+D153: every role answers on `claude-fable-5-2`; D157 (the Fable quota is used up): every role answers
+on `claude-opus-5-5`. D154: no calibration is run - a role stands on the model by the owner's
+decision, with no verdict of its own. Both are one kind of record (`roles.UNCALIBRATED_DECISIONS`):
+an owner move per role, with no evidence and with `at`, the time it took effect. `roles.py` holds the
+rules that follow (`owner_standing` with `standing_problem`, `answer_problem` through `model_at`,
+`model_now` through `run_model_at`); every gate and every brief asks them. These tests prove the
+rules, each gate that asks the first one, the recorder, and a run that began before either decision
+going on with Opus.
 
 The history of the registry up to D153 and the calibration machinery are proven on the registry as
 it stood until then (`conftest.registry_until_d153`, `test_roles.py`, `test_calibrate_claude.py`).
@@ -48,7 +52,6 @@ from tests.remediation.test_teaser_shorts_run import (  # noqa: E402
     judge_client,
     make_run,
     passes,
-    put,
     rates,
     sid,
     step,
@@ -59,7 +62,14 @@ from tests.remediation.test_wc import _run as wc_run  # noqa: E402
 from tests.remediation.wc_fixtures import wiki_cache  # noqa: E402,F401
 
 FABLE = "claude-fable-5-2"
-STANDING = "owner decision D153 (no calibration on claude-fable-5-2: D154)"
+OPUS = "claude-opus-5-5"
+STANDING = "owner decision D157 (no calibration on claude-opus-5-5: D154)"
+D153_AT = "2026-11-10T20:55:24+00:00"
+D157_AT = "2026-11-11T16:27:38+00:00"
+#: Three times an answer can have been recorded at: before D153, between the two, after D157.
+BEFORE = "2026-11-10T20:00:00+00:00"
+BETWEEN = "2026-11-11T10:00:00+00:00"
+AFTER = "2026-11-11T18:00:00+00:00"
 #: Where D153 found each role: (the model it answered on until then, its effort). The registry of
 #: `test_roles.D6`, written out again on purpose: these are the stamps of the answers on record.
 UNTIL_D153 = {
@@ -87,77 +97,126 @@ ROLE_NAMES = sorted(UNTIL_D153)
 
 
 # ------------------------------------------------------------------------------ the registry
-def test_every_role_is_registered_to_fable_at_the_effort_it_had() -> None:
+def test_every_role_is_registered_to_opus_at_the_effort_it_had() -> None:
     assert {name: (r.model, r.effort) for name, r in RO.ROLES.items()} == {
-        name: (FABLE, effort) for name, (_, effort) in UNTIL_D153.items()
+        name: (OPUS, effort) for name, (_, effort) in UNTIL_D153.items()
     }
-    assert RO.FABLE == FABLE and (RO.FABLE_DECISION, RO.NO_CALIBRATION_DECISION) == ("D153", "D154")
+    assert RO.FABLE == FABLE and RO.NO_CALIBRATION_DECISION == "D154"
+    assert {d: (m["to"], m["at"]) for d, m in RO.UNCALIBRATED_DECISIONS.items()} == {
+        "D153": (FABLE, D153_AT),
+        "D157": (OPUS, D157_AT),
+    }
+    assert RO.ROLELESS_MODEL == OPUS
     assert OH.ANSWER_MODELS[FABLE] == "anthropic/claude-fable-5-2 (Claude Code agent)"
+    assert OH.NEW_ANSWER_MODELS[0] == OPUS  # the briefs' first offer
 
 
-def test_each_role_got_there_by_an_owner_move_of_its_own_under_d153() -> None:
-    """One record per role, the last of its chain: from the model it stood on, to Fable, the effort
-    unchanged, under D153 - and resting on no calibration (D154), which the reason says plainly."""
-    moves = [m for m in RO.APPLIED_ESCALATIONS if m.get("decision") == "D153"]
+@pytest.mark.parametrize("decision", ["D153", "D157"])
+def test_each_role_got_there_by_an_owner_move_of_its_own_under_each_decision(
+    decision: str,
+) -> None:
+    """One record per role and decision: from the model it stood on to the decision's model, the
+    effort unchanged, at the decision's time - and resting on no calibration (D154)."""
+    moves = [m for m in RO.APPLIED_ESCALATIONS if m.get("decision") == decision]
     assert [m["role"] for m in moves] == list(RO.ROLES)  # every role, in the registry's order
-    assert RO.APPLIED_ESCALATIONS[-len(moves) :] == tuple(moves)  # appended, nothing after them
     for move in moves:
         name = move["role"]
-        assert RO.last_move(name) == move == RO.fable_move(name) == RO.owner_move(name, "D153")
-        assert (move["kind"], move["to"]) == ("owner", FABLE)
-        assert (move["from"], move["effort"]) == UNTIL_D153[name]
+        assert RO.uncalibrated(move) and RO.owner_move(name, decision) == move
+        assert (move["kind"], move["effort"]) == ("owner", UNTIL_D153[name][1])
+        assert move["at"] == RO.UNCALIBRATED_DECISIONS[decision]["at"]
         assert move["evidence"] == ()
-        assert "no calibration was run on Fable" in move["reason"] and "D154" in move["reason"]
-        assert "only Fable 5.2" in move["reason"]
+        assert "no calibration was run on" in move["reason"] and "D154" in move["reason"]
+        if decision == "D153":
+            assert (move["from"], move["to"]) == (UNTIL_D153[name][0], FABLE)
+            assert "only Fable 5.2" in move["reason"]
+        else:
+            assert (move["from"], move["to"]) == (FABLE, OPUS)
+            assert RO.last_move(name) == move
+            assert RO.owner_tail(name) == (RO.owner_move(name, "D153"), move)
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
     RO.check_settled_tier_moves(RO.SETTLED_TIER_MOVES, RO.APPLIED_ESCALATIONS, RO.ROLES)
 
 
-def test_fable_is_on_no_tier_so_nothing_moves_a_role_up_from_it() -> None:
+def test_the_d157_moves_close_the_chain() -> None:
+    moves = [m for m in RO.APPLIED_ESCALATIONS if m.get("decision") == "D157"]
+    assert RO.APPLIED_ESCALATIONS[-len(moves) :] == tuple(moves)  # appended, nothing after them
+
+
+def test_fable_is_on_no_tier_and_opus_is_the_top() -> None:
     with pytest.raises(RO.RoleError, match="'claude-fable-5-2' is on no tier"):
         RO.next_tier(FABLE)
-    with pytest.raises(RO.RoleError, match="is on no tier"):
+    with pytest.raises(RO.RoleError, match="no higher tier than claude-opus-5-5"):
         RO.escalation("card_writer", calibration_id="cal-x", reason="failed")
 
 
-def d153_move(**over: object) -> dict[str, object]:
-    move: dict[str, object] = dict(RO.fable_move("operator") or {})
+def owner_move(which: str = "D157", **over: object) -> dict[str, object]:
+    move: dict[str, object] = dict(RO.owner_move("operator", which) or {})
     move.update(over)
     return move
 
 
-def test_a_d153_move_rests_on_no_calibration_and_may_not_name_one() -> None:
-    """D154: no calibration is run on Fable. The move's evidence is empty and must be - naming one
-    would claim a measurement nobody made - and a move under D153 ends at Fable. Every other owner
-    move still needs the calibrations it rests on."""
-    roles = dict(RO.ROLES)
-    RO.check_applied_escalations((d153_move(),), roles)
+@pytest.mark.parametrize("decision", ["D153", "D157"])
+def test_a_move_without_calibration_rests_on_none_and_may_not_name_one(decision: str) -> None:
+    """D154: no calibration is run. The move's evidence is empty and must be - naming one would
+    claim a measurement nobody made -, it ends at the decision's model and carries the decision's
+    time. Every other owner move still needs the calibrations it rests on, and carries no time."""
+    model = RO.UNCALIBRATED_DECISIONS[decision]["to"]
+    wrong = FABLE if model == OPUS else OPUS
+    RO._check_owner_move(owner_move(decision))
     with pytest.raises(RO.RoleError, match="rests on no calibration .D154"):
-        RO.check_applied_escalations((d153_move(evidence=("scripted_dry_run",)),), roles)
-    with pytest.raises(RO.RoleError, match="a move under D153 ends at claude-fable-5-2"):
-        RO.check_applied_escalations((d153_move(to="claude-opus-5-5"),), roles)
+        RO._check_owner_move(owner_move(decision, evidence=("scripted_dry_run",)))
+    with pytest.raises(RO.RoleError, match=f"a move under {decision} ends at {model}"):
+        RO._check_owner_move(owner_move(decision, to=wrong))
+    with pytest.raises(RO.RoleError, match=f"a move under {decision} took effect at"):
+        RO._check_owner_move(owner_move(decision, at="2026-11-01T00:00:00+00:00"))
+    no_time = owner_move(decision)
+    del no_time["at"]
     with pytest.raises(RO.RoleError, match="carries exactly"):
-        RO.check_applied_escalations((d153_move(decision="D36"),), roles)  # no evidence, not D153
+        RO._check_owner_move(no_time)
     with pytest.raises(RO.RoleError, match="carries exactly"):
-        RO.check_applied_escalations((d153_move(evidence=None),), roles)
+        RO._check_owner_move(owner_move(decision, decision="D36"))  # a time, no evidence
     with pytest.raises(RO.RoleError, match="carries exactly"):
-        RO.check_applied_escalations((d153_move(evidence=("",)),), roles)
+        RO._check_owner_move(owner_move(decision, evidence=None))
+    with pytest.raises(RO.RoleError, match="carries exactly"):
+        RO._check_owner_move(owner_move(decision, evidence=("",)))
 
 
-def test_a_registry_edit_without_its_d153_move_is_refused() -> None:
-    """The ROLES edit and its record go together, as for every move before: Fable in the registry
-    without the D153 move, and the move without the edit, are both refused at import."""
+def test_the_timed_moves_of_a_role_follow_each_other_in_time() -> None:
+    swapped = tuple(
+        {**m, "at": "2026-11-09T00:00:00+00:00"}
+        if m["role"] == "operator" and m.get("decision") == "D157"
+        else m
+        for m in RO.APPLIED_ESCALATIONS
+    )
+    with pytest.raises(RO.RoleError, match="took effect at"):
+        RO.check_applied_escalations(swapped, RO.ROLES)
+    with pytest.raises(RO.RoleError, match="does not follow the decision before"):
+        RO.check_uncalibrated_decisions(
+            {
+                "D153": {"to": FABLE, "at": D157_AT, "why": "x"},
+                "D157": {"to": OPUS, "at": D153_AT, "why": "y"},
+            }
+        )
+    with pytest.raises(RO.RoleError, match="carries no time zone"):
+        RO.check_uncalibrated_decisions(
+            {"D157": {"to": OPUS, "at": "2026-11-11T16:00", "why": "y"}}
+        )
+
+
+def test_a_registry_edit_without_its_d157_move_is_refused() -> None:
+    """The ROLES edit and its record go together, as for every move before: Opus in the registry
+    without the D157 move, and the move without the edit, are both refused at import."""
     without = tuple(
         m
         for m in RO.APPLIED_ESCALATIONS
-        if not (m["role"] == "card_writer" and m.get("decision") == "D153")
+        if not (m["role"] == "card_writer" and m.get("decision") == "D157")
     )
-    with pytest.raises(RO.RoleError, match="card_writer is registered to claude-fable-5-2"):
+    with pytest.raises(RO.RoleError, match="card_writer is registered to claude-opus-5-5"):
         RO.check_applied_escalations(without, RO.ROLES)
-    unmoved = {**RO.ROLES, "operator": RO.Role("operator", "claude-haiku-5-5", "low", "x")}
-    with pytest.raises(RO.RoleError, match="operator is registered to claude-haiku-5-5"):
+    unmoved = {**RO.ROLES, "operator": RO.Role("operator", FABLE, "low", "x")}
+    with pytest.raises(RO.RoleError, match="operator is registered to claude-fable-5-2"):
         RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, unmoved)
-    wrong_start = (*without, d153_move(role="card_writer", **{"from": "claude-sonnet-5-5"}))
+    wrong_start = (*without, owner_move(role="card_writer", **{"from": "claude-sonnet-5-5"}))
     with pytest.raises(RO.RoleError, match="does not start where the last one ended"):
         RO.check_applied_escalations(wrong_start, RO.ROLES)
 
@@ -165,31 +224,46 @@ def test_a_registry_edit_without_its_d153_move_is_refused() -> None:
 def test_a_settlement_is_held_to_where_its_roles_stood_until_d153() -> None:
     """The settled tier moves record the tier chain, which D153 ended: `adversarial` stayed on
     Sonnet and `card_adversarial` took its card context on Opus. A D153 move that started somewhere
-    else would say the settled role had moved after all."""
+    else would say the settled role had moved after all; D157 changes nothing of that."""
     moved = tuple(
         {**m, "from": "claude-opus-5-5"}
         if m["role"] == "adversarial" and m.get("decision") == "D153"
         else m
         for m in RO.APPLIED_ESCALATIONS
     )
-    with pytest.raises(RO.RoleError, match="adversarial stood at claude-opus-5-5 until D153"):
+    with pytest.raises(
+        RO.RoleError, match="adversarial stood at claude-opus-5-5 until the owner moves"
+    ):
         RO.check_settled_tier_moves(RO.SETTLED_TIER_MOVES, moved, RO.ROLES)
 
 
 # ------------------------------------------------------------------------------ rule 1: standing
 @pytest.mark.parametrize("name", ROLE_NAMES)
-def test_a_role_on_fable_stands_by_the_owners_decision_in_words(name: str) -> None:
-    """Owner standing without a verdict: the record names the decision and never says `passed`."""
+def test_a_role_stands_by_the_owners_latest_decision_in_words(name: str) -> None:
+    """Owner standing without a verdict: the record names the latest decision, never `passed`, and
+    the time the standing began (the first move of the tail, D153's)."""
     record = RO.owner_standing(name)
     assert record == {
         "role": name,
-        "model": FABLE,
+        "model": OPUS,
         "standing": STANDING,
-        "owner_decision": "D153",
+        "owner_decision": "D157",
+        "since": D153_AT,
     }
-    assert record["standing"] == RO.OWNER_STANDING
+    assert record["standing"] == RO.owner_standing_text("D157")
     assert CC.PASSED not in record.values() and CC.RELEASED not in record["standing"]
     assert "calibration_id" not in record
+
+
+@pytest.mark.parametrize("name", ROLE_NAMES)
+def test_the_standing_covers_the_answers_recorded_since_it_began(name: str) -> None:
+    """An answer recorded before D153 was written on a model that stood by a calibration, which a
+    gate standing on the owner's decision did not ask."""
+    problem = RO.standing_problem(name, BEFORE)
+    assert problem is not None and "before the role's owner standing began" in problem
+    assert RO.standing_problem(name, D153_AT) is None
+    assert RO.standing_problem(name, BETWEEN) is None
+    assert RO.standing_problem(name, AFTER) is None
 
 
 def test_an_unregistered_role_stands_by_nothing() -> None:
@@ -199,29 +273,32 @@ def test_an_unregistered_role_stands_by_nothing() -> None:
         RO.model_now("writer", "claude-opus-5-5")
 
 
-def test_a_role_moved_again_after_d153_stands_by_its_calibration_again(
+def test_a_role_moved_again_after_d157_stands_by_its_calibration_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The decision covers a role only while its D153 move is its last one: a later owner move puts
-    the gates back to asking for a verdict, and the earlier stamp is no longer the role's."""
+    """The decisions cover a role only while its last move is one of them: a later owner move with
+    a calibration puts the gates back to asking for a verdict."""
     later = {
         "kind": "owner",
         "role": "card_writer",
-        "from": FABLE,
-        "to": "claude-opus-5-5",
+        "from": OPUS,
+        "to": "claude-sonnet-5-5",
         "effort": "high",
         "decision": "D199",
         "reason": "a later owner move",
         "evidence": ("cal-later",),
     }
-    roles = {**RO.ROLES, "card_writer": RO.Role("card_writer", "claude-opus-5-5", "high", "x")}
+    roles = {**RO.ROLES, "card_writer": RO.Role("card_writer", "claude-sonnet-5-5", "high", "x")}
     monkeypatch.setattr(RO, "ROLES", roles)
     monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, later))
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
-    assert RO.fable_move("card_writer") is None and RO.owner_standing("card_writer") is None
+    assert RO.owner_tail("card_writer") == () and RO.owner_standing("card_writer") is None
     assert RO.owner_standing("hook_rater") is not None  # the others are untouched
-    assert RO.model_now("card_writer", "claude-opus-5-5") == "claude-opus-5-5"
-    assert RO.answer_problem("card_writer:w", OH.FABLE_MODEL) is not None
+    assert RO.model_now("card_writer", OPUS) == OPUS  # a run is moved by the tail only
+    assert RO.answer_problem("card_writer:w", OH.OPUS_MODEL, answered_at=AFTER) is not None
+    assert RO.answer_problem("card_writer:w", OH.FABLE_MODEL, answered_at=BETWEEN) is None
+    with pytest.raises(RO.RoleError, match="does not stand by an owner decision"):
+        RO.standing_problem("card_writer", AFTER)
     with pytest.raises(CC.CalibrationError, match="no passing or released verdict"):
         CC.require_passed(Path("no-such-root"), [("card_writer", "all")])
 
@@ -229,7 +306,7 @@ def test_a_role_moved_again_after_d153_stands_by_its_calibration_again(
 @pytest.mark.usefixtures("registry_until_d153")
 def test_no_role_stood_by_an_owner_decision_before_d153() -> None:
     assert all(RO.owner_standing(name) is None for name in RO.ROLES)
-    assert all(RO.fable_move(name) is None for name in RO.ROLES)
+    assert all(RO.owner_tail(name) == () for name in RO.ROLES)
 
 
 # ------------------------------------------------------------------------------ the gates
@@ -242,13 +319,13 @@ def test_the_fields_wave_gate_names_the_decision_and_needs_no_verdict(tmp_path: 
             "role": "field_researcher",
             "comparison": "fields-decided",
             "standing": STANDING,
-            "owner_decision": "D153",
+            "owner_decision": "D157",
         },
         {
             "role": "adversarial",
             "comparison": "adv-known-truth",
             "standing": STANDING,
-            "owner_decision": "D153",
+            "owner_decision": "D157",
         },
     ]
 
@@ -283,19 +360,20 @@ def test_the_image_lanes_gate_names_the_decision_for_every_slot(tmp_path: Path) 
         ("adversarial", "image_adversarial"),
     ]
     assert {line["standing"] for line in lines} == {STANDING}
-    assert all(line["owner_decision"] == "D153" and line["model"] == FABLE for line in lines)
+    assert all(line["owner_decision"] == "D157" and line["model"] == OPUS for line in lines)
 
 
 def test_the_identity_gates_name_the_decision_and_ask_no_calibration_id(tmp_path: Path) -> None:
     """`identity/rounds.require_calibration` (run.py import) and `label_rounds.check_calibrated`
-    (the duplicate and parent judges): no id named, no verdict read, no time an answer could
-    precede."""
+    (the duplicate and parent judges): no id named, no verdict read; the time the standing began
+    is what `import_round` holds the answers to."""
     verdict = IR.require_calibration(tmp_path, None, "web_verifier", "scope-window-web")
     assert verdict == {
         "role": "web_verifier",
-        "model": FABLE,
+        "model": OPUS,
         "standing": STANDING,
-        "owner_decision": "D153",
+        "owner_decision": "D157",
+        "since": D153_AT,
         "calibration_id": None,
         "agreement": None,
         "decided_at": None,
@@ -314,8 +392,8 @@ def test_the_enrichment_approval_names_the_decision_in_place_of_a_verdict(tmp_pa
 
 @pytest.mark.usefixtures("registry_until_d153")
 def test_every_gate_still_refuses_a_role_that_stands_by_no_decision(tmp_path: Path) -> None:
-    """The gates are not gone: on a registry without the D153 moves each one asks its calibration
-    exactly as before and refuses an empty calibration root."""
+    """The gates are not gone: on a registry without the owner moves without calibration each one
+    asks its calibration exactly as before and refuses an empty calibration root."""
     with pytest.raises(CC.CalibrationError, match="no passing or released verdict"):
         CC.require_passed(tmp_path, [("field_researcher", "fields-decided")])
     with pytest.raises(K.CalibrationError, match="is not sealed"):
@@ -334,38 +412,70 @@ def test_every_gate_still_refuses_a_role_that_stands_by_no_decision(tmp_path: Pa
 
 # ------------------------------------------------------------------------------ rule 2: the stamps
 @pytest.mark.parametrize("name", ROLE_NAMES)
-def test_an_answer_recorded_before_the_move_keeps_its_stamp_and_stays_valid(name: str) -> None:
-    """D153: "answers recorded earlier keep their stamp and stay valid". The role's own earlier
-    model, and Fable - no other stamp, whatever model it names."""
+def test_each_stamp_is_valid_in_its_own_window_only(name: str) -> None:
+    """D153 and D157: "answers recorded earlier keep their stamp and stay valid" - the stamp of the
+    model the role stood on when the answer was recorded, and no other: the earlier model's before
+    D153, Fable's between the decisions, Opus's from D157 on."""
     earlier = OH.ANSWER_MODELS[UNTIL_D153[name][0]]
     by = f"{name}:agent-1"
-    assert RO.answer_problem(by, earlier) is None
-    assert RO.answer_problem(by, OH.FABLE_MODEL) is None
-    for stamp in set(OH.ANSWER_MODELS.values()) - {earlier, OH.FABLE_MODEL}:
-        problem = RO.answer_problem(by, stamp)
-        assert problem is not None and f"role {name} is registered to {FABLE}" in problem
-        assert stamp in problem
-    assert RO.answer_problem(by, UNTIL_D153[name][0]) is not None  # the bare id is no stamp
+    window = {
+        BEFORE: earlier,
+        BETWEEN: OH.FABLE_MODEL,
+        AFTER: OH.OPUS_MODEL,
+        D157_AT: OH.OPUS_MODEL,
+    }
+    for when, valid in window.items():
+        assert RO.answer_problem(by, valid, answered_at=when) is None, when
+        for stamp in set(OH.ANSWER_MODELS.values()) - {valid}:
+            problem = RO.answer_problem(by, stamp, answered_at=when)
+            assert problem is not None and f"role {name} is registered to" in problem, (when, stamp)
+            assert stamp in problem
+    assert RO.answer_problem(by, UNTIL_D153[name][0], answered_at=BEFORE) is not None  # bare id
+
+
+def test_a_new_answer_under_an_earlier_model_is_refused_whatever_wrote_it() -> None:
+    """The review finding on 2bc9aab: an earlier model's stamp was taken at any time. An Opus answer
+    of the card verifier recorded while it stood on Fable, and a Fable one recorded after D157, are
+    neither the role's - whichever recorder path wrote them."""
+    by = "card_web_verifier:x"
+    assert RO.answer_problem(by, OH.OPUS_MODEL, answered_at=BEFORE) is None
+    assert RO.answer_problem(by, OH.OPUS_MODEL, answered_at=BETWEEN) is not None
+    assert RO.answer_problem(by, OH.FABLE_MODEL, answered_at=AFTER) is not None
+    assert RO.answer_problem("web_verifier:x", OH.SONNET_MODEL, answered_at=AFTER) is not None
+    with pytest.raises(RO.RoleError, match="carries no time zone"):
+        RO.answer_problem(by, OH.OPUS_MODEL, answered_at="2026-11-11T18:00:00")
 
 
 @pytest.mark.parametrize("name", ROLE_NAMES)
-def test_a_new_answer_of_a_role_can_only_be_fables(name: str) -> None:
-    """What makes an earlier stamp an earlier answer: the recorder's check takes Fable only, and
-    the strict stamp check (a calibration's fresh answers) takes Fable's stamp only."""
-    RO.require_model(name, FABLE)
-    RO.require_stamp(name, OH.FABLE_MODEL)
+def test_a_new_answer_of_a_role_can_only_be_opus(name: str) -> None:
+    """The recorder's check takes Opus only, and the strict stamp check (a calibration's fresh
+    answers) takes Opus's stamp only."""
+    RO.require_model(name, OPUS)
+    RO.require_stamp(name, OH.OPUS_MODEL)
+    for earlier in {UNTIL_D153[name][0], FABLE} - {OPUS}:
+        with pytest.raises(RO.RoleError, match=f"role {name} is registered to {OPUS}, not"):
+            RO.require_model(name, earlier)
+        with pytest.raises(RO.RoleError, match=f"role {name} is registered to {OPUS}"):
+            RO.require_stamp(name, OH.ANSWER_MODELS[earlier])
+
+
+@pytest.mark.parametrize("name", ROLE_NAMES)
+def test_a_candidate_trial_cannot_take_a_model_an_owner_move_took_the_role_from(name: str) -> None:
     earlier = UNTIL_D153[name][0]
-    with pytest.raises(RO.RoleError, match=f"role {name} is registered to {FABLE}, not {earlier}"):
-        RO.require_model(name, earlier)
-    with pytest.raises(RO.RoleError, match=f"role {name} is registered to {FABLE}"):
-        RO.require_stamp(name, OH.ANSWER_MODELS[earlier])
+    for taken, decision in ((earlier, "D153"), (FABLE, "D157")):
+        if taken == OPUS:
+            continue  # the registered model is no candidate either
+        with pytest.raises(RO.RoleError, match=f"owner decision {decision} took {name} from"):
+            RO.candidate_model(name, taken)
+    for other in set(OH.NEW_ANSWER_MODELS) - {earlier, FABLE, OPUS}:
+        assert RO.candidate_model(name, other) == other
 
 
-def _answer_argv(root: Path, text: Path, *extra: str) -> list[str]:
+def _answer_argv(root: Path, text: Path, *extra: str, by: str = "teaser-verify-001") -> list[str]:
     return [
         sys.executable, str(REMEDIATION / "opus_handoff.py"), "answer", "--dir", str(root),
         "--batch-id", "verify-001", "--stage", "verify", "--label", "site-1",
-        "--answered-by", "teaser-verify-001", "--text-file", str(text), *extra,
+        "--answered-by", by, "--text-file", str(text), *extra,
     ]  # fmt: skip
 
 
@@ -377,48 +487,84 @@ def _recorder(tmp_path: Path) -> tuple[Path, Path]:
     return tmp_path, text
 
 
-def test_the_recorder_takes_a_fable_answer_of_the_card_verifier(tmp_path: Path) -> None:
+def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", check=False)
+
+
+def test_the_recorder_takes_an_opus_answer_of_the_card_verifier(tmp_path: Path) -> None:
     """The command the briefs of wave a2's open verify batches print."""
     root, text = _recorder(tmp_path)
-    done = subprocess.run(
-        _answer_argv(root, text, "--model", FABLE, "--role", "card_web_verifier"),
-        capture_output=True, text=True, encoding="utf-8", check=False,
-    )  # fmt: skip
+    done = _run(_answer_argv(root, text, "--model", OPUS, "--role", "card_web_verifier"))
     assert done.returncode == 0, done.stderr
     stored = json.loads(
         (root / OH.answer_relpath("verify-001", "verify", "site-1")).read_text("utf-8")
     )
-    assert stored["model"] == OH.FABLE_MODEL
+    assert stored["model"] == OH.OPUS_MODEL
     assert stored["answered_by"] == "card_web_verifier:teaser-verify-001"
-    assert RO.answer_problem(stored["answered_by"], stored["model"]) is None
+    assert (
+        RO.answer_problem(stored["answered_by"], stored["model"], answered_at=stored["answered_at"])
+        is None
+    )
     assert OH.validate(root).ok
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"])
-def test_the_recorder_refuses_a_new_answer_of_a_role_on_any_earlier_model(
+@pytest.mark.parametrize("model", [FABLE, "claude-sonnet-5-5", "claude-haiku-5-5"])
+def test_the_recorder_refuses_a_new_answer_of_a_role_on_any_other_model(
     tmp_path: Path, model: str
 ) -> None:
-    """A wrong-model new answer: Opus was this role's model until D153, and is refused like the
+    """A wrong-model new answer: Fable was this role's model until D157, and is refused like the
     others - nothing is written."""
     root, text = _recorder(tmp_path)
-    refused = subprocess.run(
-        _answer_argv(root, text, "--model", model, "--role", "card_web_verifier"),
-        capture_output=True, text=True, encoding="utf-8", check=False,
-    )  # fmt: skip
+    refused = _run(_answer_argv(root, text, "--model", model, "--role", "card_web_verifier"))
     assert refused.returncode == 2
-    assert f"role card_web_verifier is registered to {FABLE}, not {model}" in refused.stderr
+    assert f"role card_web_verifier is registered to {OPUS}, not {model}" in refused.stderr
+    assert not (root / OH.answer_relpath("verify-001", "verify", "site-1")).exists()
+
+
+def test_the_recorder_refuses_a_candidate_trial_of_a_model_the_role_was_moved_from(
+    tmp_path: Path,
+) -> None:
+    root, text = _recorder(tmp_path)
+    refused = _run(
+        _answer_argv(
+            root, text, "--model", FABLE, "--role", "card_web_verifier", "--candidate-model", FABLE
+        )
+    )
+    assert refused.returncode == 2
+    assert "owner decision D157 took card_web_verifier from claude-fable-5-2" in refused.stderr
+    assert not (root / OH.answer_relpath("verify-001", "verify", "site-1")).exists()
+
+
+def test_the_recorder_refuses_a_role_written_into_answered_by(tmp_path: Path) -> None:
+    """The second path: `--answered-by card_web_verifier:x` without `--role` would read as the
+    role's answer without the role's model ever being checked."""
+    root, text = _recorder(tmp_path)
+    refused = _run(_answer_argv(root, text, "--model", FABLE, by="card_web_verifier:x"))
+    assert refused.returncode == 2
+    assert "names role card_web_verifier" in refused.stderr
     assert not (root / OH.answer_relpath("verify-001", "verify", "site-1")).exists()
 
 
 # ------------------------------------------------------------------------------ rule 3: a run
 @pytest.mark.parametrize("name", ROLE_NAMES)
-def test_a_run_that_recorded_the_roles_earlier_model_goes_on_with_fable(name: str) -> None:
+def test_a_run_that_recorded_an_earlier_model_goes_on_with_opus(name: str) -> None:
     earlier = UNTIL_D153[name][0]
-    assert RO.model_now(name, earlier) == FABLE
-    assert RO.model_now(name, FABLE) == FABLE
-    # a run that recorded a model the role was not moved from is not what D153 moved
-    for other in set(OH.NEW_ANSWER_MODELS) - {earlier, FABLE}:
+    assert RO.model_now(name, earlier) == OPUS
+    assert RO.model_now(name, FABLE) == OPUS
+    # a run that recorded a model the role was not moved from is not what the decisions moved
+    for other in set(OH.NEW_ANSWER_MODELS) - {earlier, FABLE, OPUS}:
         assert RO.model_now(name, other) == other
+        assert RO.run_model_at(name, other, BETWEEN) == other
+
+
+@pytest.mark.parametrize("name", ROLE_NAMES)
+def test_a_run_takes_each_model_in_its_window(name: str) -> None:
+    earlier = UNTIL_D153[name][0]
+    assert RO.run_model_at(name, earlier, BEFORE) == earlier
+    assert RO.run_model_at(name, earlier, BETWEEN) == FABLE
+    assert RO.run_model_at(name, earlier, AFTER) == OPUS
+    assert RO.run_model_at(name, FABLE, BETWEEN) == FABLE
+    assert RO.run_model_at(name, FABLE, AFTER) == OPUS
 
 
 def wave_before_d153(tmp_path: Path) -> Path:
@@ -426,7 +572,7 @@ def wave_before_d153(tmp_path: Path) -> Path:
     the card lane on Opus then): selected as any run, then recorded with the earlier models."""
     run = make_run(tmp_path, NAMES)
     record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
-    assert {entry["model"] for entry in record["roles"].values()} == {FABLE}
+    assert {entry["model"] for entry in record["roles"].values()} == {OPUS}
     for role, entry in record["roles"].items():
         entry["model"] = UNTIL_D153[role][0]
     R.write_json(run / "RUN.json", record)
@@ -434,61 +580,85 @@ def wave_before_d153(tmp_path: Path) -> Path:
     return run
 
 
-def opus_until_verify(run: Path, tmp_path: Path) -> Path:
-    """Write, rate and check answered by Opus, as before the decision; `verify` exported."""
-    opus = "claude-opus-5-5"
-    step(run, tmp_path, "write", writes(NAMES), model=opus)
-    step(run, tmp_path, "rate", rates(run, NAMES), model=opus)
-    step(run, tmp_path, "check", passes(NAMES), model=opus)
+def wave_under_d153(tmp_path: Path) -> Path:
+    """A shorts-v1 run selected between D153 and D157: every role recorded on Fable."""
+    run = make_run(tmp_path, NAMES)
+    record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
+    for entry in record["roles"].values():
+        entry["model"] = FABLE
+    R.write_json(run / "RUN.json", record)
+    return run
+
+
+def until_verify(run: Path, tmp_path: Path, model: str, at: str) -> Path:
+    """Write, rate and check answered by `model` at `at`; `verify` exported."""
+    step(run, tmp_path, "write", writes(NAMES), model=model, now=lambda: at)
+    step(run, tmp_path, "rate", rates(run, NAMES), model=model, now=lambda: at)
+    step(run, tmp_path, "check", passes(NAMES), model=model, now=lambda: at)
     handoff = tmp_path / "handoff-verify"
     assert R.export_stage(run, "verify", handoff)["questions"] == 4
     return handoff
 
 
-def answer_verify(run: Path, handoff: Path, models: dict[str, str]) -> None:
-    """Each site's verification under the model `models` names for it."""
+def put_at(handoff: Path, stage: str, batch_id: str, label: str, text: str, role: str,
+           model: str, at: str) -> None:  # fmt: skip
+    OH.write_answer(
+        handoff, batch_id=batch_id, stage=stage, label=label, text=text,
+        answered_by=RO.answered_by(role, R.agent_name(batch_id)),
+        model=OH.ANSWER_MODELS[model], now=lambda: at,
+    )  # fmt: skip
+
+
+def answer_verify(run: Path, handoff: Path, models: dict[str, tuple[str, str]]) -> None:
+    """Each site's verification under the model and at the time `models` names for it."""
     record = R._round(run, "verify")
     assert record is not None
     answers = verifies(NAMES)
     for batch_id, members in record["batches"].items():
         for site_id in members:
-            put(handoff, "verify", batch_id, site_id, answers[site_id], "card_web_verifier",
-                models[site_id])  # fmt: skip
+            model, at = models[site_id]
+            put_at(handoff, "verify", batch_id, site_id, answers[site_id], "card_web_verifier",
+                   model, at)  # fmt: skip
 
 
 class TestAWaveThatBeganBeforeD153:
-    """Wave a2 (`wb-shorts-wave-a2-2026-10-24`), stage `verify`: about 250 answers stamped Opus and
-    about 40 questions open on the evening of D153."""
+    """Wave a2 (`wb-shorts-wave-a2-2026-10-24`), stage `verify`: about 250 answers stamped Opus,
+    some stamped Fable under D153, and the questions still open when D157 came."""
 
-    def test_the_open_batches_are_briefed_with_fable(self, tmp_path: Path) -> None:
+    def test_the_open_batches_are_briefed_with_opus(self, tmp_path: Path) -> None:
         run = wave_before_d153(tmp_path)
-        handoff = opus_until_verify(run, tmp_path)
+        handoff = until_verify(run, tmp_path, OPUS, BEFORE)
         jobs = R.agent_jobs(run, handoff)
         assert {(job["role"], job["model"], job["effort"]) for job in jobs} == {
-            ("card_web_verifier", FABLE, "high")
+            ("card_web_verifier", OPUS, "high")
         }
         for job in jobs:
             assert (
-                "**card_web_verifier**: your model is **claude-fable-5-2**, effort high"
+                "**card_web_verifier**: your model is **claude-opus-5-5**, effort high"
                 in (job["brief"])
             )
-            assert "--role card_web_verifier --model claude-fable-5-2" in job["brief"]
-            assert "claude-opus-5-5" not in job["brief"]
+            assert "--role card_web_verifier --model claude-opus-5-5" in job["brief"]
+            assert FABLE not in job["brief"]
             assert R.brief(run, handoff, job["batch_id"]) == job["brief"]
-        assert R.role_now(run, "card_web_verifier") == {"model": FABLE, "effort": "high"}
+        assert R.role_now(run, "card_web_verifier") == {"model": OPUS, "effort": "high"}
         assert R.run_roles(run)["card_web_verifier"]["model"] == "claude-opus-5-5"  # as recorded
 
-    def test_a_round_answered_partly_by_opus_and_partly_by_fable_imports(
-        self, tmp_path: Path
-    ) -> None:
+    def test_a_run_under_d153_is_briefed_with_opus(self, tmp_path: Path) -> None:
+        run = wave_under_d153(tmp_path)
+        assert R.role_now(run, "card_writer") == {"model": OPUS, "effort": "high"}
+        assert R.run_roles(run)["card_writer"]["model"] == FABLE  # as recorded
+
+    def test_a_round_answered_by_opus_then_fable_then_opus_imports(self, tmp_path: Path) -> None:
         """validate and import accept the mixed round; each card discloses exactly the models its
-        own answers carry, and the write path takes both disclosures."""
+        own answers carry, and the write path takes every disclosure."""
         run = wave_before_d153(tmp_path)
-        handoff = opus_until_verify(run, tmp_path)
-        before, after = NAMES[:2], NAMES[2:]
+        handoff = until_verify(run, tmp_path, OPUS, BEFORE)
+        first, second, third, fourth = NAMES
         models = {
-            **{sid(n): "claude-opus-5-5" for n in before},
-            **{sid(n): FABLE for n in after},
+            sid(first): (OPUS, BEFORE),
+            sid(second): (FABLE, BETWEEN),
+            sid(third): (FABLE, BETWEEN),
+            sid(fourth): (OPUS, AFTER),
         }
         answer_verify(run, handoff, models)
         assert OH.validate(handoff).ok
@@ -497,11 +667,11 @@ class TestAWaveThatBeganBeforeD153:
         R.outcomes(run)
         rows = {r["site_id"]: r for r in R.read_outcomes(run)}
         assert {r["status"] for r in rows.values()} == {R.ACCEPTED}
-        for name in before:
+        for name in (first, fourth):
             prov = CP.validate(rows[sid(name)]["provenance"])
             assert set(prov["models"].values()) == {OH.OPUS_MODEL}
             assert prov["ai_system"] == M.AI_SYSTEM_CLAUDE_OPUS
-        for name in after:
+        for name in (second, third):
             prov = CP.validate(rows[sid(name)]["provenance"])
             assert prov["models"] == {
                 "write": OH.OPUS_MODEL,
@@ -514,23 +684,32 @@ class TestAWaveThatBeganBeforeD153:
             assert written is not None
             assert written[CP.CARD_PROVENANCE_KEY]["ai_system"] == M.AI_SYSTEM_CLAUDE_OPUS_FABLE
 
-    @pytest.mark.parametrize("model", ["claude-sonnet-5-5", "claude-haiku-5-5"])
-    def test_an_answer_of_a_third_model_stops_the_import(self, tmp_path: Path, model: str) -> None:
+    @pytest.mark.parametrize(
+        ("model", "at"),
+        [
+            ("claude-sonnet-5-5", BETWEEN),
+            ("claude-haiku-5-5", AFTER),
+            (OPUS, BETWEEN),  # Opus while the role stood on Fable
+            (FABLE, AFTER),  # Fable after D157
+        ],
+    )
+    def test_an_answer_out_of_its_window_stops_the_import(
+        self, tmp_path: Path, model: str, at: str
+    ) -> None:
         run = wave_before_d153(tmp_path)
-        handoff = opus_until_verify(run, tmp_path)
-        models = {sid(n): FABLE for n in NAMES}
-        models[sid(NAMES[0])] = model
+        handoff = until_verify(run, tmp_path, OPUS, BEFORE)
+        models = {sid(n): (OPUS, AFTER) for n in NAMES}
+        models[sid(NAMES[0])] = (model, at)
         answer_verify(run, handoff, models)
         with pytest.raises(
             R.RunError, match="role card_web_verifier is recorded as claude-opus-5-5"
         ):
             R.import_stage(run, "verify", fit=T.fit, client=judge_client(), pace=0)
 
-    def test_a_run_that_begins_on_fable_takes_no_earlier_stamp(self, tmp_path: Path) -> None:
-        """Only the run that recorded Opus keeps taking Opus: a run selected since D153 records
-        Fable for every role and refuses an Opus-stamped answer."""
+    def test_a_run_that_begins_on_opus_takes_no_fable_answer(self, tmp_path: Path) -> None:
+        """A run selected since D157 records Opus for every role and refuses a Fable answer."""
         run = make_run(tmp_path, NAMES)
-        assert {entry["model"] for entry in R.run_roles(run).values()} == {FABLE}
+        assert {entry["model"] for entry in R.run_roles(run).values()} == {OPUS}
         handoff = tmp_path / "handoff-write"
         R.export_stage(run, "write", handoff)
         record = R._round(run, "write")
@@ -538,12 +717,12 @@ class TestAWaveThatBeganBeforeD153:
         answers = writes(NAMES)
         for batch_id, members in record["batches"].items():
             for site_id in members:
-                put(handoff, "write", batch_id, site_id, answers[site_id], "card_writer",
-                    "claude-opus-5-5")  # fmt: skip
-        with pytest.raises(R.RunError, match="role card_writer is recorded as claude-fable-5-2"):
+                put_at(handoff, "write", batch_id, site_id, answers[site_id], "card_writer",
+                       FABLE, AFTER)  # fmt: skip
+        with pytest.raises(R.RunError, match="role card_writer is recorded as claude-opus-5-5"):
             R.import_stage(run, "write", fit=T.fit)
 
-    def test_a_card_only_fable_answered_discloses_fable_alone(self, tmp_path: Path) -> None:
+    def test_a_card_only_opus_answered_discloses_opus_alone(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, NAMES)
         step(run, tmp_path, "write", writes(NAMES))
         step(run, tmp_path, "rate", rates(run, NAMES))
@@ -552,66 +731,70 @@ class TestAWaveThatBeganBeforeD153:
         R.outcomes(run)
         for row in R.read_outcomes(run):
             prov = CP.validate(row["provenance"])
-            assert set(prov["models"].values()) == {OH.FABLE_MODEL}
+            assert set(prov["models"].values()) == {OH.OPUS_MODEL}
             assert (
                 prov["ai_system"]
-                == M.AI_SYSTEM_CLAUDE_FABLE
+                == M.AI_SYSTEM_CLAUDE_OPUS
                 == (
-                    "Claude Fable (Anthropic): anthropic/claude-fable-5-2 (Claude Code agent), "
-                    "an-sites-remediation-2026-11"
+                    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+                    "an-sites-remediation-2026-10"
                 )
             )
             assert MT.new_raw_data({}, row) is not None
 
 
 # ------------------------------------------------------------------------------ the other lanes
-def _answer(role: str, stamp: str, **over: Any) -> OH.Answer:
+def _answer(role: str, stamp: str, at: str = AFTER, **over: Any) -> OH.Answer:
     fields = {
         "text": "x",
         "answered_by": f"{role}:agent-1",
-        "answered_at": "2026-11-10T20:00:00+00:00",
+        "answered_at": at,
         "model": stamp,
     }
     return OH.Answer(**{**fields, **over})
 
 
-def test_lane_wc_briefs_fable_and_takes_the_answers_its_open_rounds_hold(
-    tmp_path: Path,
-) -> None:
+def test_lane_wc_briefs_opus_and_takes_each_answer_in_its_window(tmp_path: Path) -> None:
     """Lane WC reads role, model and agent family from the registry at every brief, so an open
-    round (`defects-2026-10-02`) is briefed with Fable; its import takes the Opus answers the
-    round already holds and the Fable ones that finish it, and no third model's."""
+    round (`defects-2026-10-02`) is briefed with Opus; its import takes the Opus answers given
+    before D153, the Fable ones given under it and the Opus ones that finish it, and no other."""
     run, handoff = wc_run(tmp_path)
     text = WC.brief(run, handoff, "wc-0002")
-    assert "You are Fable checker wc-0002" in text
-    assert "--model claude-fable-5-2 --role fact_checker" in text
-    assert "--answered-by fable-check-r1-wc-0002" in text
-    assert "claude-opus-5-5" not in text and "claude-sonnet-5-5" not in text
+    assert "You are Opus checker wc-0002" in text
+    assert "--model claude-opus-5-5 --role fact_checker" in text
+    assert "--answered-by opus-check-r1-wc-0002" in text
+    assert FABLE not in text and "claude-sonnet-5-5" not in text
     for role in (WC.ROLE_CHECK, WC.ROLE_VERIFY, WC.ROLE_JUDGE, WC.ROLE_ADVERSARIAL):
-        WC._require_role(_answer(role, OH.OPUS_MODEL), role_name=role, where="here")
-        WC._require_role(_answer(role, OH.FABLE_MODEL), role_name=role, where="here")
-        with pytest.raises(WC.WcRunError, match=f"role {role} is registered to {FABLE}"):
+        WC._require_role(_answer(role, OH.OPUS_MODEL, BEFORE), role_name=role, where="here")
+        WC._require_role(_answer(role, OH.FABLE_MODEL, BETWEEN), role_name=role, where="here")
+        WC._require_role(_answer(role, OH.OPUS_MODEL, AFTER), role_name=role, where="here")
+        with pytest.raises(WC.WcRunError, match=f"role {role} is registered to {OPUS}"):
             WC._require_role(_answer(role, OH.SONNET_MODEL), role_name=role, where="here")
+        with pytest.raises(WC.WcRunError, match=f"role {role} is registered to {OPUS}"):
+            WC._require_role(_answer(role, OH.FABLE_MODEL), role_name=role, where="here")
         with pytest.raises(WC.WcRunError, match="answered by MiniMax"):
             WC._require_role(_answer(role, OH.MINIMAX_MODEL), role_name=role, where="here")
 
 
-def test_the_enrichment_takes_its_writers_earlier_answers_and_fables() -> None:
-    E.require_role(_answer(E.WRITER_ROLE, OH.SONNET_MODEL), E.WRITER_ROLE, "here")
-    E.require_role(_answer(E.WRITER_ROLE, OH.FABLE_MODEL), E.WRITER_ROLE, "here")
+def test_the_enrichment_takes_its_writers_answers_in_their_windows() -> None:
+    E.require_role(_answer(E.WRITER_ROLE, OH.SONNET_MODEL, BEFORE), E.WRITER_ROLE, "here")
+    E.require_role(_answer(E.WRITER_ROLE, OH.FABLE_MODEL, BETWEEN), E.WRITER_ROLE, "here")
+    E.require_role(_answer(E.WRITER_ROLE, OH.OPUS_MODEL, AFTER), E.WRITER_ROLE, "here")
     with pytest.raises(E.EnrichError, match="role enrich_writer is registered to"):
-        E.require_role(_answer(E.WRITER_ROLE, OH.OPUS_MODEL), E.WRITER_ROLE, "here")
+        E.require_role(_answer(E.WRITER_ROLE, OH.OPUS_MODEL, BEFORE), E.WRITER_ROLE, "here")
 
 
-def test_the_identity_stages_take_the_earlier_answers_and_fables() -> None:
+def test_the_identity_stages_take_each_answer_in_its_window() -> None:
     """The web verifier and the shared adversarial answered on Sonnet until D153, the pilot judge
-    on Opus: each stage takes its role's earlier stamp and Fable's, and still no other."""
+    on Opus: each stage takes its role's earlier stamp before D153, Fable's under it, Opus's after
+    D157, and still no other."""
     for role, earlier, other in (
-        ("web_verifier", OH.SONNET_MODEL, OH.OPUS_MODEL),
+        ("web_verifier", OH.SONNET_MODEL, OH.HAIKU_MODEL),
         ("adversarial", OH.SONNET_MODEL, OH.HAIKU_MODEL),
         ("pilot_judge", OH.OPUS_MODEL, OH.SONNET_MODEL),
     ):
-        assert LR.role_problem(_answer(role, earlier), [role]) is None
-        assert LR.role_problem(_answer(role, OH.FABLE_MODEL), [role]) is None
-        assert f"is registered to {FABLE}" in str(LR.role_problem(_answer(role, other), [role]))
+        assert LR.role_problem(_answer(role, earlier, BEFORE), [role]) is None
+        assert LR.role_problem(_answer(role, OH.FABLE_MODEL, BETWEEN), [role]) is None
+        assert LR.role_problem(_answer(role, OH.OPUS_MODEL, AFTER), [role]) is None
+        assert f"is registered to {OPUS}" in str(LR.role_problem(_answer(role, other), [role]))
         assert "MiniMax" in str(LR.role_problem(_answer(role, OH.MINIMAX_MODEL), [role]))

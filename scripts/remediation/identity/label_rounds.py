@@ -206,7 +206,7 @@ def role_problem(answer: OH.Answer, allowed_roles: Iterable[str]) -> str | None:
         return f"answered_by {answer.answered_by!r} names no role (answer --role {allowed[0]})"
     if named not in allowed:
         return f"answered in role {named}, but this stage asks {' or '.join(allowed)}"
-    return RO.answer_problem(answer.answered_by, answer.model)
+    return RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)
 
 
 def gold_dir(run: Path, kind: str) -> Path:
@@ -301,8 +301,8 @@ def check_calibrated(
     and whose registry entry is unchanged since the seal. An answer of a role without one counts
     for nothing, so the import stops before it reads a page or writes a decision.
 
-    A role that stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable, D154
-    says no calibration is run there) has no verdict and needs no id. Returns how each role stands,
+    A role that stands by the owner's decision (`roles.owner_standing`: D153 and D157 moved it
+    with no calibration, D154) has no verdict and needs no id. Returns how each role stands,
     in role order: that decision in words, or its passed calibration."""
     base = CC.CALIBRATION_ROOT if root is None else root
     standing: list[dict[str, str]] = []

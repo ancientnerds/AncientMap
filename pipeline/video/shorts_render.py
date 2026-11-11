@@ -83,7 +83,8 @@ MAPBOX_CREDIT = "© Mapbox © Maxar"
 # The note is built per card from its `_card_provenance.ai_system` (owner decision 2026-10-08) and
 # names exactly the models that string names: the cards were written by Claude Opus and Claude
 # Sonnet agents (2026-10-01), by MiniMax M3.1 Flash agents (from 2026-10-03), and the final repair
-# writes them with Claude again - from 2026-11-10 with Claude Fable 5.2 (owner decision D153). A
+# writes them with Claude again - from 2026-11-10 with Claude Fable 5.2 (owner decision D153), from
+# 2026-11-11 with Claude Opus 5.5 again (owner decision D157). A
 # constant naming one family claimed models that did not write every card; a constant naming all
 # of them claimed models for cards they never touched.
 _AI_SYSTEM_MODEL = re.compile(r"(?<!\w)(anthropic|minimax)/([A-Za-z0-9][A-Za-z0-9.\-]*[A-Za-z0-9])")

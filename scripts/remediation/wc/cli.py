@@ -599,7 +599,7 @@ def _require_role(answer: OH.Answer, *, role_name: str, where: str) -> None:
         raise WcRunError(
             f"{where}: {answer.answered_by} was given in role {named}, this round is {role_name}'s"
         )
-    problem = RO.answer_problem(answer.answered_by, answer.model)
+    problem = RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)
     if problem is not None:
         raise WcRunError(f"{where}: {problem}")
 
@@ -2457,7 +2457,7 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     run may itself be a judged pilot, named after the plain one). Everything else is as above, for
     each. A lane-E pilot is approved only once the writer stands as well (`enrich.writer_standing`:
     by its calibration, `enrich.require_writer_calibration` read from `enrich.CALIBRATION_ROOT`, or
-    by owner decision D153/D154 - the approval records which)."""
+    by owner decision D157/D154 - the approval records which)."""
     if not plans:
         raise WcRunError("no WC plan named")
     approvals: list[dict[str, str]] = []

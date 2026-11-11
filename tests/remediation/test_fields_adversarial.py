@@ -19,6 +19,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from acceptance.answers import AnswerError  # noqa: E402
 from fields import adversarial as AD  # noqa: E402
 from fields import carry as CA  # noqa: E402
@@ -90,9 +91,11 @@ def reply(field: str, decision: str, reasoning: str = REASON, quotes: Any = ()) 
 
 
 def record(handoff: Path, batch: str, cell: str, text: str, *, role: bool = True,
-           model: str = OH.SONNET_MODEL) -> None:  # fmt: skip
+           model: str | None = None) -> None:  # fmt: skip
+    """Recorded now, so by default stamped with the model the registry gives the role now."""
+    stamp = model or OH.ANSWER_MODELS[RO.role("adversarial").model]
     OH.write_answer(handoff, batch_id=batch, stage=AD.STAGE, label=cell, text=text,
-                    answered_by=f"adversarial:{batch}" if role else batch, model=model)  # fmt: skip
+                    answered_by=f"adversarial:{batch}" if role else batch, model=stamp)  # fmt: skip
 
 
 def cell_of(site: str = A_ID, field: str = "period_start") -> str:
@@ -411,7 +414,7 @@ class TestTheRounds:
         with pytest.raises(AD.AdversarialError, match="is no batch"):
             AD.brief(adv, tmp_path / "h-r0", "adv-r0-b0009")
 
-    def test_a_round_exported_before_d153_is_briefed_with_fable(
+    def test_a_round_exported_before_d153_is_briefed_with_opus(
         self, adv: Path, tmp_path: Path
     ) -> None:
         """The re-check's role is on Fable since owner decision D153. A round exported today records
@@ -419,13 +422,13 @@ class TestTheRounds:
         batches are briefed with the model the recorder takes now (`roles.model_now`)."""
         AD.export(adv, tmp_path / "h-r0")
         [record] = AD.read_rounds(adv)
-        assert record["model"] == "claude-fable-5-2"
-        assert "--model claude-fable-5-2 --role adversarial" in AD.brief(
+        assert record["model"] == "claude-opus-5-5"
+        assert "--model claude-opus-5-5 --role adversarial" in AD.brief(
             adv, tmp_path / "h-r0", "adv-r0-b0001"
         )
         HO._write_jsonl(adv / AD.ROUNDS_FILE, [{**record, "model": "claude-sonnet-5-5"}])
         earlier = AD.brief(adv, tmp_path / "h-r0", "adv-r0-b0001")
-        assert "--model claude-fable-5-2 --role adversarial" in earlier
+        assert "--model claude-opus-5-5 --role adversarial" in earlier
         assert "claude-sonnet-5-5" not in earlier
 
     def test_check_answer_names_the_shape_problem(self, adv: Path, tmp_path: Path) -> None:

@@ -22,6 +22,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from identity import common, dup_clusters  # noqa: E402
 from identity import dup_judge as J
 from identity import label_rounds as rounds  # noqa: E402
@@ -818,10 +819,12 @@ def write_answer(
     text: str,
     *,
     by: str = "web_verifier:b1",
-    model: str = SONNET,
+    model: str | None = None,
 ) -> None:
+    """Recorded now, so by default stamped with the model the registry gives the role now."""
+    stamp = model or OH.ANSWER_MODELS[RO.role(RO.role_of(by) or "web_verifier").model]
     OH.write_answer(
-        handoff, batch_id=batch, stage=stage, label=label, text=text, answered_by=by, model=model
+        handoff, batch_id=batch, stage=stage, label=label, text=text, answered_by=by, model=stamp
     )
 
 
@@ -1034,7 +1037,6 @@ class TestTheRounds:
             CID,
             recheck,
             by="adversarial:r1",
-            model=SONNET,
         )
         summary = import_round(run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert summary["decided"] == 1

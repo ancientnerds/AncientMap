@@ -35,8 +35,8 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
               its adversarial reviewer failed, with the sources cited, for the orchestrator to label in
               `teaser-gold/ADJUDICATION.json` (`verified_cards`: clean, disputed, contradicted).
     standing  how a role's verdict stands: passed, or released (a release that still rests on what
-              it was made on). Refused otherwise - this is what a gate asks. A role that owner
-              decision D153 put on Fable has no verdict (D154: no calibration is run there): it
+              it was made on). Refused otherwise - this is what a gate asks. A role an owner move
+              without calibration put on its model (D153, D157) has no verdict (D154): it
               stands by that decision, and `standing` says so (`roles.owner_standing`).
 
     T=scripts/remediation/teaser/calibrate.py     D=output/remediation/calibration/teaser-<id>
@@ -2035,8 +2035,8 @@ def standing(run_dir: Path, role: str) -> dict[str, str]:
     failed verdict with a tier move, a held one without a release and a role without a verdict do
     not stand.
 
-    A role that stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable, D154
-    says no calibration is run there) has no verdict in `run_dir` or anywhere else: the answer is
+    A role that stands by the owner's decision (`roles.owner_standing`: D153 and D157 moved it
+    with no calibration, D154) has no verdict in `run_dir` or anywhere else: the answer is
     that decision, in words, with no `calibration_id`."""
     by_owner = RO.owner_standing(role)
     if by_owner is not None:

@@ -196,7 +196,11 @@ AI_SYSTEM_CLAUDE_SONNET_HAIKU = (
 #: recorded before keep their stamp. A write may therefore rest on Fable answers alone, or on
 #: Fable answers beside earlier Opus, Sonnet or Haiku ones (a run that began before the decision,
 #: a text an earlier write made and a Fable one changed): one string for each such set, as D56
-#: asks, each naming exactly its models. Tagged with the month they were first written.
+#: asks, each naming exactly its models. Tagged with the month they were first written. Owner
+#: decision D157, 2026-11-11, put every role on Opus 5.5 again: a write after it rests on Opus
+#: answers alone (`AI_SYSTEM_CLAUDE_OPUS`) or on Opus answers beside the Fable ones of a run that
+#: began under D153 (`AI_SYSTEM_CLAUDE_OPUS_FABLE`, and with Sonnet or Haiku the strings that name
+#: them too) - every such set is already one of the fifteen below, so D157 adds no string.
 AI_SYSTEM_CLAUDE_FABLE = (
     "Claude Fable (Anthropic): anthropic/claude-fable-5-2 (Claude Code agent), "
     "an-sites-remediation-2026-11"
@@ -243,7 +247,7 @@ AI_SYSTEM_FABLE = (
     "minimax/MiniMax-M3.1-Flash-Preview, an-sites-remediation-2026-11"
 )
 #: The disclosure of each set of Claude stamps a write can rest on (D56): every non-empty subset of
-#: Opus, Sonnet, Haiku and (D153) Fable, each named by the one string that names exactly its
+#: Opus, Sonnet, Haiku and (D153, D157) Fable, each named by the one string that names exactly its
 #: models. Opus and Sonnet keep `AI_SYSTEM_CLAUDE`, Opus, Sonnet and Haiku `AI_SYSTEM_CLAUDE_HAIKU`
 #: (both in production).
 CLAUDE_DISCLOSURES: Mapping[frozenset[str], str] = MappingProxyType(

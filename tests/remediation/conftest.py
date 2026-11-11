@@ -7,7 +7,6 @@ import sys
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
 
 import pytest
 
@@ -21,10 +20,6 @@ import roles as RO  # noqa: E402
 UNTIL_D153 = "registry_until_d153"
 
 
-def _is_fable_move(move: Mapping[str, Any]) -> bool:
-    return move.get("kind") == RO.OWNER_KIND and move["decision"] == RO.FABLE_DECISION
-
-
 @pytest.fixture(autouse=True)
 def _registry_of_the_test(request: pytest.FixtureRequest) -> Iterator[None]:
     """Puts `registry_until_d153` in place before every other fixture of a test that asks for it.
@@ -36,8 +31,11 @@ def _registry_of_the_test(request: pytest.FixtureRequest) -> Iterator[None]:
     if UNTIL_D153 not in request.fixturenames:
         yield
         return
-    moves = tuple(m for m in RO.APPLIED_ESCALATIONS if not _is_fable_move(m))
-    stood = {m["role"]: m["from"] for m in RO.APPLIED_ESCALATIONS if _is_fable_move(m)}
+    moves = tuple(m for m in RO.APPLIED_ESCALATIONS if not RO.uncalibrated(m))
+    stood: dict[str, str] = {}
+    for move in RO.APPLIED_ESCALATIONS:
+        if RO.uncalibrated(move):
+            stood.setdefault(move["role"], move["from"])
     assert set(stood) == set(RO.ROLES), "D153 moved every role"
     roles = MappingProxyType(
         {name: dataclasses.replace(entry, model=stood[name]) for name, entry in RO.ROLES.items()}
@@ -53,16 +51,17 @@ def _registry_of_the_test(request: pytest.FixtureRequest) -> Iterator[None]:
 @pytest.fixture
 def registry_until_d153(_registry_of_the_test: None) -> Mapping[str, RO.Role]:
     """The role registry as it stood until owner decision D153 (2026-11-10) put every role on
-    Fable: each role on the `from` of its D153 move, and the applied moves without the D153 ones.
+    Fable: each role on the `from` of its D153 move, and the applied moves without the owner moves
+    without calibration (D153, D157).
 
     The calibration machinery - a tier move after a failed verdict, the hold at the top tier, a
     release, a candidate trial, a seal bound to a role's entry - and a stamp refused between two
     roles' models can only be exercised on a registry whose roles stand on different tiers. Fable
-    is on none, and D154 runs no calibration on it. A test of that machinery asks for this fixture,
-    so the machinery stays proven for a role that is moved again; a test of what D153 and D154
-    changed uses the registry as it is.
+    is on none, D157's Opus is the top tier, and D154 runs no calibration on either. A test of that
+    machinery asks for this fixture, so the machinery stays proven for a role that is moved again; a
+    test of what D153, D154 and D157 changed uses the registry as it is.
 
     The registry is rebuilt from the chain itself (`roles.APPLIED_ESCALATIONS`), never from a second
     list here, and it is held to the same two checks `roles.py` runs at import. A subprocess a test
-    starts does not see it: the recorder's own tests name Fable."""
+    starts does not see it: the recorder's own tests name the registered model."""
     return RO.ROLES

@@ -17,6 +17,7 @@ socket, calls a model or touches a database.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import json
 import re
 import subprocess
@@ -598,6 +599,28 @@ def test_ai_system_for_names_fable_alone_or_beside_the_earlier_models() -> None:
     for stamps, system in M.CLAUDE_DISCLOSURES.items():
         assert (OH.FABLE_MODEL in stamps) == ("claude-fable-5-2" in system), system
         assert system.endswith("2026-11") == (OH.FABLE_MODEL in stamps), system
+
+
+def test_every_stamp_set_d157_can_leave_has_a_truthful_disclosure() -> None:
+    """D157 (2026-11-11): every role answers on Opus again, after D153's Fable. A write can now rest
+    on Opus alone, Fable alone, Opus beside Fable (a run that began under D153 and was finished
+    after D157), each beside the earlier Sonnet or Haiku answers, and beside a MiniMax answer of a
+    text touched before D6. Every such set has one string, and it names each Claude model of the
+    set and no Claude model outside it (the MiniMax strings name the models they always named)."""
+    claude = (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.FABLE_MODEL)
+    ids = {stamp: stamp.split(" ")[0] for stamp in claude}
+    for size in range(1, len(claude) + 1):
+        for chosen in itertools.combinations(claude, size):
+            system = M.ai_system_for(chosen)
+            assert system in M.AI_SYSTEMS
+            for stamp in claude:
+                assert (ids[stamp] in system) == (stamp in chosen), (chosen, system)
+            assert M.DISCLOSED_STAMPS[system] == frozenset(chosen)
+            with_minimax = M.ai_system_for((*chosen, OH.MINIMAX_MODEL))
+            assert with_minimax == (M.AI_SYSTEM_FABLE if OH.FABLE_MODEL in chosen else M.AI_SYSTEM)
+            assert "minimax/MiniMax-M3.1-Flash-Preview" in with_minimax
+    assert M.ai_system_for([OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE_OPUS
+    assert M.ai_system_for([OH.FABLE_MODEL, OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE_OPUS_FABLE
 
 
 def test_the_fable_strings_leave_every_earlier_disclosure_as_it_was() -> None:

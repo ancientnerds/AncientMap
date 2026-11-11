@@ -589,7 +589,7 @@ class TestTheHandoff:
         text = H.brief(out, "r1", "r1-b01")
         assert "handoff-r1/r1-b01/MANIFEST.jsonl" in text and "check-answer --round r1" in text
         assert (
-            "--model <the model id you run as: claude-fable-5-2>" in text
+            "--model <the model id you run as: claude-opus-5-5>" in text
         )  # an agent names the model it runs as (owner decision 2026-10-01)
         assert H.check_answer(out, "r1", "r1-b01", TIKAL, json.dumps(answer())) is None
         assert "carries" in str(

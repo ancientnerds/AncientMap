@@ -478,8 +478,9 @@ def roles_record(spec: Spec) -> dict[str, dict[str, str]]:
     """The registry's entries for the roles of this contract's stages and the pilot judge, as a
     run fixes them at its start (`RUN.json["roles"]`): later changes of `roles.ROLES` do not move a
     run that began - an escalation is a record of its own (`escalate_role`). The one change that
-    does reach a run that began is owner decision D153 (every role on Fable from 2026-11-10 on):
-    `role_now` and `role_problem` read the recorded model through `roles.model_now`."""
+    does reach a run that began is an owner move without calibration (D153: every role on Fable
+    from 2026-11-10 on; D157: every role on Opus from 2026-11-11 on): `role_now` and `role_problem`
+    read the recorded model through `roles.model_now` and `roles.run_model_at`."""
     names = sorted({*spec.roles.values(), JUDGE_ROLE})
     return {name: {"model": RO.role(name).model, "effort": RO.role(name).effort} for name in names}
 
@@ -495,33 +496,40 @@ def run_roles(run: Path) -> dict[str, dict[str, str]]:
 
 def role_now(run: Path, role: str) -> dict[str, str]:
     """The model and effort `role` answers this run with now: the effort the run recorded, and the
-    model `roles.model_now` gives for the one it recorded - Fable for a run that began before owner
-    decision D153 took the role from that model, the recorded model for every other run."""
+    model `roles.model_now` gives for the one it recorded - the role's current model for a run that
+    began before an owner move without calibration (D153, D157) took the role from that model, the
+    recorded model for every other run."""
     fixed = run_roles(run)[role]
     return {**fixed, "model": RO.model_now(role, fixed["model"])}
 
 
 def role_problem(
-    roles: Mapping[str, Mapping[str, str]], role: str, answered_by: str, stamp: str
+    roles: Mapping[str, Mapping[str, str]],
+    role: str,
+    answered_by: str,
+    stamp: str,
+    *,
+    answered_at: str,
 ) -> str | None:
     """Why an answer is not the role's: it names another role, or its stamp is not the stamp of the
-    model the run recorded for the role. `None` when it is.
+    model the run's role answered on when the answer was recorded. `None` when it is.
 
-    A run that began before owner decision D153 goes on with Fable (`roles.model_now`): its answers
-    carry the recorded model's stamp when they were given before the move and Fable's after it."""
+    That model is the one the run recorded, unless an owner move without calibration (D153, D157)
+    took the role from it: then each answer carries the stamp of the model the role stood on when it
+    was given (`roles.run_model_at`) - the recorded model's before the move, the new one's after."""
     named = RO.role_of(answered_by)
     if named != role:
         return (
             f"{answered_by!r} did not answer as role {role} (record it with `opus_handoff.py "
             f"answer --role {role}`)"
         )
-    expected = OH.ANSWER_MODELS[roles[role]["model"]]
-    if stamp == OH.ANSWER_MODELS[RO.model_now(role, roles[role]["model"])]:
-        return None
+    recorded = roles[role]["model"]
+    model = RO.run_model_at(role, recorded, answered_at)
+    expected = OH.ANSWER_MODELS[model]
     if stamp != expected:
         return (
-            f"role {role} is recorded as {roles[role]['model']} ({expected!r}), but the answer "
-            f"is stamped {stamp!r}"
+            f"role {role} is recorded as {recorded} and answered on {model} ({expected!r}) when "
+            f"the answer was recorded ({answered_at}), but the answer is stamped {stamp!r}"
         )
     return None
 
@@ -1850,7 +1858,13 @@ def import_stage(
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=site_id,
                                 prompt=prompt)  # fmt: skip
         if spec.roles:
-            why = role_problem(roles, spec.roles[stage], answer.answered_by, answer.model)
+            why = role_problem(
+                roles,
+                spec.roles[stage],
+                answer.answered_by,
+                answer.model,
+                answered_at=answer.answered_at,
+            )
             if why is not None:
                 raise RunError(f"{batch_id}/{site_id}: {why}")
         if stage in spec.independent:
@@ -1987,7 +2001,13 @@ def read_canaries(
             handoff, batch_id=batch_id, stage=stage, label=canary["label"], prompt=prompt
         )
         if spec.roles:
-            why = role_problem(roles, spec.roles[stage], answer.answered_by, answer.model)
+            why = role_problem(
+                roles,
+                spec.roles[stage],
+                answer.answered_by,
+                answer.model,
+                answered_at=answer.answered_at,
+            )
             if why is not None:
                 raise RunError(f"{batch_id}/{canary['label']}: {why}")
         try:
@@ -2342,7 +2362,7 @@ def role_brief(run: Path, spec: Spec, record: Mapping[str, Any], batch_id: str) 
     """The instruction of the agent that answers one batch of a role-bound contract: the role, the
     model id the registry fixed for it and the effort - and the `--role`/`--model` flags that
     record the answer under them. The model is the one the role answers this run with now
-    (`role_now`: Fable for a run that began before owner decision D153)."""
+    (`role_now`: the current one for a run that began before owner decision D153 or D157)."""
     stage = record["stage"]
     role = stage_role(spec, stage)
     fixed = role_now(run, role)
@@ -2963,7 +2983,13 @@ def import_judge(
             answer = OH.read_answer(handoff, batch_id=batch_id, stage=JUDGE_STAGE, label=site_id,
                                     prompt=prompt)  # fmt: skip
             if spec.roles:
-                why = role_problem(roles, JUDGE_ROLE, answer.answered_by, answer.model)
+                why = role_problem(
+                    roles,
+                    JUDGE_ROLE,
+                    answer.answered_by,
+                    answer.model,
+                    answered_at=answer.answered_at,
+                )
                 if why is not None:
                     raise RunError(f"{batch_id}/{site_id}: {why}")
             if answer.answered_by in workers:  # a reused name; the agent: module doc

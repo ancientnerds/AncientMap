@@ -34,9 +34,12 @@ has no passed verdict, or whose verdict was reached under another registry entry
 not the lane's own, or that was sealed without a bar of 0 false writes (`WRITE_VERDICTS`): a role
 that has not passed is not a role to write from (D6). `import_round` refuses an answer given before
 the verdict was decided: the calibration comes first, not after. Since owner decisions D153 and D154
-of 2026-11-10 every role is on Fable 5.2 and no calibration is run there: such a role stands by the
-owner's decision (`roles.owner_standing`), which `require_calibration` asks first and returns in
-words; it has no verdict, so no calibration id is named and no answer can precede one.
+of 2026-11-10 (Fable 5.2) and D157 of 2026-11-11 (Opus 5.5) every role is moved without a
+calibration: such a role stands by the owner's decision (`roles.owner_standing`), which
+`require_calibration` asks first and returns in words; it has no verdict, so no calibration id is
+named. The standing covers only the answers recorded since the role's first such move
+(`roles.standing_problem`): an earlier answer was written on a model that stood by a calibration
+this gate did not ask, so `import_round` refuses it as it refuses one given before a verdict.
 """
 
 from __future__ import annotations
@@ -437,10 +440,11 @@ def require_calibration(
     stage), and the seal must hold the bar of 0 false writes over `WRITE_VERDICTS`, which the
     verdict met.
 
-    A role that stands by the owner's decision (`roles.owner_standing`: D153 put it on Fable, D154
-    says no calibration is run there) has no verdict: what is returned is that decision in words,
-    with no calibration id, no agreement and no `decided_at` - there is no calibration an answer
-    could have been given before. Any other role needs its `calibration_id`."""
+    A role that stands by the owner's decision (`roles.owner_standing`: D153 and D157 moved it with
+    no calibration, D154) has no verdict: what is returned is that decision in words, with no
+    calibration id, no agreement and no `decided_at`; `since` is when the standing began, and
+    `import_round` holds every answer to it (`roles.standing_problem`). Any other role needs its
+    `calibration_id`."""
     by_owner = RO.owner_standing(role)
     if by_owner is not None:
         return {**by_owner, "calibration_id": None, "agreement": None, "decided_at": None}
@@ -519,7 +523,7 @@ def _role_problems(spec: StageSpec, answers: Mapping[str, OH.Answer]) -> list[st
                 f"asks role {spec.role}"
             )
             continue
-        why = RO.answer_problem(answer.answered_by, answer.model)
+        why = RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)
         if why is not None:
             problems.append(f"{sid}: {why}")
     return problems
@@ -539,7 +543,9 @@ def import_round(
     """Parse, fetch, resolve and decide every answer of one round; merge the decisions. Refused
     when an answer was given before `decided_at`, the time the role's calibration was decided.
     `decided_at` is `None` only for a role that stands by the owner's decision
-    (`require_calibration`): it has no calibration, so no answer precedes one."""
+    (`require_calibration`): it has no calibration, and an answer is refused when it was given
+    before that standing began (`roles.standing_problem`) - the gate passes no answer of a model
+    that stood by a calibration it did not ask."""
     record = find_round(out, round_name)
     newest = load_rounds(out)[-1].name
     if record.name != newest:
@@ -575,6 +581,18 @@ def import_round(
             f"have them answered again: " + "; ".join(problems[:5])
         )
 
+    if decided_at is None:
+        before = {
+            sid: why
+            for sid, a in sorted(raw.items())
+            if (why := RO.standing_problem(spec.role, a.answered_at)) is not None
+        }
+        if before:
+            raise RoundError(
+                f"{len(before)} answer(s) were given before role {spec.role} stood by the owner's "
+                f"decision: delete them from {root} and have them answered again: "
+                + "; ".join(f"{sid}: {why}" for sid, why in list(before.items())[:3])
+            )
     early = (
         []
         if decided_at is None

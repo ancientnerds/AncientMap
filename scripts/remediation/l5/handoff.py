@@ -43,6 +43,7 @@ for _root in (REPO, REPO / "scripts" / "remediation", REPO / "output" / "remedia
         sys.path.insert(0, str(_root))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
 from l5 import decide as D  # noqa: E402
@@ -242,7 +243,7 @@ For each question:
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
    {python} {handoff_tool} answer --dir {handoff} --batch-id {batch} --stage {stage} \
---label <label> --answered-by {batch} --model <the model id you run as: claude-fable-5-2> --text-file {scratch}/<label>.json
+--label <label> --answered-by {batch} --model <the model id you run as: {model}> --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
@@ -266,6 +267,7 @@ def brief(out: Path, round_name: str, batch_id: str) -> str:
         python="./.venv/Scripts/python.exe",
         run="scripts/remediation/l5/run.py",
         handoff_tool="scripts/remediation/opus_handoff.py",
+        model=RO.ROLELESS_MODEL,
     )
 
 

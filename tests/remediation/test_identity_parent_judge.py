@@ -20,6 +20,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from identity import label_rounds as rounds  # noqa: E402
 from identity import parent_judge as J  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
@@ -570,7 +571,7 @@ class TestTheRounds:
             label=PARENT,
             text=a_part_answer(),
             answered_by="web_verifier:b1",
-            model=SONNET,
+            model=OH.ANSWER_MODELS[RO.role("web_verifier").model],
         )
         summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fetch, now=lambda: NOW)
         assert summary["decided"] == 1
@@ -590,7 +591,7 @@ class TestTheRounds:
             label=PARENT,
             text=answer(rows),
             answered_by="adversarial:b1",
-            model=SONNET,
+            model=OH.ANSWER_MODELS[RO.role("adversarial").model],
         )
         assert import_round(run, J.STAGE_RECHECK, "r1", CTX, fetch, now=lambda: NOW)["decided"] == 1
         assert J.write_decisions(run, CTX) == {"children": 1, "decided": 1}

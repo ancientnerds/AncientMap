@@ -1341,8 +1341,11 @@ When every question of the batch is recorded, report how many answers you record
 
 
 #: What differs between the rules' briefs: who answers, where the evidence comes from, what a field
-#: nobody can source is, and the model id the answer is recorded with (owner decision 2026-10-01:
-#: every answering agent of WD3 is Sonnet 5.5; WD1's agents named what they ran as).
+#: nobody can source is, and the model id the answer is recorded with: the current model of the
+#: lanes' researcher role (`RECHECK_MODEL`, the registry's `field_researcher`), never written out -
+#: an owner move (D153, D157) would otherwise leave a brief naming a model the recorder refuses.
+#: (Owner decision 2026-10-01 had every answering agent of WD3 on Sonnet 5.5; WD1's agents named
+#: what they ran as.)
 BRIEF_PARTS = {
     R.TWO_FAMILIES.name: {
         "role": "Opus researcher",
@@ -1354,10 +1357,10 @@ BRIEF_PARTS = {
             "university pages."
         ),
         "unsourced": 'is "clear" (or "unresolved" for coordinates)',
-        "model": "<the model id you run as: claude-fable-5-2>",
+        "model": f"<the model id you run as: {RECHECK_MODEL}>",
     },
     R.ONE_FAMILY.name: {
-        "role": "Sonnet researcher",
+        "role": f"{OH.ANSWER_FAMILIES[RECHECK_MODEL].capitalize()} researcher",
         "lane": "WD3",
         "work": "fill",
         "evidence": (
@@ -1368,10 +1371,10 @@ BRIEF_PARTS = {
             "content farms or Wikipedia mirrors."
         ),
         "unsourced": 'is "unresolved"',
-        "model": "claude-sonnet-5-5",
+        "model": RECHECK_MODEL,
     },
     R.ONE_FAMILY_PERIOD.name: {
-        "role": "Sonnet researcher",
+        "role": f"{OH.ANSWER_FAMILIES[RECHECK_MODEL].capitalize()} researcher",
         "lane": "WD4",
         "work": "fill",
         "evidence": (
@@ -1382,7 +1385,7 @@ BRIEF_PARTS = {
             "content farms or Wikipedia mirrors."
         ),
         "unsourced": 'is "unresolved"',
-        "model": "claude-sonnet-5-5",
+        "model": RECHECK_MODEL,
     },
     R.RECHECK.name: {
         "role": f"{OH.ANSWER_FAMILIES[RECHECK_MODEL].capitalize()} researcher",
@@ -1474,8 +1477,9 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         # the round names the model, so the role must not claim to be another one
         parts["role"] = "researcher"
         if rule.name in RULE_ROLE:
-            # the model the rule's role answers with now: Fable for a round exported before owner
-            # decision D153 took the role from the model the round recorded (`roles.model_now`)
+            # the model the rule's role answers with now: the current one for a round exported
+            # before an owner move without calibration (D153, D157) took the role from the model
+            # the round recorded (`roles.model_now`)
             parts["model"] = RO.model_now(RULE_ROLE[rule.name], record["model"])
     if is_d99_run(run):
         parts["evidence"] = _swap(parts["evidence"], D99_REPLACED_EVIDENCE, D99_EVIDENCE)
@@ -1586,7 +1590,7 @@ def role_problem(rule: R.Rule, answer: OH.Answer) -> str | None:
             f"without `--role {role}`, so nothing says the registry's model wrote it - delete it "
             "and answer again"
         )
-    return RO.answer_problem(answer.answered_by, answer.model)
+    return RO.answer_problem(answer.answered_by, answer.model, answered_at=answer.answered_at)
 
 
 def import_rounds(

@@ -274,7 +274,7 @@ class TestTheExport:
     def test_the_default_model_is_the_one_the_rule_names(self, run: Path, tmp_path: Path) -> None:
         HO.export(run, tmp_path / "h-r0")
         # WD1's brief asks the agent to name what it runs as: Fable since owner decision D153
-        assert HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001").count("claude-fable-5-2") >= 1
+        assert HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001").count("claude-opus-5-5") >= 1
 
     def test_the_brief_names_the_batch_s_own_files(self, run: Path, tmp_path: Path) -> None:
         HO.export(run, tmp_path / "h-r0")
@@ -282,7 +282,7 @@ class TestTheExport:
         assert "h-r0-scratch/wd1-r0-b0001/<label>.json" in text
         assert "--answered-by wd1-r0-b0001" in text and "check-answer" in text
         assert (
-            "--model <the model id you run as: claude-fable-5-2>" in text
+            "--model <the model id you run as: claude-opus-5-5>" in text
         )  # an agent names the model it runs as (owner decision 2026-10-01)
         with pytest.raises(HO.HandoffStepError, match="is no batch"):
             HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0009")

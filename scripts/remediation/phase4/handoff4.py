@@ -63,6 +63,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import opus_handoff as OH  # noqa: E402 - the handoff directory's contract
+import roles as RO  # noqa: E402 - the model a brief without a role offers
 
 from phase4 import assemble as A  # noqa: E402
 from phase4 import batch4 as B  # noqa: E402
@@ -161,7 +162,7 @@ For each line of the manifest:
    the label's part before "/" (create the directory).
 4. Record it through its shape check (the stage's own parser; nothing is judged). An answer is
    written once, under your name {agent}:
-   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --model <the model id you run as: claude-fable-5-2> --text-file {scratch}/<site id>.txt
+   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --model <the model id you run as: {model}> --text-file {scratch}/<site id>.txt
    It prints {{"ok": true, "wrote": true, ...}} when the answer is recorded. It prints
    {{"ok": false, "problem": ...}} and records nothing when the shape is wrong: fix the shape in
    your file, never the finding, and run the same command again. If it says REFUSED, stop and
@@ -195,6 +196,7 @@ def brief(run_dir: Path, handoff: Path, batch_id: str) -> str:
         python=Path(sys.executable).resolve().as_posix(),
         handoff4=HANDOFF4.as_posix(),
         run_dir=run_dir.resolve().as_posix(),
+        model=RO.ROLELESS_MODEL,
     )
 
 

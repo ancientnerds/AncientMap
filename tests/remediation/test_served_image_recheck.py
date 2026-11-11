@@ -536,8 +536,9 @@ class TestTheRole:
         state = ST.load_read(run / "READ.json")
         V.export_check(run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures)
         legacy = V.brief(run, handoff, "check-001")
-        # no role, the lane's own model: Fable since owner decision D153 (Sonnet until then)
-        assert "running as claude-fable-5-2." in legacy and "--role" not in legacy
+        # no role, the lane's own model: Opus since owner decision D157 (Fable under D153, Sonnet
+        # until then)
+        assert "running as claude-opus-5-5." in legacy and "--role" not in legacy
 
     def test_a_recheck_export_records_its_role(self, tmp_path: Path) -> None:
         run, _, _ = _recheck_run(
