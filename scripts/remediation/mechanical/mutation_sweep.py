@@ -14832,8 +14832,24 @@ D20_START_CASES: list[Case] = [
     guard(
         "d20 start: a found quote states the year",
         PERIOD_FIX,
-        '    if not any(states_year(str(q["quote"]), start) for q in row["quotes"]):',
+        '    if not any(states_date(str(q["quote"]), start) for q in row["quotes"]):',
         "test_a_year_no_found_quote_states_is_listed_not_written",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: a measure, a count or a bare number states no year",
+        PERIOD_FIX,
+        "        item.statement.lo <= year <= item.statement.hi and acceptable(item, low) is None\n",
+        "        item.statement.lo <= year <= item.statement.hi\n",
+        "test_a_bare_number_that_is_no_date_does_not_state_the_year",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the statement that reads as a date is the one of the year",
+        PERIOD_FIX,
+        "        item.statement.lo <= year <= item.statement.hi and acceptable(item, low) is None\n",
+        "        acceptable(item, low) is None\n",
+        "test_a_bare_number_that_is_no_date_does_not_state_the_year",
         PERIOD_FIX_TESTS,
     ),
     Case(

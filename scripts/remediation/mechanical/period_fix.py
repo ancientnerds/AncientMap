@@ -31,10 +31,14 @@ corrections of curated `period_start`.
   decision, the answer's found quotes, its agent and its model as evidence. A row is written only
   where the scope wave's `in_scope` is in production (`d20-scope-not-written`: that write comes
   first, its premise is the stored period), the site still holds the start the answer judged
-  (`moved-since-answer`) and one of the found quotes states the year itself
-  (`fields.answers.states_year`, the fields lanes' gate: `d20-no-quote-states-year`). A start of
-  500-1500 in a label-borderline country is written where the answer was asked the label question
-  (the row's `label_borderline`, D58: its subject is decided), and listed `d58-window` where not.
+  (`moved-since-answer`) and one of the found quotes states the year itself as a date
+  (`states_date`: `fields.answers.states_year`, the fields lanes' gate, read as the dating
+  extractor reads a number - "300 metres", "Population 1200" and "Page 450" state no year:
+  `d20-no-quote-states-year`). A start of 500-1500 in a label-borderline country is written where
+  the answer was asked the label question (the row's `label_borderline`, D58: its subject is
+  decided), and listed `d58-window` where not. The scope wave's `ROLLBACK.sql` is conditioned on
+  the stored period as its write is (guard 5), so a D20 step is undone before the scope wave it
+  follows (runbook WD2 1b).
 
 Undated is the residue rung (`residue_period.py`): `period_start` NULL and `period_name` `Undated`.
 The D58 window includes a record without a date (`pipeline.normalizers.dates.passes_date_cutoff`), so
@@ -88,8 +92,9 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from fields.answers import states_year  # noqa: E402
-from fields.dating import scope_problem  # noqa: E402
+from fields import dates  # noqa: E402
+from fields.answers import states_bp, states_year  # noqa: E402
+from fields.dating import acceptable, scope_problem  # noqa: E402
 
 from mechanical.field_prov import read_production, sha256_file, step_name  # noqa: E402
 from mechanical.identity_lanes import IN_SCOPE  # noqa: E402
@@ -594,8 +599,28 @@ def load_d20(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def states_date(quote: str, year: int) -> bool:
+    """Whether a found quote states `year` as a date: `fields.answers.states_year` (the fields
+    lanes' gate), by a statement the dating extractor reads as a date (`fields.dating.acceptable`).
+    `states_year` reads every unmarked number as an AD year; here "300 metres" (a unit after it),
+    "Population 1200" and "Page 450" (an unmarked number with no date preposition before it) state
+    none. Years before the present are `states_bp`'s."""
+    if not states_year(quote, year):
+        return False
+    if states_bp(quote, year):
+        return True
+    low = dates.reading_text(quote).casefold()
+    return any(
+        item.statement.lo <= year <= item.statement.hi and acceptable(item, low) is None
+        for item in dates.located(quote)
+    )
+
+
 def decide_d20(site: Live, links: Sequence[Link], row: Mapping[str, Any]) -> Decision | Refusal:
-    """D20: the sourced start of a site the scope window kept, where a found quote states it."""
+    """D20: the sourced start of a site the scope window kept, where a found quote states it as a
+    date (`states_date`). The gate proves the year stands on a page the answer quoted, not that the
+    sentence dates the beginning of this site: that is the answer's judgement, read again in the
+    step's PLAN.md before the write."""
     start, stored = int(row["period_start"]), row["stored_period_start"]
     if site.scope_status != IN_SCOPE:
         return Refusal(
@@ -612,13 +637,14 @@ def decide_d20(site: Live, links: Sequence[Link], row: Mapping[str, Any]) -> Dec
             "moved-since-answer",
             f"the answer judged a stored start of {stored}, production holds {site.period_start}",
         )
-    if not any(states_year(str(q["quote"]), start) for q in row["quotes"]):
+    if not any(states_date(str(q["quote"]), start) for q in row["quotes"]):
         return Refusal(
             site.site_id,
             site.name,
             "d20-no-quote-states-year",
-            f"none of the answer's {len(row['quotes'])} found quote(s) states {start} itself (its "
-            "year, or its century or millennium): the year is the answer's reading, not a source's",
+            f"none of the answer's {len(row['quotes'])} found quote(s) states {start} itself as a "
+            "date (its year, or its century or millennium; a measure, a count or a bare number is "
+            "none): the year is the answer's reading, not a source's",
         )
     return Decision(
         site.site_id,

@@ -839,6 +839,23 @@ class TestThePlan:
         records = A.load_records(tmp_path / "PLAN.jsonl")
         A.validate_records(records, lane=plan.lane)
 
+    def test_the_undo_of_a_wave_holds_only_while_the_stored_period_does(
+        self, tmp_path: Path
+    ) -> None:
+        # the undo order of D20 (runbook WD2 1b): the reversal keeps the plan's premise, which
+        # holds the stored start, so the period lane's step for a site of the wave is undone first
+        plan = build({FORT: decision_for("PERIOD_WRONG")}, {FORT: live_row()})
+        assert [r["site_id"] for r in plan.period_wrong] == [FORT]
+        mech = SJ.to_plan(plan, "2026-10-09T03:00:00+00:00")
+        MP.write_plan_jsonl(mech, tmp_path / "PLAN.jsonl")
+        MP.write_rollback_sql(mech, tmp_path / "ROLLBACK.sql", plan_path=tmp_path / "PLAN.jsonl")
+        rollback = (tmp_path / "ROLLBACK.sql").read_text("utf-8")
+        assert "coalesce(u.period_start::text, 'NULL')" in rollback
+        assert ") IS DISTINCT FROM p.premise" in rollback
+        assert "no longer hold the premise the plan derived its value from" in rollback
+        assert "| Pakistan | 1837 | NULL" in live_row()["premise"]
+        assert live_row()["premise"] in rollback
+
     def test_a_wave_is_at_most_a_hundred_sites(self) -> None:
         plan = SJ.ScopePlan(SJ.scope_window_lane("2026-10-12"))
         for i in range(101):

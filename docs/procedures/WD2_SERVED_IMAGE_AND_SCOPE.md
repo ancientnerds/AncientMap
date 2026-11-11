@@ -283,9 +283,14 @@ would make that wave refuse:
 PY=./.venv/Scripts/python.exe; M=scripts/remediation/mechanical; A=$M/apply.py
 $PY $M/period_fix.py wave --wave PW --no-d113 --d20 <run>/scope-window/waves/<W>/PERIOD_WRONG.jsonl
 $PY $M/period_fix.py step --wave PW --step 1     # PLAN.md: read every old -> new start before the write
-for s in emit verify rehearse probe-guards apply verify rehearse-rollback; do $PY $A --lane period-fix-PW-s001 --$s; done
+for s in emit verify rehearse probe-guards apply verify rehearse-rollback; do $PY $A --lane period-fix-PW-s001 --$s || break; done
 $PY $M/period_fix.py accept --wave PW --step 1   # 0 deviations; then a card_stats wave (the period is a card input)
 ```
+
+A gate that exits non-zero ends the sequence: `accept` and the card_stats wave run only after every
+gate exited 0 (after an `--apply` that exited 4, 5 or 6 the journal is recounted first, never a
+second `--apply`). Each scope wave's `PERIOD_WRONG.jsonl` is one period wave with a label of its
+own: `wave` reads one hand-off and a label is planned once.
 
 * `PW` is a wave label the period-fix lane has not used. The journal rows carry the run stamp
   `<PW>_mechanical-period-fix-s001` and, as evidence, the D20 decision row, every found quote of
@@ -295,17 +300,39 @@ $PY $M/period_fix.py accept --wave PW --step 1   # 0 deviations; then a card_sta
   in `WAVE.json` (`refused`) and keep their stored start: `d20-scope-not-written` (the site is not
   `in_scope` in production: apply the scope wave first), `moved-since-answer` (production no longer
   holds the start the answer judged), `d20-no-quote-states-year` (no found quote states the year
-  itself, its century or its millennium - `fields.answers.states_year`, the fields lanes' gate: the
-  year is then the answer's reading, not a source's), `d58-window` (the start would leave the
+  itself, its century or its millennium as a date - `period_fix.states_date`: the fields lanes'
+  gate `fields.answers.states_year`, by a statement the dating extractor reads as a date,
+  `fields.dating.acceptable`. `states_year` alone reads every unmarked number as an AD year; here
+  "300 metres", "Population 1200" and "Page 450" state none, and an unmarked year counts after a
+  date preposition, "built in 1200", "around 900". The year is then the answer's reading, not a
+  source's), `d58-window` (the start would leave the
   window, or make the site label-borderline although its answer was not asked the label question;
   where it was asked, the start is written), `period-end-set`, `journal-disagrees`.
 * A `PERIOD_WRONG.jsonl` planned by code older than this input lacks the answer's stamp and is
-  refused whole (`REFUSED: ... exactly the keys`).
+  refused whole (`REFUSED: ... exactly the keys`). The scope `plan` writes the hand-off, so it runs
+  on code that has this input: a wave without `APPLY.sql` is planned again and gets the stamp, an
+  emitted one is never planned again and its starts are listed for the owner.
+* The gate proves that a page the answer quoted states the year as a date. It does not prove that
+  the sentence dates the beginning of this site (any found quote of the answer may state it, also
+  one that supports only the keep verdict): that is the answer's judgement, and the reader of the
+  step's `PLAN.md` checks it before the write - the quote that states the year must date the start
+  of this site, not a later phase, a namesake or the modern town.
 * Undo is the step's `ROLLBACK.sql`, rehearsed by `--rehearse-rollback` like every step of the lane.
+* **Undo order: the period step first, then the scope wave.** The scope wave's `ROLLBACK.sql`
+  carries the same guard 5 as its write, over every planned site: the premise
+  (`SCOPE_REVIEW_PREMISE_SQL`) holds `period_start`, and a reversal keeps the plan's premise
+  (`plan.reversed_records`). Once a D20 start of one of its sites is written, that file refuses
+  as a whole - the retirements included - with `planned row(s) no longer hold the premise the plan
+  derived its value from`. To undo a scope wave whose starts were written: first the `ROLLBACK.sql`
+  of every landed step of the period wave that read its `PERIOD_WRONG.jsonl`, which restores the
+  stored starts, then the scope wave's `ROLLBACK.sql`. The cards are not undone from a file (a
+  card_stats `ROLLBACK.sql` is void once a period label moved, `card_stats.py`): a new card_stats
+  wave recomputes them after the undo.
 
 Tests: `tests/remediation/test_mechanical_period_fix.py` (`TestD20`, `TestLoadD20`, `TestD20Wave`),
-`test_identity_b_scope.py` (the hand-off's stamp, the reader on the row as the plan writes it);
-mutation cases `scripts/remediation/mechanical/mutation_sweep.py "d20 start:"` (13).
+`test_identity_b_scope.py` (the hand-off's stamp, the reader on the row as the plan writes it, the
+premise in the scope wave's rollback); mutation cases
+`scripts/remediation/mechanical/mutation_sweep.py "d20 start:"` (15).
 
 ---
 

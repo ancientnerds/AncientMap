@@ -483,6 +483,43 @@ class TestD20:
         decisions, _, counters = M.build_decisions({OTHER: kept()}, {}, [], list_sha="", d20=[row])
         assert not decisions and counters["skip:d20-no-quote-states-year"] == 1
 
+    @pytest.mark.parametrize(
+        ("year", "number"),
+        [
+            (300, "The wall is 300 metres long."),
+            (1200, "Population 1200 (2011 census)."),
+            (450, "Page 450 of the report describes the pottery."),
+            (300, "The village has about 300 houses."),
+            (300, "The wall, rebuilt in 1837, is 300 metres long."),
+        ],
+    )
+    def test_a_bare_number_that_is_no_date_does_not_state_the_year(self, year: int, number: str) -> None:
+        # fields.answers.states_year reads an unmarked number as an AD year: a measure, a count or a
+        # page number in a quote that only supports the keep verdict would source the start
+        assert M.states_year(number, year) and not M.states_date(number, year)
+        quotes = [
+            found("https://example.org/ali-masjid", "An old fort of the Kushan kings."),
+            found("https://example.net/khyber", number),
+        ]
+        out = M.decide_d20(kept(), [], d20_row(OTHER, period_start=year, quotes=quotes))
+        assert isinstance(out, M.Refusal) and out.reason == "d20-no-quote-states-year"
+
+    @pytest.mark.parametrize(
+        ("year", "quote"),
+        [
+            (1200, AYYUBID),
+            (1250, "Construido en 1250 por los incas."),
+            (1100, "The terraces were occupied from 1100 to 1450."),
+            (300, "The first stronghold here was built in the 3rd century AD."),
+            (900, "The hall was raised in 900 AD."),
+            (-3000, "The mound dates to 3000 BC and is 300 m wide."),
+            (-800, "Settled in the 8th century BC."),
+            (-3000, "The first houses stood here about 5,000 years ago."),
+        ],
+    )
+    def test_a_year_a_quote_states_as_a_date_is_stated(self, year: int, quote: str) -> None:
+        assert M.states_date(quote, year)
+
     def test_a_start_that_moved_since_the_answer_is_refused(self) -> None:
         out = M.decide_d20(kept(1500), [], d20_row(OTHER))
         assert isinstance(out, M.Refusal) and out.reason == "moved-since-answer"
