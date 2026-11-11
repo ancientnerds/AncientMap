@@ -1180,9 +1180,10 @@ def d50_site_sql(alias: str = "u") -> str:
 #: D84 (owner, 2026-11-05) with D149 (owner, 2026-11-10): the Baltic Sea Anomaly lies in
 #: international waters. Its `country` is empty, it has no country page and no `/sites/` route
 #: ("Globe only: no route without a country"). By site id, the name and the country it held (read
-#: on production 2026-11-11: 'Baltic Sea', written by no journalled lane). The `country-d84` lane
-#: empties the cell (`country_d84.py`), and the un-retire shows such a site only without a country
-#: (`identity_lanes.unretire_violation_sql`, `scope_unretire.py`).
+#: on production 2026-11-11: 'Baltic Sea', written by no journalled lane). A `country-d84-<wave>`
+#: lane empties the cell (`identity_lanes.country_d84_lane`, `country_d84.py`), and the un-retire
+#: shows such a site only without a country (`identity_lanes.unretire_violation_sql`,
+#: `scope_unretire.py`).
 D84_NO_COUNTRY_SITES: Mapping[str, tuple[str, str]] = {
     "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded": ("Baltic Sea Anomaly", "Baltic Sea"),
 }
@@ -1862,68 +1863,6 @@ COUNTRY_B2_READBACK = journal_readback(
 )
 LANES[COUNTRY_B2.name] = COUNTRY_B2
 LANE_READBACKS[COUNTRY_B2.name] = COUNTRY_B2_READBACK
-
-# ------------------------------------------------------------ the D84 country lane (2026-11-11)
-_D84_COUNTRY_HELD = Residual(
-    "curated rows D84 leaves without a country that still hold one",
-    f"({d84_site_sql('unified_sites')} AND country IS NOT NULL)",
-)
-#: What the D84 decision rests on, as the database prints it: the row is the site the owner named,
-#: where it lies. `concat_ws` and the `coalesce`s keep the premise from ever being NULL.
-COUNTRY_D84_PREMISE_SQL = (
-    "concat_ws(' | ', u.name, coalesce(u.lat::text, 'NULL'), coalesce(u.lon::text, 'NULL'))"
-)
-
-#: The country lane of D84 (`country_d84.py`): a cell lane, because it empties its column
-#: (`Column.clears`) - a column lane owns values and never writes NULL. It owns no value: the one
-#: thing it writes is "no country", onto the sites of `D84_NO_COUNTRY_SITES` and no other, which
-#: its invariant checks inside the transaction (a NULL is nothing guard 4 could own). A D84 site is
-#: written while it is retired: the un-retire (`scope-unretire-<wave>`) shows it only afterwards.
-COUNTRY_D84 = Lane(
-    name="country-d84",
-    key_prefix="country-d84",
-    run_stamp="2026-11-11_mechanical-country-d84",
-    test_id="D84/country",
-    confidence="authoritative",
-    label="D84 country emptied",
-    plan_table="_country_d84_plan",
-    out_dir_name="mechanical_country_d84",
-    post_commit_residual=_D84_COUNTRY_HELD,
-    rehearsal_residual=_D84_COUNTRY_HELD,
-    premise_sql=COUNTRY_D84_PREMISE_SQL,
-    lock_timeout=LOCK_TIMEOUT,
-    statement_timeout=STATEMENT_TIMEOUT,
-    target=UNIFIED_SITES,
-    cells=(Column("country", "character varying", max_chars=100, clears=True),),
-    site_invariants=(
-        SiteInvariant(
-            says="planned site(s) keep a country, or are none D84 leaves without one",
-            predicate=f"u.country IS NOT NULL OR NOT {d84_site_sql('u')}",
-            probe_column="country",
-            probe_values=("Sweden", "Finland", "International waters"),
-        ),
-    ),
-)
-COUNTRY_D84_READBACK = journal_readback(
-    COUNTRY_D84,
-    [
-        (_D84_COUNTRY_HELD.metric, _CURATED_ROWS + _D84_COUNTRY_HELD.predicate),
-        (
-            "curated rows without a country",
-            _CURATED_ROWS + "country IS NULL",
-        ),
-        (
-            "curated shown rows without a country that D84 does not name",
-            _CURATED_ROWS
-            + f"country IS NULL AND {not_retired('unified_sites')} "
-            + f"AND NOT {d84_site_sql('unified_sites')}",
-        ),
-        *_country_rows(sorted({held for _name, held in D84_NO_COUNTRY_SITES.values()})),
-        _CARD_COUNTRY,
-    ],
-)
-LANES[COUNTRY_D84.name] = COUNTRY_D84
-LANE_READBACKS[COUNTRY_D84.name] = COUNTRY_D84_READBACK
 
 # ------------------------------------------------------------------ the L5 name lane (WE)
 #: A curated row whose match key is not the key Postgres derives from its name: the name lane's
@@ -3142,9 +3081,11 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 #: 2026-10-24): `card-exact-sNNN`, built by `card_disclosure_exact.lane_of` (the pinned site list).
 CARD_EXACT_LANE = re.compile(r"^card-exact-s(\d{3})\Z")
 #: The identity package's wave lanes (`mechanical/identity_lanes.py`, owner decisions D13, D20, D23 of
-#: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`.
+#: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`,
+#: the un-retire `scope-unretire-<wave>` (D58, D50) and its D84 country lane `country-d84-<wave>`.
 IDENTITY_WAVE_LANE = re.compile(
-    r"^(?:scope-window|scope-unretire|name-clean|retarget-name|spoken)-\d{4}-\d{2}-\d{2}[a-z]?\Z"
+    r"^(?:scope-window|scope-unretire|country-d84|name-clean|retarget-name|spoken)"
+    r"-\d{4}-\d{2}-\d{2}[a-z]?\Z"
 )
 
 

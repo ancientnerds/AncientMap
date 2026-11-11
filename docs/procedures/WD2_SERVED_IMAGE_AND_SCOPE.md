@@ -512,14 +512,16 @@ sites, a stamp applied once):
   the gate holds it whatever wrote it). The export reads the record for the plan
   (`EXPORT_DISPUTE_SQL`: run `export` again before a wave, an export of older code has no `record`).
   Until then each is skipped `d50-no-dispute-text`. D50 also says "no card or page asserts the claim":
-  a D50 site with a card text comes back only once the latest journal row of its
-  `card_stats.card_description` is **later** than the journal row of its dispute text (the card lane
-  wrote the card in the knowledge of the dispute, D21); until then it is skipped
+  a D50 site comes back only **without a card text**, or with one the card lane judged against the
+  description the site holds - its teaser provenance (`raw_data._card_provenance`) hashes that card
+  and that description (`identity_lanes.card_judged_sql`); until then it is skipped
   `d50-card-not-cleared`. All six have a card (read 2026-10-24; Richat's last journalled write is
   `wb-teaser-card-s009`, the other five have none). Since orchestrator decision O17 (2026-11-10) the
-  six cards are **cleared** the D47 way, not rewritten: a site without a card text passes this
-  test, and the Baltic Sea Anomaly also needs its country emptied (D84, D149) - both are "The D50
-  wave since 2026-11-11" below. The dispute screen and lane E ask the six although they are
+  six cards are **cleared** the D47 way, not rewritten, and no card run asks a retired site: the
+  six come back without a card text. The test asks no journal order (until 2026-11-11 it passed any
+  card whose latest journal row was later than the dispute text - which the reversal of the clear
+  is, with the old card back). The Baltic Sea Anomaly also needs its country emptied (D84, D149) -
+  both are "The D50 wave since 2026-11-11" below. The dispute screen and lane E ask the six although they are
   retired (`wc/disputes.py screened`, `wc/cli.py hidden`), so the order is: `disputes.py`
   candidates -> research -> adjudicate -> outputs; `cli.py defect-sites` + the repair run for the
   asserting sentences; `cli.py export --enrich --disputes` and its write; the card lane's step for
@@ -541,7 +543,7 @@ window, is not borderline, holds no Viking item (`viking_subject_sql`) and is of
 type; or a D58 museum reason, retired by the numeric cut, and is a placed Museum whose region has
 the 1500 AD cutoff (`label_cutoff_sql`: an unrecognised country fails it); or a D50 reason and is a D50 site whose description is a dispute enrichment
 that kept both positions (`dispute_enriched_sql`: the journal row and the site's enrichment record,
-read by position up to `enrich.MAX_APPENDED` sentences), whose card was written after it or holds no text (`card_cleared_sql`)
+read by position up to `enrich.MAX_APPENDED` sentences), which holds no card text or one the card lane judged against that description (`card_cleared_sql`)
 and which, if D84 leaves it without a country (`lane.D84_NO_COUNTRY_SITES`), holds none. The rollback is
 the retirement again: `ROLLBACK.sql` restores `retired` and the old reason.
 
@@ -593,7 +595,7 @@ $PY $U export && $PY $U write --wave 2026-10-24b
 
 The read-back prints the scope counts, the D58 residual, the date retirements the label window keeps
 and the borderline ones, the D50 sites shown, those shown **without** a dispute text and those shown
-with a card **not written after** their dispute text (both always 0), statuses without a reason,
+with a card **not judged against** their dispute text (both always 0), statuses without a reason,
 and journal rows of the run that write another status. (The window metric counts every date
 retirement the window keeps, D20's and the non-site types included: after the first wave it stays
 at 1, Mount Livadiyskaya.)
@@ -612,19 +614,27 @@ things the six need beside their dispute text, each with a command of its own, i
    builds the owner run, and the card planner plans its clears although the sites are retired
    (`CARD_DESCRIPTIONS.md` 5.11). A site without a card text passes the card test
    (`card_cleared_sql`, `card_problem`) whatever the order of the journal rows, so the clear may
-   land before lane E reads the six or after its write step is accepted - never in between.
+   land before lane E reads the six or after its write step is accepted - never in between. A
+   clear that was undone does not pass it: the old card is back, and no teaser provenance ties it
+   to the dispute text (`d50-card-not-cleared` again, and the wave's invariant refuses it).
 2. **The Baltic Sea Anomaly holds no country** (D84: "Empty / international waters, no country
    page"; D149: "Globe only: no route without a country"). It holds `'Baltic Sea'` (read
    2026-11-11, written by no journalled lane); shown with it, it would get `/sites/baltic-sea/...`
-   and a country hub. The lane `country-d84` (`lane.COUNTRY_D84`, planner
-   `mechanical/country_d84.py`, stamp `2026-11-11_mechanical-country-d84`, test id `D84/country`)
+   and a country hub. A lane `country-d84-<wave>` (`identity_lanes.country_d84_lane`, planner
+   `mechanical/country_d84.py --write --wave <wave>`, stamp `<wave>_mechanical-country-d84`,
+   directory `mechanical_country_d84/<wave>/`, test id `D84/country`)
    empties the cell: a cell lane whose one column may be emptied (`Column.clears`), premise the
-   row's name and point, and an invariant inside the transaction that every planned site holds no
-   country afterwards and is one `lane.D84_NO_COUNTRY_SITES` names. It writes the site **while it
-   is retired**. The planner lists a row that is no curated row, is named otherwise
-   (`name-moved`), holds no country (`already-empty`) or another one (`stored-value-moved`), or
+   row's name, point **and scope status**, and an invariant inside the transaction that every
+   planned site holds no country afterwards and is one `lane.D84_NO_COUNTRY_SITES` names. It
+   writes the site **while it is retired**, and the premise makes that a guard: guard 5 runs on
+   the apply and on `ROLLBACK.sql` alike, so the reversal refuses a site that is shown. The
+   planner lists a row that is no curated row, is named otherwise
+   (`name-moved`), holds no country (`already-empty`) or another one (`stored-value-moved`), is
+   not retired (`row-not-retired`), or
    whose `country` journal does not end at the live value; it stops for a row the read lost and
-   for a lane that has journalled a row.
+   for a wave that has journalled a row. It is a wave like the un-retire it is paired with: a
+   stamp is applied once, so a write that was undone is planned again under the next label
+   (`2026-11-12b`) - the row holds `'Baltic Sea'` again and its journal ends there.
    The un-retire shows a D84 site only without a country: the planner skips it
    `d84-country-not-cleared` (after its dispute text and its card), and `unretire_violation_sql`
    refuses it inside the transaction. Its premise holds the country, so `scope_unretire.py
@@ -642,30 +652,39 @@ A=scripts/remediation/mechanical/apply.py
 $PY $MW d50-clear --run d50-card-clear-<wave>      # read-only; the owner run's OUTCOMES.jsonl
 $PY $MW plan --run d50-card-clear-<wave> --step N  # then both lanes of the step, and accept --step N
 # 2. the country of the Baltic Sea Anomaly
-$PY $C --write                                     # read-only: READ.jsonl, PLAN.jsonl, SKIPPED.jsonl, PLAN.md, ROLLBACK.sql
-$PY $A --lane country-d84 --check-primitive
-$PY $A --lane country-d84 --verify                 # before: "... that still hold one" = 1
-$PY $A --lane country-d84 --emit
-$PY $A --lane country-d84 --rehearse
-$PY $A --lane country-d84 --probe-guards           # incl. invariant-country
-$PY $A --lane country-d84 --apply
-$PY $A --lane country-d84 --verify                 # after: 0; "curated shown rows without a country that D84 does not name" = 0
-$PY $A --lane country-d84 --rehearse-rollback
+W=<wave>                                           # the day, e.g. 2026-11-12; the next letter (2026-11-12b) for a write that was undone
+$PY $C --write --wave $W                           # read-only: mechanical_country_d84/$W/ READ.jsonl, PLAN.jsonl, SKIPPED.jsonl, PLAN.md, ROLLBACK.sql
+$PY $A --lane country-d84-$W --check-primitive
+$PY $A --lane country-d84-$W --verify              # before: "... that still hold one" = 1
+$PY $A --lane country-d84-$W --emit
+$PY $A --lane country-d84-$W --rehearse
+$PY $A --lane country-d84-$W --probe-guards        # incl. invariant-country
+$PY $A --lane country-d84-$W --apply
+$PY $A --lane country-d84-$W --verify              # after: 0; "curated shown rows without a country that D84 does not name" = 0
+$PY $A --lane country-d84-$W --rehearse-rollback   # now, while the site is retired: guard 5 refuses it once the site is shown
 # 3. the wave: a fresh export, the next label
 $PY $U export && $PY $U write --wave <wave>
 ```
 
-`--write` is refused while `mechanical_country_d84/` holds a plan (a delivered plan is never
-replaced) and when the read leaves nothing to write. The read-back of `country-d84` also counts the
+`--write` is refused while `mechanical_country_d84/<wave>/` holds a plan (a delivered plan is never
+replaced), when the wave's stamps hold a journal row (a wave that has written is never re-planned)
+and when the read leaves nothing to write. The read-back of a `country-d84-<wave>` lane also counts the
 `card_stats` rows whose `civilization` differs from the site's country: it rises by one, because a
 card_stats wave never empties a column and lists this site `new-value-null` (the card keeps
 `civilization = 'Baltic Sea'`). **Undo, in this order:** the un-retire wave's `ROLLBACK.sql` (the site
-is retired again), then `mechanical_country_d84/ROLLBACK.sql` (the country is back), then the card
+is retired again), then `mechanical_country_d84/<wave>/ROLLBACK.sql` (the country is back), then the card
 step's undo (`CARD_DESCRIPTIONS.md` 5.6) - never a D84 site shown with a country, never a D50 site
-shown with the card the clear removed. Tests: `tests/remediation/test_mechanical_country_d84.py`,
+shown with the card the clear removed. The first two are held by guards, not by this order alone:
+the country lane's `ROLLBACK.sql` run first is refused by its guard 5 (the premise holds
+`scope_status = retired`; nothing is written), and a card that the card step's undo put back is
+not one the un-retire shows a site with (`CARD_DESCRIPTIONS.md` 5.11, Undo). **After the undo** the
+whole part can be made again: a new `d50-clear` run and step, `country_d84.py --write` under the
+next wave label, a fresh export and the next un-retire label - no stamp is used twice.
+Tests: `tests/remediation/test_mechanical_country_d84.py`,
 `test_scope_unretire.py` (`test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied`,
-`test_a_site_d84_leaves_without_a_country_passes_only_without_one`); `mechanical/mutation_sweep.py
-d84` (17 cases).
+`test_a_site_d84_leaves_without_a_country_passes_only_without_one`,
+`test_a_d50_site_passes_only_without_a_card_or_with_one_judged_against_its_text`);
+`mechanical/mutation_sweep.py d84` (26 cases) and `"d50 sql" "d50 plan"` (the card test among them).
 
 ---
 
@@ -1950,7 +1969,7 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   dispute screen and lane E.
 * `scripts/remediation/mechanical/mutation_sweep.py d58 d50` - the D58/D50 guards (`D58_CASES`);
   `mutation_sweep.py "d50 clear" d84` - what the D50 wave needs since 2026-11-11
-  (`D50_UNRETIRE_CASES`, 28 cases: the card clear of O17, the `country-d84` lane, the un-retire's
+  (`D50_UNRETIRE_CASES`, 37 cases: the card clear of O17, the `country-d84-<wave>` lane, the un-retire's
   D84 gate; tests in `test_mechanical_teaser.py`, `test_mechanical_country_d84.py`,
   `test_scope_unretire.py`);
   `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20

@@ -1011,14 +1011,27 @@ scratch directory).
 **The order.** The clear's premise is the description, and both lanes of a WB step and a lane-WC
 write step write on the same sites: never build or apply the clear between lane E's `read` and the
 acceptance of its write for these sites. Clear the cards either before lane E reads the six or after
-its write step is accepted; then the country lane of the Baltic Sea Anomaly (`country-d84`,
-`WD2_SERVED_IMAGE_AND_SCOPE.md` section 4), then `scope_unretire.py export` and the wave - the
+its write step is accepted; then the country lane of the Baltic Sea Anomaly
+(`country-d84-<wave>`, `WD2_SERVED_IMAGE_AND_SCOPE.md` section 2.2, "The D50 wave since
+2026-11-11"), then `scope_unretire.py export` and the wave - the
 un-retire's premise holds the md5 of the card text and the country, so its export is read last. A
 site whose step was planned and not applied (a description that moved) is closed with
 `close-reverted` (5.6) and asked again by a new `d50-clear` run under the next wave label.
 
 **Undo**: 5.6, card lane first. An un-retire wave that showed the site is undone before
 (`scope-unretire-<wave>`'s `ROLLBACK.sql`): a D50 site is never shown with the card the clear removed.
+The un-retire's gates hold that rule, not this sentence (review of 2026-11-11). The card test asks
+no journal order - the reversal of the clear is a later journal row than the dispute text, and it
+puts the old card back. It asks whether the site holds no card text or one the card lane judged
+against the description the site holds: a teaser provenance that hashes that card and that
+description (`identity_lanes.card_judged_sql`). A card no teaser run wrote has none (five of the
+six), and Richat's undo restores a provenance that hashes the description of before the dispute
+text. So after an undone clear `scope_unretire.py` skips the site `d50-card-not-cleared`, the wave's
+invariant refuses it inside the transaction, guard 5 refuses a wave planned before the undo (the
+premise holds the md5 of the card text), and the wave's read-back counts a site that is shown
+already ("curated D50 sites shown with a card not judged against their dispute text": 0, always).
+The card step's own `ROLLBACK.sql` has no such guard: run on a shown D50 site it commits, and that
+read-back is what reports it - retire the site first.
 
 **Tests**: `TestTheD50Clear` in `tests/remediation/test_mechanical_teaser.py`;
 `mechanical/mutation_sweep.py "d50 clear"` (11 cases).

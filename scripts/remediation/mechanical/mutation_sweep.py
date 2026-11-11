@@ -13209,8 +13209,11 @@ UNRETIRE_WAVES = "test_a_wave_writes_its_files_and_is_never_replaced_or_planned_
 UNRETIRE_PLACED_SQL = (
     "test_a_label_un_retirement_needs_a_placed_dated_site_that_is_no_viking_or_non_site"
 )
-UNRETIRE_CARD_SQL = "test_a_d50_site_passes_only_once_its_card_was_written_after_its_dispute_text"
-UNRETIRE_D50_CARD = "test_a_d50_site_waits_until_its_card_was_written_after_its_dispute_text"
+#: The card test (review of B5, 2026-11-11): no card, or one the card lane judged against the
+#: text the site holds - never "a later journal row", which the reversal of the clear is.
+UNRETIRE_CARD_SQL = "test_a_d50_site_passes_only_without_a_card_or_with_one_judged_against_its_text"
+UNRETIRE_D50_CARD = "test_a_d50_site_waits_until_its_card_is_cleared_or_judged_against_its_text"
+UNRETIRE_EXPORT = "test_the_export_is_one_read_only_snapshot_of_the_retired_and_their_journal"
 #: The doors the label rule guards where no verdict is asked (D58, review of 2026-10-24).
 LOADER_SCOPE = REPO / "pipeline/unified_loader.py"
 LOADER_SCOPE_TESTS = "tests/pipeline/test_loader_scope_rule.py"
@@ -14086,7 +14089,7 @@ D58_CASES: list[Case] = [
         "tests/remediation/test_phase4_plan.py",
     ),
     Case(
-        "d50 lane: a D50 site's card was written after its text",
+        "d50 lane: a D50 site's card is cleared or judged against its text",
         IDENTITY_LANES,
         "        f\"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})\"\n",
         "        f\"AND {dispute_enriched_sql('u')})\"\n",
@@ -14094,18 +14097,36 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 sql: a card before the text does not clear",
+        "d50 sql: a card nobody judged does not clear",
         IDENTITY_LANES,
-        '    return f"({no_card} OR coalesce({card} > {text}, false))"',
-        '    return f"({no_card} OR coalesce({card} IS NOT NULL, false))"',
+        '    return f"({no_card} OR {card_judged_sql(alias)})"',
+        '    return f"({no_card} OR true)"',
         UNRETIRE_CARD_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
         "d50 sql: no card clears",
         IDENTITY_LANES,
-        '    return f"({no_card} OR coalesce({card} > {text}, false))"',
-        '    return f"(coalesce({card} > {text}, false))"',
+        '    return f"({no_card} OR {card_judged_sql(alias)})"',
+        '    return f"({card_judged_sql(alias)})"',
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the provenance hashes the card the site holds",
+        IDENTITY_LANES,
+        "        \"AND encode(sha256(convert_to(cs.card_description, 'UTF8')), 'hex') = \"\n"
+        "        f\"{provenance}->>'text_sha256' \"\n",
+        "",
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the provenance hashes the description the site holds",
+        IDENTITY_LANES,
+        "        f\"AND encode(sha256(convert_to(coalesce({a}.description, ''), 'UTF8')), 'hex') = \"\n"
+        "        f\"{provenance}->>'desc_sha256')\"\n",
+        '        ")"\n',
         UNRETIRE_CARD_SQL,
         UNRETIRE_TESTS,
     ),
@@ -14170,19 +14191,36 @@ D58_CASES: list[Case] = [
         UNRETIRE_D50_CARD,
         UNRETIRE_TESTS,
     ),
-    guard(
+    Case(
         "d50 plan: no card clears",
         UNRETIRE,
+        '    if not site["has_card"] or site["card_judged"]:',
+        '    if site["card_judged"]:',
+        UNRETIRE_D50_CARD,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a card nobody judged does not clear",
+        UNRETIRE,
+        '    if not site["has_card"] or site["card_judged"]:',
+        '    if not site["has_card"] or site["has_card"]:',
+        UNRETIRE_D50_CARD,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a card judged against the text clears",
+        UNRETIRE,
+        '    if not site["has_card"] or site["card_judged"]:',
         '    if not site["has_card"]:',
         UNRETIRE_D50_CARD,
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 plan: a card before the text does not clear",
+        "d50 plan: the export reads the invariant's own card test",
         UNRETIRE,
-        "    if card is not None and int(card) > written_id:",
-        "    if card is not None:",
-        UNRETIRE_D50_CARD,
+        "    f\"{card_judged_sql('u')} AS card_judged, \"\n",
+        '    "true AS card_judged, "\n',
+        UNRETIRE_EXPORT,
         UNRETIRE_TESTS,
     ),
 ]
@@ -15031,7 +15069,8 @@ CASES += D20_START_CASES
 #: What the six D50 sites need to be shown again (code gaps wn-and-disputes#4 and #5). O17: their
 #: cards are cleared the D47 way - the owner run `teaser.py d50-clear` builds, and the one outcome
 #: of a retired site the card planner plans (`teaser.classify`). D84 and D149: the Baltic Sea
-#: Anomaly holds no country - the `country-d84` lane (`lane.COUNTRY_D84`, `country_d84.py`), and
+#: Anomaly holds no country - a `country-d84-<wave>` lane (`identity_lanes.country_d84_lane`,
+#: `country_d84.py`: a wave, written while the site is retired, its premise holding that), and
 #: the un-retire's gate for it (`identity_lanes.unretire_violation_sql`, `scope_unretire.py`).
 #: Every label starts with "d50 clear" or "d84": `mutation_sweep.py "d50 clear" d84` runs exactly
 #: these.
@@ -15044,7 +15083,10 @@ _D50_CLEAR_REFUSED = "test_a_run_with_nothing_to_clear_or_another_name_is_not_wr
 _D84_WAITS = "test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied"
 _D84_INVARIANT = "test_a_planned_site_holds_no_country_and_is_one_d84_names"
 _D84_REFUSED = "test_each_check_refuses_on_its_own"
-_D84_STOPPED = "test_a_row_the_read_lost_and_a_lane_that_has_written_stop_the_plan"
+_D84_STOPPED = "test_a_row_the_read_lost_and_a_wave_that_has_written_stop_the_plan"
+_D84_WAVE = "test_a_wave_has_a_stamp_keys_and_a_directory_of_its_own"
+_D84_PREMISE = "test_the_premise_holds_the_scope_status_so_the_reversal_refuses_a_shown_site"
+_D84_FILES = "test_write_keeps_the_read_and_delivers_the_plan_with_its_undo"
 
 D50_UNRETIRE_CASES: list[Case] = [
     # -- O17: the card planner
@@ -15146,35 +15188,99 @@ D50_UNRETIRE_CASES: list[Case] = [
     # -- D84: the lane
     Case(
         "d84 lane: a planned site holds no country",
-        LANE,
-        "            predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
-        "            predicate=f\"NOT {d84_site_sql('u')}\",\n",
+        IDENTITY_LANES,
+        "                predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
+        "                predicate=f\"NOT {d84_site_sql('u')}\",\n",
         _D84_INVARIANT,
         D84_TESTS,
     ),
     Case(
         "d84 lane: only a site D84 names is planned",
-        LANE,
-        "            predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
-        '            predicate="u.country IS NOT NULL",\n',
+        IDENTITY_LANES,
+        "                predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
+        '                predicate="u.country IS NOT NULL",\n',
         _D84_INVARIANT,
         D84_TESTS,
     ),
     Case(
         "d84 lane: the cell is emptied and never filled",
-        LANE,
-        '    cells=(Column("country", "character varying", max_chars=100, clears=True),),\n',
-        '    cells=(Column("country", "character varying", max_chars=100, clears=True, '
+        IDENTITY_LANES,
+        '        cells=(Column("country", "character varying", max_chars=100, clears=True),),\n',
+        '        cells=(Column("country", "character varying", max_chars=100, clears=True, '
         "fills_null=True),),\n",
         "test_the_clear_and_its_reversal_are_valid_and_nothing_fills_a_null",
         D84_TESTS,
     ),
     Case(
         "d84 lane: the residual is a D84 site that holds a country",
-        LANE,
+        IDENTITY_LANES,
         "    f\"({d84_site_sql('unified_sites')} AND country IS NOT NULL)\",\n",
         "    f\"({d84_site_sql('unified_sites')})\",\n",
         "test_the_residual_counts_a_d84_site_that_still_holds_a_country",
+        D84_TESTS,
+    ),
+    # -- review of B5 (2026-11-11): the retired status is a guard, and the lane is a wave
+    Case(
+        "d84 lane: the premise holds the scope status",
+        IDENTITY_LANES,
+        "    \"concat_ws(' | ', u.name, coalesce(u.lat::text, 'NULL'), coalesce(u.lon::text, 'NULL'), \"\n"
+        "    \"coalesce(u.scope_status, 'NULL'))\"\n",
+        "    \"concat_ws(' | ', u.name, coalesce(u.lat::text, 'NULL'), coalesce(u.lon::text, 'NULL'))\"\n",
+        _D84_PREMISE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: a wave has a stamp of its own",
+        IDENTITY_LANES,
+        '        run_stamp=f"{wave}_mechanical-country-d84",\n',
+        '        run_stamp="2026-11-11_mechanical-country-d84",\n',
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: a wave has journal keys of its own",
+        IDENTITY_LANES,
+        '        key_prefix=f"country-d84-{wave}",\n',
+        '        key_prefix="country-d84",\n',
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: a wave has a directory of its own",
+        IDENTITY_LANES,
+        '        out_dir_name=f"{COUNTRY_D84_ROOT}/{wave}",\n',
+        "        out_dir_name=COUNTRY_D84_ROOT,\n",
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    guard(
+        "d84 lane: a label that is no wave is refused",
+        IDENTITY_LANES,
+        '    if COUNTRY_D84_LANE.match(f"country-d84-{wave}") is None:',
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 plan: a wave's read asks for its own two stamps",
+        COUNTRY_D84_PY,
+        '        + ", ".join(sql_literal(stamp) for stamp in (lane.run_stamp, lane.rollback_run_stamp))\n',
+        '        + ", ".join(sql_literal(stamp) for stamp in (lane.run_stamp,))\n',
+        "test_the_read_is_one_read_only_snapshot_of_the_decided_row",
+        D84_TESTS,
+    ),
+    Case(
+        "d84 plan: a wave is planned into its own directory",
+        COUNTRY_D84_PY,
+        "    out = out / wave\n",
+        "",
+        _D84_FILES,
+        D84_TESTS,
+    ),
+    guard(
+        "d84 plan: the CLI writes a named wave only",
+        COUNTRY_D84_PY,
+        "    if args.wave is None:",
+        "test_the_cli_writes_a_named_wave_only",
         D84_TESTS,
     ),
     # -- D84: the planner
@@ -15194,16 +15300,21 @@ D50_UNRETIRE_CASES: list[Case] = [
             ("a row without a country is listed", '    if row["country"] is None:', _D84_REFUSED),
             ("the row holds the country D84 empties", '    if row["country"] != held:', _D84_REFUSED),
             (
+                "a shown row is not planned",
+                '    if row["scope_status"] != RETIRED:',
+                _D84_REFUSED,
+            ),
+            (
                 "a journal that does not end at the live value",
                 "    if broken is not None:",
                 "test_a_journal_that_does_not_end_at_the_live_value_refuses",
             ),
-            ("a lane that has written is not re-planned", "    if written:", _D84_STOPPED),
+            ("a wave that has written is not re-planned", "    if written:", _D84_STOPPED),
             ("a row the read lost stops the plan", "        if site_id not in sites:", _D84_STOPPED),
             (
                 "a delivered plan is never replaced",
                 '    if (out / "PLAN.jsonl").exists():',
-                "test_write_keeps_the_read_and_delivers_the_plan_with_its_undo",
+                _D84_FILES,
             ),
             (
                 "an empty plan is not delivered",

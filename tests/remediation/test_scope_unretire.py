@@ -10,6 +10,7 @@ the rows it must let through. Nothing here opens a socket or touches a database.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import sys
@@ -31,6 +32,7 @@ from mechanical import scope_unretire as U  # noqa: E402
 from phase4 import wc4  # noqa: E402
 
 from pipeline.normalizers import dates as D  # noqa: E402
+from pipeline.utils import card_provenance as CP  # noqa: E402
 
 WAVE = "2026-10-24"
 SCOPE_E4 = "2026-09-23_mechanical-scope-e4"
@@ -123,6 +125,13 @@ def _rows() -> list[tuple[str | None, float | None, float]]:
 
 def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
     db = sqlite3.connect(":memory:")
+    # Postgres' `encode(sha256(convert_to(<text>, 'UTF8')), 'hex')`, which the card test hashes with
+    for name, args, function in (
+        ("convert_to", 2, lambda text, _encoding: text.encode("utf-8")),
+        ("sha256", 1, lambda data: hashlib.sha256(data).digest()),
+        ("encode", 2, lambda data, _format: data.hex()),
+    ):
+        db.create_function(name, args, lambda *a, f=function: None if a[0] is None else f(*a))
     db.execute(
         "CREATE TABLE unified_sites (id TEXT, source_id TEXT, name TEXT, site_type TEXT, "
         "country TEXT, lat REAL, lon REAL, period_start INT, period_end INT, scope_status TEXT, "
@@ -340,7 +349,7 @@ class TestTheLane:
             "curated rows retired for their date that are D58 borderline",
             "curated D50 sites shown",
             "curated D50 sites shown without a dispute-enriched description",
-            "curated D50 sites shown with a card not written after their dispute text",
+            "curated D50 sites shown with a card not judged against their dispute text",
             "curated sites D84 leaves without a country shown with one",
             "curated rows outside the D58 label window with no scope decision",
             "journal rows for this run that write a status other than in_scope",
@@ -380,6 +389,17 @@ def enrichment_record(
 def _enriched(sentences: tuple[tuple[str, str], ...] = BOTH_KEPT, **over: Any) -> dict[str, Any]:
     """The `raw_data` of a site whose text lane E enriched."""
     return {wc4.ENRICH_KEY: enrichment_record(sentences, **over)}
+
+
+def _judged(card: str, description: str) -> dict[str, Any]:
+    """What the card test reads of a teaser provenance (`raw_data._card_provenance`): the hash of
+    the card it describes and of the description that card was checked against."""
+    return {
+        CP.CARD_PROVENANCE_KEY: {
+            "text_sha256": CP.text_sha256(card),
+            "desc_sha256": CP.text_sha256(description),
+        }
+    }
 
 
 class TestTheInvariantInSql:
@@ -530,17 +550,44 @@ class TestTheInvariantInSql:
         assert violators({"_card_provenance": {}}) == {YONAGUNI}
         assert violators(_enriched(run="another-run")) == {YONAGUNI}, "another run's record"
 
-    def test_a_d50_site_passes_only_once_its_card_was_written_after_its_dispute_text(self) -> None:
+    def test_a_d50_site_passes_only_without_a_card_or_with_one_judged_against_its_text(
+        self,
+    ) -> None:
+        """D50: "no card or page asserts the claim". O17 clears the six cards, and the one card
+        that passes is one the card lane judged against the description the site holds: its
+        teaser provenance hashes that card and that text. A journal row later than the dispute
+        text proves nothing - the reversal of the clear is one (review of 2026-11-11: dispute
+        text 500, clear 600, the card lane's ROLLBACK.sql 601 puts the old card back)."""
         d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
         text = "A text with both positions."
-        rows = [self.site(YONAGUNI, d50, description=text, country="Japan", raw_data=_enriched())]
+        old = "Still fiercely contested: natural geology or submerged ruins?"
         good = [(500, YONAGUNI, text, _evidence())]
-        card = ((YONAGUNI, "Still fiercely contested: natural geology or submerged ruins?"),)
-        assert self.violators(rows, good) == set(), "no card: nothing asserts the claim"
-        assert self.violators(rows, good, cards=card) == {YONAGUNI}, "no journalled card"
-        assert self.violators(rows, good, cards=card, card_rows=((400, YONAGUNI),)) == {YONAGUNI}
-        assert self.violators(rows, good, cards=card, card_rows=((600, YONAGUNI),)) == set()
-        assert self.violators(rows, good, cards=((YONAGUNI, None),)) == set(), "a NULL card"
+        undone = ((600, YONAGUNI), (601, YONAGUNI))
+
+        def violators(
+            provenance: dict[str, Any] | None = None,
+            *,
+            cards: tuple[tuple[str, str | None], ...] = ((YONAGUNI, old),),
+            card_rows: tuple[tuple[int, str], ...] = (),
+        ) -> set[str]:
+            raw_data = {**_enriched(), **(provenance or {})}
+            rows = [self.site(YONAGUNI, d50, description=text, country="Japan", raw_data=raw_data)]
+            return self.violators(rows, good, cards=cards, card_rows=card_rows)
+
+        assert violators(cards=()) == set(), "no card: nothing asserts the claim"
+        assert violators(cards=((YONAGUNI, None),)) == set(), "a NULL card"
+        assert violators(cards=(), card_rows=undone[:1]) == set(), "the clear after the text"
+        assert violators() == {YONAGUNI}, "a card no teaser run wrote"
+        assert violators(card_rows=((400, YONAGUNI),)) == {YONAGUNI}
+        assert violators(card_rows=((600, YONAGUNI),)) == {YONAGUNI}, "a later row is no proof"
+        assert violators(card_rows=undone) == {YONAGUNI}, "the clear, undone: the old card is back"
+        # Richat's case: the undo puts the teaser card back and the provenance of before the text
+        before = _judged(old, "The text of before the dispute.")
+        assert violators(before, card_rows=undone) == {YONAGUNI}
+        # between the two applies of a card step the provenance hashes the card to come
+        assert violators(_judged("The card to come.", text)) == {YONAGUNI}
+        assert violators(_judged(old, text)) == set(), "judged against the text it holds"
+        assert violators(_judged(old, text), card_rows=((400, YONAGUNI),)) == set()
 
     def test_a_site_d84_leaves_without_a_country_passes_only_without_one(self) -> None:
         """D84 and D149: the Baltic Sea Anomaly lies in international waters and is shown on the
@@ -601,7 +648,7 @@ def site_row(sid: str, **over: Any) -> dict[str, Any]:
         "lat": -7.75, "lon": 110.49, "period_start": 850, "period_end": None,
         "scope_status": "retired",
         "scope_reason": "E3: period_start 850 is 350 years past the rest of world cutoff of 500 AD",
-        "qids": [], "has_card": False, "card_journal_id": None, "premise": f"premise-{sid[:8]}",
+        "qids": [], "has_card": False, "card_judged": False, "premise": f"premise-{sid[:8]}",
     }  # fmt: skip
     row.update(over)
     return row
@@ -877,9 +924,11 @@ class TestThePlanner:
         latest_bad = [dispute_row(n=500), dispute_row(n=600, dispute=None)]
         assert build(export([yonaguni], rows, latest_bad)).changes == (), "the latest row decides"
 
-    def test_a_d50_site_waits_until_its_card_was_written_after_its_dispute_text(self) -> None:
-        """D50: "no card or page asserts the claim" - the card lane (D21) rewrites the card in the
-        knowledge of the dispute text before the site is shown."""
+    def test_a_d50_site_waits_until_its_card_is_cleared_or_judged_against_its_text(self) -> None:
+        """D50: "no card or page asserts the claim" - the card is cleared (O17), or it is one the
+        card lane judged against the description the site holds (`card_judged`, the export's
+        answer of the invariant's own SQL). The planner asks no journal order: a cleared card
+        that an undo put back has a later journal row and is not judged."""
         rows = [journal(YONAGUNI, 129629, stamp="2026-09-30_mechanical-scope-review")]
 
         def yonaguni(**card: Any) -> dict[str, Any]:
@@ -888,20 +937,20 @@ class TestThePlanner:
                             **card)  # fmt: skip
 
         for card, cleared in (
-            ({"has_card": True, "card_journal_id": None}, False),
-            ({"has_card": True, "card_journal_id": 450}, False),
-            ({"has_card": True, "card_journal_id": 600}, True),
-            ({"has_card": False, "card_journal_id": None}, True),
+            ({"has_card": True, "card_judged": False}, False),
+            ({"has_card": True, "card_judged": True}, True),
+            ({"has_card": False, "card_judged": False}, True),
         ):
             plan = build(export([yonaguni(**card)], rows, [dispute_row(n=500)]))
             assert bool(plan.changes) is cleared, card
             if not cleared:
                 assert skipped(plan) == {YONAGUNI: "d50-card-not-cleared"}
                 assert "the card is cleared first (O17: " in plan.skipped[0].note
+                assert "a clear that was undone put the old card back" in plan.skipped[0].note
 
     def test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied(self) -> None:
         """D84 and D149: no country, no country page, no `/sites/` route - globe only. The
-        un-retire shows the site only once the `country-d84` lane has emptied its country; its
+        un-retire shows the site only once a `country-d84-<wave>` lane has emptied its country; its
         dispute text and its card come first, as for every D50 site."""
         rows = [journal(BALTIC, 129663, stamp="2026-09-30_mechanical-scope-review")]
         text = [dispute_row(BALTIC)]
@@ -917,7 +966,7 @@ class TestThePlanner:
         plan = build(export([baltic()], rows, text))
         assert plan.changes == () and skipped(plan) == {BALTIC: "d84-country-not-cleared"}
         assert "it holds the country 'Baltic Sea'" in plan.skipped[0].note
-        assert "the `country-d84` lane" in plan.skipped[0].note
+        assert "a `country-d84-<wave>` lane" in plan.skipped[0].note
         assert plan.counters["skipped_d84-country-not-cleared"] == 1
         emptied = build(export([baltic(country=None)], rows, text))
         assert emptied.counters["d50_disputed"] == 1 and emptied.skipped == ()
@@ -926,7 +975,7 @@ class TestThePlanner:
         assert skipped(build(export([baltic(country=None)], rows))) == {
             BALTIC: "d50-no-dispute-text"
         }
-        with_card = baltic(has_card=True, card_journal_id=None)
+        with_card = baltic(has_card=True)
         assert skipped(build(export([with_card], rows, text))) == {BALTIC: "d50-card-not-cleared"}
         assert U.country_problem(baltic(country=None)) is None
         yonaguni = site_row(YONAGUNI, country="Japan", scope_reason=D50_REASON_NOW)
@@ -1021,7 +1070,11 @@ class TestTheExport:
         assert "u.scope_status = 'retired'" in U.EXPORT_SITES_SQL
         assert f"{IL.SCOPE_UNRETIRE_PREMISE_SQL} AS premise" in U.EXPORT_SITES_SQL
         assert "e.kind = 'wikidata_qid'" in U.EXPORT_SITES_SQL
-        assert "AS has_card" in U.EXPORT_SITES_SQL and "AS card_journal_id" in U.EXPORT_SITES_SQL
+        assert "AS has_card" in U.EXPORT_SITES_SQL
+        # the planner's card test is the invariant's own SQL, read by the export - no twin of it
+        assert f"{IL.card_judged_sql('u')} AS card_judged, " in U.EXPORT_SITES_SQL
+        assert IL.card_judged_sql("u") in IL.card_cleared_sql("u")
+        assert "remediation_change_log" not in IL.card_cleared_sql("u"), "no journal order"
         assert "l.column_name = 'scope_status'" in U.EXPORT_JOURNAL_SQL
         assert "l.new_value = u.description" in U.EXPORT_DISPUTE_SQL
         for sid in L.D50_DISPUTED_SITES:
