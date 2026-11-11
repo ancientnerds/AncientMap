@@ -13195,6 +13195,9 @@ UNRETIRE_STAYS = "test_a_date_retirement_the_label_rule_does_not_keep_stays"
 UNRETIRE_MUSEUM = "test_a_pinned_museum_comes_back_outside_the_medieval_old_world_only"
 UNRETIRE_D50_WAITS = "test_a_d50_site_waits_for_its_dispute_text"
 UNRETIRE_D50_SQL = "test_a_d50_site_passes_only_with_its_dispute_text"
+#: D21 in the D50 gate (code gap wn-and-disputes#3, 2026-11-11): both positions kept, not written.
+UNRETIRE_D50_KEPT_SQL = "test_a_d50_site_passes_only_with_both_positions_kept"
+UNRETIRE_D50_KEPT = "test_a_d50_site_whose_text_kept_one_position_waits"
 UNRETIRE_DATE_SQL = "test_a_label_un_retirement_inside_the_window_passes_and_every_other_fails"
 UNRETIRE_MUSEUM_SQL = "test_a_museum_un_retirement_needs_a_museum_outside_the_medieval_old_world"
 UNRETIRE_JOURNAL = "test_only_a_journalled_retirement_is_taken_back"
@@ -13500,11 +13503,43 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 sql: both positions were appended",
+        "d50 sql: position B was kept",
         IDENTITY_LANES,
-        "        f\"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})\"\n",
+        '        f"AND {kept(wc4.DISPUTE_B)})"\n',
         '        ")"\n',
-        UNRETIRE_D50_SQL,
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: position A was kept",
+        IDENTITY_LANES,
+        '        f"AND {kept(wc4.DISPUTE_A)} "\n',
+        "",
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: a position written and dropped is not kept",
+        IDENTITY_LANES,
+        "                f\"AND {record}->'sentences'->{index}->>'verdict' = {keep})\"\n",
+        '                ")"\n',
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the record is the one of the run that wrote the text",
+        IDENTITY_LANES,
+        "        f\"AND l.evidence->>'run' = {record}->>'run' \"\n",
+        "",
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: every sentence an enrichment appends is read",
+        IDENTITY_LANES,
+        "                for index in range(enrich.MAX_APPENDED)\n",
+        "                for index in range(2)\n",
+        UNRETIRE_D50_KEPT_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
@@ -13668,10 +13703,33 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 plan: both positions were appended",
+        "d50 plan: both positions were kept",
         UNRETIRE,
         "    for needed in (wc4.DISPUTE_A, wc4.DISPUTE_B):",
         "    for needed in ():",
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a position written and dropped is not kept",
+        UNRETIRE,
+        '        if sentence["verdict"] == wc4.Verdict.KEEP.value\n',
+        "        if True\n",
+        UNRETIRE_D50_KEPT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: the record is the one of the run that wrote the text",
+        UNRETIRE,
+        '    if record is None or record["run"] != row["run"]:',
+        "    if record is None:",
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: a site without an enrichment record waits",
+        UNRETIRE,
+        '    if record is None or record["run"] != row["run"]:',
         UNRETIRE_D50_WAITS,
         UNRETIRE_TESTS,
     ),

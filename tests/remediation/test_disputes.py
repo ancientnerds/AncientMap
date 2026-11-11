@@ -167,7 +167,7 @@ def test_the_screen_is_measured_against_the_known_positives(tmp_path: Path) -> N
     run = _run(tmp_path, rows)
     D.cmd_candidates(run, wiki_cache=None)
     assert D.cmd_recall(run) == {
-        "known": 17, "flagged": 17, "recall": 1.0, "missed": [], "passed": True,
+        "known": 17, "flagged": 17, "recall": 1.0, "missed": [], "named": [], "passed": True,
     }  # fmt: skip
     plain = [{**r, "description": "A plain site in Malta with four buildings."} for r in rows[:3]]
     run2 = _run(tmp_path / "b", [*plain, *rows[3:]])
@@ -197,6 +197,92 @@ def test_the_d50_sites_are_known_positives_and_screened_although_retired(
     assert D.screened({"id": yonaguni, "scope_status": "retired"})
     assert not D.screened({"id": FX.SITE_C, "scope_status": "retired"})
     assert D.screened({"id": FX.SITE_C, "scope_status": None})
+
+
+PLAIN = "A plain site in Malta with four buildings in the south of the island."
+
+
+def _include(tmp_path: Path, *site_ids: str) -> Path:
+    path = tmp_path / "dispute-include.txt"
+    path.write_text("".join(f"{site_id}\n" for site_id in site_ids), encoding="utf-8")
+    return path
+
+
+def test_a_named_site_is_a_candidate_whatever_it_carries(tmp_path: Path) -> None:
+    """D21 names Pantelleria Vecchia Bank Megalith, whose description, article and categories carry
+    no signal: `candidates --include` asks a named site all the same, like any other candidate."""
+    rows = [
+        _row(FX.SITE_A, "A controversial site in Malta. It has four buildings in the south."),
+        _row(FX.SITE_B, PLAIN, name="Pantelleria Vecchia Bank Megalith"),
+        _row(FX.SITE_D, PLAIN, name="Unnamed and plain"),
+    ]
+    run = _run(tmp_path, rows)
+    assert D.cmd_candidates(run, wiki_cache=None)["candidates"] == 1  # the screen alone: SITE_A
+    include = _include(tmp_path, FX.SITE_A, FX.SITE_B)
+    summary = D.cmd_candidates(run, wiki_cache=None, include=include)
+    assert summary["candidates"] == 2 and summary["by_signal"] == {"description": 1, "named": 2}
+    assert summary["include"] == {
+        "path": cli._shown(include), "sha256": cli._sha256(include), "sites": 2,
+    }  # fmt: skip
+    found = {c["site_id"]: c for c in read_jsonl(run / D.CANDIDATES_FILE)}
+    assert set(found) == {FX.SITE_A, FX.SITE_B}
+    assert found[FX.SITE_B]["reasons"] == {"named": ["dispute-include.txt"]}
+    assert found[FX.SITE_A]["reasons"] == {
+        "description": ["disputed"],
+        "named": ["dispute-include.txt"],
+    }
+    assert found[FX.SITE_B]["sentences"] == [PLAIN]
+    # the research round asks it exactly as it asks a flagged site
+    assert D.cmd_export(run, tmp_path / "h") == {"questions": 2, "batches": 1}
+    prompts = {
+        m["label"]: (tmp_path / "h" / m["prompt_path"]).read_text(encoding="utf-8")
+        for m in OH.manifest(tmp_path / "h")
+    }
+    assert "name: Pantelleria Vecchia Bank Megalith" in prompts[FX.SITE_B]
+    assert "named" not in prompts[FX.SITE_B] and f"S1: {PLAIN}" in prompts[FX.SITE_B]
+
+
+def test_a_site_asked_by_name_is_no_hit_of_the_screen(tmp_path: Path) -> None:
+    """The recall measures the signals: a known positive that is a candidate only because the list
+    names it stays among the missed (and is listed as named), so a list never passes the screen."""
+    rows = [_row(f"{n:08x}-0000-4000-8000-000000000001", "A controversial hoax.", name=name)
+            for n, name in enumerate(D.KNOWN_POSITIVES, start=1)]  # fmt: skip
+    plain = [_row(r["id"], PLAIN, name=r["name"]) for r in rows[:3]]
+    run = _run(tmp_path, [*plain, *rows[3:]])
+    include = _include(tmp_path, *(r["id"] for r in plain[:2]))
+    assert D.cmd_candidates(run, wiki_cache=None, include=include)["candidates"] == 16
+    result = D.cmd_recall(run)
+    assert result["flagged"] == 14 and result["recall"] == round(14 / 17, 4)
+    assert result["passed"] is False
+    assert result["missed"] == list(D.KNOWN_POSITIVES[:3])
+    assert result["named"] == list(D.KNOWN_POSITIVES[:2])
+
+
+@pytest.mark.parametrize(
+    ("row", "reason"),
+    [
+        (_row(FX.SITE_C, "A site that a file calls disputed.", scope_status="retired"), "retired"),
+        ({**FX.row(FX.SITE_C, None), "site_type": "x"}, "no-description"),
+        (_row(FX.SITE_C, "A disputed site [1-3]. It stands in Malta."), "not-splittable"),
+    ],
+)
+def test_a_named_site_the_screen_cannot_ask_stops_the_command(
+    tmp_path: Path, row: dict, reason: str
+) -> None:
+    """A site the list names is asked or the command stops: it is never left out silently."""
+    run = _run(tmp_path, [_row(FX.SITE_A, PLAIN), row])
+    # without the list the site is counted under its reason, as before
+    assert D.cmd_candidates(run, wiki_cache=None)["listed"] == {reason: 1}
+    (run / D.CANDIDATES_FILE).unlink()
+    with pytest.raises(D.DisputeError, match=rf"cannot be asked \({reason}\)"):
+        D.cmd_candidates(run, wiki_cache=None, include=_include(tmp_path, FX.SITE_C))
+    assert not (run / D.CANDIDATES_FILE).exists()
+    with pytest.raises(D.DisputeError, match="is no curated row of the read"):
+        D.cmd_candidates(run, wiki_cache=None, include=_include(tmp_path, FX.SITE_D))
+    bad = tmp_path / "bad.txt"
+    bad.write_text("not-a-site-id\n", encoding="utf-8")
+    with pytest.raises(cli.WcRunError, match="bad.txt:1"):
+        D.cmd_candidates(run, wiki_cache=None, include=bad)
 
 
 # ------------------------------------------------------------------------------ the categories
@@ -662,6 +748,132 @@ def test_a_wc_list_run_reads_a_dispute_as_a_reported_claim(
     assert EF.POSITIONS in prompt
 
 
+# ------------------------------------------------------------------------------ the briefs of one run
+STATED = "They date to approximately 3150 BC."
+NO_ROW = "ffffffff-0000-4000-8000-000000000001"
+
+
+@pytest.fixture
+def confirmed(tmp_path: Path) -> dict[str, Any]:
+    """A dispute run with seven confirmed briefs, the read of an enrichment run that can take two
+    of them, and an earlier enrichment run (the pilot) that asked one of the others."""
+    rows = [
+        EF.p4_row(EF.SITE_W),
+        EF.p4_row(EF.SITE_L, name="Second"),
+        EF.p4_row(EF.SITE_N, name="In the pilot"),
+        EF.p4_row(EF.SITE_NONE, name="Asserting"),
+        FX.row(EF.SITE_BAD, WX.P4_TEXT, raw_data=WX.p4_site_raw(), scope_status="retired"),
+        FX.row(FX.SITE_A, "A text no lane has marked or checked.", name="Unmarked"),
+    ]
+    briefs = [
+        EF.dispute_brief(EF.SITE_NONE, asserting=[{"sentence": 2, "asserts": "b", "text": STATED}]),
+        EF.dispute_brief(EF.SITE_W),
+        EF.dispute_brief(EF.SITE_BAD),
+        EF.dispute_brief(NO_ROW),
+        EF.dispute_brief(EF.SITE_N),
+        # made for an earlier text; the sentence it names is not in the text the read holds
+        EF.dispute_brief(
+            EF.SITE_L,
+            asserting=[{"sentence": 2, "asserts": "a", "text": "It is a pyramid."}],
+            desc_sha256="e" * 64,
+        ),
+        EF.dispute_brief(FX.SITE_A),
+    ]
+    disputes = tmp_path / "dispute_runs" / "d"
+    disputes.mkdir(parents=True)
+    (disputes / D.DISPUTES_FILE).write_text(
+        "".join(json.dumps(b) + "\n" for b in briefs), encoding="utf-8"
+    )
+    pilot, _ = EF.start_enrich_run(tmp_path / "p", rows, sites=[EF.SITE_N], name="pilot")
+    run = tmp_path / "runs" / "rest"
+    run.mkdir(parents=True)
+    cli.cmd_read(run, runner=FX.ReadRunner(rows))
+    return {"disputes": disputes, "briefs": briefs, "pilot": pilot, "run": run, "rows": rows}
+
+
+def test_the_briefs_a_run_can_take_are_written_and_the_others_are_held_with_their_reason(
+    confirmed: dict[str, Any], tmp_path: Path
+) -> None:
+    """`DISPUTES.jsonl` holds every confirmed dispute; an enrichment run asks only some of their
+    sites. `briefs --for-run` decides on that run's read as its export will, and writes the subset
+    the export takes, its site list and the held briefs - the full file is never cut by hand."""
+    out = tmp_path / "drv" / "enrich-rest.briefs.jsonl"
+    summary = D.cmd_briefs(
+        confirmed["disputes"], for_run=confirmed["run"], out=out, after=[confirmed["pilot"]]
+    )
+    assert (summary["briefs"], summary["usable"], summary["pilot_size"]) == (7, 2, 2)
+    assert summary["held"] == {
+        "asserting-in-text": 1,
+        "earlier-run": 1,
+        "no-curated-row": 1,
+        "no-provenance": 1,
+        "retired": 1,
+    }
+    briefs = confirmed["briefs"]
+    assert read_jsonl(out) == [briefs[1], briefs[5]]  # unchanged, in the file's order
+    sites = out.with_name(out.name + D.BRIEF_SITES_SUFFIX)
+    assert sites.read_bytes() == f"{EF.SITE_W}\n{EF.SITE_L}\n".encode()
+    assert summary["out"] == {"path": cli._shown(out), "sha256": cli._sha256(out)}
+    held = json.loads(out.with_name(out.name + D.BRIEFS_HELD_SUFFIX).read_text(encoding="utf-8"))
+    assert {h["site_id"]: (h["reason"], h["asserting_in_text"]) for h in held} == {
+        EF.SITE_NONE: ("asserting-in-text", [2]),
+        EF.SITE_BAD: ("retired", []),
+        NO_ROW: ("no-curated-row", []),
+        EF.SITE_N: ("earlier-run", []),
+        FX.SITE_A: ("no-provenance", []),
+    }
+    assert all(h["name"] == "Tarxien Temples" for h in held)
+
+    def export(handoff: str, disputes: Path) -> dict[str, Any]:
+        return cli.cmd_export(
+            confirmed["run"], tmp_path / handoff, batch_size=5, exclude=None,
+            after=[confirmed["pilot"]], pilot=2, seed=1, sites=sites, enrich=True,
+            disputes=disputes,
+        )  # fmt: skip
+
+    # the whole file is refused, and the refusal names the command; the subset is what is taken
+    with pytest.raises(cli.WcRunError, match="is no site this run asks - disputes.py briefs"):
+        export("h-all", confirmed["disputes"] / D.DISPUTES_FILE)
+    assert export("h", out)["questions"] == 2
+    population = json.loads((confirmed["run"] / cli.POPULATION_FILE).read_text(encoding="utf-8"))
+    assert population["disputes"] == {
+        "path": cli._shown(out), "sha256": cli._sha256(out), "sites": 2,
+    }  # fmt: skip
+    entries = read_jsonl(confirmed["run"] / cli.SITES_FILE)
+    assert [e["dispute"]["site_id"] for e in entries] == [EF.SITE_W, EF.SITE_L]
+
+
+def test_the_briefs_of_a_run_without_an_earlier_one_take_the_pilot_s_site_too(
+    confirmed: dict[str, Any], tmp_path: Path
+) -> None:
+    out = tmp_path / "pilot.briefs.jsonl"
+    summary = D.cmd_briefs(confirmed["disputes"], for_run=confirmed["run"], out=out)
+    assert summary["usable"] == 3 and "earlier-run" not in summary["held"]
+    assert [b["site_id"] for b in read_jsonl(out)] == [EF.SITE_W, EF.SITE_N, EF.SITE_L]
+
+
+def test_the_briefs_command_refuses_what_it_cannot_decide(
+    confirmed: dict[str, Any], tmp_path: Path
+) -> None:
+    disputes, run, out = confirmed["disputes"], confirmed["run"], tmp_path / "b.jsonl"
+    with pytest.raises(D.DisputeError, match="the outputs were not written"):
+        D.cmd_briefs(tmp_path / "none", for_run=run, out=out)
+    with pytest.raises(D.DisputeError, match="no read"):
+        D.cmd_briefs(disputes, for_run=tmp_path / "unread", out=out)
+    path = disputes / D.DISPUTES_FILE
+    whole = path.read_text(encoding="utf-8")
+    path.write_text(whole + json.dumps(confirmed["briefs"][1]) + "\n", encoding="utf-8")
+    with pytest.raises(D.DisputeError, match=f"8: {EF.SITE_W} has two dispute briefs"):
+        D.cmd_briefs(disputes, for_run=run, out=out)
+    path.write_text(
+        whole + json.dumps({**EF.dispute_brief(FX.SITE_B), "verdict": "settled"}) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(D.DisputeError, match="8: verdict 'settled'"):
+        D.cmd_briefs(disputes, for_run=run, out=out)
+    assert not out.exists()
+
+
 # ------------------------------------------------------------------------------ the command line
 def test_the_command_line_screens_and_refuses_with_a_line_of_its_own(
     screened: dict[str, Any], capsys: pytest.CaptureFixture[str]
@@ -680,3 +892,21 @@ def test_the_command_line_screens_and_refuses_with_a_line_of_its_own(
     assert (
         D.main(["recall", "--run-dir", str(run)]) == 1
     )  # two candidates: far below the known positives
+
+
+def test_the_command_line_takes_the_include_list_and_writes_the_briefs_of_a_run(
+    confirmed: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = _run(tmp_path / "screen", [_row(FX.SITE_B, PLAIN)])
+    include = _include(tmp_path, FX.SITE_B)
+    assert D.main(["candidates", "--run-dir", str(run), "--include", str(include)]) == 0
+    assert '"candidates": 1' in capsys.readouterr().out
+    out = tmp_path / "b.jsonl"
+    argv = ["briefs", "--run-dir", str(confirmed["disputes"]), "--for-run", str(confirmed["run"]),
+            "--after", str(confirmed["pilot"]), "--out", str(out)]  # fmt: skip
+    assert D.main(argv) == 0
+    printed = capsys.readouterr().out
+    assert '"usable": 2' in printed and "DISPUTE_EXIT=0" in printed
+    assert len(read_jsonl(out)) == 2
+    assert D.main([*argv[:4], str(tmp_path / "unread"), *argv[5:]]) == 1
+    assert "REFUSED" in capsys.readouterr().err

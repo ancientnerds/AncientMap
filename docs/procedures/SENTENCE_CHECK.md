@@ -1190,7 +1190,13 @@ measured on no corpus: the pilot is where they are measured.
 * `build --first-batch N`: the composition is `wc4.compose(decisions, quotes, base=)`: the stored text stays byte for
   byte with its `[n]`, the citation list keeps the stored entries verbatim, a page the base already cites keeps its number,
   every other page is numbered from N+1 by first appearance. A site that got no sentence is `not_planned.unchanged`
-  (`FINAL.jsonl` `planned: false`, `cleared: false`): nothing is written for it. The check record is replaced by
+  (`FINAL.jsonl` `planned: false`, `cleared: false`): nothing is written for it. **A site that kept one position of
+  its dispute without the other is `not_planned.dispute-one-position`** (owner decision D21: both positions are named; a
+  text that keeps only one is not written; `enrich.positions_kept`, since 2026-11-11): the writer gives both or none, but
+  the import's quote check and each verifier drop sentence by sentence. Nothing of that site is written, its facts and its
+  open question included (the verified text is the one with the single position in it); a pilot's judge still judges its
+  sentences. A site that kept neither position is written with its other sentences and is no dispute text (the scope
+  lane's D50 gate reads the kept classes, WD2 section 4). The check record is replaced by
   `raw_data._description_enrichment` (14.4); the journal evidence's `decision` is `wc4.EVIDENCE_DECISION_ENRICH` and its
   `enrichment` block holds the base (text and citations as stored), the old check record, each new sentence's class, the
   dispute brief and the thin flag - the database alone composes the text again (`wc4.enrichment_evidence_problems`).
@@ -1263,7 +1269,7 @@ the verifiers and the judge are different agents (compared without the role). A 
     D="$PY scripts/remediation/wc/disputes.py"
     $C read --run-dir $RUNS/$R                                  # one read (ROWS.jsonl)
     $D fetch-categories --run-dir $RUNS/$R                      # CATEGORIES.json: MediaWiki, 50 titles a query
-    $D candidates --run-dir $RUNS/$R --wiki-cache output/remediation/final-2026-10-08/wiki_cache
+    $D candidates --run-dir $RUNS/$R --wiki-cache output/remediation/final-2026-10-08/wiki_cache [--include F]
     $D recall --run-dir $RUNS/$R                                # the screen vs the known positives, bar 0.9
     $D export --run-dir $RUNS/$R --handoff $H/dispute-$R-r      # research: role field_researcher (Opus since 2026-10-09)
     $D brief --run-dir $RUNS/$R --handoff $H/dispute-$R-r --batch-id ds-000N     # per batch
@@ -1271,6 +1277,26 @@ the verifiers and the judge are different agents (compared without the role). A 
     $D adjudicate-export --run-dir $RUNS/$R --handoff $H/dispute-$R-a            # Opus high, role adversarial
     $D adjudicate-brief ... ; $OH validate ... ; $D adjudicate-import --run-dir $RUNS/$R --handoff $H/dispute-$R-a
     $D outputs --run-dir $RUNS/$R             # DISPUTES.jsonl, DISPUTE_DEFECTS.jsonl, SUMMARY.json
+    $D briefs --run-dir $RUNS/$R --for-run $RUNS/$E [--after $RUNS/$P] --out B   # B, B.sites.txt, B.held.json
+
+*Named sites* (`candidates --include F`, since 2026-11-11): `F` holds site ids, one per line; each is a candidate whatever
+it carries, with the signal `named` beside its own (`by_signal.named`, and `include` with the file's sha256 in the printed
+summary), and is researched like any other. D21 names Pantelleria Vecchia Bank Megalith
+(`daa1ea4b-c002-4552-a4ef-45d996c6cea6`), which no signal flags. A named site the screen cannot ask - no curated row of the
+read, retired and no D50 site, no description, a text that does not split - stops the command (`REFUSED: ... cannot be
+asked (<reason>)`): take it out of the list and report it as not asked. `recall` measures the signals: a known name that is
+a candidate by name alone stays in `missed` and is listed under `named`, so a list never passes the screen.
+
+*The briefs of one enrichment run* (`briefs`, since 2026-11-11): `DISPUTES.jsonl` holds every confirmed dispute, an
+enrichment run asks only some of their sites, and `export --enrich --disputes` refuses a file whole when one brief's site
+is not asked. `briefs --for-run E` reads run `E`'s own read (`cli.py read`, made after the repair pass wrote) and decides
+as `E`'s export will: the site is one a lane-E run asks (`cli.population`; `--after P` leaves out the sites of run `P`, as
+`export --after` does) and none of the brief's asserting sentences stands in the text (`cli.asserting_standing`). `B` gets
+those briefs, unchanged and in the file's order (the export's `--disputes`), `B.sites.txt` their site ids (its `--sites`),
+`B.held.json` every other brief with its reason: the population's own (`retired`, `no-description`, `unchecked-text`,
+`no-provenance`, `enriched-before`, `earlier-run`, `base-not-enrichable`, ...), `no-curated-row`, or `asserting-in-text`
+with the sentence numbers. It prints `usable` and the `pilot_size` a pilot of them draws. `DISPUTES.jsonl` is never cut by
+hand.
 
 *Candidates* (in code, shown sites only - retired ones are never listed): the description (`DESCRIPTION_PATTERNS`:
 disputed, hoax, pseudo, natural, claimed, doubt), the English Wikipedia text of the shared cache (two hits of
@@ -1288,16 +1314,20 @@ and `DISPUTE_DEFECTS.jsonl` (one `DESCRIPTION_DEFECTS.jsonl`-shaped line per ass
 *Feeding the lane*: (1) `cli.py defect-sites --defects DISPUTE_DEFECTS.jsonl --out F` and a `wc-list` run
 (`export --sites F --defects F.report.json`, section 11.3): the dispute enters the check question as a reported claim
 (`prompts_sonnet.DEFECTS_HEAD`), so the sentence that states a side as fact is dropped (Pantelleria states the 2015
-reading as fact); (2) after that write and a fresh `read`, `export --enrich --sites S --disputes DISPUTES.jsonl`: each
-listed site gets the dispute block and must name both positions (`dispute_a`, `dispute_b`) or none. The export refuses a
-brief whose asserting sentence is still in the text (`cli._read_disputes`). The card then asserts neither: the card
-contract allows "debated" only when the description says so.
+reading as fact); (2) after that write and a fresh `read` of the enrichment run, `briefs --for-run` (above) and
+`export --enrich --sites B.sites.txt --disputes B`: each listed site gets the dispute block and must name both positions
+(`dispute_a`, `dispute_b`) or none. The export refuses a brief whose asserting sentence is still in the text and a brief
+of a site it does not ask (`cli._read_disputes`); the subset holds neither. The build writes a dispute site only with
+both positions kept or with neither (14.3). The card then asserts neither: the card contract allows "debated" only when
+the description says so.
 
 ### 14.8 The runbook
 
     R=enrich-2026-10-DD ; F=output/remediation/enrich/$R.sites.txt          # one site id per line
     $C read   --run-dir $RUNS/$R
     $C export --run-dir $RUNS/$R --handoff $H/enrich-$R-w --enrich --sites $F --pilot 20 --seed <S> [--disputes D]
+    #   a dispute run: F and D are B.sites.txt and B of `disputes.py briefs --for-run $RUNS/$R --out B` (14.7),
+    #   run after the read; --pilot is the pilot_size it prints
     #   per batch we-0001.. one Sonnet agent, whose whole instruction is
     $C brief  --run-dir $RUNS/$R --handoff $H/enrich-$R-w --batch-id we-000N
     $OH validate --dir $H/enrich-$R-w

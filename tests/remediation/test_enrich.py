@@ -577,20 +577,7 @@ def test_a_judged_enrichment_pilot_that_measured_too_little_does_not_pass(tmp_pa
 
 
 # ------------------------------------------------------------------------------ the disputes
-def _brief(
-    site_id: str, *, asserting: list[dict] | None = None, desc_sha256: str | None = None
-) -> dict:
-    source = {"url": EF.POSITIONS, "title": "Dating Tarxien", "quote": EF.Q_A["quote"]}
-    return {
-        "site_id": site_id, "name": "Tarxien Temples", "verdict": "dispute",
-        "desc_sha256": desc_sha256 or M.text_sha256(WX.P4_TEXT),
-        "position_a": {"claim": "The first phase is near 3600 BC", "holders": "the excavators",
-                       "sources": [source]},
-        "position_b": {"claim": "The first phase is near 3150 BC", "holders": "radiocarbon dating",
-                       "sources": [{**source, "quote": EF.Q_B["quote"]}]},
-        "asserting": asserting or [], "note": "a documented controversy",
-        "researched_by": "field_researcher:r", "adjudicated_by": "adversarial:a",
-    }  # fmt: skip
+_brief = EF.dispute_brief
 
 
 def test_a_dispute_brief_puts_both_positions_into_the_question_of_its_site(tmp_path: Path) -> None:
@@ -632,6 +619,124 @@ def test_the_dispute_pair_goes_through_the_whole_chain(tmp_path: Path) -> None:
     classes = final["evidence"]["enrichment"]["classes"]
     assert classes == {"1": "dispute_a", "2": "dispute_b"}
     assert final["evidence"]["enrichment"]["dispute"]["verdict"] == "dispute"
+
+
+def _dispute_site_built(
+    tmp_path: Path, verdicts: list[str], *, lost: str | None = None
+) -> tuple[Path, dict[str, Any]]:
+    """A lane-E run whose Phase-4 site has a dispute brief and got both positions and an open
+    question, verified with `verdicts` (verify2 follows a drop) and built. `lost` names the
+    position whose quote the import does not find on its page."""
+    rows, answers = _rows(tmp_path)
+    briefs = tmp_path / "DISPUTES.jsonl"
+    briefs.write_text(json.dumps(_brief(EF.SITE_W)) + "\n", encoding="utf-8")
+    nowhere = FX.quote(EF.POSITIONS, "Nothing like this is written on the page at all.")
+    answers[EF.SITE_W] = EF.answer(
+        EF.SITE_W,
+        EF.sentence("dispute_a", EF.POSITION_A, nowhere if lost == "dispute_a" else EF.Q_A),
+        EF.sentence("dispute_b", EF.POSITION_B, nowhere if lost == "dispute_b" else EF.Q_B),
+        EF.sentence("open_question", EF.HOOK, EF.Q_HOOK),
+    )
+    run, handoff = EF.start_enrich_run(tmp_path / "r", rows, disputes=briefs)
+    _record(handoff, answers)
+    _import(run, handoff)
+    first = EF.verify_enriched(run, tmp_path / "v1", verdicts={EF.SITE_W: verdicts})
+    if first["to_verify2"]:
+        EF.verify_enriched(run, tmp_path / "v2", agent="sonnet-wc-verify2")
+    return run, cli.cmd_build(run, first_batch=WC4.FIRST_BATCH)
+
+
+def _d50_gate_row(final: dict[str, Any], raw_data: dict[str, Any]) -> dict[str, Any]:
+    """The row the scope lane's export reads of a written dispute enrichment
+    (`scope_unretire.EXPORT_DISPUTE_SQL`): the journal evidence's decision, brief and run, and the
+    enrichment record the site carries."""
+    evidence = final["evidence"]
+    return {
+        "id": 500,
+        "row_pk": final["site_id"],
+        "decision": evidence["decision"],
+        "dispute": evidence[WC4.ENRICH_EVIDENCE_KEY]["dispute"],
+        "run": evidence["run"],
+        "record": raw_data[WC4.ENRICH_KEY],
+    }
+
+
+@pytest.mark.parametrize(
+    ("verdicts", "lost", "kept"),
+    [
+        (["SUPPORTED", "UNSUPPORTED", "SUPPORTED"], None, ["dispute_a", "open_question"]),
+        (["WRONG", "SUPPORTED", "SUPPORTED"], None, ["dispute_b", "open_question"]),
+        (["SUPPORTED", "SUPPORTED"], "dispute_b", ["dispute_a", "open_question"]),
+        (["SUPPORTED", "SUPPORTED"], "dispute_a", ["dispute_b", "open_question"]),
+    ],
+)
+def test_a_text_that_keeps_one_position_of_a_dispute_is_not_written(
+    tmp_path: Path, verdicts: list[str], lost: str | None, kept: list[str]
+) -> None:
+    """Owner decision D21: both positions are named; a text that keeps only one is not written.
+    The writer gives both, but a verifier - or the import, whose quote check found nothing - drops
+    one: the site is built, shown in FINAL.jsonl and left out of the plan, its open question too."""
+    run, summary = _dispute_site_built(tmp_path, verdicts, lost=lost)
+    assert summary["not_planned"] == {
+        "dispute-one-position": [EF.SITE_W],
+        "unchanged": [EF.SITE_NONE],
+    }
+    final = {f["site_id"]: f for f in read_jsonl(run / cli.FINAL_FILE)}[EF.SITE_W]
+    classes = final["evidence"]["enrichment"]["classes"]
+    assert [classes[str(d["n"])] for d in final["decisions"] if d["text"] is not None] == kept
+    assert final["planned"] is False and final["cleared"] is False
+    planned = {o["site_id"] for b in read_jsonl(run / cli.PLAN_FILE) for o in b["outcomes"]}
+    assert planned == {EF.SITE_L, EF.SITE_N}
+
+
+def test_both_positions_kept_are_written_and_the_d50_gate_reads_them_as_kept(
+    tmp_path: Path,
+) -> None:
+    from mechanical import scope_unretire as U
+
+    run, summary = _dispute_site_built(tmp_path, ["SUPPORTED", "SUPPORTED", "SUPPORTED"])
+    assert summary["not_planned"] == {"unchanged": [EF.SITE_NONE]}
+    final = {f["site_id"]: f for f in read_jsonl(run / cli.FINAL_FILE)}[EF.SITE_W]
+    (outcome,) = [
+        o
+        for b in read_jsonl(run / cli.PLAN_FILE)
+        for o in b["outcomes"]
+        if o["site_id"] == EF.SITE_W
+    ]
+    assert final["planned"] is True
+    # the record the write leaves is the one the scope lane's D50 gate reads: both kept
+    assert U.dispute_text_problems(EF.SITE_W, [_d50_gate_row(final, outcome["raw_data"])]) == []
+
+
+def test_neither_position_kept_is_written_without_them_and_is_no_dispute_text(
+    tmp_path: Path,
+) -> None:
+    """Both positions dropped leaves a text that names neither: its open question is written, and
+    the scope lane's D50 gate - which reads what was kept, not what was appended - refuses it."""
+    from mechanical import scope_unretire as U
+
+    run, summary = _dispute_site_built(tmp_path, ["UNSUPPORTED", "UNSUPPORTED", "SUPPORTED"])
+    assert summary["not_planned"] == {"unchanged": [EF.SITE_NONE]}
+    final = {f["site_id"]: f for f in read_jsonl(run / cli.FINAL_FILE)}[EF.SITE_W]
+    (outcome,) = [
+        o
+        for b in read_jsonl(run / cli.PLAN_FILE)
+        for o in b["outcomes"]
+        if o["site_id"] == EF.SITE_W
+    ]
+    assert final["description"].endswith("remains undecided [2].")
+    assert EF.POSITION_A[:20] not in final["description"]
+    appended = set(final["evidence"]["enrichment"]["classes"].values())
+    assert {"dispute_a", "dispute_b"} <= appended  # written - and dropped
+    problems = U.dispute_text_problems(EF.SITE_W, [_d50_gate_row(final, outcome["raw_data"])])
+    assert len(problems) == 2 and "kept no dispute_a" in problems[0]
+    assert "kept no dispute_b" in problems[1]
+
+
+def test_the_d50_gate_reads_as_many_sentences_as_an_enrichment_appends() -> None:
+    from wc import answers as A
+
+    assert E.MAX_APPENDED == E.MAX_FACTS_THIN + 2 + A.MAX_HOOKS == 6
 
 
 @pytest.mark.parametrize(

@@ -125,7 +125,7 @@ def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
     db.execute(
         "CREATE TABLE unified_sites (id TEXT, source_id TEXT, name TEXT, site_type TEXT, "
         "country TEXT, lat REAL, lon REAL, period_start INT, period_end INT, scope_status TEXT, "
-        "scope_reason TEXT, description TEXT)"
+        "scope_reason TEXT, description TEXT, raw_data TEXT)"
     )
     db.execute(
         "CREATE TABLE remediation_change_log (id INT, table_name TEXT, column_name TEXT, "
@@ -136,7 +136,8 @@ def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
     for r in rows:
         db.execute(
             "INSERT INTO unified_sites VALUES (:id, 'ancient_nerds', :name, :site_type, :country, "
-            ":lat, :lon, :period_start, :period_end, :scope_status, :scope_reason, :description)",
+            ":lat, :lon, :period_start, :period_end, :scope_status, :scope_reason, :description, "
+            ":raw_data)",
             {
                 "name": "a site",
                 "site_type": "Temple complex",
@@ -145,6 +146,7 @@ def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
                 "scope_reason": None,
                 "description": "A text.",
                 **r,
+                "raw_data": None if r.get("raw_data") is None else json.dumps(r["raw_data"]),
             },
         )
     return db
@@ -346,18 +348,36 @@ class TestTheLane:
 
 
 # ------------------------------------------------------------------------------ the invariant
+ENRICH_RUN = "enrich-disputes-2026-11-pilot"
+KEEP, DROP = wc4.Verdict.KEEP.value, wc4.Verdict.DROP.value
+BOTH_KEPT = ((wc4.DISPUTE_A, KEEP), (wc4.DISPUTE_B, KEEP))
+
+
 def _evidence(*, decision: str = wc4.EVIDENCE_DECISION_ENRICH, dispute: Any = "brief",
-              classes: dict[str, str] | None = None) -> str:  # fmt: skip
+              run: str = ENRICH_RUN) -> str:  # fmt: skip
     brief = {"site_id": YONAGUNI} if dispute == "brief" else dispute
     return json.dumps(
-        {
-            "decision": decision,
-            wc4.ENRICH_EVIDENCE_KEY: {
-                "dispute": brief,
-                "classes": classes or {"4": wc4.DISPUTE_A, "5": wc4.DISPUTE_B},
-            },
-        }
+        {"decision": decision, "run": run, wc4.ENRICH_EVIDENCE_KEY: {"dispute": brief}}
     )
+
+
+def enrichment_record(
+    sentences: tuple[tuple[str, str], ...] = BOTH_KEPT, *, run: str = ENRICH_RUN
+) -> dict[str, Any]:
+    """What the gate reads of `raw_data._description_enrichment` (`wc4.DescriptionEnrichment`): the
+    run and, per appended sentence in order, its class and its verdict after the verification."""
+    return {
+        "run": run,
+        "sentences": [
+            {"n": n, "class": kind, "verdict": verdict}
+            for n, (kind, verdict) in enumerate(sentences, start=1)
+        ],
+    }
+
+
+def _enriched(sentences: tuple[tuple[str, str], ...] = BOTH_KEPT, **over: Any) -> dict[str, Any]:
+    """The `raw_data` of a site whose text lane E enriched."""
+    return {wc4.ENRICH_KEY: enrichment_record(sentences, **over)}
 
 
 class TestTheInvariantInSql:
@@ -462,9 +482,9 @@ class TestTheInvariantInSql:
         d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
         text = "A text with both positions."
         rows = [
-            self.site(YONAGUNI, d50, description=text, country="Japan"),
-            self.site(RICHAT, d50, description=text, country="Mauritania"),
-            self.site(PRAMBANAN, d50, description=text),
+            self.site(YONAGUNI, d50, description=text, country="Japan", raw_data=_enriched()),
+            self.site(RICHAT, d50, description=text, country="Mauritania", raw_data=_enriched()),
+            self.site(PRAMBANAN, d50, description=text, raw_data=_enriched()),
         ]
         good = [(1, YONAGUNI, text, _evidence()), (2, PRAMBANAN, text, _evidence())]
         assert self.violators(rows, good) == {RICHAT, PRAMBANAN}, "no text; no D50 site"
@@ -472,17 +492,46 @@ class TestTheInvariantInSql:
             (1, YONAGUNI, "An older text.", _evidence()),
             (1, YONAGUNI, text, _evidence(decision=wc4.EVIDENCE_DECISION)),
             (1, YONAGUNI, text, _evidence(dispute=None)),
-            (1, YONAGUNI, text, _evidence(classes={"4": wc4.DISPUTE_A, "5": wc4.FACT})),
-            (1, YONAGUNI, text, _evidence(classes={"4": wc4.DISPUTE_B})),
+            (1, YONAGUNI, text, _evidence(run="another-run")),
         ):
             assert YONAGUNI in self.violators(rows, [broken]), broken
         d58_on_d50 = [self.site(YONAGUNI, IL.D58_REASON_PREFIX + "x", country="Japan")]
         assert self.violators(d58_on_d50, []) == {YONAGUNI}
 
+    def test_a_d50_site_passes_only_with_both_positions_kept(self) -> None:
+        """D21: both positions are named. The gate reads what the verification kept
+        (`raw_data._description_enrichment`), not what the writer appended: a position that was
+        written and then dropped is not in the text."""
+        d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
+        text = "A text with both positions."
+        journal = [(1, YONAGUNI, text, _evidence())]
+
+        def violators(raw_data: dict[str, Any] | None) -> set[str]:
+            row = self.site(YONAGUNI, d50, description=text, country="Japan", raw_data=raw_data)
+            return self.violators([row], journal)
+
+        a, b, fact, hook = wc4.DISPUTE_A, wc4.DISPUTE_B, wc4.FACT, wc4.OPEN_QUESTION
+        assert violators(_enriched()) == set()
+        # the pair after three facts and before the open question: the most an enrichment appends
+        full = ((fact, KEEP), (fact, DROP), (fact, KEEP), (a, KEEP), (b, KEEP), (hook, KEEP))
+        assert len(full) == U.E.MAX_APPENDED and violators(_enriched(full)) == set()
+        for sentences in (
+            ((a, KEEP), (b, DROP)),
+            ((a, DROP), (b, KEEP)),
+            ((a, DROP), (b, DROP), (hook, KEEP)),
+            ((fact, KEEP), (a, KEEP), (b, DROP), (hook, KEEP)),
+            ((a, KEEP), (hook, KEEP)),
+            ((fact, KEEP), (hook, KEEP)),
+        ):
+            assert violators(_enriched(sentences)) == {YONAGUNI}, sentences
+        assert violators(None) == {YONAGUNI}, "no enrichment record on the site"
+        assert violators({"_card_provenance": {}}) == {YONAGUNI}
+        assert violators(_enriched(run="another-run")) == {YONAGUNI}, "another run's record"
+
     def test_a_d50_site_passes_only_once_its_card_was_written_after_its_dispute_text(self) -> None:
         d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
         text = "A text with both positions."
-        rows = [self.site(YONAGUNI, d50, description=text, country="Japan")]
+        rows = [self.site(YONAGUNI, d50, description=text, country="Japan", raw_data=_enriched())]
         good = [(500, YONAGUNI, text, _evidence())]
         card = ((YONAGUNI, "Still fiercely contested: natural geology or submerged ruins?"),)
         assert self.violators(rows, good) == set(), "no card: nothing asserts the claim"
@@ -492,19 +541,27 @@ class TestTheInvariantInSql:
         assert self.violators(rows, good, cards=((YONAGUNI, None),)) == set(), "a NULL card"
 
     def test_the_d50_readback_counts_a_shown_site_without_its_text(self) -> None:
-        rows = [self.site(YONAGUNI, "x", description="t", country="Japan")]
-        db = _sites_db(rows)
         sql = (
             "SELECT count(*) FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND "
             f"NOT {IL.dispute_enriched_sql('u')}"
         )
-        assert db.execute(sql).fetchone() == (1,)
-        db.execute(
-            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value, "
-            "evidence) VALUES (1, 'unified_sites', 'description', ?, 't', ?)",
-            (YONAGUNI, _evidence()),
-        )
-        assert db.execute(sql).fetchone() == (0,)
+        one_position = ((wc4.DISPUTE_A, KEEP), (wc4.DISPUTE_B, DROP))
+        for raw_data, journalled, counted in (
+            (_enriched(), False, 1),
+            (_enriched(), True, 0),
+            # a shown site that kept one position, or has no record, is counted: never NULL
+            (_enriched(one_position), True, 1),
+            (None, True, 1),
+        ):
+            rows = [self.site(YONAGUNI, "x", description="t", country="Japan", raw_data=raw_data)]
+            db = _sites_db(rows)
+            if journalled:
+                db.execute(
+                    "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, "
+                    "new_value, evidence) VALUES (1, 'unified_sites', 'description', ?, 't', ?)",
+                    (YONAGUNI, _evidence()),
+                )
+            assert db.execute(sql).fetchone() == (counted,), (raw_data, journalled)
 
 
 # ------------------------------------------------------------------------------ the planner
@@ -541,7 +598,7 @@ def dispute_row(sid: str = YONAGUNI, n: int = 500, **over: Any) -> dict[str, Any
     row = {
         "id": n, "row_pk": sid, "run_stamp": "2026-10-30_wc-enrich-s001",
         "decision": wc4.EVIDENCE_DECISION_ENRICH, "dispute": brief(sid),
-        "classes": {"3": wc4.DISPUTE_A, "4": wc4.DISPUTE_B},
+        "run": ENRICH_RUN, "record": enrichment_record(),
     }  # fmt: skip
     row.update(over)
     return row
@@ -737,11 +794,39 @@ class TestThePlanner:
             (dispute_row(dispute=None), "without a dispute brief"),
             (dispute_row(dispute=brief(verdict="unverified")), "is not 'dispute'"),
             (dispute_row(dispute=brief(RICHAT)), f"is of {RICHAT}"),
-            (dispute_row(classes={"3": wc4.DISPUTE_A}), "appended no dispute_b"),
-            (dispute_row(classes={"3": wc4.FACT}), "appended no dispute_a"),
+            (dispute_row(record=None), "carries no enrichment record of the run"),
+            (
+                dispute_row(record=enrichment_record(run="another-run")),
+                "carries no enrichment record of the run",
+            ),
+            (
+                dispute_row(record=enrichment_record(((wc4.DISPUTE_A, KEEP),))),
+                "kept no dispute_b",
+            ),
+            (dispute_row(record=enrichment_record(((wc4.FACT, KEEP),))), "kept no dispute_a"),
         ):
             got = build(export([yonaguni], rows, [row]))
             assert got.changes == () and says in got.skipped[0].note, says
+
+    def test_a_d50_site_whose_text_kept_one_position_waits(self) -> None:
+        """D21: both positions are named. A position the writer appended and the verification
+        dropped is not in the text, so the site is not shown on it - whichever one it is, and
+        also when both were dropped and only another new sentence stayed."""
+        yonaguni = site_row(YONAGUNI, name="Yonaguni Monument", country="Japan", lat=24.4,
+                            lon=123.0, period_start=None, scope_reason=D50_REASON_NOW)  # fmt: skip
+        rows = [journal(YONAGUNI, 2, old="pending")]
+        a, b, hook = wc4.DISPUTE_A, wc4.DISPUTE_B, wc4.OPEN_QUESTION
+        for sentences, says in (
+            (((a, KEEP), (b, DROP)), ["kept no dispute_b"]),
+            (((a, DROP), (b, KEEP)), ["kept no dispute_a"]),
+            (((a, DROP), (b, DROP), (hook, KEEP)), ["kept no dispute_a", "kept no dispute_b"]),
+        ):
+            row = dispute_row(record=enrichment_record(sentences))
+            got = build(export([yonaguni], rows, [row]))
+            assert got.changes == () and skipped(got) == {YONAGUNI: "d50-no-dispute-text"}
+            assert all(text in got.skipped[0].note for text in says), sentences
+        kept = dispute_row(record=enrichment_record(((wc4.FACT, DROP), (a, KEEP), (b, KEEP))))
+        assert build(export([yonaguni], rows, [kept])).counters["d50_disputed"] == 1
 
     def test_a_d50_site_with_its_dispute_text_comes_back_disputed(self) -> None:
         yonaguni = site_row(YONAGUNI, name="Yonaguni Monument", country="Japan", lat=24.4,

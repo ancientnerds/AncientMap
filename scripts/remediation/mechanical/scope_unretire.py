@@ -41,8 +41,10 @@ page asserts the claim." The six sites of `lane.D50_DISPUTED_SITES` come back on
 description as it stands is a lane-E dispute enrichment (`wc/disputes.py` -> `wc/cli.py export
 --enrich --disputes`, D21): the journal row that wrote the current description carries an
 enrichment's evidence (`wc4.EVIDENCE_DECISION_ENRICH`) with a well-formed adjudicated brief of this
-site (`wc.enrich.dispute_record_problems`) and appended a sentence of each position (`dispute_a`,
-`dispute_b`). Until then each is skipped `d50-no-dispute-text`, with what is missing. Its card
+site (`wc.enrich.dispute_record_problems`), and the record that run left on the site
+(`raw_data._description_enrichment`) kept a sentence of each position (`dispute_a`, `dispute_b`) -
+kept after the verification, not merely written: a text that names one position is none D21
+allows. Until then each is skipped `d50-no-dispute-text`, with what is missing. Its card
 must not assert the claim either: a D50 site with a card text comes back only once the latest
 journal row of its `card_stats.card_description` is later than the one of its dispute text (the
 card lane wrote the card in the knowledge of the dispute, D21); until then it is skipped
@@ -171,11 +173,13 @@ EXPORT_JOURNAL_SQL = (
 )
 _D50_IDS = ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
 #: The journal rows that wrote the description a D50 site holds now, with what their evidence says
-#: of a dispute (`wc4`'s enrichment block): the D50 gate's input.
+#: of a dispute (`wc4`'s enrichment block: the brief, and the run that wrote) and the enrichment
+#: record the site carries (`raw_data._description_enrichment`: every appended sentence's class and
+#: verdict, so what was kept): the D50 gate's input.
 EXPORT_DISPUTE_SQL = (
     "SELECT l.id, l.row_pk, l.run_stamp, l.evidence->>'decision' AS decision, "
     f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->'dispute' AS dispute, "
-    f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->'classes' AS classes "
+    f"l.evidence->>'run' AS run, u.raw_data->{sql_literal(wc4.ENRICH_KEY)} AS record "
     "FROM remediation_change_log l JOIN unified_sites u ON u.id::text = l.row_pk "
     "WHERE l.table_name = 'unified_sites' AND l.column_name = 'description' "
     f"AND l.new_value = u.description AND u.id::text IN ({_D50_IDS}) ORDER BY l.id"
@@ -232,8 +236,10 @@ def latest_retirement(
 
 def dispute_text_problems(site_id: str, rows: Sequence[Mapping[str, Any]]) -> list[str]:
     """Why the description a D50 site holds now is no dispute enrichment, or nothing: the journal
-    row that wrote it (the latest such row) is an enrichment's, carries a well-formed adjudicated
-    brief of this site and appended a sentence of each position."""
+    row that wrote it (the latest such row) is an enrichment's and carries a well-formed adjudicated
+    brief of this site, and the record that run left on the site kept a sentence of each position
+    (`identity_lanes.dispute_enriched_sql`, the invariant's form of the same test). Kept, not
+    written: a position the verification dropped is not in the text (D21)."""
     mine = [row for row in rows if str(row["row_pk"]) == site_id]
     if not mine:
         return ["no journal row wrote the description the site holds now"]
@@ -246,10 +252,21 @@ def dispute_text_problems(site_id: str, rows: Sequence[Mapping[str, Any]]) -> li
     problems = list(E.dispute_record_problems(brief))
     if not problems and brief["site_id"] != site_id:
         problems.append(f"the dispute brief is of {brief['site_id']}, not of this site")
-    classes = set((row["classes"] or {}).values())
+    record = row["record"]
+    if record is None or record["run"] != row["run"]:
+        return [
+            *problems,
+            f"the site carries no enrichment record of the run of journal row {row['id']} "
+            f"({row['run']})",
+        ]
+    kept = {
+        sentence["class"]
+        for sentence in record["sentences"]
+        if sentence["verdict"] == wc4.Verdict.KEEP.value
+    }
     for needed in (wc4.DISPUTE_A, wc4.DISPUTE_B):
-        if needed not in classes:
-            problems.append(f"journal row {row['id']} appended no {needed} sentence")
+        if needed not in kept:
+            problems.append(f"journal row {row['id']} kept no {needed} sentence")
     return problems
 
 

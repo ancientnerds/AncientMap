@@ -340,24 +340,46 @@ def card_cleared_sql(alias: str = "u") -> str:
 
 
 def dispute_enriched_sql(alias: str = "u") -> str:
-    """SQL: the site's description is a lane-E dispute enrichment (D21 written for D50): a journal
-    row of `unified_sites.description` of this site whose new value is the description as it stands,
-    whose evidence is an enrichment's (`wc4.EVIDENCE_DECISION_ENRICH`), carries the adjudicated
-    dispute brief and appended a sentence of each position (`wc4.DISPUTE_A`, `wc4.DISPUTE_B`).
-    Postgres' `->`/`->>` on the jsonb evidence; SQLite reads the same operators on JSON text, which
-    is where the tests evaluate it."""
+    """SQL: the site's description is a lane-E dispute enrichment (D21 written for D50) that names
+    both positions: a journal row of `unified_sites.description` of this site whose new value is
+    the description as it stands, whose evidence is an enrichment's
+    (`wc4.EVIDENCE_DECISION_ENRICH`) and carries the adjudicated dispute brief; and the public
+    record that run left on the site (`raw_data._description_enrichment`, tied to the journal row
+    by its `run`) **kept** a sentence of each position (`wc4.DISPUTE_A`, `wc4.DISPUTE_B`). Kept, not
+    written: the import and each verifier drop sentence by sentence, and a text that names one
+    position is none D21 allows. The record holds class and verdict of every appended sentence
+    side by side, so it is read by position, up to the most an enrichment appends
+    (`enrich.MAX_APPENDED`; a sentence beyond it would not count, which refuses). Every test
+    stands in the one WHERE, so a site without a record answers FALSE, never NULL. Postgres'
+    `->`/`->>` on jsonb; SQLite reads the same operators on JSON text, which is where the tests
+    evaluate it."""
     from phase4 import wc4
+    from wc import enrich
 
     a = alias
-    classes = f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'classes'"
+    record = f"{a}.raw_data->{sql_literal(wc4.ENRICH_KEY)}"
+    keep = sql_literal(wc4.Verdict.KEEP.value)
+
+    def kept(position: str) -> str:
+        return (
+            "("
+            + " OR ".join(
+                f"({record}->'sentences'->{index}->>'class' = {sql_literal(position)} "
+                f"AND {record}->'sentences'->{index}->>'verdict' = {keep})"
+                for index in range(enrich.MAX_APPENDED)
+            )
+            + ")"
+        )
+
     return (
         "EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.table_name = 'unified_sites' "
         f"AND l.column_name = 'description' AND l.row_pk = CAST({a}.id AS text) "
         f"AND l.new_value = {a}.description "
         f"AND l.evidence->>'decision' = {sql_literal(wc4.EVIDENCE_DECISION_ENRICH)} "
         f"AND l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'dispute' IS NOT NULL "
-        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_A}{chr(34)}%')} "
-        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})"
+        f"AND l.evidence->>'run' = {record}->>'run' "
+        f"AND {kept(wc4.DISPUTE_A)} "
+        f"AND {kept(wc4.DISPUTE_B)})"
     )
 
 

@@ -502,9 +502,15 @@ sites, a stamp applied once):
 * **D50:** the six retired mystery sites (`lane.D50_DISPUTED_SITES`: Baltic Sea Anomaly, the three
   Bosnian pyramids, Yonaguni Monument, Richat Structure) come back **only** when the description they
   hold is a lane-E dispute enrichment: the journal row that wrote it carries
-  `wc4.EVIDENCE_DECISION_ENRICH`, a well-formed adjudicated brief of the site
-  (`enrich.dispute_record_problems`) and appended a `dispute_a` and a `dispute_b` sentence. Until
-  then each is skipped `d50-no-dispute-text`. D50 also says "no card or page asserts the claim":
+  `wc4.EVIDENCE_DECISION_ENRICH` and a well-formed adjudicated brief of the site
+  (`enrich.dispute_record_problems`), and the enrichment record that run left on the site
+  (`raw_data._description_enrichment`, tied to the journal row by its `run`) **kept** a `dispute_a`
+  and a `dispute_b` sentence. Kept after the verification, not merely appended (since 2026-11-11,
+  owner decision D21: both positions are named): a position the writer gave and a verifier dropped
+  is not in the text, and a site whose text kept one position, or neither, waits (`kept no
+  dispute_a sentence` in SKIPPED.jsonl). The export reads the record for the plan
+  (`EXPORT_DISPUTE_SQL`: run `export` again before a wave, an export of older code has no `record`).
+  Until then each is skipped `d50-no-dispute-text`. D50 also says "no card or page asserts the claim":
   a D50 site with a card text comes back only once the latest journal row of its
   `card_stats.card_description` is **later** than the journal row of its dispute text (the card lane
   wrote the card in the knowledge of the dispute, D21); until then it is skipped
@@ -531,7 +537,8 @@ retired by the numeric cut (`numeric_cut_sql`), has a point and a date, lies ins
 window, is not borderline, holds no Viking item (`viking_subject_sql`) and is of no `NON_SITE_TYPES`
 type; or a D58 museum reason, retired by the numeric cut, and is a placed Museum whose region has
 the 1500 AD cutoff (`label_cutoff_sql`: an unrecognised country fails it); or a D50 reason and is a D50 site whose description is a dispute enrichment
-(`dispute_enriched_sql`) and whose card was written after it (`card_cleared_sql`). The rollback is
+that kept both positions (`dispute_enriched_sql`: the journal row and the site's enrichment record,
+read by position up to `enrich.MAX_APPENDED` sentences) and whose card was written after it (`card_cleared_sql`). The rollback is
 the retirement again: `ROLLBACK.sql` restores `retired` and the old reason.
 
 **The population measured on production (read-only export, 2026-10-24, dry plan
