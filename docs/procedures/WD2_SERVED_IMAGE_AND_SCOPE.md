@@ -270,6 +270,43 @@ precedes), `test_identity_b_rounds.py` (the moved round, the context a decision 
 `test_identity_b_files.py` (a released site, a skip row kept whole), `test_identity_b_run.py` (the
 whole path through the command line, a plan made again before the import, a move that was undone).
 
+**The corrected starts of D20 (`period_fix.py wave --d20`).** D20: "a wrong period is corrected
+(sourced)". The scope-window `plan` writes `<run>/scope-window/waves/<W>/PERIOD_WRONG.jsonl`: every
+site a `PERIOD_WRONG` answer keeps on a sourced start other than the stored one, with the answer's
+found quotes, its reasoning, its agent (`answered_by`), its model stamp, when it was answered and
+whether it was asked the label question (`label_borderline`). The period lane
+(`mechanical/period_fix.py`, rule `d20-sourced`) writes those starts **after** the scope wave is
+applied and accepted - the scope wave's premise is the stored period, so a start written before it
+would make that wave refuse:
+
+```bash
+PY=./.venv/Scripts/python.exe; M=scripts/remediation/mechanical; A=$M/apply.py
+$PY $M/period_fix.py wave --wave PW --no-d113 --d20 <run>/scope-window/waves/<W>/PERIOD_WRONG.jsonl
+$PY $M/period_fix.py step --wave PW --step 1     # PLAN.md: read every old -> new start before the write
+for s in emit verify rehearse probe-guards apply verify rehearse-rollback; do $PY $A --lane period-fix-PW-s001 --$s; done
+$PY $M/period_fix.py accept --wave PW --step 1   # 0 deviations; then a card_stats wave (the period is a card input)
+```
+
+* `PW` is a wave label the period-fix lane has not used. The journal rows carry the run stamp
+  `<PW>_mechanical-period-fix-s001` and, as evidence, the D20 decision row, every found quote of
+  the answer and the answer itself (agent, model, reasoning) - never D124's (`--cited` is Eddisbury's
+  input and is not fed this file).
+* `wave` prints `rule:d20-sourced` and one `skip:<reason>` counter per refusal; the refused sites are
+  in `WAVE.json` (`refused`) and keep their stored start: `d20-scope-not-written` (the site is not
+  `in_scope` in production: apply the scope wave first), `moved-since-answer` (production no longer
+  holds the start the answer judged), `d20-no-quote-states-year` (no found quote states the year
+  itself, its century or its millennium - `fields.answers.states_year`, the fields lanes' gate: the
+  year is then the answer's reading, not a source's), `d58-window` (the start would leave the
+  window, or make the site label-borderline although its answer was not asked the label question;
+  where it was asked, the start is written), `period-end-set`, `journal-disagrees`.
+* A `PERIOD_WRONG.jsonl` planned by code older than this input lacks the answer's stamp and is
+  refused whole (`REFUSED: ... exactly the keys`).
+* Undo is the step's `ROLLBACK.sql`, rehearsed by `--rehearse-rollback` like every step of the lane.
+
+Tests: `tests/remediation/test_mechanical_period_fix.py` (`TestD20`, `TestLoadD20`, `TestD20Wave`),
+`test_identity_b_scope.py` (the hand-off's stamp, the reader on the row as the plan writes it);
+mutation cases `scripts/remediation/mechanical/mutation_sweep.py "d20 start:"` (13).
+
 ---
 
 ## 2. The E3 scope review - entries that are no archaeological site

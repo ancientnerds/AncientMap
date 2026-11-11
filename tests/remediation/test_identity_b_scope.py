@@ -24,6 +24,7 @@ from identity import scope_judge as SJ  # noqa: E402
 from mechanical import apply as A  # noqa: E402
 from mechanical import identity_lanes as IL  # noqa: E402
 from mechanical import lane as L  # noqa: E402
+from mechanical import period_fix as PF  # noqa: E402
 from mechanical import plan as MP  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
@@ -548,6 +549,7 @@ def decision_for(verdict: str, sid: str = FORT, **over: Any) -> dict[str, Any]:
         "status": R.DECIDED,
         "round": "r1",
         "answered_by": "web_verifier:r1-b01",
+        "model": "anthropic/claude-fable-5-2 (Claude Code agent)",
         "answered_at": WEB_AT,
         "data": data,
     }
@@ -658,7 +660,7 @@ class TestThePlan:
             "E3 museum rule: the museum exhibits ancient material;"
         )
 
-    def test_a_wrong_period_keeps_the_entry_and_hands_the_year_to_the_fields_lane(self) -> None:
+    def test_a_wrong_period_keeps_the_entry_and_hands_the_year_to_the_period_lane(self) -> None:
         plan = build({FORT: decision_for("PERIOD_WRONG")}, {FORT: live_row()})
         cells = {c.column: c for c in plan.changes}
         assert cells["scope_status"].new_value == "in_scope"
@@ -671,7 +673,36 @@ class TestThePlan:
             1837,
             True,
         )
-        assert hand["quotes"][0]["url"] == FORT_PAGE and "WD4" in hand["ask"]
+        assert hand["quotes"][0]["url"] == FORT_PAGE and "period_fix.py wave" in hand["ask"]
+        # the answer's stamp travels with the year: it is the evidence of the period lane's write
+        assert (hand["answered_by"], hand["model"], hand["answered_at"], hand["why"]) == (
+            "web_verifier:r1-b01",
+            "anthropic/claude-fable-5-2 (Claude Code agent)",
+            WEB_AT,
+            "The sources date it.",
+        )
+        assert hand["label_borderline"] is False
+
+    def test_the_period_lane_reads_the_hand_off_as_the_plan_writes_it(self, tmp_path: Path) -> None:
+        stated = {
+            **q(FORT_PAGE, "The first fort here dates to 300 AD."),
+            "outcome": "found",
+            "detail": "visible text",
+        }
+        asked = {FORT: context(FORT, label_borderline=True)}
+        plan = build(
+            {FORT: decision_for("PERIOD_WRONG", quotes=[stated])}, {FORT: live_row()}, asked
+        )
+        path = tmp_path / SJ.PERIOD_WRONG_FILE
+        common.write_jsonl(path, plan.period_wrong)
+        (row,) = PF.load_d20(path)
+        assert set(row) == PF.D20_KEYS and row["label_borderline"] is True
+        site = PF.Live(
+            FORT, "Ali Masjid Fort", "Pakistan", "ancient_nerds", "in_scope", 34.0, 71.2, 1837,
+            None, "1500+ AD",
+        )  # fmt: skip
+        decisions, refused, _ = PF.build_decisions({FORT: site}, {}, [], list_sha="", d20=[row])
+        assert not refused and (decisions[0].rule, decisions[0].new_start) == ("d20-sourced", 300)
 
     def test_a_year_that_is_already_right_is_kept_without_a_hand_off(self) -> None:
         asked = {

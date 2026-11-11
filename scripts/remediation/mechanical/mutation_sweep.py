@@ -14807,6 +14807,116 @@ D153_CASES: list[Case] = [
 CASES += D153_CASES
 
 
+# ---------------- owner decision D20, the corrected starts (`period_fix.py wave --d20`, rule
+# `d20-sourced`): the scope window's PERIOD_WRONG.jsonl is read by the period lane. Each guard of the
+# reader and of the decision, and the hand-off's stamp on the writer's side. Every label starts with
+# "d20 start:", so the group runs on its own: `mutation_sweep.py "d20 start:"`.
+PERIOD_FIX = MECHANICAL / "period_fix.py"
+PERIOD_FIX_TESTS = "tests/remediation/test_mechanical_period_fix.py"
+_D20_ROW_REFUSED = "test_a_row_that_is_no_found_claude_answer_is_refused"
+D20_START_CASES: list[Case] = [
+    guard(
+        "d20 start: the scope wave's write comes first",
+        PERIOD_FIX,
+        "    if site.scope_status != IN_SCOPE:",
+        "test_a_site_the_scope_wave_has_not_written_in_scope_is_refused",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: the stored start is the one the answer judged",
+        PERIOD_FIX,
+        "    if site.period_start != stored:",
+        "test_a_start_that_moved_since_the_answer_is_refused",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: a found quote states the year",
+        PERIOD_FIX,
+        '    if not any(states_year(str(q["quote"]), start) for q in row["quotes"]):',
+        "test_a_year_no_found_quote_states_is_listed_not_written",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: a borderline start needs the label question",
+        PERIOD_FIX,
+        "    if label_asked and label_borderline(",
+        "    if label_borderline(",
+        "test_a_start_that_makes_a_site_borderline_unasked_is_listed_not_written",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the label question decides a borderline start",
+        PERIOD_FIX,
+        "        problem = _scope(site, d.new_start, label_asked=sid in label_asked)\n",
+        "        problem = _scope(site, d.new_start)\n",
+        "test_a_borderline_start_is_written_where_the_answer_was_asked_the_label",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the window still holds where the label was asked",
+        PERIOD_FIX,
+        "    if label_asked and label_borderline(",
+        "    if label_asked or label_borderline(",
+        "test_a_start_outside_the_window_is_listed_even_where_the_label_was_asked",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: a row in another shape is not read",
+        PERIOD_FIX,
+        "        if set(r) != D20_KEYS:",
+        "test_a_row_without_the_answer_s_stamp_is_refused",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: the year is an integer",
+        PERIOD_FIX,
+        "        if isinstance(start, bool) or not isinstance(start, int):",
+        _D20_ROW_REFUSED,
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: every quote was found on its page",
+        PERIOD_FIX,
+        '            q["outcome"] == "found" and str(q["quote"]).strip()',
+        '            str(q["quote"]).strip()',
+        _D20_ROW_REFUSED,
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: a Claude answer with its agent",
+        PERIOD_FIX,
+        '        if not str(r["model"]).startswith("anthropic/claude-") or not str(r["answered_by"]).strip():',
+        _D20_ROW_REFUSED,
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the wave reads the hand-off",
+        PERIOD_FIX,
+        "    d20 = load_d20(d20_path) if d20_path is not None else []\n",
+        "    d20 = []\n",
+        "test_the_wave_plans_the_start_its_label_and_a_rollback",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the hand-off carries the answer's stamp",
+        SCOPE_JUDGE_PY,
+        '                    "model": decision["model"],\n',
+        "",
+        "test_a_wrong_period_keeps_the_entry_and_hands_the_year_to_the_period_lane",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+    Case(
+        "d20 start: the hand-off says whether the label was asked",
+        SCOPE_JUDGE_PY,
+        '                    "label_borderline": ctx["label_borderline"],\n',
+        '                    "label_borderline": False,\n',
+        "test_the_period_lane_reads_the_hand_off_as_the_plan_writes_it",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+]
+CASES += D20_START_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""

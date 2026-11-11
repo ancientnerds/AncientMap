@@ -20,8 +20,9 @@ other European site, its cutoff 500 AD.
 
 * `PERIOD_WRONG`   - a source dates the site's start at or before the region's cutoff (give that
                      year with a quote; the stored one is wrong, or empty, or already right). The
-                     entry is kept (`in_scope`) and the corrected start goes to the fields lane as
-                     a hand-off (`PERIOD_WRONG.jsonl`), which writes it with its own quote gates;
+                     entry is kept (`in_scope`) and the corrected start goes to the period lane as
+                     a hand-off (`PERIOD_WRONG.jsonl`, read by `mechanical/period_fix.py wave
+                     --d20`), which writes it with its own quote gate (a quote states the year);
 * `OUT_OF_WINDOW`  - sources show the site began after the cutoff and nothing of it is older (give
                      the sourced year and a quote): retired;
 * `MUSEUM_KEEP`    - a museum that exhibits ancient material (scope rule d; quote): `in_scope`;
@@ -134,6 +135,10 @@ RECHECK_KEYS = frozenset({"site_id", "verdict", "why", "quotes"})
 YEAR_LOW, YEAR_HIGH = -200_000, 2100
 SOURCE_FILE = "SCOPE_WINDOW.jsonl"
 PERIOD_WRONG_FILE = "PERIOD_WRONG.jsonl"
+#: Who reads the hand-off: the period lane's D20 input, after this wave's scope write.
+PERIOD_WRONG_ASK = (
+    "mechanical/period_fix.py wave --no-d113 --d20 writes the corrected start (rule d20-sourced)"
+)
 DIR = "scope-window"
 #: The plan's skip of a site whose entry changed since its question: `export-moved` asks it again.
 ENTRY_MOVED = "entry-moved"
@@ -868,8 +873,9 @@ def build(
 ) -> ScopePlan:
     """A pure function of the final decisions, the contexts they judged and the live read: the cells
     of every site that can be written, the skips with their reasons, and the corrected starts the
-    fields lane is handed. `final` maps a site to its web decision (a site that is not final is not
-    passed in)."""
+    period lane is handed (`PERIOD_WRONG_ASK`; each row carries the answer's stamp, the evidence of
+    that write). `final` maps a site to its web decision (a site that is not final is not passed
+    in)."""
     plan = ScopePlan(scope_window_lane(wave))
 
     def skip(sid: str, reason: str, note: str, **more: Any) -> None:
@@ -921,8 +927,15 @@ def build(
                     "period_start": data["period_start"],
                     "origin": ctx["origin"],
                     "recheck_d10": ctx["recheck_d10"],
+                    # the label question was part of this answer (D58): a start it dates between
+                    # 500 and 1500 in a borderline country is then a decided one
+                    "label_borderline": ctx["label_borderline"],
+                    "why": data["why"],
+                    "answered_by": decision["answered_by"],
+                    "model": decision["model"],
+                    "answered_at": decision["answered_at"],
                     "quotes": [q for q in data["quotes"] if q["outcome"] == "found"],
-                    "ask": "the WD4 fields lane writes the corrected start with its own gates",
+                    "ask": PERIOD_WRONG_ASK,
                 }
             )
         status = IN_SCOPE if verdict in (PERIOD_WRONG, MUSEUM_KEEP) else RETIRED
