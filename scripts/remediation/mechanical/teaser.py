@@ -85,6 +85,21 @@ here:
     $M/teaser.py accept --step N                (read-only; ACCEPT_EXIT=0 at 0 deviations)
     $M/teaser.py close-reverted --step N        (read-only; after an undo: its sites are planned again)
     $M/teaser.py stale                          (read-only; teaser cards whose description moved)
+
+## The D50 clear (orchestrator decision O17, 2026-11-10)
+
+"The six cards [of the retired D50 sites] are cleared the D47 way, so the un-retire needs no new
+card." The D47 way is an owner run: a run directory whose `OUTCOMES.jsonl` holds one `cleared`
+outcome per card, each naming the card it clears (`seeded_card_sha256`, and the run that wrote it
+where a teaser provenance names one), planned and written as a step like every other clear.
+`d50-clear --run d50-card-clear-<wave>` builds that run from one read-only production read of
+`lane.D50_DISPUTED_SITES`. Its outcomes carry the reason `D50_CLEAR_REASON`, the one reason a
+**retired** site is planned for, and only on those six sites: every other outcome of a retired
+site stays listed `retired`, and no card run asks a retired site (`teaser/run.py classify`,
+`seed_reason`). The un-retire (`scope_unretire.py`) shows a D50 site that holds no card text.
+
+    $M/teaser.py d50-clear --run d50-card-clear-<wave>   (read-only; writes the run's OUTCOMES.jsonl)
+    $M/teaser.py plan --run d50-card-clear-<wave> --step N   and the step's commands above
 """
 
 from __future__ import annotations
@@ -119,6 +134,7 @@ from mechanical import card_disclosure_list as CORRECTED  # noqa: E402 - the 185
 from mechanical.citations import canonical, premise_of, reprint  # noqa: E402
 from mechanical.lane import (  # noqa: E402
     CARD_STATS,
+    D50_DISPUTED_SITES,
     LOCK_TIMEOUT,
     ORPHAN_CITATIONS,
     PROVENANCE_HASH_DIFFERS,
@@ -532,6 +548,17 @@ CARD_CHANGED = "card-changed"
 #: card is written afresh by a new run on the repaired text. A defect on another description (one
 #: repaired since) holds nothing.
 DESCRIPTION_DEFECT_HELD = "description-defect-held"
+#: Orchestrator decision O17 (2026-11-10, under owner decisions D50 and D21): the cards of the six
+#: retired D50 sites are cleared the D47 way. The reason of such a clear's outcome
+#: (`d50_clear_outcomes`), and the one reason a retired site is planned for (`classify`).
+D50_CLEAR_REASON = "owner-o17-d50-disputed"
+D50_CLEAR_FINDING = (
+    "orchestrator decision O17 (2026-11-10) under owner decisions D50 and D21: no card asserts the "
+    "claim of a disputed site - the card of a D50 site is cleared the D47 way, and the site is "
+    "shown again without a card"
+)
+#: The run such a clear lives in, directly under `RUNS`: `d50-card-clear-<wave>`.
+D50_CLEAR_RUN = re.compile(r"^d50-card-clear-\d{4}-\d{2}-\d{2}[a-z]?\Z")
 REFUSAL_MEANING = {
     KEPT: "the site keeps its card: its chain failed or its writer declined its thin description "
     "(owner decision D5) - nothing is written, nothing is cleared",
@@ -713,9 +740,15 @@ def classify(
         and outcome["provenance"]["ai_system"] == M.AI_SYSTEM_OPUS
     ):
         return _refused(site_id, name, DISCLOSURE_CORRECTED, "the outcome names the Opus-only text")
+    d50_clear = outcome["status"] == CLEARED and outcome["reason"] == D50_CLEAR_REASON
+    if d50_clear and (site_id not in D50_DISPUTED_SITES or "seeded_card_sha256" not in outcome):
+        raise PlanError(
+            f"{site_id}: {D50_CLEAR_REASON} clears the card of a D50 site and names the card it "
+            "clears (`teaser.py d50-clear` writes such an outcome) - this one does not"
+        )
     if live is None:
         return _refused(site_id, name, NOT_CURATED, "the export did not return the site")
-    if live.scope_status == RETIRED:
+    if live.scope_status == RETIRED and not d50_clear:
         return _refused(site_id, name, SITE_RETIRED, "retired since the run")
     if not live.has_card_row:
         return _refused(site_id, name, NO_CARD_ROW, "no card_stats row")
@@ -1059,6 +1092,77 @@ def plan_step(
     return record
 
 
+# ------------------------------------------------------------------------------ the D50 clear
+def d50_clear_outcomes(live: Mapping[str, Live]) -> tuple[list[dict[str, Any]], list[str]]:
+    """The owner run of orchestrator decision O17, from one read of the six D50 sites: a `cleared`
+    outcome for every site that holds a card text, in the shape of the D47 run
+    (`owner-d47-2026-10-19`) - the card it clears by its hash, the run of the teaser provenance
+    that wrote it (None for a card no teaser run wrote), the description it was read beside - and
+    the sites that hold no card text, which need no clear. Pure."""
+    missing = sorted(set(D50_DISPUTED_SITES) - set(live))
+    if missing:
+        raise PlanError(f"the read returned no curated row of the D50 site(s) {', '.join(missing)}")
+    outcomes: list[dict[str, Any]] = []
+    without_card: list[str] = []
+    for site_id in sorted(D50_DISPUTED_SITES):
+        site = live[site_id]
+        if site.card is None:
+            without_card.append(site_id)
+            continue
+        teaser = CP.card_provenance_of(site.raw_data)
+        outcomes.append(
+            {
+                "attempts": 0,
+                "card": None,
+                "desc_sha256": premise_of(site.description),
+                "findings": [{"card": site.card, "reasons": [D50_CLEAR_FINDING]}],
+                "name": site.name,
+                "provenance": None,
+                "reason": D50_CLEAR_REASON,
+                "seeded_card_sha256": CP.text_sha256(site.card),
+                "seeded_run": None if teaser is None else teaser["run"],
+                "site_id": site_id,
+                "status": CLEARED,
+                "verification": None,
+                "verifications": [],
+                "writer": None,
+            }
+        )
+    return outcomes, without_card
+
+
+def write_d50_clear(
+    run: str, *, read: Callable[[str], str] = read_production, runs: Path = RUNS
+) -> dict[str, Any]:
+    """Build the run `d50-card-clear-<wave>` under `runs` from a fresh read-only production read:
+    `EXPORT.jsonl` (the read as it came) and `OUTCOMES.jsonl` (`d50_clear_outcomes`), which
+    `plan --run` then plans as a step. A run is written once; one without a card to clear is not
+    written."""
+    if D50_CLEAR_RUN.match(run) is None:
+        raise PlanError(f"{run!r} is not a run name like d50-card-clear-2026-11-12")
+    target = runs / run
+    if target.exists():
+        raise PlanError(f"{target} exists - a run is written once and never replaced")
+    text = read(export_script(sorted(D50_DISPUTED_SITES)))
+    live, _journal = parse_export(text)
+    outcomes, without_card = d50_clear_outcomes(live)
+    if not outcomes:
+        raise PlanError("no D50 site holds a card text - there is nothing to clear")
+    target.mkdir(parents=True)
+    (target / "EXPORT.jsonl").write_text(text, encoding="utf-8", newline="\n")
+    (target / "OUTCOMES.jsonl").write_text(
+        "".join(json.dumps(o, ensure_ascii=False, sort_keys=True) + "\n" for o in outcomes),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {
+        "run": run,
+        "dir": str(target),
+        "cleared": {o["site_id"]: o["name"] for o in outcomes},
+        "without_card": without_card,
+    }
+
+
 # ------------------------------------------------------------------------------ the acceptance
 #: The journal rows of a step's four stamps, and the disclosure corrections' rows on the step's
 #: sites (`corrected_cell`): the later lanes an acceptance names (`CORRECTIONS`).
@@ -1315,6 +1419,9 @@ def _run(args: argparse.Namespace) -> int:
             print(f"  {line}")
         print(f"RESULT: {len(found)} write(s) still standing")
         return code
+    if args.command == "d50-clear":
+        _print(write_d50_clear(args.run))
+        return 0
     _print(stale())
     return 0
 
@@ -1333,6 +1440,10 @@ def main(argv: list[str] | None = None) -> int:
     close = sub.add_parser("close-reverted", help="close an undone step (read-only)")
     close.add_argument("--step", required=True, type=int)
     sub.add_parser("stale", help="teaser cards whose description or card moved (read-only)")
+    d50 = sub.add_parser(
+        "d50-clear", help="the run that clears the cards of the six D50 sites (O17; read-only)"
+    )
+    d50.add_argument("--run", required=True, help="the new run's name: d50-card-clear-<wave>")
     args = parser.parse_args(argv)
     tag = "ACCEPT" if args.command in ("accept", "close-reverted") else "WRITE"
 

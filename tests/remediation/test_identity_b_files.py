@@ -118,6 +118,22 @@ class TestTheWaves:
         with pytest.raises(waves.WaveError, match="no site is left"):
             waves.select_wave(tmp_path, "w3", {"a", "b", "c"}, limit=1, built_at="t")
 
+    def test_a_site_a_wave_released_is_open_for_a_new_wave_and_no_other_is(
+        self, tmp_path: Path
+    ) -> None:
+        """A site the plan of w1 skipped because its entry moved and that was asked again since:
+        w1 no longer holds it. The wave that takes it next holds it like any site."""
+        waves.select_wave(tmp_path, "w1", {"a", "b"}, limit=2, built_at="t")
+        released = {("a", "w1"), ("b", "w0")}
+        assert waves.planned_sites(tmp_path, released) == {"b"}
+        second = waves.select_wave(
+            tmp_path, "w2", {"a", "b"}, limit=2, built_at="t", released=released
+        )
+        assert second["sites"] == ["a"]
+        assert waves.planned_sites(tmp_path, released) == {"a", "b"}
+        with pytest.raises(waves.WaveError, match="no site is left"):
+            waves.select_wave(tmp_path, "w3", {"a", "b"}, limit=2, built_at="t", released=released)
+
     @pytest.mark.parametrize("limit", [0, -1, 101])
     def test_a_wave_holds_one_to_a_hundred_sites(self, tmp_path: Path, limit: int) -> None:
         with pytest.raises(waves.WaveError, match="1..100"):
@@ -218,3 +234,14 @@ class TestTheReadOnlyReader:
             ("w2", "d", "gone"),
         ]
         assert set(got[0]) == {"wave", "site_id", "name", "reason", "note"}
+
+    def test_a_skip_keeps_what_its_plan_recorded(self, tmp_path: Path) -> None:
+        """The D20 plan says with a skip `entry-moved` when it read production (`read_at`):
+        `export-moved` reads it from the listed row."""
+        lane = tmp_path / "lane"
+        waves.select_wave(lane, "w1", {"a"}, limit=1, built_at="t")
+        row = {"site_id": "a", "name": "A", "reason": "entry-moved", "note": "n", "read_at": "T"}
+        (tmp_path / "w1.jsonl").write_text(json.dumps(row) + "\n", "utf-8")
+        assert waves.wave_skips(lane, lambda wave: [tmp_path / "w1.jsonl"]) == [
+            {"wave": "w1", **row}
+        ]

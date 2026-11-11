@@ -970,10 +970,15 @@ CARD_STATS_WAVE = "card-stats-2026-09-23"
 #: A scope-review wave (`scope_review.py`): built by `lane.resolve_lane` like the card_stats waves,
 #: so the parametrisations reach it; its plan is fabricated (`scope_review_plan`).
 SCOPE_REVIEW_WAVE = "scope-review-2026-09-26"
+#: A D84 country wave (`mechanical/country_d84.py --write --wave`, `identity_lanes`): the one wave
+#: lane that empties a `unified_sites` cell. Its driver writes the plan from a fresh production
+#: read, so the plan here is fabricated (`country_d84_plan`).
+COUNTRY_D84_WAVE = "country-d84-2026-11-11"
 ALL_LANES: dict[str, L.Lane] = {
     **L.LANES,
     CARD_STATS_WAVE: L.resolve_lane(CARD_STATS_WAVE),
     SCOPE_REVIEW_WAVE: L.resolve_lane(SCOPE_REVIEW_WAVE),
+    COUNTRY_D84_WAVE: L.resolve_lane(COUNTRY_D84_WAVE),
 }
 
 #: A row of another source, as `--probe-guards` reads it from production.
@@ -1520,6 +1525,8 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
         return card_stats_plan(directory, lane)
     if lane is L.NAME_L5:
         return name_l5_plan(directory)
+    if lane.name == COUNTRY_D84_WAVE:
+        return country_d84_plan(directory, lane)
     if L.SCOPE_REVIEW_LANE.match(lane.name):
         return scope_review_plan(directory, lane)
     plan_path = directory / "PLAN.jsonl"
@@ -1601,6 +1608,38 @@ def name_l5_plan(directory: Path) -> tuple[list[A.ChangeRecord], Path]:
         for site, column, old, new in cells
     )
     plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=L.NAME_L5)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
+
+
+def country_d84_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path]:
+    """A D84 country wave's plan, fabricated: its driver writes it from a fresh production read
+    (`country_d84.py --write --wave`). The cell that planner writes - the Baltic Sea Anomaly's
+    country emptied, on its name, its point and its retired status - and a second cell of the same
+    shape, which the real plan never holds (D84 names one site, and the lane's invariant refuses
+    any other): the commit-state tests need a plan whose journal can be partial."""
+    (site_id, (name, held)) = next(iter(L.D84_NO_COUNTRY_SITES.items()))
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name=name,
+            ok=True,
+            old_value=held,
+            new_value=None,
+            rule="d84-no-country",
+            reason="",
+            note=f"country {held!r} -> NULL",
+            phase3=False,
+            finding_test_id="D84/country",
+            evidence=({"source": "test", "quote": "x"},),
+            premise=f"{name} | 61.37676947509479 | 18.448311841356542 | retired",
+            column="country",
+        )
+        for site in (site_id, SITE_BOA)
+    )
+    plan = P.Plan(changes=changes, skipped=(), built_at="2026-11-11T00:00:00+00:00", lane=lane)
     plan_path = directory / "PLAN.jsonl"
     P.write_plan_jsonl(plan, plan_path)
     P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)

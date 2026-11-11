@@ -117,7 +117,13 @@ def resolver_of(titles: dict[str, dict[str, Any]]):
 
 
 def answer_all(
-    root: Path, record: R.Round, spec: R.StageSpec, texts: dict[str, Any], *, now: str = NOW
+    root: Path,
+    record: R.Round,
+    spec: R.StageSpec,
+    texts: dict[str, Any],
+    *,
+    now: str = NOW,
+    model: str | None = None,
 ) -> None:
     """Every question of the round answered under the stage's role, as `answer --role` records it."""
     for batch_id, sids in record.batches.items():
@@ -130,7 +136,7 @@ def answer_all(
                 label=sid,
                 text=text,
                 answered_by=RO.answered_by(spec.role, batch_id),
-                model=OH.ANSWER_MODELS[spec.model],
+                model=OH.ANSWER_MODELS[model or spec.model],
                 now=lambda: now,
             )
 

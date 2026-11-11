@@ -312,7 +312,7 @@ CASES: list[Case] = [
     swap(
         "loser holds something",
         DUPS,
-        '        if loser["images"] > 0 or loser["links"] > 0\n',
+        "        if holds(loser)\n",
         "        if True\n",
         "test_a_loser_that_holds_nothing_is_not_listed",
         T_DUPS,
@@ -320,9 +320,16 @@ CASES: list[Case] = [
     swap(
         "loser holds links",
         DUPS,
-        '        if loser["images"] > 0 or loser["links"] > 0\n',
-        '        if loser["images"] > 0\n',
+        '    held = [kind for kind in ("images", "links") if loser[kind] > 0]\n',
+        '    held = [kind for kind in ("images",) if loser[kind] > 0]\n',
         "test_a_loser_that_holds_images_or_links_is_listed_with_what_it_holds",
+        T_DUPS,
+    ),
+    guard(
+        "loser holds a name its survivor lacks",
+        DUPS,
+        '    if not loser["name_is_alias_on_survivor"]:',
+        "test_a_loser_whose_name_is_no_name_of_its_survivor_is_listed_for_its_name",
         T_DUPS,
     ),
     swap(
@@ -790,8 +797,16 @@ CASES: list[Case] = [
     guard(
         "footpath pinned",
         SCOPE,
-        '    if len(hadrian) != 1 or hadrian[0]["name"] != HADRIANS_WALL_PATH_NAME:',
-        "test_the_footpath_must_be_exactly_one_site_with_the_pinned_name",
+        '    if len(hadrian) > 1 or any(r["name"] != HADRIANS_WALL_PATH_NAME for r in hadrian):',
+        "test_the_footpath_is_at_most_one_site_with_the_pinned_name",
+        T_SCOPE,
+    ),
+    swap(
+        "footpath retired",
+        SCOPE,
+        '    if len(hadrian) > 1 or any(r["name"] != HADRIANS_WALL_PATH_NAME for r in hadrian):',
+        '    if len(hadrian) != 1 or any(r["name"] != HADRIANS_WALL_PATH_NAME for r in hadrian):',
+        "test_the_discovery_is_built_again_once_a_wave_has_retired_the_footpath",
         T_SCOPE,
     ),
     swap(

@@ -793,6 +793,11 @@ OPEN_TEXT = {
     # owner decision D99 (2026-11-06): the undated shown sites, asked by a Claude researcher after
     # the deterministic extractor of D70 failed (gold 0.7034, three spot checks 26-29 of 30 wrong)
     "d99-undated": D99_OPEN_TEXT,
+    # a listed-point run (`population.py build --stage wd5 --sites FILE --point`): the orchestrator
+    # names a stored point a later finding puts in doubt; its reason is the question's "What stands"
+    "listed-point": "the stored point is asked once more: no source stands behind it, and a later "
+    "finding puts it in doubt - what was found is below, under 'What stands'. The point of "
+    "another site of a similar name, of the modern town or of the region is not this site's point",
 }
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).

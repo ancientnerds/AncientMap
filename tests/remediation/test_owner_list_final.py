@@ -57,6 +57,7 @@ def site(site_id: str = SITE, **over: Any) -> dict[str, Any]:
         "source_url": "https://en.wikipedia.org/wiki/Kourion",
         "thumbnail_url": "/data/images/k.webp",
         "no_description": False,
+        "description_start": "Kourion was a city on the south coast of Cyprus.",
         "card_description": "A card.",
         "card_contract": "shorts-v1",
         "coord_kind": "quote",
@@ -267,6 +268,129 @@ class TestTheFieldRuns:
         assert rows == [] and aside == {"retired-or-gone": 2}
 
 
+class TestTheFieldRunFiles:
+    """A field run's own owner files are no list of their own: its rows are rebuilt."""
+
+    def test_every_owner_artefact_of_2026_11_10_has_its_source_or_its_reason(self) -> None:
+        """The twelve artefacts `--final` refused on 2026-11-10 (code gap phase8-closeout#2), less
+        the two hero-moves lists, which are the image lanes' own source."""
+        runs = F.field_run_names(Path("nowhere"))
+        assert runs == F.FIELD_RUNS and runs[-3:] == ("wd5r/pilot", "wd5r/pilot2", "d121/d124")
+        for rel in (
+            "fields/d121/d124/adv/OWNER.jsonl",
+            "fields/wd5r/pilot/DECISIONS.pre-owner-1.jsonl",
+            "fields/wd5r/pilot/adv/OWNER.jsonl",
+            "fields/wd5r/pilot/adv/OWNER_REJECTED.jsonl",
+            "fields/wd5r/pilot2/adv/OWNER.jsonl",
+        ):
+            assert F._of_a_field_run(rel, runs), rel
+        for rel in (
+            "fields/wd5x/OWNER_SHOWN.candidates.json",
+            "fields/wd5x/report-615/OWNER_SCOPE.jsonl",
+            "insert_site/d57-2026-11-05/D114_OWNER_ROUND.json",
+            "insert_site/d57-2026-11-05/D130_OWNER_ROUND.json",
+            "insert_site/d57-2026-11-05/D143_OWNER_ROUND.json",
+        ):
+            assert F.OUT_OF_SCOPE[rel].strip() and not F._of_a_field_run(rel, runs), rel
+        assert "D1-D156" in F.OUT_OF_SCOPE["OWNER_DECISIONS_2026-10-08.md"]
+
+    def test_a_file_deeper_in_a_run_or_of_a_run_of_a_similar_name_is_not_the_runs(self) -> None:
+        runs = ("wd5", "wd5r/pilot")
+        assert F._of_a_field_run("fields/wd5/OWNER_LIST.jsonl", runs)
+        assert F._of_a_field_run("fields/wd5/adv/OWNER.jsonl", runs)
+        assert not F._of_a_field_run("fields/wd5/write/2026-10-09a/OWNER.jsonl", runs)
+        assert not F._of_a_field_run("fields/wd5-reask/adv/OWNER.jsonl", runs)
+        assert not F._of_a_field_run("fields/wd5r/pilot2/adv/OWNER.jsonl", runs)
+        assert not F._of_a_field_run("fields/wd5r/pilot/adv/x/OWNER.jsonl", runs)
+        assert not F._of_a_field_run("served_image/wd5/OWNER.jsonl", runs)
+
+
+SYBARIS_ON_THE_TRAEIS = "251ac618-a557-4c31-9129-65afc47b649d"
+TICHIT = "1e5f61dd-b362-4985-b235-dadeea0eca0f"
+QASR_QAROUN = "3ac3c796-1538-47b5-8985-6807adf8dec3"
+POINT = {"lat": "39.716823473968", "lon": "16.493845981232198"}
+
+
+def followup(site_id: str, **over: Any) -> dict[str, Any]:
+    base = {"site_id": site_id, "name": "n", "lane": "fields coordinates (D19)",
+            "issue": "the record carries another record's point", "found_by": "review"}  # fmt: skip
+    return {**base, **over}
+
+
+class TestTheFollowUps:
+    """`CLOSEOUT_FOLLOWUPS.jsonl`: a follow-up is listed while production still shows its defect."""
+
+    def rows(self, site_id: str, *sites: dict[str, Any]) -> tuple[list[dict[str, Any]], Any]:
+        return F.followup_rows([followup(site_id)], {s["site_id"]: s for s in sites})
+
+    def test_a_record_at_another_records_point_is_open_until_it_moves(self) -> None:
+        sybaris = site(F.SYBARIS, name="Sybaris", **POINT)
+        rows, closed = self.rows(
+            SYBARIS_ON_THE_TRAEIS, site(SYBARIS_ON_THE_TRAEIS, **POINT), sybaris
+        )
+        assert [(r["topic"], r["source"], r["state"], r["decision"]) for r in rows] == [
+            ("closeout-followup", "closeout-followups", "open", "D19")
+        ]
+        assert rows[0]["reason"] == (
+            "its point 39.716823473968, 16.493845981232198 is still the point of Sybaris - "
+            "fields coordinates (D19): the record carries another record's point"
+        )
+        assert closed == {}
+        # the same point written with other digits is the same point
+        same = site(SYBARIS_ON_THE_TRAEIS, lat="39.7168234739680", lon="16.493845981232198")
+        assert len(self.rows(SYBARIS_ON_THE_TRAEIS, same, sybaris)[0]) == 1
+        for moved in ({"lat": "39.5"}, {"lon": "16.75"}):
+            rows, closed = self.rows(
+                SYBARIS_ON_THE_TRAEIS, site(SYBARIS_ON_THE_TRAEIS, **{**POINT, **moved}), sybaris
+            )
+            assert rows == [] and closed == {
+                SYBARIS_ON_THE_TRAEIS: "the record no longer shares the point of Sybaris"
+            }
+
+    def test_a_record_under_another_records_text_is_open_until_the_text_is_its_own(self) -> None:
+        theirs = site(TICHIT, description_start="The Neolithic sites of Dhar Tichitt were settled")
+        rows, _ = self.rows(TICHIT, theirs)
+        assert rows[0]["reason"].startswith(
+            "its description still begins 'The Neolithic sites of Dhar Tichitt' - "
+        )
+        assert rows[0]["decision"] == "D13/D20"
+        for own in ("Tichit is a town in Mauritania.", None):
+            assert self.rows(TICHIT, site(TICHIT, description_start=own)) == (
+                [],
+                {TICHIT: "the description is no longer Dhar Tichitt's"},
+            )
+
+    def test_a_record_without_a_hero_is_open_unless_image_none_lists_it(self) -> None:
+        thumbnail_only = site(QASR_QAROUN, hero=None, images=0)
+        rows, _ = self.rows(QASR_QAROUN, thumbnail_only)
+        assert rows[0]["reason"].startswith(
+            "it has no hero row and is not listed under `image-none` - "
+        )
+        assert rows[0]["decision"] == "D17/D82"
+        how = {QASR_QAROUN: "a hero row exists, or `image-none` lists the site"}
+        assert self.rows(QASR_QAROUN, site(QASR_QAROUN)) == ([], how)
+        bare = site(QASR_QAROUN, hero=None, images=0, thumbnail_url=None)
+        assert self.rows(QASR_QAROUN, bare) == ([], how)
+        assert "image-none" in topics(F.production_rows([bare]))
+
+    def test_a_follow_up_of_a_retired_or_gone_site_is_closed(self) -> None:
+        retired = site(TICHIT, scope_status="retired",
+                       description_start="The Neolithic sites of Dhar Tichitt")  # fmt: skip
+        assert self.rows(TICHIT, retired) == ([], {TICHIT: "the site is retired or gone"})
+        assert self.rows(TICHIT) == ([], {TICHIT: "the site is retired or gone"})
+
+    def test_a_follow_up_without_a_check_stays_open_while_its_site_is_shown(self) -> None:
+        assert SITE not in F.FOLLOWUP_CHECKS
+        rows, closed = self.rows(SITE, site())
+        assert closed == {} and rows[0]["decision"] == "-"
+        assert rows[0]["reason"].startswith(F.FOLLOWUP_UNCHECKED + " - fields coordinates (D19): ")
+        assert self.rows(SITE, site(scope_status="retired"))[0] == []
+
+    def test_the_three_follow_ups_of_2026_10_24_have_their_checks(self) -> None:
+        assert set(F.FOLLOWUP_CHECKS) == {SYBARIS_ON_THE_TRAEIS, TICHIT, QASR_QAROUN}
+        assert F._title(F.FOLLOWUP_TOPIC) == (F.FOLLOWUP_TITLE, "D13/D20/D17/D82/D19")
+
+
 class TestTheLaneLists:
     LANE = F.LANE_LISTS[0]
 
@@ -297,12 +421,29 @@ class TestTheLaneLists:
             "teaser/runs/owner-d99/OUTCOMES.jsonl",  # an owner run nobody registered
             "qid_repair/HUMAN_ONLY_LEFTOVERS.md",  # another name for an owner list
             "qid_repair/owner.sql",  # not a list's suffix
+            "fields/wd5r/pilot/adv/OWNER.jsonl",  # a run one level deeper: in its rows
+            "fields/wd5r/pilot/adv/OWNER_REJECTED.jsonl",  # the cells D112 did not write
+            "fields/wd5r/pilot/DECISIONS.pre-owner-1.jsonl",  # the run's file before them
+            "fields/d121/d124/adv/OWNER.jsonl",  # the D124 re-ask
+            "fields/wd5r/pilot3/adv/OWNER.jsonl",  # a pilot nobody registered
+            "fields/wd5r/OWNER_NOTES.md",  # beside the pilots, of no run
+            "fields/wd5-point/2026-11-11/RUN.json",  # a listed-point run ...
+            "fields/wd5-point/2026-11-11/adv/OWNER.jsonl",  # ... is found, its list in its rows
+            "fields/wd5-point/2026-11-12/adv/OWNER.jsonl",  # a directory without a run
+            "fields/wd5x/OWNER_SHOWN.candidates.json",  # out of scope: a sample of cells
+            "fields/wd5x/report-615/OWNER_SCOPE.jsonl",  # out of scope: the failed extractor's
+            "insert_site/d57-2026-11-05/D114_OWNER_ROUND.json",  # out of scope: a round's input
+            "insert_site/d57-2026-11-05/D999_OWNER_ROUND.json",  # a round nobody registered
         ):
             (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
             (tmp_path / rel).write_text("", encoding="utf-8")
         found = F.unregistered_lists(tmp_path, [F.LANE_LISTS[0].path])
         assert found == [
+            "fields/wd5-point/2026-11-12/adv/OWNER.jsonl",
+            "fields/wd5r/OWNER_NOTES.md",
+            "fields/wd5r/pilot3/adv/OWNER.jsonl",
             "images/d17/OWNER_LIST.jsonl",
+            "insert_site/d57-2026-11-05/D999_OWNER_ROUND.json",
             "qid_repair/HUMAN_ONLY_LEFTOVERS.md",
             "teaser/runs/owner-d99",
         ]
@@ -442,6 +583,8 @@ def write_list(root: Path, rel: str, rows: list[dict[str, Any]]) -> None:
 
 def make_root(tmp_path: Path, runs: tuple[str, ...] = F.FIELD_RUNS, lanes: bool = True) -> Path:
     root = tmp_path / "remediation"
+    (root / F.FOLLOWUPS).parent.mkdir(parents=True)
+    (root / F.FOLLOWUPS).write_text("", encoding="utf-8")
     for name in runs:
         (root / "fields" / name).mkdir(parents=True)
         (root / "fields" / name / "RUN.json").write_text("{}", encoding="utf-8")
@@ -591,3 +734,84 @@ class TestTheBuild:
         assert built["out_of_scope"] == {"HUMAN_ONLY.md": F.OUT_OF_SCOPE["HUMAN_ONLY.md"]}
         assert built["unregistered"] == []
         assert "- `HUMAN_ONLY.md`: the 2026-09 questions" in F.render(built)
+
+    def test_the_follow_ups_are_a_source_whose_open_rows_are_listed(self, tmp_path: Path) -> None:
+        root = make_root(tmp_path)
+        (root / F.FOLLOWUPS).write_text(
+            "".join(
+                json.dumps(followup(site_id)) + "\n"
+                for site_id in (SYBARIS_ON_THE_TRAEIS, TICHIT, QASR_QAROUN)
+            ),
+            encoding="utf-8",
+        )
+        sites = [
+            site(F.SYBARIS, name="Sybaris", **POINT),
+            site(SYBARIS_ON_THE_TRAEIS, name="Sybaris on the Traeis", **POINT),
+            site(TICHIT, description_start="Tichit is a town in Mauritania."),
+            site(QASR_QAROUN, scope_status="retired"),
+        ]
+        built = F.build(
+            root=root, read=lambda _sql: tagged(sites), field_run=self.field_run({}), final=True
+        )
+        assert [(r["site_id"], r["source"]) for r in built["rows"] if r["topic"] == F.FOLLOWUP_TOPIC] == [
+            (SYBARIS_ON_THE_TRAEIS, "closeout-followups")
+        ]  # fmt: skip
+        assert built["followups"] == {
+            "open": [SYBARIS_ON_THE_TRAEIS],
+            "closed": {
+                TICHIT: "the description is no longer Dhar Tichitt's",
+                QASR_QAROUN: "the site is retired or gone",
+            },
+        }
+        assert built["missing"] == [] and built["counts"][F.FOLLOWUP_TOPIC] == 1
+        md = F.render(built)
+        assert f"| {F.FOLLOWUP_TITLE} (`closeout-followup`) | 1 | D13/D20/D17/D82/D19 |" in md
+        assert "1 still open (listed under `closeout-followup`), 2 closed; " in md
+        assert f"`{TICHIT}`: the description is no longer Dhar Tichitt's" in md
+        assert "Sybaris on the Traeis (`" in md
+
+    def test_missing_follow_ups_are_named_and_refused_when_final(self, tmp_path: Path) -> None:
+        root = make_root(tmp_path)
+        (root / F.FOLLOWUPS).unlink()
+        read = lambda _sql: tagged([site()])  # noqa: E731
+        built = F.build(root=root, read=read, field_run=self.field_run({}))
+        assert built["missing"] == ["final-2026-10-08/CLOSEOUT_FOLLOWUPS.jsonl"]
+        assert built["followups"] == {"open": [], "closed": {}}
+        with pytest.raises(F.OwnerListFinalError, match="CLOSEOUT_FOLLOWUPS.jsonl"):
+            F.build(root=root, read=read, field_run=self.field_run({}), final=True)
+
+    def test_a_listed_point_run_is_found_and_read_after_every_other_run(
+        self, tmp_path: Path
+    ) -> None:
+        """`fields/wd5-point/<label>` (`population.py build --point`): its answer about a point
+        is the last one, so a keep there closes what wd5 left unresolved."""
+        root = make_root(tmp_path)
+        assert F.field_run_names(root) == F.FIELD_RUNS
+        for label in ("2026-11-12", "2026-11-11", "scratch"):
+            (root / "fields" / F.POINT_RUNS / label).mkdir(parents=True)
+        for label in ("2026-11-12", "2026-11-11"):  # `scratch` holds no RUN.json: no run
+            (root / "fields" / F.POINT_RUNS / label / "RUN.json").write_text("{}", encoding="utf-8")
+        assert F.field_run_names(root) == (
+            *F.FIELD_RUNS,
+            "wd5-point/2026-11-11",
+            "wd5-point/2026-11-12",
+        )
+        point = run_row(field="coordinates", stored="34.664, 32.887")
+        other = run_row(OTHER, field="coordinates", stored="34.664, 32.887")
+        asked: list[str] = []
+
+        def field_run(_root: Path, name: str) -> tuple[dict[str, Any], set[tuple[str, str]]]:
+            asked.append(name)
+            if name == "wd5":
+                return result(point, other), {(SITE, "coordinates"), (OTHER, "coordinates")}
+            if name == "wd5-point/2026-11-11":  # asked both again; kept SITE's point on a quote
+                return result(other), {(SITE, "coordinates"), (OTHER, "coordinates")}
+            return result(), set()
+
+        built = F.build(
+            root=root, read=lambda _sql: tagged([site(), site(OTHER)]), field_run=field_run
+        )
+        assert asked == list(F.field_run_names(root))
+        assert [(r["site_id"], r["source"]) for r in built["rows"] if r["topic"] == "field-coordinates"] == [
+            (OTHER, "fields-wd5-point/2026-11-11")
+        ]  # fmt: skip

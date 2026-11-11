@@ -1,5 +1,5 @@
-"""Owner decisions D121, D122, D124 and D136/D137 (2026-11-07): journalled corrections of curated
-`period_start`.
+"""Owner decisions D121, D122, D124 and D136/D137 (2026-11-07) and D20 (2026-10-08): journalled
+corrections of curated `period_start`.
 
 ## What is corrected
 
@@ -25,6 +25,20 @@
   source states a year takes the band of the earliest year it states and stores the band's edge
   (`d138-year`, the D137 year rule), with the sentence that states it as evidence. An obvious reading
   error (D137: a year that is not the site's own) is listed, not written (`D138_READING_ERRORS`).
+* **D20** - the corrected starts of the scope window (`--d20`, the `PERIOD_WRONG.jsonl` a planned
+  `scope-window-<wave>` hands over, `identity/scope_judge.py`): a site the web answer kept in scope
+  on a sourced start other than the stored one takes that year (`d20-sourced`), with the D20
+  decision, the answer's found quotes, its agent and its model as evidence. A row is written only
+  where the scope wave's `in_scope` is in production (`d20-scope-not-written`: that write comes
+  first, its premise is the stored period), the site still holds the start the answer judged
+  (`moved-since-answer`) and one of the found quotes states the year itself as a date
+  (`states_date`: `fields.answers.states_year`, the fields lanes' gate, read as the dating
+  extractor reads a number - "300 metres", "Population 1200" and "Page 450" state no year:
+  `d20-no-quote-states-year`). A start of 500-1500 in a label-borderline country is written where
+  the answer was asked the label question (the row's `label_borderline`, D58: its subject is
+  decided), and listed `d58-window` where not. The scope wave's `ROLLBACK.sql` is conditioned on
+  the stored period as its write is (guard 5), so a D20 step is undone before the scope wave it
+  follows (runbook WD2 1b).
 
 Undated is the residue rung (`residue_period.py`): `period_start` NULL and `period_name` `Undated`.
 The D58 window includes a record without a date (`pipeline.normalizers.dates.passes_date_cutoff`), so
@@ -51,6 +65,7 @@ none) inside the transaction.
     $M/period_fix.py wave   --wave W [--d113 FILE] [--cited FILE]   (read-only; WAVE.json, steps of 100)
     $M/period_fix.py wave   --wave W --no-d113 --bands CANDIDATES.jsonl                   (D136/D137)
     $M/period_fix.py wave   --wave W --no-d113 --years CANDIDATES.jsonl                   (D138)
+    $M/period_fix.py wave   --wave W --no-d113 --d20 PERIOD_WRONG.jsonl                   (D20)
     $M/period_fix.py step   --wave W --step N                       (read-only; PLAN.jsonl, ROLLBACK.sql)
     $M/apply.py --lane period-fix-W-sNNN --emit | --verify | --rehearse | --probe-guards | --apply
     $M/apply.py --lane period-fix-W-sNNN --rehearse-rollback
@@ -77,9 +92,12 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from fields.dating import scope_problem  # noqa: E402
+from fields import dates  # noqa: E402
+from fields.answers import states_bp, states_year  # noqa: E402
+from fields.dating import acceptable, scope_problem  # noqa: E402
 
 from mechanical.field_prov import read_production, sha256_file, step_name  # noqa: E402
+from mechanical.identity_lanes import IN_SCOPE  # noqa: E402
 from mechanical.lane import (  # noqa: E402
     _CURATED_ROWS,
     _PERIOD_MISMATCH,
@@ -107,6 +125,7 @@ from mechanical.plan import (  # noqa: E402
     write_skipped_jsonl,
 )
 from pipeline import periods as P  # noqa: E402
+from pipeline.normalizers.dates import label_borderline  # noqa: E402
 from pipeline.utils.text import UNDATED, bucket_edge, categorize_period  # noqa: E402
 
 ROOT_NAME = "mechanical_period_fix"
@@ -146,6 +165,11 @@ D138_QUOTE = (
     'medieval / out of scope (owner: "die 2 mittelalter deaktivieren"), through the journalled '
     "scope-retire lane. |"
 )
+D20_QUOTE = (
+    "| D20 | Scope (116 after the window, 5 pending, Hadrian's Wall Path) | **Check and retire "
+    "autonomously** (rec): a wrong period is corrected (sourced), a truly out-of-window site is "
+    "retired (journalled); rule periods re-researched first. |"
+)
 RULES = (
     "d121-regional",
     "d121-no-year",
@@ -154,6 +178,7 @@ RULES = (
     "d136-band",
     "d137-year",
     "d138-year",
+    "d20-sourced",
 )
 BAND_KEYS = frozenset(
     {"site_id", "name", "status", "band", "edge", "epoch", "band_from", "source_kind", "quote", "url"}
@@ -175,6 +200,27 @@ D138_READING_ERRORS = {
     ),
 }
 CITED_KEYS = frozenset({"site_id", "start", "url", "quote", "answered_by", "model", "reason"})
+#: A row of the scope window's `PERIOD_WRONG.jsonl` (`identity/scope_judge.py`, `build`): the D20
+#: web answer that kept the site on a sourced start other than the stored one.
+D20_KEYS = frozenset(
+    {
+        "site_id",
+        "wave",
+        "name",
+        "stored_period_start",
+        "stored_period_name",
+        "period_start",
+        "origin",
+        "recheck_d10",
+        "label_borderline",
+        "why",
+        "answered_by",
+        "model",
+        "answered_at",
+        "quotes",
+        "ask",
+    }
+)
 
 
 # ------------------------------------------------------------------------------ the lane
@@ -190,7 +236,7 @@ def fix_lane(wave: str, step: int) -> Lane:
         run_stamp=f"{wave}_mechanical-period-fix-{step_name(step)}",
         test_id="D121-D124/period-correction",
         # Derived from the owner's decisions and the cited table (D121/D122); the cited start of
-        # D124 carries its own quote and answer in the evidence.
+        # D124 and the sourced start of D20 carry their own quote and answer in the evidence.
         confidence="authoritative",
         label="D121 period correction",
         plan_table="_period_fix_plan",
@@ -384,12 +430,17 @@ def _site_checks(site: Live | None, links: Sequence[Link], site_id: str) -> Refu
     return None
 
 
-def _scope(site: Live, start: int | None) -> str | None:
+def _scope(site: Live, start: int | None, *, label_asked: bool = False) -> str | None:
+    """Why `start` is listed and not written (`scope_problem`), or None. `label_asked`: the D20
+    answer the start comes from was asked the label question (D58), so a start that leaves the site
+    label-borderline (inside the window: its region keeps it through 1500 AD) is a decided one -
+    its subject was judged with it."""
     if start is None:
         return None
-    return scope_problem(
-        {"site_id": site.site_id, "lat": site.lat, "lon": site.lon, "country": site.country}, start
-    )
+    record = {"site_id": site.site_id, "lat": site.lat, "lon": site.lon, "country": site.country}
+    if label_asked and label_borderline({**record, "period_start": start, "period_end": None}):
+        return None
+    return scope_problem(record, start)
 
 
 def _journal_quote(link: Link) -> dict[str, Any]:
@@ -519,6 +570,101 @@ def load_cited(path: Path) -> list[dict[str, Any]]:
         if not str(r["model"]).startswith("anthropic/claude-"):
             raise PlanError(f"{path}: {r['site_id']} was not answered by a Claude model ({r['model']!r})")
     return rows
+
+
+def load_d20(path: Path) -> list[dict[str, Any]]:
+    """The rows of a scope-window wave's `PERIOD_WRONG.jsonl`, each in the shape `scope_judge.build`
+    writes: a year, the answer's found quotes and the stamp of the Claude answer they come from."""
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    for r in rows:
+        if set(r) != D20_KEYS:
+            raise PlanError(
+                f"{path}: a D20 start has exactly the keys {sorted(D20_KEYS)}, not {sorted(r)} (a "
+                "file planned before the hand-off carried the answer's stamp is not read)"
+            )
+        start = r["period_start"]
+        if isinstance(start, bool) or not isinstance(start, int):
+            raise PlanError(f"{path}: {r['site_id']} period_start {start!r} is not a year")
+        quotes = r["quotes"]
+        if not quotes or not all(
+            q["outcome"] == "found" and str(q["quote"]).strip() and str(q["url"]).startswith("http")
+            for q in quotes
+        ):
+            raise PlanError(f"{path}: {r['site_id']} has no quote, or one that was not found on its page")
+        if not str(r["model"]).startswith("anthropic/claude-") or not str(r["answered_by"]).strip():
+            raise PlanError(
+                f"{path}: {r['site_id']} was not answered by a Claude model ({r['model']!r}, "
+                f"{r['answered_by']!r})"
+            )
+    return rows
+
+
+def states_date(quote: str, year: int) -> bool:
+    """Whether a found quote states `year` as a date: `fields.answers.states_year` (the fields
+    lanes' gate), by a statement the dating extractor reads as a date (`fields.dating.acceptable`).
+    `states_year` reads every unmarked number as an AD year; here "300 metres" (a unit after it),
+    "Population 1200" and "Page 450" (an unmarked number with no date preposition before it) state
+    none. Years before the present are `states_bp`'s."""
+    if not states_year(quote, year):
+        return False
+    if states_bp(quote, year):
+        return True
+    low = dates.reading_text(quote).casefold()
+    return any(
+        item.statement.lo <= year <= item.statement.hi and acceptable(item, low) is None
+        for item in dates.located(quote)
+    )
+
+
+def decide_d20(site: Live, links: Sequence[Link], row: Mapping[str, Any]) -> Decision | Refusal:
+    """D20: the sourced start of a site the scope window kept, where a found quote states it as a
+    date (`states_date`). The gate proves the year stands on a page the answer quoted, not that the
+    sentence dates the beginning of this site: that is the answer's judgement, read again in the
+    step's PLAN.md before the write."""
+    start, stored = int(row["period_start"]), row["stored_period_start"]
+    if site.scope_status != IN_SCOPE:
+        return Refusal(
+            site.site_id,
+            site.name,
+            "d20-scope-not-written",
+            f"scope wave {row['wave']} keeps the site in scope, production holds scope_status "
+            f"{site.scope_status!r}: that wave's write comes first",
+        )
+    if site.period_start != stored:
+        return Refusal(
+            site.site_id,
+            site.name,
+            "moved-since-answer",
+            f"the answer judged a stored start of {stored}, production holds {site.period_start}",
+        )
+    if not any(states_date(str(q["quote"]), start) for q in row["quotes"]):
+        return Refusal(
+            site.site_id,
+            site.name,
+            "d20-no-quote-states-year",
+            f"none of the answer's {len(row['quotes'])} found quote(s) states {start} itself as a "
+            "date (its year, or its century or millennium; a measure, a count or a bare number is "
+            "none): the year is the answer's reading, not a source's",
+        )
+    return Decision(
+        site.site_id,
+        site.name,
+        "d20-sourced",
+        site.period_start,
+        links[-1].link.id if links else None,
+        start,
+        f"a source dates the start at {start}, the stored start was {stored} ({row['origin']}): "
+        f"corrected (D20, scope wave {row['wave']})",
+        (
+            {"source": "owner decision D20 (2026-10-08)", "url": DECISIONS, "quote": D20_QUOTE},
+            *({"source": str(q["url"]), "url": str(q["url"]), "quote": str(q["quote"])} for q in row["quotes"]),
+            {
+                "source": f"D20 scope-window answer ({row['answered_by']}, {row['answered_at']})",
+                "model": str(row["model"]),
+                "reasoning": str(row["why"]),
+            },
+        ),
+    )
 
 
 def load_bands(path: Path) -> list[dict[str, Any]]:
@@ -672,10 +818,12 @@ def build_decisions(
     cited: Sequence[Mapping[str, Any]] = (),
     bands: Sequence[Mapping[str, Any]] = (),
     years: Sequence[Mapping[str, Any]] = (),
+    d20: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[Decision], list[Refusal], dict[str, int]]:
     """Every decision of a wave and every refusal, from one production read. Pure."""
     decided: dict[str, Decision] = {}
     refused: list[Refusal] = []
+    label_asked: set[str] = set()
     counters: Counter[str] = Counter()
     for site_id, site in live.items():
         d = decide_d122(site, journal.get(site_id, ()))
@@ -746,6 +894,23 @@ def build_decisions(
             refused.append(out)
         else:
             decided[sid] = out
+    for row in d20:
+        sid = str(row["site_id"])
+        if sid in decided:
+            raise PlanError(f"{sid}: a D20 start for a site another rule already decides")
+        site = live.get(sid)
+        refusal = _site_checks(site, journal.get(sid, ()), sid)
+        if refusal is not None:
+            refused.append(refusal)
+            continue
+        assert site is not None
+        out = decide_d20(site, journal.get(sid, ()), row)
+        if isinstance(out, Refusal):
+            refused.append(out)
+        else:
+            decided[sid] = out
+            if row["label_borderline"]:
+                label_asked.add(sid)
     final: list[Decision] = []
     for sid in sorted(decided):
         d = decided[sid]
@@ -755,7 +920,7 @@ def build_decisions(
             if refusal is not None:
                 refused.append(refusal)
                 continue
-        problem = _scope(site, d.new_start)
+        problem = _scope(site, d.new_start, label_asked=sid in label_asked)
         if problem is not None:
             refused.append(Refusal(sid, site.name, "d58-window", problem))
             continue
@@ -778,6 +943,7 @@ def build_wave(
     cited_path: Path | None = None,
     bands_path: Path | None = None,
     years_path: Path | None = None,
+    d20_path: Path | None = None,
     read: Callable[[str], str] = read_production,
     root: Path = ROOT,
 ) -> dict[str, Any]:
@@ -795,17 +961,18 @@ def build_wave(
     cited = load_cited(cited_path) if cited_path is not None else []
     bands = load_bands(bands_path) if bands_path is not None else []
     years = load_years(years_path) if years_path is not None else []
+    d20 = load_d20(d20_path) if d20_path is not None else []
     text = read(tagged_export_script([("site", site_sql()), ("journal", journal_sql())]))
     live, journal, at = parse_export(text)
     if d113_path is None:
-        # a wave without the list (D124, D136/D137 or D138 alone) decides no D122 row either: those
-        # are one run's
-        named = [str(c["site_id"]) for c in (*cited, *bands, *years)]
+        # a wave without the list (D124, D136/D137, D138 or D20 alone) decides no D122 row either:
+        # those are one run's
+        named = [str(c["site_id"]) for c in (*cited, *bands, *years, *d20)]
         live_scope = {sid: live[sid] for sid in named if sid in live}
     else:
         live_scope = live
     decisions, refused, counters = build_decisions(
-        live_scope, journal, d113, list_sha=list_sha, cited=cited, bands=bands, years=years
+        live_scope, journal, d113, list_sha=list_sha, cited=cited, bands=bands, years=years, d20=d20
     )
     ids = [d.site_id for d in decisions]
     record = {
@@ -815,6 +982,7 @@ def build_wave(
         "cited_sha256": sha256_file(cited_path) if cited_path is not None else "",
         "bands_sha256": sha256_file(bands_path) if bands_path is not None else "",
         "years_sha256": sha256_file(years_path) if years_path is not None else "",
+        "d20_sha256": sha256_file(d20_path) if d20_path is not None else "",
         "counters": counters,
         "steps": [ids[i : i + MAX_SITES] for i in range(0, len(ids), MAX_SITES)],
         "decisions": [d.as_dict() for d in decisions],
@@ -906,7 +1074,7 @@ def write_plan_md(plan: Plan, path: Path, decisions: Sequence[Decision]) -> None
     lane = plan.lane
     by_rule = Counter(d.rule for d in decisions if d.site_id in plan.sites)
     lines = [
-        f"# D121/D122/D124/D136/D137/D138 period correction - {lane.name}",
+        f"# D121/D122/D124/D136/D137/D138/D20 period correction - {lane.name}",
         "",
         f"Built {plan.built_at} by `scripts/remediation/mechanical/period_fix.py`. Run stamp "
         f"`{lane.run_stamp}`, test id `{lane.test_id}`, change keys `{lane.key_prefix}:<site_id>:<column>`.",
@@ -1076,6 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--cited", type=Path, help="D124: cited starts of a released re-ask")
             command.add_argument("--bands", type=Path, help="D136/D137: the epoch_bands CANDIDATES.jsonl")
             command.add_argument("--years", type=Path, help="D138: its year-stated-only rows")
+            command.add_argument("--d20", type=Path, help="D20: a scope-window wave's PERIOD_WRONG.jsonl")
         else:
             command.add_argument("--step", type=int, required=True)
     args = parser.parse_args(argv)
@@ -1088,6 +1257,7 @@ def main(argv: list[str] | None = None) -> int:
                     cited_path=args.cited,
                     bands_path=args.bands,
                     years_path=args.years,
+                    d20_path=args.d20,
                 )
             )
         elif args.command == "step":

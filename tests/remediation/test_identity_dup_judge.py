@@ -11,7 +11,9 @@ handoff directory with `opus_handoff.write_answer`.
 from __future__ import annotations
 
 import json
+import math
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -504,6 +506,24 @@ def decided(
     )  # fmt: skip
 
 
+def far_cluster(degrees: float = 0.03) -> dict[str, Any]:
+    """The cluster with Banias moved north: 0.03 degrees are about 3.3 km from the others."""
+    members = [dict(m) for m in CLUSTER["members"]]
+    for m in members:
+        if m["id"] == A_ID:
+            m["lat"] = 33.2486 + degrees
+    return {**CLUSTER, "members": members}
+
+
+def far_decided(tmp_path: Path) -> dict[str, Any]:
+    """The verdict decision of a MERGE of Banias, 3.3 km away, into Caesarea Philippi, with no
+    override."""
+    return J.decide_verdict(
+        far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1",
+        answered_by="web_verifier:b1", library=library(tmp_path, PAGES), overrides={},
+    )  # fmt: skip
+
+
 class TestTheMachineChecks:
     def test_a_merge_whose_quotes_are_found_and_which_is_near_is_decided(
         self, tmp_path: Path
@@ -554,18 +574,41 @@ class TestTheMachineChecks:
         decision = J.decide_verdict(CLUSTER, J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=Q.Library(REPO, store), overrides={})  # fmt: skip
         assert decision["status"] == J.HELD and "fetch failed" in decision["reason"]
 
-    def far_cluster(self) -> dict[str, Any]:
-        members = [dict(m) for m in CLUSTER["members"]]
-        for m in members:
-            if m["id"] == A_ID:
-                m["lat"] = 33.2486 + 0.03  # about 3.3 km from the others
-        return {**CLUSTER, "members": members}
-
-    def test_a_merge_beyond_two_kilometres_is_held_without_an_override(
+    def test_a_merge_beyond_two_kilometres_is_not_held_for_its_distance(
         self, tmp_path: Path
     ) -> None:
-        decision = J.decide_verdict(self.far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={})  # fmt: skip
-        assert decision["status"] == J.HELD and "beyond 2000 m" in decision["reason"]
+        """O14: the verdict decides a far pair on its quotes, like any other, so the recheck is
+        asked it. Its limit is its own distance and it has no evidence but the two readers'."""
+        decision = far_decided(tmp_path)
+        assert decision["status"] == J.DECIDED and decision["reason"] == ""
+        [far] = [m for m in decision["members"] if m["verdict"] == "MERGE"]
+        metres = J.metres_between(far_cluster())[(A_ID, B_ID)]
+        assert 3000 < metres < 4000 and far["metres"] == round(metres, 1)
+        assert metres <= far["metres_limit"] == math.ceil(metres * J.LANE_SPHERE)
+        assert far["limit_evidence"] == []
+
+    def test_a_merge_beyond_two_kilometres_is_still_held_for_a_quote_that_is_not_found(
+        self, tmp_path: Path
+    ) -> None:
+        absent = [{"source": URL_BANIAS, "quote": "a sentence that is not there"}]
+        text = answer([member(A_ID, "MERGE", quotes=absent), member(B_ID), member(C_ID)])
+        decision = J.decide_verdict(far_cluster(), J.parse_verdict(text, CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={})  # fmt: skip
+        assert decision["status"] == J.HELD and "a quote does not count" in decision["reason"]
+
+    def test_the_limit_of_a_far_pair_is_its_distance_as_the_lanes_measure_it(
+        self, tmp_path: Path
+    ) -> None:
+        """The lanes measure on PostGIS's sphere (radius 6,371,008.77 m), 1.4 mm per km more than
+        this module: about 1,000 km apart that is 1.4 m, more than rounding up gives."""
+        cluster = far_cluster(degrees=9.0)
+        decision = J.decide_verdict(cluster, J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={})  # fmt: skip
+        [far] = [m for m in decision["members"] if m["verdict"] == "MERGE"]
+        a, b = (next(m for m in cluster["members"] if m["id"] == i) for i in (A_ID, B_ID))
+        lat1, lon1, lat2, lon2 = (math.radians(x) for x in (a["lat"], a["lon"], b["lat"], b["lon"]))
+        h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2  # fmt: skip
+        on_the_lanes_sphere = 2 * 6371008.7714 * math.asin(math.sqrt(h))
+        assert on_the_lanes_sphere > math.ceil(J.metres_between(cluster)[(A_ID, B_ID)])
+        assert on_the_lanes_sphere <= far["metres_limit"] < on_the_lanes_sphere + 1
 
     def test_an_override_with_a_found_quote_and_a_big_enough_limit_decides_it(
         self, tmp_path: Path
@@ -576,7 +619,7 @@ class TestTheMachineChecks:
                 "evidence": [{"source": URL_BANIAS, "quote": "ancient site at the foot"}],
             }
         }
-        decision = J.decide_verdict(self.far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides=override)  # fmt: skip
+        decision = J.decide_verdict(far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides=override)  # fmt: skip
         assert decision["status"] == J.DECIDED
         [far] = [m for m in decision["members"] if m["verdict"] == "MERGE"]
         assert far["metres_limit"] == 4000
@@ -592,7 +635,7 @@ class TestTheMachineChecks:
         """Checked once in the verdict round: build_decisions reads no OVERRIDES.json again."""
         evidence = [{"source": URL_BANIAS, "quote": "ancient site at the foot"}]
         far = {"metres_limit": 4000, "evidence": evidence}
-        decision = J.decide_verdict(self.far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={A_ID: far})  # fmt: skip
+        decision = J.decide_verdict(far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={A_ID: far})  # fmt: skip
         ctx = J.Context(CTX.clusters, (), CTX.shown, CTX.names, None, CTX.basis)
         [record] = J.build_decisions(ctx, {CID: decision}, {CID: recheck_decision(tmp_path)})
         [merge] = record["merges"]
@@ -615,8 +658,9 @@ class TestTheMachineChecks:
     def test_an_override_too_small_without_evidence_or_with_a_false_quote_decides_nothing(
         self, tmp_path: Path, override: dict[str, Any]
     ) -> None:
-        decision = J.decide_verdict(self.far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={A_ID: override})  # fmt: skip
+        decision = J.decide_verdict(far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={A_ID: override})  # fmt: skip
         assert decision["status"] == J.HELD
+        assert "OVERRIDES.json gives this record carries no limit" in decision["reason"]
 
     def test_a_distinct_only_answer_is_decided_with_nothing_to_check(self, tmp_path: Path) -> None:
         decision = decided(answer([member(A_ID), member(B_ID), member(C_ID)]), tmp_path)
@@ -696,6 +740,37 @@ class TestTheDecisions:
         assert len(merge["quotes"]) == 2 and set(record["distinct"]) == {B_ID, C_ID}
         assert record["answered_by"] == ["web_verifier:b1", "adversarial:b1"]
 
+    def test_a_merge_beyond_two_kilometres_is_merged_when_the_recheck_confirms_it(
+        self, tmp_path: Path
+    ) -> None:
+        """O14: verdict and recheck both call the pair one site, each with a quote the machine
+        found. The merge carries both and the pair's own distance as its limit."""
+        [record] = self.build({CID: far_decided(tmp_path)}, {CID: recheck_decision(tmp_path)})
+        assert record["status"] == "complete" and record["held"] == []
+        [merge] = record["merges"]
+        assert (merge["site_id"], merge["target"]) == (A_ID, B_ID)
+        assert 3000 < merge["metres"] <= merge["metres_limit"] < 4000
+        assert merge["limit_evidence"] == []
+        assert [q["quote"] for q in merge["quotes"]] == [
+            "also known as Caesarea Philippi",
+            "also known as",
+        ]
+
+    @pytest.mark.parametrize("decision", ["REJECT", "RETARGET"])
+    def test_a_merge_beyond_two_kilometres_the_recheck_does_not_confirm_is_held_and_listed(
+        self, tmp_path: Path, decision: str
+    ) -> None:
+        target = C_ID if decision == "RETARGET" else None
+        [record] = self.build(
+            {CID: far_decided(tmp_path)}, {CID: recheck_decision(tmp_path, decision, target)}
+        )
+        assert record["status"] == "held" and record["merges"] == []
+        assert [(h["site_id"], h["name"]) for h in record["held"]] == [(A_ID, "Banias")]
+
+    def test_a_merge_beyond_two_kilometres_waits_for_its_recheck(self, tmp_path: Path) -> None:
+        [record] = self.build({CID: far_decided(tmp_path)})
+        assert record["status"] == "pending-recheck" and record["merges"] == []
+
     def test_a_merge_waits_for_its_recheck(self, tmp_path: Path) -> None:
         [record] = self.build({CID: verdict_decision(tmp_path)})
         assert record["status"] == "pending-recheck" and record["merges"] == []
@@ -770,10 +845,13 @@ class TestTheDecisions:
             "survivor_name": "New",
             "images": 3,
             "links": 0,
+            "holds": ["images", "name"],
         }
         records = self.build({}, losers=[loser])
         move = next(r for r in records if r["cluster_id"] == "retired-l1")
         assert move["status"] == "complete" and move["source"] == "retired-loser"
+        # the journal's evidence says what is moved, not more
+        assert move["merges"][0]["why"].endswith("still on it: images, name")
         assert (
             move["merges"][0]["target"],
             move["merges"][0]["already_retired"],
@@ -1044,6 +1122,28 @@ class TestTheRounds:
         assert written["merges"] == 1 and written["status"] == {"complete": 1}
         [record] = common.read_jsonl(run / J.DUP_DECISIONS)
         assert record["merges"][0]["site_id"] == A_ID
+
+    def test_a_merge_beyond_two_kilometres_reaches_the_recheck_and_its_confirm_merges_it(
+        self, tmp_path: Path
+    ) -> None:
+        """O14 end to end, with no OVERRIDES.json: the far MERGE is decided by the verdict round,
+        so the recheck export asks its cluster, and the CONFIRM makes the merge."""
+        ctx = replace(CTX, clusters={CID: far_cluster()})
+        run = self.run_dir(tmp_path)
+        J.export_verdicts(run, ctx, tmp_path / "h1", now=lambda: NOW)
+        write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
+        first = import_round(run, J.STAGE_VERDICT, "r1", ctx, fake_fetch(PAGES), now=lambda: NOW)
+        assert (first["decided"], first["held"]) == (1, 0)
+        assert not (run / J.DUP_DIR / J.OVERRIDES_FILE).exists()
+        record = J.export_rechecks(run, ctx, tmp_path / "h2", now=lambda: NOW)
+        assert record.labels == [CID]
+        recheck = answer([{"site_id": A_ID, "decision": "CONFIRM", "target": B_ID, "why": "rw", "quotes": [{"source": URL_BANIAS, "quote": "also known as"}]}])  # fmt: skip
+        write_answer(tmp_path / "h2", "r1-b01", J.STAGE_RECHECK, CID, recheck, by="adversarial:r1")  # fmt: skip
+        import_round(run, J.STAGE_RECHECK, "r1", ctx, fake_fetch(PAGES), now=lambda: NOW)
+        assert J.write_decisions(run, ctx)["merges"] == 1
+        [decision] = common.read_jsonl(run / J.DUP_DECISIONS)
+        [merge] = decision["merges"]
+        assert merge["site_id"] == A_ID and 3000 < merge["metres"] <= merge["metres_limit"]
 
     def test_the_pilot_judge_may_recheck_and_a_web_verifier_may_not(self, tmp_path: Path) -> None:
         run = self.run_dir(tmp_path)

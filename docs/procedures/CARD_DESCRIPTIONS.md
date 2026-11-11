@@ -636,7 +636,8 @@ What the gates check:
   its provenance validates (`verify` VERIFIED within the unproven limit, by another agent than the
   checker, of the card itself - `verify.text_sha256` is the card's; `web_facts` exactly the cited
   ones); the live description is the one the card was checked
-  against (its sha256 is the outcome's `desc_sha256`); the site is curated, not retired, has a
+  against (its sha256 is the outcome's `desc_sha256`); the site is curated, not retired (the one
+  outcome planned for a retired site is the D50 clear of 5.11), has a
   `card_stats` row; `raw_data` is a JSON object spelled the way the planner prints it; each cell's
   journal is continuous and ends at the live value;
 - `apply.py` (every mechanical lane's guards, `docs/procedures/PHASE4_CONTRACTS.md` has the general
@@ -965,6 +966,75 @@ transition, whichever pattern allows it.
 of steps 36/37, then `teaser.py accept --step 36|37` is 0 deviations again. Record the sitting in
 AUDIT_LOG, then `git add -f output/remediation/mechanical_card_exact/LIST.jsonl
 output/remediation/mechanical_card_exact/ACCEPTED output/remediation/mechanical_card_exact/s001`.
+
+### 5.11 The D50 clear (`d50-card-clear-<wave>`, orchestrator decision O17, 2026-11-10)
+
+**What it is for.** The six D50 sites (`lane.D50_DISPUTED_SITES`: Baltic Sea Anomaly, the three
+Bosnian pyramids, Yonaguni Monument, Richat Structure) are retired and each holds a card (read
+2026-11-11: Richat's is the teaser card of `wb-ws-2026-09-27-04`, the other five were written by no
+journalled lane). D50 shows them again only when "no card or page asserts the claim". The card lane
+asks no retired site (`teaser/run.py classify`, `seed_reason`) and its planner listed every outcome
+of a retired site `retired`, while the un-retire waits for the card: a deadlock. O17 decides it:
+"The six cards are cleared the D47 way, so the un-retire needs no new card." No card run for the
+six, no new card (D147); a site shown without a card text gets no Short (D22).
+
+**The D47 way** is an owner run: a run directory whose `OUTCOMES.jsonl` holds one `cleared` outcome
+per card, written as a step of 5.4 like every clear. D47's run (`owner-d47-2026-10-19`, step 35) was
+assembled in the session; this one is built by a command, from one read-only production read:
+
+```bash
+PY=./.venv/Scripts/python.exe; MW=scripts/remediation/mechanical/teaser.py
+RUN=d50-card-clear-<wave>          # <wave> = the day, e.g. 2026-11-12 (a letter for a second run)
+$PY $MW d50-clear --run $RUN       # read-only; WRITE_EXIT=0
+#   output/remediation/teaser/runs/$RUN/EXPORT.jsonl (the read as it came) and OUTCOMES.jsonl: per
+#   D50 site that holds a card text one outcome - status cleared, reason owner-o17-d50-disputed,
+#   desc_sha256 (the description it was read beside), seeded_card_sha256 (the card it clears),
+#   seeded_run (the run of its teaser provenance, null for a card no teaser run wrote). Prints
+#   "cleared" (id -> name) and "without_card" (D50 sites that hold no card text: nothing to clear).
+#   Refused: a name that is no d50-card-clear-<wave>, a run directory that exists (a run is written
+#   once), a read without one of the six, no card to clear at all.
+$PY $MW plan --run $RUN --step N   # then the step's commands of 5.4, unchanged, and accept --step N
+```
+
+**What the planner does with it** (`mechanical/teaser.py classify`): the reason
+`owner-o17-d50-disputed` is the **one** outcome of a retired site that is planned, and only on the
+six D50 sites and only when the outcome names the card it clears (any other use of the reason stops
+the plan: `REFUSED: ... clears the card of a D50 site and names the card it clears`). Every other
+outcome of a retired site - another clear, an accepted card, a D50 site included - stays listed
+`retired`. All other rules of 5.4 hold: the live description is the one read (`stale-description`
+otherwise: lane E wrote the dispute text in between - build a new run), the live card is the one read
+(`card-changed`), the journals are continuous. The rule in the journal is
+`card-clear-owner-o17-d50-disputed`; a site with a teaser provenance loses it in the provenance lane
+(today Richat alone: 1 provenance cell, 6 card cells - measured 2026-11-11 on a read-only read, in a
+scratch directory).
+
+**The order.** The clear's premise is the description, and both lanes of a WB step and a lane-WC
+write step write on the same sites: never build or apply the clear between lane E's `read` and the
+acceptance of its write for these sites. Clear the cards either before lane E reads the six or after
+its write step is accepted; then the country lane of the Baltic Sea Anomaly
+(`country-d84-<wave>`, `WD2_SERVED_IMAGE_AND_SCOPE.md` section 2.2, "The D50 wave since
+2026-11-11"), then `scope_unretire.py export` and the wave - the
+un-retire's premise holds the md5 of the card text and the country, so its export is read last. A
+site whose step was planned and not applied (a description that moved) is closed with
+`close-reverted` (5.6) and asked again by a new `d50-clear` run under the next wave label.
+
+**Undo**: 5.6, card lane first. An un-retire wave that showed the site is undone before
+(`scope-unretire-<wave>`'s `ROLLBACK.sql`): a D50 site is never shown with the card the clear removed.
+The un-retire's gates hold that rule, not this sentence (review of 2026-11-11). The card test asks
+no journal order - the reversal of the clear is a later journal row than the dispute text, and it
+puts the old card back. It asks whether the site holds no card text or one the card lane judged
+against the description the site holds: a teaser provenance that hashes that card and that
+description (`identity_lanes.card_judged_sql`). A card no teaser run wrote has none (five of the
+six), and Richat's undo restores a provenance that hashes the description of before the dispute
+text. So after an undone clear `scope_unretire.py` skips the site `d50-card-not-cleared`, the wave's
+invariant refuses it inside the transaction, guard 5 refuses a wave planned before the undo (the
+premise holds the md5 of the card text), and the wave's read-back counts a site that is shown
+already ("curated D50 sites shown with a card not judged against their dispute text": 0, always).
+The card step's own `ROLLBACK.sql` has no such guard: run on a shown D50 site it commits, and that
+read-back is what reports it - retire the site first.
+
+**Tests**: `TestTheD50Clear` in `tests/remediation/test_mechanical_teaser.py`;
+`mechanical/mutation_sweep.py "d50 clear"` (11 cases).
 
 ## 6. Why a mechanical lane and not `write_gate4.py --group P5`
 

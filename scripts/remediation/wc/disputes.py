@@ -12,6 +12,9 @@ checks:
     candidates        a shown site is a candidate when its description, its English Wikipedia text
                       (the shared cache), its Wikipedia categories (`fetch-categories`) or its site
                       type carry a dispute signal. A screen, not a verdict: it is meant to be broad.
+                      `--include F` names sites the screen asks whatever they carry (D21 names
+                      Pantelleria Vecchia Bank Megalith, whose text, article and categories carry
+                      no signal): each is a candidate by name (`NAMED_SIGNAL`), asked like any other.
     export / import   RESEARCH: per candidate, one `field_researcher` (the registry's model: Opus, high, since the tier move of
                       2026-10-09; it was Sonnet) answers whether
                       reputable sources hold two positions about the site, gives both with verbatim
@@ -26,11 +29,19 @@ checks:
                       `DESCRIPTION_DEFECTS.jsonl`-shaped line per sentence that states a side as
                       fact - the input of `cli.py defect-sites`, so a `wc-list` pass reads the dispute
                       as a reported claim (`prompts_sonnet.DEFECTS_HEAD`) and drops that sentence.
+    briefs            the briefs of `DISPUTES.jsonl` one enrichment run can take (`--for-run`, read
+                      after the repair writes): its site is one the run asks (`cli.population`,
+                      kind `wn-enrich`) and none of its asserting sentences stands in the text any
+                      more. Writes the subset, its site list and the held briefs with their
+                      reasons. `export --enrich --disputes` refuses a file whole when one brief's
+                      site is not asked, and `DISPUTES.jsonl` is never cut by hand. `--after` and
+                      `--exclude` are the export's own: a run exported with either is given the
+                      briefs decided with the same.
 
     PY=.venv/Scripts/python.exe ; D="$PY scripts/remediation/wc/disputes.py" ; C="$PY scripts/remediation/wc/cli.py"
     $C read --run-dir R                                   # the run's one read (ROWS.jsonl)
     $D fetch-categories --run-dir R                       # CATEGORIES.json (the MediaWiki API, a few dozen GETs)
-    $D candidates --run-dir R [--wiki-cache DIR]          # CANDIDATES.jsonl
+    $D candidates --run-dir R [--wiki-cache DIR] [--include F]   # CANDIDATES.jsonl
     $D export --run-dir R --handoff H                     # research questions
     $D brief --run-dir R --handoff H --batch-id B         # per batch: one Sonnet agent
     $D check-answer --run-dir R --handoff H --batch-id B --label SITE --text-file F
@@ -38,10 +49,15 @@ checks:
     $D adjudicate-export --run-dir R --handoff H2         # new agents
     $D adjudicate-brief ... ; $D adjudicate-import --run-dir R --handoff H2
     $D outputs --run-dir R                                # DISPUTES.jsonl, DISPUTE_DEFECTS.jsonl, SUMMARY.json
+    $C read --run-dir E                                   # the enrichment run's read, after the repair
+    $D briefs --run-dir R --for-run E [--after P] [--exclude X] --out B   # B, B.sites.txt, B.held.json
+    $C export --run-dir E --handoff H3 --enrich --sites B.sites.txt --disputes B [--after P] [--exclude X] ...
 
 The screen is calibrated before its first answer (`recall`): it must flag at least 90 % of the known
 positives of `KNOWN_POSITIVES` (the shown ones of the descriptions map plus the six D50 sites, by
-name) and the candidate count is reported with the share of random negatives it flags.
+name) and the candidate count is reported with the share of random negatives it flags. A candidate by
+name alone (`--include`) is no hit of the screen: `recall` counts it as missed and lists it under
+`named`.
 """
 
 from __future__ import annotations
@@ -88,6 +104,14 @@ CATEGORIES_FILE = "CATEGORIES.json"
 RESEARCH_FILE = "RESEARCH.jsonl"
 ADJUDICATED_FILE = "ADJUDICATED.jsonl"
 DISPUTES_FILE = "DISPUTES.jsonl"
+#: What `briefs --out B` writes beside the subset `B`: the site list an enrichment's `--sites` takes
+#: and the briefs the run cannot take, each with its reason.
+BRIEF_SITES_SUFFIX = ".sites.txt"
+BRIEFS_HELD_SUFFIX = ".held.json"
+#: Why a brief is held although the run asks its site: a sentence that states one position as fact
+#: still stands in the text (`cli.asserting_standing`); and why when the read has no such row.
+HELD_ASSERTING = "asserting-in-text"
+HELD_NO_ROW = "no-curated-row"
 DEFECTS_FILE = "DISPUTE_DEFECTS.jsonl"
 SUMMARY_FILE = "SUMMARY.json"
 DISPUTE_DIR = "dispute"
@@ -141,6 +165,9 @@ CATEGORY_PATTERNS: Mapping[str, str] = {
     "fringe": r"^Category:(?:Esoteric|Unexplained phenomena|Ufology|Paranormal|Ancient astronauts|"
     r"Pre-Columbian transoceanic contact theories)",
 }
+#: The signal of a site the screen was told to ask (`candidates --include`): no pattern's hit, so
+#: `recall` never counts it.
+NAMED_SIGNAL = "named"
 #: Site types that name an anomaly or a natural feature taken for a site.
 SITE_TYPE_PATTERNS: Mapping[str, str] = {
     "anomaly": r"anomal",
@@ -225,12 +252,24 @@ def wikipedia_texts(cache: Path) -> dict[str, str]:
 
 
 def cmd_candidates(
-    run: Path, *, wiki_cache: Path | None, wiki_min_hits: int = WIKI_MIN_HITS
+    run: Path,
+    *,
+    wiki_cache: Path | None,
+    wiki_min_hits: int = WIKI_MIN_HITS,
+    include: Path | None = None,
 ) -> dict[str, Any]:
     """`CANDIDATES.jsonl`: every curated site of the read the screen reads (`screened`: not
     retired, or a D50 site), with a description that splits into sentences, that carries a
-    dispute signal. Reads `CATEGORIES.json` when `fetch-categories` made it."""
+    dispute signal. Reads `CATEGORIES.json` when `fetch-categories` made it. `include` (a file of
+    site ids, one per line) names sites that are candidates whatever they carry: each gets the
+    signal `NAMED_SIGNAL` beside its own. A named site the screen cannot ask - no curated row of
+    the read, retired and no D50 site, without a description, or with one that does not split -
+    stops the command: the list says it is asked."""
     rows = read_jsonl(run / cli.ROWS_FILE)
+    named = cli._ids(include) if include is not None else set()
+    unknown = sorted(named - {row["id"] for row in rows})
+    if unknown:
+        raise DisputeError(f"{include}: {unknown} is no curated row of the read")
     categories_path = run / CATEGORIES_FILE
     categories: dict[str, list[str]] = (
         json.loads(categories_path.read_text(encoding="utf-8")) if categories_path.exists() else {}
@@ -241,10 +280,10 @@ def cmd_candidates(
     signals: Counter[str] = Counter()
     for row in sorted(rows, key=lambda r: r["id"]):
         if not screened(row):
-            listed["retired"] += 1
+            _not_asked(row, "retired", named, include, listed)
             continue
         if wc4.is_empty(row["description"]):
-            listed["no-description"] += 1
+            _not_asked(row, "no-description", named, include, listed)
             continue
         reasons = candidate_reasons(
             row,
@@ -252,12 +291,14 @@ def cmd_candidates(
             categories=categories.get(row["id"], ()),
             wiki_min_hits=wiki_min_hits,
         )
+        if row["id"] in named:
+            reasons[NAMED_SIGNAL] = [include.name]
         if not reasons:
             continue
         try:
             sentences = wc4.checked_sentences(row["description"])
         except wc4.WcError:
-            listed["not-splittable"] += 1
+            _not_asked(row, "not-splittable", named, include, listed)
             continue
         site = plan4.plan_site(
             {k: v for k, v in row.items() if k != "scope_status"}, flags=frozenset()
@@ -281,20 +322,42 @@ def cmd_candidates(
         "categories": len(categories),
         "wikipedia_texts": len(texts),
         "wiki_min_hits": wiki_min_hits,
+        "include": None
+        if include is None
+        else {"path": cli._shown(include), "sha256": cli._sha256(include), "sites": len(named)},
     }
+
+
+def _not_asked(
+    row: Mapping[str, Any], reason: str, named: set[str], include: Path | None, listed: Counter[str]
+) -> None:
+    """A site the screen does not ask is counted under its reason - unless the list names it: a
+    named site that cannot be asked stops the command, it is never left out silently."""
+    if row["id"] in named:
+        raise DisputeError(
+            f"{include}: {row['id']} ({row['name']}) cannot be asked ({reason}) - the screen asks "
+            "a shown site, or a D50 site, whose description splits into sentences; take it out of "
+            "the list and report it as not asked"
+        )
+    listed[reason] += 1
 
 
 def cmd_recall(run: Path, *, known: Sequence[str] = KNOWN_POSITIVES) -> dict[str, Any]:
     """The screen's recall on the known positives (by site name) among the run's candidates, and the
     names it missed. The screen is calibrated before the research answers a question: below
-    `MIN_RECALL` the signals are widened (a code change, then the calibration is run again)."""
-    names = {entry["name"] for entry in read_jsonl(run / CANDIDATES_FILE)}
+    `MIN_RECALL` the signals are widened (a code change, then the calibration is run again). A
+    candidate by name alone (`candidates --include`, `NAMED_SIGNAL`) was flagged by no signal: it
+    counts as missed, and `named` lists the missed names the run asks all the same."""
+    candidates = read_jsonl(run / CANDIDATES_FILE)
+    names = {entry["name"] for entry in candidates if set(entry["reasons"]) != {NAMED_SIGNAL}}
+    by_name = {entry["name"] for entry in candidates} - names
     found = [name for name in known if name in names]
     return {
         "known": len(known),
         "flagged": len(found),
         "recall": round(len(found) / len(known), 4),
         "missed": [name for name in known if name not in names],
+        "named": [name for name in known if name in by_name],
         "passed": len(found) / len(known) >= MIN_RECALL,
     }
 
@@ -1025,6 +1088,94 @@ def cmd_outputs(run: Path) -> dict[str, Any]:
     return summary
 
 
+# ------------------------------------------------------------------------------ the briefs of one run
+def cmd_briefs(
+    run: Path,
+    *,
+    for_run: Path,
+    out: Path,
+    after: Sequence[Path] = (),
+    exclude: Path | None = None,
+) -> dict[str, Any]:
+    """The briefs of `DISPUTES.jsonl` the enrichment run `for_run` can take, decided on that run's
+    own read (`cli.py read`, after the repair pass wrote) exactly as its export will decide: the
+    site is one a lane-E run asks (`cli.population`, kind `wn-enrich`; `after` names the runs whose
+    sites are not asked again and `exclude` the file of the sites the run leaves out, as `export
+    --after` and `export --exclude` do: the export is given the same two) and none of the brief's
+    asserting sentences stands in the text (`cli.asserting_standing`). `out` gets those briefs,
+    unchanged and in the file's order - what `export --enrich --disputes` takes; `out.sites.txt`
+    their site ids, the export's `--sites`; `out.held.json` every other brief with the reason it is
+    held (the population's own reason, `HELD_NO_ROW` or `HELD_ASSERTING` with the sentence
+    numbers)."""
+    path = run / DISPUTES_FILE
+    if not path.exists():
+        raise DisputeError(f"{run}: no {DISPUTES_FILE} - the outputs were not written")
+    if not (for_run / cli.ROWS_FILE).exists():
+        raise DisputeError(f"{for_run}: no read - run cli.py read --run-dir on it first")
+    briefs = read_jsonl(path)
+    seen: set[str] = set()
+    for number, record in enumerate(briefs, start=1):
+        problems = E.dispute_record_problems(record)
+        if problems:
+            raise DisputeError(f"{path}:{number}: " + "; ".join(problems))
+        if record["site_id"] in seen:
+            raise DisputeError(f"{path}:{number}: {record['site_id']} has two dispute briefs")
+        seen.add(record["site_id"])
+    rows = read_jsonl(for_run / cli.ROWS_FILE)
+    live = {row["id"]: row for row in rows}
+    earlier: set[str] = set()
+    for other in after:
+        earlier |= set(cli.read_sites(other))
+    excluded = cli._ids(exclude) if exclude is not None else set()
+    _, listed = cli.population(
+        rows, excluded=excluded, earlier=earlier, kind=cli.KIND_ENRICH, only=seen
+    )
+    not_asked = {site_id: reason for reason, sites in listed.items() for site_id in sites}
+    usable: list[dict[str, Any]] = []
+    held: list[dict[str, Any]] = []
+    for record in briefs:
+        site_id = record["site_id"]
+        standing: list[int] = []
+        if site_id not in live:
+            reason: str | None = HELD_NO_ROW
+        elif site_id in not_asked:
+            reason = not_asked[site_id]
+        else:
+            standing = cli.asserting_standing(live[site_id], record)
+            reason = HELD_ASSERTING if standing else None
+        if reason is None:
+            usable.append(record)
+        else:
+            held.append(
+                {
+                    "site_id": site_id,
+                    "name": record["name"],
+                    "reason": reason,
+                    "asserting_in_text": standing,
+                }
+            )
+    sites, held_path = Path(str(out) + BRIEF_SITES_SUFFIX), Path(str(out) + BRIEFS_HELD_SUFFIX)
+    RF.write_jsonl(out, usable)
+    sites.write_text(
+        "".join(f"{record['site_id']}\n" for record in usable), encoding="utf-8", newline="\n"
+    )
+    RF.write_json(held_path, held)
+    return {
+        "briefs": len(briefs),
+        "usable": len(usable),
+        "pilot_size": cli.wn_pilot_size(len(usable)),
+        "held": dict(sorted(Counter(entry["reason"] for entry in held).items())),
+        "read": json.loads((for_run / cli.READ_FILE).read_text(encoding="utf-8"))["read_at"],
+        "after": [cli._shown(other) for other in after],
+        "exclude": None
+        if exclude is None
+        else {"path": cli._shown(exclude), "sha256": cli._sha256(exclude)},
+        "out": {"path": cli._shown(out), "sha256": cli._sha256(out)},
+        "sites": cli._shown(sites),
+        "held_file": cli._shown(held_path),
+    }
+
+
 # ------------------------------------------------------------------------------ the CLI
 def _print(payload: Any) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
@@ -1036,11 +1187,11 @@ def build_parser() -> argparse.ArgumentParser:
     for name in (
         "fetch-categories", "candidates", "recall", "export", "brief", "check-answer", "import",
         "adjudicate-export", "adjudicate-brief", "adjudicate-check-answer", "adjudicate-import",
-        "outputs",
+        "outputs", "briefs",
     ):  # fmt: skip
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True, type=Path)
-        if name not in ("fetch-categories", "candidates", "recall", "outputs"):
+        if name not in ("fetch-categories", "candidates", "recall", "outputs", "briefs"):
             command.add_argument("--handoff", required=True, type=Path)
         if name in ("brief", "check-answer", "adjudicate-brief", "adjudicate-check-answer"):
             command.add_argument("--batch-id", required=True)
@@ -1052,6 +1203,12 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "candidates":
             command.add_argument("--wiki-cache", type=Path, default=None)
             command.add_argument("--wiki-min-hits", type=int, default=WIKI_MIN_HITS)
+            command.add_argument("--include", type=Path, default=None)
+        if name == "briefs":
+            command.add_argument("--for-run", required=True, type=Path)
+            command.add_argument("--after", type=Path, action="append", default=[])
+            command.add_argument("--exclude", type=Path, default=None)
+            command.add_argument("--out", required=True, type=Path)
     return parser
 
 
@@ -1065,7 +1222,14 @@ def run_command(args: argparse.Namespace) -> int:
         finally:
             client.close()
     elif command == "candidates":
-        _print(cmd_candidates(run, wiki_cache=args.wiki_cache, wiki_min_hits=args.wiki_min_hits))
+        _print(
+            cmd_candidates(
+                run,
+                wiki_cache=args.wiki_cache,
+                wiki_min_hits=args.wiki_min_hits,
+                include=args.include,
+            )
+        )
     elif command == "recall":
         result = cmd_recall(run)
         _print(result)
@@ -1092,6 +1256,12 @@ def run_command(args: argparse.Namespace) -> int:
         _print(cmd_adjudicate_import(run, args.handoff))
     elif command == "outputs":
         _print(cmd_outputs(run))
+    elif command == "briefs":
+        _print(
+            cmd_briefs(
+                run, for_run=args.for_run, out=args.out, after=args.after, exclude=args.exclude
+            )
+        )
     return 0
 
 

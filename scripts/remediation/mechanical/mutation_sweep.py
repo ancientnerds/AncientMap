@@ -4936,7 +4936,7 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "a site retired since the run",
-                "    if live.scope_status == RETIRED:",
+                "    if live.scope_status == RETIRED and not d50_clear:",
                 _TEASER_CHANGED,
             ),
             ("a site without a card row", "    if not live.has_card_row:", _TEASER_CHANGED),
@@ -13866,6 +13866,13 @@ UNRETIRE_STAYS = "test_a_date_retirement_the_label_rule_does_not_keep_stays"
 UNRETIRE_MUSEUM = "test_a_pinned_museum_comes_back_outside_the_medieval_old_world_only"
 UNRETIRE_D50_WAITS = "test_a_d50_site_waits_for_its_dispute_text"
 UNRETIRE_D50_SQL = "test_a_d50_site_passes_only_with_its_dispute_text"
+#: D21 in the D50 gate (code gap wn-and-disputes#3, 2026-11-11): both positions kept, not written.
+UNRETIRE_D50_KEPT_SQL = "test_a_d50_site_passes_only_with_both_positions_kept"
+UNRETIRE_D50_KEPT = "test_a_d50_site_whose_text_kept_one_position_waits"
+#: The export's own SQL, run in SQLite and handed to the planner (review of B4, 2026-11-11).
+UNRETIRE_D50_EXPORT = (
+    "test_the_dispute_export_hands_the_gate_the_run_and_the_record_it_decides_on"
+)
 UNRETIRE_DATE_SQL = "test_a_label_un_retirement_inside_the_window_passes_and_every_other_fails"
 UNRETIRE_MUSEUM_SQL = "test_a_museum_un_retirement_needs_a_museum_outside_the_medieval_old_world"
 UNRETIRE_JOURNAL = "test_only_a_journalled_retirement_is_taken_back"
@@ -13873,8 +13880,11 @@ UNRETIRE_WAVES = "test_a_wave_writes_its_files_and_is_never_replaced_or_planned_
 UNRETIRE_PLACED_SQL = (
     "test_a_label_un_retirement_needs_a_placed_dated_site_that_is_no_viking_or_non_site"
 )
-UNRETIRE_CARD_SQL = "test_a_d50_site_passes_only_once_its_card_was_written_after_its_dispute_text"
-UNRETIRE_D50_CARD = "test_a_d50_site_waits_until_its_card_was_written_after_its_dispute_text"
+#: The card test (review of B5, 2026-11-11): no card, or one the card lane judged against the
+#: text the site holds - never "a later journal row", which the reversal of the clear is.
+UNRETIRE_CARD_SQL = "test_a_d50_site_passes_only_without_a_card_or_with_one_judged_against_its_text"
+UNRETIRE_D50_CARD = "test_a_d50_site_waits_until_its_card_is_cleared_or_judged_against_its_text"
+UNRETIRE_EXPORT = "test_the_export_is_one_read_only_snapshot_of_the_retired_and_their_journal"
 #: The doors the label rule guards where no verdict is asked (D58, review of 2026-10-24).
 LOADER_SCOPE = REPO / "pipeline/unified_loader.py"
 LOADER_SCOPE_TESTS = "tests/pipeline/test_loader_scope_rule.py"
@@ -14171,11 +14181,43 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 sql: both positions were appended",
+        "d50 sql: position B was kept",
         IDENTITY_LANES,
-        "        f\"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})\"\n",
+        '        f"AND {kept(wc4.DISPUTE_B)})"\n',
         '        ")"\n',
-        UNRETIRE_D50_SQL,
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: position A was kept",
+        IDENTITY_LANES,
+        '        f"AND {kept(wc4.DISPUTE_A)} "\n',
+        "",
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: a position written and dropped is not kept",
+        IDENTITY_LANES,
+        "                f\"AND {record}->'sentences'->{index}->>'verdict' = {keep})\"\n",
+        '                ")"\n',
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the record is the one of the run that wrote the text",
+        IDENTITY_LANES,
+        "        f\"AND l.evidence->>'run' = {record}->>'run' \"\n",
+        "",
+        UNRETIRE_D50_KEPT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: every sentence an enrichment appends is read",
+        IDENTITY_LANES,
+        "                for index in range(enrich.MAX_APPENDED)\n",
+        "                for index in range(2)\n",
+        UNRETIRE_D50_KEPT_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
@@ -14339,11 +14381,66 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 plan: both positions were appended",
+        "d50 plan: both positions were kept",
         UNRETIRE,
         "    for needed in (wc4.DISPUTE_A, wc4.DISPUTE_B):",
         "    for needed in ():",
         UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a position written and dropped is not kept",
+        UNRETIRE,
+        '        if sentence["verdict"] == wc4.Verdict.KEEP.value\n',
+        "        if True\n",
+        UNRETIRE_D50_KEPT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: the record is the one of the run that wrote the text",
+        UNRETIRE,
+        '    if record is None or record["run"] != row["run"]:',
+        "    if record is None:",
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d50 plan: a site without an enrichment record waits",
+        UNRETIRE,
+        '    if record is None or record["run"] != row["run"]:',
+        UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: the run is the one the evidence names, not the stamp",
+        UNRETIRE,
+        "    f\"l.evidence->>'run' AS run, u.raw_data->",
+        "    f\"l.run_stamp AS run, u.raw_data->",
+        UNRETIRE_D50_EXPORT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: the record is the enrichment's, not the check's",
+        UNRETIRE,
+        "u.raw_data->{sql_literal(wc4.ENRICH_KEY)} AS record ",
+        "u.raw_data->{sql_literal(wc4.CHECK_KEY)} AS record ",
+        UNRETIRE_D50_EXPORT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: only the row that wrote the description as it stands",
+        UNRETIRE,
+        '    f"AND l.new_value = u.description AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"',
+        '    f"AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"',
+        UNRETIRE_D50_EXPORT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: only the D50 sites",
+        UNRETIRE,
+        '    f"AND l.new_value = u.description AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"',
+        '    "AND l.new_value = u.description ORDER BY l.id"',
+        UNRETIRE_D50_EXPORT,
         UNRETIRE_TESTS,
     ),
     Case(
@@ -14636,20 +14733,22 @@ D58_CASES: list[Case] = [
         "test_the_numeric_cut_s_other_retirements_are_listed",
         UNRETIRE_TESTS,
     ),
+    # -- X13 (2026-10-24, O15): Islamic and Byzantine Europe is medieval Europe in the D20 lane; the
+    #    two holds of the review above are gone, and a mutant that puts one back is noticed
     Case(
-        "d58 window: Islamic Europe is not asked",
+        "x13 window: Islamic Europe is asked like any site past the window",
         SCOPE_WINDOW_PY,
-        '        if row["label_open_question"]:\n',
-        "        if False:\n",
-        "test_a_site_of_islamic_europe_is_held_out_of_the_population",
+        '        if not found or row["id"] in D50_DISPUTED_SITES:\n',
+        '        if not found or row["id"] in D50_DISPUTED_SITES or row["label_open_question"]:\n',
+        "test_a_site_of_islamic_europe_is_asked_like_any_site_past_the_window",
         "tests/remediation/test_identity_scope_parents.py",
     ),
     Case(
-        "d58 window: the region alone retires no Islamic Europe site",
+        "x13 window: the region retires an Islamic Europe site",
         SCOPE_JUDGE_PY,
-        "        if verdict == OUT_OF_WINDOW and label_open_question(now):\n",
-        "        if False:\n",
-        "test_the_region_alone_never_retires_a_site_of_islamic_europe",
+        "        if sid in D50_DISPUTED_SITES:\n",
+        '        if sid in D50_DISPUTED_SITES or now["country"] in ("Spain", "Portugal"):\n',
+        "test_a_site_of_islamic_or_byzantine_europe_is_retired_like_any_european_site",
         "tests/remediation/test_identity_b_scope.py",
     ),
     Case(
@@ -14661,7 +14760,7 @@ D58_CASES: list[Case] = [
         "tests/remediation/test_phase4_plan.py",
     ),
     Case(
-        "d50 lane: a D50 site's card was written after its text",
+        "d50 lane: a D50 site's card is cleared or judged against its text",
         IDENTITY_LANES,
         "        f\"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})\"\n",
         "        f\"AND {dispute_enriched_sql('u')})\"\n",
@@ -14669,18 +14768,36 @@ D58_CASES: list[Case] = [
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 sql: a card before the text does not clear",
+        "d50 sql: a card nobody judged does not clear",
         IDENTITY_LANES,
-        '    return f"({no_card} OR coalesce({card} > {text}, false))"',
-        '    return f"({no_card} OR coalesce({card} IS NOT NULL, false))"',
+        '    return f"({no_card} OR {card_judged_sql(alias)})"',
+        '    return f"({no_card} OR true)"',
         UNRETIRE_CARD_SQL,
         UNRETIRE_TESTS,
     ),
     Case(
         "d50 sql: no card clears",
         IDENTITY_LANES,
-        '    return f"({no_card} OR coalesce({card} > {text}, false))"',
-        '    return f"(coalesce({card} > {text}, false))"',
+        '    return f"({no_card} OR {card_judged_sql(alias)})"',
+        '    return f"({card_judged_sql(alias)})"',
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the provenance hashes the card the site holds",
+        IDENTITY_LANES,
+        "        \"AND encode(sha256(convert_to(cs.card_description, 'UTF8')), 'hex') = \"\n"
+        "        f\"{provenance}->>'text_sha256' \"\n",
+        "",
+        UNRETIRE_CARD_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 sql: the provenance hashes the description the site holds",
+        IDENTITY_LANES,
+        "        f\"AND encode(sha256(convert_to(coalesce({a}.description, ''), 'UTF8')), 'hex') = \"\n"
+        "        f\"{provenance}->>'desc_sha256')\"\n",
+        '        ")"\n',
         UNRETIRE_CARD_SQL,
         UNRETIRE_TESTS,
     ),
@@ -14745,19 +14862,36 @@ D58_CASES: list[Case] = [
         UNRETIRE_D50_CARD,
         UNRETIRE_TESTS,
     ),
-    guard(
+    Case(
         "d50 plan: no card clears",
         UNRETIRE,
+        '    if not site["has_card"] or site["card_judged"]:',
+        '    if site["card_judged"]:',
+        UNRETIRE_D50_CARD,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a card nobody judged does not clear",
+        UNRETIRE,
+        '    if not site["has_card"] or site["card_judged"]:',
+        '    if not site["has_card"] or site["has_card"]:',
+        UNRETIRE_D50_CARD,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 plan: a card judged against the text clears",
+        UNRETIRE,
+        '    if not site["has_card"] or site["card_judged"]:',
         '    if not site["has_card"]:',
         UNRETIRE_D50_CARD,
         UNRETIRE_TESTS,
     ),
     Case(
-        "d50 plan: a card before the text does not clear",
+        "d50 plan: the export reads the invariant's own card test",
         UNRETIRE,
-        "    if card is not None and int(card) > written_id:",
-        "    if card is not None:",
-        UNRETIRE_D50_CARD,
+        "    f\"{card_judged_sql('u')} AS card_judged, \"\n",
+        '    "true AS card_judged, "\n',
+        UNRETIRE_EXPORT,
         UNRETIRE_TESTS,
     ),
 ]
@@ -15042,7 +15176,7 @@ D25_OWNER_CASES: list[Case] = [
              "        if rel in known or rel in OUT_OF_SCOPE:",
              "test_an_owner_list_no_source_covers_is_named"),
             ("the field runs' own lists are rebuilt",
-             '        if parts[0] == "fields" and len(parts) in (3, 4) and parts[1] in FIELD_RUNS:',
+             "        if _of_a_field_run(rel, runs):",
              "test_an_owner_list_no_source_covers_is_named"),
             ("a cache is never an owner list", "            if name in SKIP_PARTS:",
              "test_an_owner_list_no_source_covers_is_named"),
@@ -15906,6 +16040,671 @@ D57_GO_LIVE_CASES: list[Case] = [
     ),
 ]
 CASES += D57_GO_LIVE_CASES
+
+
+# ---------------- owner decision D20, the corrected starts (`period_fix.py wave --d20`, rule
+# `d20-sourced`): the scope window's PERIOD_WRONG.jsonl is read by the period lane. Each guard of the
+# reader and of the decision, and the hand-off's stamp on the writer's side. Every label starts with
+# "d20 start:", so the group runs on its own: `mutation_sweep.py "d20 start:"`.
+PERIOD_FIX = MECHANICAL / "period_fix.py"
+PERIOD_FIX_TESTS = "tests/remediation/test_mechanical_period_fix.py"
+_D20_ROW_REFUSED = "test_a_row_that_is_no_found_claude_answer_is_refused"
+D20_START_CASES: list[Case] = [
+    guard(
+        "d20 start: the scope wave's write comes first",
+        PERIOD_FIX,
+        "    if site.scope_status != IN_SCOPE:",
+        "test_a_site_the_scope_wave_has_not_written_in_scope_is_refused",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: the stored start is the one the answer judged",
+        PERIOD_FIX,
+        "    if site.period_start != stored:",
+        "test_a_start_that_moved_since_the_answer_is_refused",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: a found quote states the year",
+        PERIOD_FIX,
+        '    if not any(states_date(str(q["quote"]), start) for q in row["quotes"]):',
+        "test_a_year_no_found_quote_states_is_listed_not_written",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: a measure, a count or a bare number states no year",
+        PERIOD_FIX,
+        "        item.statement.lo <= year <= item.statement.hi and acceptable(item, low) is None\n",
+        "        item.statement.lo <= year <= item.statement.hi\n",
+        "test_a_bare_number_that_is_no_date_does_not_state_the_year",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the statement that reads as a date is the one of the year",
+        PERIOD_FIX,
+        "        item.statement.lo <= year <= item.statement.hi and acceptable(item, low) is None\n",
+        "        acceptable(item, low) is None\n",
+        "test_a_bare_number_that_is_no_date_does_not_state_the_year",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: a borderline start needs the label question",
+        PERIOD_FIX,
+        "    if label_asked and label_borderline(",
+        "    if label_borderline(",
+        "test_a_start_that_makes_a_site_borderline_unasked_is_listed_not_written",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the label question decides a borderline start",
+        PERIOD_FIX,
+        "        problem = _scope(site, d.new_start, label_asked=sid in label_asked)\n",
+        "        problem = _scope(site, d.new_start)\n",
+        "test_a_borderline_start_is_written_where_the_answer_was_asked_the_label",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the window still holds where the label was asked",
+        PERIOD_FIX,
+        "    if label_asked and label_borderline(",
+        "    if label_asked or label_borderline(",
+        "test_a_start_outside_the_window_is_listed_even_where_the_label_was_asked",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: a row in another shape is not read",
+        PERIOD_FIX,
+        "        if set(r) != D20_KEYS:",
+        "test_a_row_without_the_answer_s_stamp_is_refused",
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: the year is an integer",
+        PERIOD_FIX,
+        "        if isinstance(start, bool) or not isinstance(start, int):",
+        _D20_ROW_REFUSED,
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: every quote was found on its page",
+        PERIOD_FIX,
+        '            q["outcome"] == "found" and str(q["quote"]).strip()',
+        '            str(q["quote"]).strip()',
+        _D20_ROW_REFUSED,
+        PERIOD_FIX_TESTS,
+    ),
+    guard(
+        "d20 start: a Claude answer with its agent",
+        PERIOD_FIX,
+        '        if not str(r["model"]).startswith("anthropic/claude-") or not str(r["answered_by"]).strip():',
+        _D20_ROW_REFUSED,
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the wave reads the hand-off",
+        PERIOD_FIX,
+        "    d20 = load_d20(d20_path) if d20_path is not None else []\n",
+        "    d20 = []\n",
+        "test_the_wave_plans_the_start_its_label_and_a_rollback",
+        PERIOD_FIX_TESTS,
+    ),
+    Case(
+        "d20 start: the hand-off carries the answer's stamp",
+        SCOPE_JUDGE_PY,
+        '                    "model": decision["model"],\n',
+        "",
+        "test_a_wrong_period_keeps_the_entry_and_hands_the_year_to_the_period_lane",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+    Case(
+        "d20 start: the hand-off says whether the label was asked",
+        SCOPE_JUDGE_PY,
+        '                    "label_borderline": ctx["label_borderline"],\n',
+        '                    "label_borderline": False,\n',
+        "test_the_period_lane_reads_the_hand_off_as_the_plan_writes_it",
+        "tests/remediation/test_identity_b_scope.py",
+    ),
+]
+CASES += D20_START_CASES
+
+
+# ------------------------------- the un-retire of the D50 sites: O17 and D84/D149 (2026-11-11)
+#: What the six D50 sites need to be shown again (code gaps wn-and-disputes#4 and #5). O17: their
+#: cards are cleared the D47 way - the owner run `teaser.py d50-clear` builds, and the one outcome
+#: of a retired site the card planner plans (`teaser.classify`). D84 and D149: the Baltic Sea
+#: Anomaly holds no country - a `country-d84-<wave>` lane (`identity_lanes.country_d84_lane`,
+#: `country_d84.py`: a wave, written while the site is retired, its premise holding that), and
+#: the un-retire's gate for it (`identity_lanes.unretire_violation_sql`, `scope_unretire.py`).
+#: Every label starts with "d50 clear" or "d84": `mutation_sweep.py "d50 clear" d84` runs exactly
+#: these.
+COUNTRY_D84_PY = MECHANICAL / "country_d84.py"
+D84_TESTS = "tests/remediation/test_mechanical_country_d84.py"
+_D50_CLEAR_RUN_SHAPE = "test_the_run_holds_one_cleared_outcome_per_card_in_the_shape_of_the_d47_run"
+_D50_CLEAR_NAMED = "test_the_d50_reason_clears_a_d50_site_s_named_card_and_nothing_else"
+_D50_CLEAR_WRITTEN = "test_the_run_is_written_once_from_one_read_and_planned_as_a_step"
+_D50_CLEAR_REFUSED = "test_a_run_with_nothing_to_clear_or_another_name_is_not_written"
+_D84_WAITS = "test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied"
+_D84_INVARIANT = "test_a_planned_site_holds_no_country_and_is_one_d84_names"
+_D84_REFUSED = "test_each_check_refuses_on_its_own"
+_D84_STOPPED = "test_a_row_the_read_lost_and_a_wave_that_has_written_stop_the_plan"
+_D84_WAVE = "test_a_wave_has_a_stamp_keys_and_a_directory_of_its_own"
+_D84_PREMISE = "test_the_premise_holds_the_scope_status_so_the_reversal_refuses_a_shown_site"
+_D84_FILES = "test_write_keeps_the_read_and_delivers_the_plan_with_its_undo"
+
+D50_UNRETIRE_CASES: list[Case] = [
+    # -- O17: the card planner
+    Case(
+        "d50 clear: only the D50 reason plans a retired site",
+        TEASER,
+        '    d50_clear = outcome["status"] == CLEARED and outcome["reason"] == D50_CLEAR_REASON\n',
+        '    d50_clear = outcome["status"] == CLEARED\n',
+        "test_no_other_outcome_of_a_retired_site_is_planned",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: a retired D50 site is planned for its clear",
+        TEASER,
+        "    if live.scope_status == RETIRED and not d50_clear:",
+        "    if live.scope_status == RETIRED:",
+        "test_a_retired_d50_site_is_planned_for_its_clear",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: the reason is a D50 site's alone",
+        TEASER,
+        '    if d50_clear and (site_id not in D50_DISPUTED_SITES or "seeded_card_sha256" not in outcome):',
+        '    if d50_clear and "seeded_card_sha256" not in outcome:',
+        _D50_CLEAR_NAMED,
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: the clear names the card it clears",
+        TEASER,
+        '    if d50_clear and (site_id not in D50_DISPUTED_SITES or "seeded_card_sha256" not in outcome):',
+        "    if d50_clear and site_id not in D50_DISPUTED_SITES:",
+        _D50_CLEAR_NAMED,
+        TEASER_WRITE_TESTS,
+    ),
+    # -- O17: the owner run
+    Case(
+        "d50 clear: the outcome pins the card that was read",
+        TEASER,
+        '                "seeded_card_sha256": CP.text_sha256(site.card),\n',
+        '                "seeded_card_sha256": CP.text_sha256(site.name),\n',
+        _D50_CLEAR_RUN_SHAPE,
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: the outcome names the run of the teaser provenance",
+        TEASER,
+        '                "seeded_run": None if teaser is None else teaser["run"],\n',
+        '                "seeded_run": None,\n',
+        _D50_CLEAR_RUN_SHAPE,
+        TEASER_WRITE_TESTS,
+    ),
+    *(
+        guard(f"d50 clear: {label}", TEASER, needle, test, TEASER_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a site without a card text gets no outcome",
+                "        if site.card is None:",
+                _D50_CLEAR_RUN_SHAPE,
+            ),
+            (
+                "a read without a D50 site stops the run",
+                "    if missing:",
+                "test_a_read_that_lost_a_d50_site_stops_the_run",
+            ),
+            ("a run is written once", "    if target.exists():", _D50_CLEAR_WRITTEN),
+            (
+                "the run is named as a D50 clear",
+                "    if D50_CLEAR_RUN.match(run) is None:",
+                _D50_CLEAR_REFUSED,
+            ),
+            ("nothing to clear writes no run", "    if not outcomes:", _D50_CLEAR_REFUSED),
+        )
+    ),
+    # -- D84, D149: the un-retire's gate
+    Case(
+        "d84 gate: the invariant shows a D84 site only without a country",
+        IDENTITY_LANES,
+        "        f\"AND (u.country IS NULL OR NOT {d84_site_sql('u')}) \"\n",
+        "",
+        "test_a_site_d84_leaves_without_a_country_passes_only_without_one",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d84 gate: the plan waits for the emptied country",
+        UNRETIRE,
+        "    if country is not None:",
+        _D84_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d84 gate: only a D84 site is asked for no country",
+        UNRETIRE,
+        '    if str(site["id"]) not in D84_NO_COUNTRY_SITES or site["country"] is None:',
+        '    if site["country"] is None:',
+        _D84_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    # -- D84: the lane
+    Case(
+        "d84 lane: a planned site holds no country",
+        IDENTITY_LANES,
+        "                predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
+        "                predicate=f\"NOT {d84_site_sql('u')}\",\n",
+        _D84_INVARIANT,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: only a site D84 names is planned",
+        IDENTITY_LANES,
+        "                predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
+        '                predicate="u.country IS NOT NULL",\n',
+        _D84_INVARIANT,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: the cell is emptied and never filled",
+        IDENTITY_LANES,
+        '        cells=(Column("country", "character varying", max_chars=100, clears=True),),\n',
+        '        cells=(Column("country", "character varying", max_chars=100, clears=True, '
+        "fills_null=True),),\n",
+        "test_the_clear_and_its_reversal_are_valid_and_nothing_fills_a_null",
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: the residual is a D84 site that holds a country",
+        IDENTITY_LANES,
+        "    f\"({d84_site_sql('unified_sites')} AND country IS NOT NULL)\",\n",
+        "    f\"({d84_site_sql('unified_sites')})\",\n",
+        "test_the_residual_counts_a_d84_site_that_still_holds_a_country",
+        D84_TESTS,
+    ),
+    # -- review of B5 (2026-11-11): the retired status is a guard, and the lane is a wave
+    Case(
+        "d84 lane: the premise holds the scope status",
+        IDENTITY_LANES,
+        "    \"concat_ws(' | ', u.name, coalesce(u.lat::text, 'NULL'), coalesce(u.lon::text, 'NULL'), \"\n"
+        "    \"coalesce(u.scope_status, 'NULL'))\"\n",
+        "    \"concat_ws(' | ', u.name, coalesce(u.lat::text, 'NULL'), coalesce(u.lon::text, 'NULL'))\"\n",
+        _D84_PREMISE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: a wave has a stamp of its own",
+        IDENTITY_LANES,
+        '        run_stamp=f"{wave}_mechanical-country-d84",\n',
+        '        run_stamp="2026-11-11_mechanical-country-d84",\n',
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: a wave has journal keys of its own",
+        IDENTITY_LANES,
+        '        key_prefix=f"country-d84-{wave}",\n',
+        '        key_prefix="country-d84",\n',
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: a wave has a directory of its own",
+        IDENTITY_LANES,
+        '        out_dir_name=f"{COUNTRY_D84_ROOT}/{wave}",\n',
+        "        out_dir_name=COUNTRY_D84_ROOT,\n",
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    guard(
+        "d84 lane: a label that is no wave is refused",
+        IDENTITY_LANES,
+        '    if COUNTRY_D84_LANE.match(f"country-d84-{wave}") is None:',
+        _D84_WAVE,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 plan: a wave's read asks for its own two stamps",
+        COUNTRY_D84_PY,
+        '        + ", ".join(sql_literal(stamp) for stamp in (lane.run_stamp, lane.rollback_run_stamp))\n',
+        '        + ", ".join(sql_literal(stamp) for stamp in (lane.run_stamp,))\n',
+        "test_the_read_is_one_read_only_snapshot_of_the_decided_row",
+        D84_TESTS,
+    ),
+    Case(
+        "d84 plan: a wave is planned into its own directory",
+        COUNTRY_D84_PY,
+        "    out = out / wave\n",
+        "",
+        _D84_FILES,
+        D84_TESTS,
+    ),
+    guard(
+        "d84 plan: the CLI writes a named wave only",
+        COUNTRY_D84_PY,
+        "    if args.wave is None:",
+        "test_the_cli_writes_a_named_wave_only",
+        D84_TESTS,
+    ),
+    # -- D84: the planner
+    Case(
+        "d84 plan: what is written is no country",
+        COUNTRY_D84_PY,
+        "            new_value=None,\n",
+        '            new_value="International waters",\n',
+        "test_the_retired_row_is_emptied_on_its_name_and_point",
+        D84_TESTS,
+    ),
+    *(
+        guard(f"d84 plan: {label}", COUNTRY_D84_PY, needle, test, D84_TESTS)
+        for label, needle, test in (
+            ("a curated row only", '    if row["source_id"] != P.CURATED_SOURCE:', _D84_REFUSED),
+            ("the row is still the site D84 names", '    if row["name"] != name:', _D84_REFUSED),
+            ("a row without a country is listed", '    if row["country"] is None:', _D84_REFUSED),
+            ("the row holds the country D84 empties", '    if row["country"] != held:', _D84_REFUSED),
+            (
+                "a shown row is not planned",
+                '    if row["scope_status"] != RETIRED:',
+                _D84_REFUSED,
+            ),
+            (
+                "a journal that does not end at the live value",
+                "    if broken is not None:",
+                "test_a_journal_that_does_not_end_at_the_live_value_refuses",
+            ),
+            ("a wave that has written is not re-planned", "    if written:", _D84_STOPPED),
+            ("a row the read lost stops the plan", "        if site_id not in sites:", _D84_STOPPED),
+            (
+                "a delivered plan is never replaced",
+                '    if (out / "PLAN.jsonl").exists():',
+                _D84_FILES,
+            ),
+            (
+                "an empty plan is not delivered",
+                "    if not plan.changes:",
+                "test_a_read_that_leaves_nothing_to_write_delivers_no_plan",
+            ),
+        )
+    ),
+]
+CASES += D50_UNRETIRE_CASES
+
+# ---------------- phase 8 close-out (2026-11-11): the owner list's sources, the listed-point run
+#: Code gaps phase8-closeout#2 (every owner artefact a source or out of scope; the follow-ups a
+#: source) and #3 (one named site's coordinates asked again). Every label starts with "p8 owner:"
+#: or "p8 point:", so `mutation_sweep.py "p8 "` runs exactly these.
+POINT_TESTS = "tests/remediation/test_fields_listed_point.py"
+_P8_RUN_FILES = "test_a_file_deeper_in_a_run_or_of_a_run_of_a_similar_name_is_not_the_runs"
+_P8_POINT_RUNS = "test_a_listed_point_run_is_found_and_read_after_every_other_run"
+_P8_SAME_POINT = "test_a_record_at_another_records_point_is_open_until_it_moves"
+_P8_OTHER_TEXT = "test_a_record_under_another_records_text_is_open_until_the_text_is_its_own"
+_P8_NO_HERO = "test_a_record_without_a_hero_is_open_unless_image_none_lists_it"
+_P8_RETIRED = "test_a_follow_up_of_a_retired_or_gone_site_is_closed"
+_P8_UNCHECKED = "test_a_follow_up_without_a_check_stays_open_while_its_site_is_shown"
+_P8_SOURCE = "test_the_follow_ups_are_a_source_whose_open_rows_are_listed"
+_P8_MISSING = "test_missing_follow_ups_are_named_and_refused_when_final"
+_P8_ASKABLE = "test_a_listed_point_must_be_askable"
+_P8_POINT_RUN = "test_the_run_asks_the_point_of_the_listed_site_and_nothing_else"
+
+P8_CASES: list[Case] = [
+    # -- #2: which artefacts are a field run's own
+    Case(
+        "p8 owner: a file deeper in a run is not the run's",
+        OWNER_FINAL,
+        '        rel.startswith(f"fields/{run}/") and rel.count("/") - run.count("/") in (2, 3)',
+        '        rel.startswith(f"fields/{run}/")',
+        _P8_RUN_FILES,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a run of a similar name is another run",
+        OWNER_FINAL,
+        '        rel.startswith(f"fields/{run}/") and rel.count("/") - run.count("/") in (2, 3)',
+        '        rel.startswith(f"fields/{run}") and rel.count("/") - run.count("/") in (2, 3)',
+        _P8_RUN_FILES,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a listed-point run is a field run",
+        OWNER_FINAL,
+        '    return (*FIELD_RUNS, *(f"{POINT_RUNS}/{label}" for label in labels))',
+        "    return FIELD_RUNS",
+        _P8_POINT_RUNS,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a directory without RUN.json is no run",
+        OWNER_FINAL,
+        'sorted(p.parent.name for p in (root / "fields" / POINT_RUNS).glob(f"*/{R.RUN_FILE}"))',
+        'sorted(p.name for p in (root / "fields" / POINT_RUNS).glob("*"))',
+        _P8_POINT_RUNS,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: the listed-point runs are built",
+        OWNER_FINAL,
+        "    for name in field_run_names(root):",
+        "    for name in FIELD_RUNS:",
+        _P8_POINT_RUNS,
+        OWNER_FINAL_TESTS,
+    ),
+    # -- #2: the follow-ups
+    Case(
+        "p8 owner: a follow-up's point is compared as numbers",
+        OWNER_FINAL,
+        '    if float(site["lat"]) == float(other["lat"]) and float(site["lon"]) == float(other["lon"]):',
+        '    if site["lat"] == other["lat"] and site["lon"] == other["lon"]:',
+        _P8_SAME_POINT,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: one moved coordinate is another point",
+        OWNER_FINAL,
+        '    if float(site["lat"]) == float(other["lat"]) and float(site["lon"]) == float(other["lon"]):',
+        '    if float(site["lat"]) == float(other["lat"]) or float(site["lon"]) == float(other["lon"]):',
+        _P8_SAME_POINT,
+        OWNER_FINAL_TESTS,
+    ),
+    guard(
+        "p8 owner: another record's text keeps the follow-up open",
+        OWNER_FINAL,
+        '    if str(site["description_start"] or "").startswith(DHAR_TICHITT_TEXT):',
+        _P8_OTHER_TEXT,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: image-none closes the picture follow-up",
+        OWNER_FINAL,
+        '    if site["hero"] is None and TOPIC_OF["image-none"].test(site) is None:',
+        '    if site["hero"] is None:',
+        _P8_NO_HERO,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a hero closes the picture follow-up",
+        OWNER_FINAL,
+        '    if site["hero"] is None and TOPIC_OF["image-none"].test(site) is None:',
+        '    if TOPIC_OF["image-none"].test(site) is None:',
+        _P8_NO_HERO,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a follow-up of a retired site is closed",
+        OWNER_FINAL,
+        '        if site is None or site["scope_status"] == RETIRED:\n            closed[site_id]',
+        '        if site is None:\n            closed[site_id]',
+        _P8_RETIRED,
+        OWNER_FINAL_TESTS,
+    ),
+    guard(
+        "p8 owner: a closed follow-up is not listed",
+        OWNER_FINAL,
+        "        if check is not None and left is None:",
+        _P8_SAME_POINT,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: a follow-up without a check stays open",
+        OWNER_FINAL,
+        "        left = FOLLOWUP_UNCHECKED if check is None else check.left(site, sites)",
+        "        left = None if check is None else check.left(site, sites)",
+        _P8_UNCHECKED,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: the open follow-ups are rows of the list",
+        OWNER_FINAL,
+        "        rows += still\n",
+        "",
+        _P8_SOURCE,
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "p8 owner: missing follow-ups are a missing source",
+        OWNER_FINAL,
+        "        missing.append(FOLLOWUPS)",
+        "        pass",
+        _P8_MISSING,
+        OWNER_FINAL_TESTS,
+    ),
+    # -- #3: which listed points are asked
+    Case(
+        "p8 point: an unknown site is refused",
+        FIELDS / "population.py",
+        "        if row is None:\n            refused.append(",
+        "        if False:\n            refused.append(",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a retired site is refused",
+        FIELDS / "population.py",
+        '        elif row["scope_status"] == "retired":\n            refused.append(',
+        "        elif False:\n            refused.append(",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: another lane's sourced point is not asked",
+        FIELDS / "population.py",
+        '        elif field_kind(made_kinds(row, made, site), "coordinates") == SOURCED:',
+        "        elif False:",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a kept point is not asked",
+        FIELDS / "population.py",
+        '        elif said and said[-1][1]["decision"] == A.KEEP:',
+        "        elif False:",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the latest answer says whether a point was kept",
+        FIELDS / "population.py",
+        '        elif said and said[-1][1]["decision"] == A.KEEP:',
+        '        elif said and said[0][1]["decision"] == A.KEEP:',
+        "test_a_point_no_source_stands_behind_may_be_asked_again",
+        POINT_TESTS,
+    ),
+    guard(
+        "p8 point: a listed point that cannot be asked refuses",
+        FIELDS / "population.py",
+        "    if refused:",
+        _P8_ASKABLE,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the listed points are checked before the run is pinned",
+        FIELDS / "population.py",
+        "        check_listed_points(point.listed, stored_all, made, point.answers)",
+        "        pass",
+        "test_a_listed_point_a_source_stands_behind_refuses_before_anything_is_written",
+        POINT_TESTS,
+    ),
+    # -- #3: what the run asks
+    Case(
+        "p8 point: a listed-point run asks the point, not the period",
+        FIELDS / "population.py",
+        "    point = reask if reask is not None and reask.why == WHY_LISTED_POINT else None",
+        "    point = None",
+        _P8_POINT_RUN,
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a site the list does not name is not asked",
+        FIELDS / "population.py",
+        "    if listed is None:\n        return {}\n    note = ",
+        "    if False:\n        return {}\n    note = ",
+        "test_a_site_the_list_does_not_name_is_not_asked",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the latest answer is the lead",
+        FIELDS / "population.py",
+        "        run, latest = answers[-1]\n        said = ",
+        "        run, latest = answers[0]\n        said = ",
+        "test_the_latest_answer_about_the_point_is_shown_as_a_lead",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: the run records its reason",
+        FIELDS / "population.py",
+        '            **({"why": reask.why} if reask.why != WHY_READER_GAP else {}),',
+        '            **({"why": WHY_D99} if reask.why == WHY_D99 else {}),',
+        _P8_POINT_RUN,
+        POINT_TESTS,
+    ),
+    guard(
+        "p8 point: a listed-point run neither detects nor skips",
+        FIELDS / "population.py",
+        "    if point is not None and (point.detect or point.already):",
+        "test_a_listed_point_run_neither_detects_nor_skips",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: --point needs its stage and its list",
+        FIELDS / "population.py",
+        "            if args.point and (\n                args.stage != R.RECHECK.stage\n",
+        "            if False and (\n                args.stage != R.RECHECK.stage\n",
+        "test_the_main_refuses_point_without_its_flags",
+        POINT_TESTS,
+    ),
+    guard(
+        "p8 point: the run is built where the owner list reads it",
+        FIELDS / "population.py",
+        "            if args.point and args.out.resolve().parent.name != POINT_RUNS:",
+        "test_the_main_builds_a_listed_point_run_only_where_the_owner_list_reads_it",
+        POINT_TESTS,
+    ),
+    # -- #3: the question and the write plan
+    Case(
+        "p8 point: the question names the reason to the agent",
+        FIELDS / "handoff.py",
+        '    "listed-point": "the stored point is asked once more',
+        '    "listed-point-x": "the stored point is asked once more',
+        "test_the_question_names_the_reason_to_the_agent",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: a sourced answer replaces a listed point",
+        FIELDS / "plan.py",
+        "    POP.WHY_LISTED_POINT: (POP.MINIMAX, None),\n",
+        "",
+        "test_a_sourced_point_replaces_the_listed_one",
+        POINT_TESTS,
+    ),
+    Case(
+        "p8 point: another lane's sourced point is never replaced",
+        FIELDS / "plan.py",
+        "    POP.WHY_LISTED_POINT: (POP.MINIMAX, None),",
+        "    POP.WHY_LISTED_POINT: (POP.MINIMAX, None, POP.SOURCED),",
+        "test_a_point_another_lane_sourced_since_is_not_replaced",
+        POINT_TESTS,
+    ),
+]  # fmt: skip
+CASES += P8_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

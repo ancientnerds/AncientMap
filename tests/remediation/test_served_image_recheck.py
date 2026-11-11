@@ -544,7 +544,7 @@ class TestTheRestrictedStages:
                 text=_answer("depicts"),
                 answered_by=f"image_adversarial:{line['batch_id']}",
                 model=OH.ANSWER_MODELS[RO.role("image_adversarial").model],
-                now=lambda: "2026-11-11T03:00:00+00:00",
+                now=lambda: "2026-11-12T03:00:00+00:00",  # after D157: Opus answers
             )
         assert V.RECHECK_PROMPT_ID == "served-check-v4"
         assert V.import_stage(run, V.STAGE_CHECK)["answers"] == len(SITES)

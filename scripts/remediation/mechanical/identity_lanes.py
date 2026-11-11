@@ -1,6 +1,6 @@
 """The write lanes of the identity package (final repair 2026-10-08): scope window, names, spoken names.
 
-Four lane families, each a wave of at most 100 sites with a run stamp of its own (`<wave>` is a date
+Six lane families, each a wave of at most 100 sites with a run stamp of its own (`<wave>` is a date
 label like `2026-10-12` or `2026-10-12b`; a stamp is applied once):
 
 * `scope-window-<wave>` (owner decision D20) - `scope_status` and `scope_reason` of one site in one
@@ -22,7 +22,11 @@ label like `2026-10-12` or `2026-10-12b`; a stamp is applied once):
   longer carries, a D50 mystery site once its description is a lane-E dispute enrichment, and a
   staged D57 insert once it holds a checked description and a confirmed picture (O12). The premise
   holds the description and the picture too, and an invariant checks in the transaction that every
-  un-retired site carries one of the reasons and what that reason rests on.
+  un-retired site carries one of the reasons and what that reason rests on;
+* `country-d84-<wave>` (D84 and D149) - `country` of a site D84 leaves without one, emptied while
+  the site is retired (`mechanical/country_d84.py` plans it). The premise holds the scope status,
+  so the lane's apply and its `ROLLBACK.sql` both refuse a shown site: the un-retire shows such a
+  site only without a country, and the country comes back only after the site is retired again.
 
 `mechanical.lane.resolve_lane` reaches these lazily (`lane_of`), like the other wave families.
 """
@@ -33,12 +37,14 @@ import functools
 import re
 
 from mechanical.lane import (
+    _CARD_COUNTRY,
     _CURATED_ROWS,
     _NAME_KEY_DIFFERS,
     _STATUS_WITHOUT_REASON,
     D50_NOT_RETIRED,
     D50_REASON_PREFIX,
     D57_STAGED_PREFIX,
+    D84_NO_COUNTRY_SITES,
     LOCK_TIMEOUT,
     NAME_CELLS,
     NAME_FIX_PREMISE_SQL,
@@ -52,9 +58,11 @@ from mechanical.lane import (
     Lane,
     Residual,
     SiteInvariant,
+    _country_rows,
     _window_date_sql,
     d50_site_sql,
     d57_staged_sql,
+    d84_site_sql,
     journal_readback,
     label_borderline_sql,
     label_cutoff_sql,
@@ -64,6 +72,7 @@ from mechanical.lane import (
     sql_literal,
 )
 from pipeline.normalizers.dates import LABEL_CUTOFF_REST_OF_WORLD
+from pipeline.utils.card_provenance import CARD_PROVENANCE_KEY
 from pipeline.utils.public_sites import RETIRED, not_retired
 
 IN_SCOPE = "in_scope"
@@ -73,6 +82,7 @@ NAME_CLEAN_LANE = re.compile(rf"^name-clean-{WAVE}\Z")
 RETARGET_NAME_LANE = re.compile(rf"^retarget-name-{WAVE}\Z")
 SPOKEN_LANE = re.compile(rf"^spoken-{WAVE}\Z")
 SCOPE_UNRETIRE_LANE = re.compile(rf"^scope-unretire-{WAVE}\Z")
+COUNTRY_D84_LANE = re.compile(rf"^country-d84-{WAVE}\Z")
 #: The lane families of this module, for `resolve_lane` and the read-back choice.
 LANE_PATTERNS = (
     SCOPE_WINDOW_LANE,
@@ -80,12 +90,14 @@ LANE_PATTERNS = (
     RETARGET_NAME_LANE,
     SPOKEN_LANE,
     SCOPE_UNRETIRE_LANE,
+    COUNTRY_D84_LANE,
 )
 
 SCOPE_WINDOW_ROOT = "mechanical_scope_window"
 NAME_ROOT = "mechanical_names"
 SPOKEN_ROOT = "mechanical_spoken"
 SCOPE_UNRETIRE_ROOT = "mechanical_scope_unretire"
+COUNTRY_D84_ROOT = "mechanical_country_d84"
 #: The reason prefix of a retirement for the date (`E3: period_start N is past the cutoff; <quote>`).
 DATE_RETIRED_PREFIX = "E3: period_start"
 #: The reason prefix of a retirement by the label (D58: a borderline entry whose subject is
@@ -294,7 +306,8 @@ NUMERIC_CUT_STAMPS = ("2026-09-23_mechanical-scope-e4",)
 #: What an un-retirement rests on, as the database prints it: the entry's name, type, point,
 #: country and dates (`SCOPE_REVIEW_PREMISE_SQL`'s, which the label rule reads), the md5 of its
 #: description and the md5 of its card text - a D50 site is shown only with the dispute text and
-#: the card the plan checked, and a text rewritten between plan and apply is refused by guard 5.
+#: the card the plan checked (none, or one the card lane judged against that text), and a text
+#: rewritten or a cleared card put back between plan and apply is refused by guard 5.
 #: This is the premise of the wave delivered before the D57 class (`WAVES_BEFORE_D57`).
 _PREMISE_BEFORE_D57 = (
     SCOPE_REVIEW_PREMISE_SQL.removesuffix(")")
@@ -346,47 +359,85 @@ def viking_subject_sql(alias: str = "u") -> str:
     )
 
 
-def card_cleared_sql(alias: str = "u") -> str:
-    """SQL: the site's card asserts nothing the card lane has not judged against the dispute text
-    (D50: "no card or page asserts the claim") - it has no card text, or the latest journal row
-    that wrote its `card_stats.card_description` comes after the latest journal row that wrote the
-    description it holds now."""
+def card_judged_sql(alias: str = "u") -> str:
+    """SQL: the card lane judged the card text the site holds against the description it holds -
+    the site's teaser provenance (`raw_data._card_provenance`, which lane WB writes beside every
+    card it writes: `pipeline.utils.card_provenance`) hashes the live card (`text_sha256`) and the
+    live description (`desc_sha256`, "the description the card was written from and checked
+    against"). The order of the journal rows proves nothing of that: the reversal of a card clear
+    is a later row than the dispute text and puts back the card of before it (review of
+    2026-11-11) - a card no teaser run wrote has no provenance, and one a teaser run wrote before
+    the dispute text has a provenance that hashes the description of before. A site without a
+    card text, or without a provenance, answers FALSE, never NULL."""
     a = alias
-    card = (
-        "(SELECT max(c.id) FROM remediation_change_log c WHERE c.table_name = 'card_stats' "
-        f"AND c.column_name = 'card_description' AND c.row_pk = CAST({a}.id AS text))"
+    provenance = f"{a}.raw_data->{sql_literal(CARD_PROVENANCE_KEY)}"
+    return (
+        f"EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = {a}.id "
+        "AND encode(sha256(convert_to(cs.card_description, 'UTF8')), 'hex') = "
+        f"{provenance}->>'text_sha256' "
+        f"AND encode(sha256(convert_to(coalesce({a}.description, ''), 'UTF8')), 'hex') = "
+        f"{provenance}->>'desc_sha256')"
     )
-    text = (
-        "(SELECT max(d.id) FROM remediation_change_log d WHERE d.table_name = 'unified_sites' "
-        f"AND d.column_name = 'description' AND d.row_pk = CAST({a}.id AS text) "
-        f"AND d.new_value = {a}.description)"
-    )
+
+
+def card_cleared_sql(alias: str = "u") -> str:
+    """SQL: no card of the site asserts the claim (D50: "no card or page asserts the claim") - it
+    holds no card text (O17: the six cards are cleared the D47 way, `teaser.py d50-clear`), or the
+    card lane judged the card it holds against the description it holds (`card_judged_sql`),
+    which the D50 gate beside this test proves to be the dispute text (`dispute_enriched_sql`):
+    a card judged against the description of before that text passes only until the text is
+    written (Richat's teaser card, read 2026-11-11, hashes the description the site holds today,
+    which is no dispute text yet). No card run asks a retired site, so once the six hold their
+    dispute text the second leg is a shown site's - the card a later run writes for it. A cleared
+    card that an undo put back passes neither leg."""
     no_card = (
-        f"NOT EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = {a}.id "
+        f"NOT EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = {alias}.id "
         "AND cs.card_description IS NOT NULL)"
     )
-    return f"({no_card} OR coalesce({card} > {text}, false))"
+    return f"({no_card} OR {card_judged_sql(alias)})"
 
 
 def dispute_enriched_sql(alias: str = "u") -> str:
-    """SQL: the site's description is a lane-E dispute enrichment (D21 written for D50): a journal
-    row of `unified_sites.description` of this site whose new value is the description as it stands,
-    whose evidence is an enrichment's (`wc4.EVIDENCE_DECISION_ENRICH`), carries the adjudicated
-    dispute brief and appended a sentence of each position (`wc4.DISPUTE_A`, `wc4.DISPUTE_B`).
-    Postgres' `->`/`->>` on the jsonb evidence; SQLite reads the same operators on JSON text, which
-    is where the tests evaluate it."""
+    """SQL: the site's description is a lane-E dispute enrichment (D21 written for D50) that names
+    both positions: a journal row of `unified_sites.description` of this site whose new value is
+    the description as it stands, whose evidence is an enrichment's
+    (`wc4.EVIDENCE_DECISION_ENRICH`) and carries the adjudicated dispute brief; and the public
+    record that run left on the site (`raw_data._description_enrichment`, tied to the journal row
+    by its `run`) **kept** a sentence of each position (`wc4.DISPUTE_A`, `wc4.DISPUTE_B`). Kept, not
+    written: the import and each verifier drop sentence by sentence, and a text that names one
+    position is none D21 allows. The record holds class and verdict of every appended sentence
+    side by side, so it is read by position, up to the most an enrichment appends
+    (`enrich.MAX_APPENDED`; a sentence beyond it would not count, which refuses). Every test
+    stands in the one WHERE, so a site without a record answers FALSE, never NULL. Postgres'
+    `->`/`->>` on jsonb; SQLite reads the same operators on JSON text, which is where the tests
+    evaluate it."""
     from phase4 import wc4
+    from wc import enrich
 
     a = alias
-    classes = f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'classes'"
+    record = f"{a}.raw_data->{sql_literal(wc4.ENRICH_KEY)}"
+    keep = sql_literal(wc4.Verdict.KEEP.value)
+
+    def kept(position: str) -> str:
+        return (
+            "("
+            + " OR ".join(
+                f"({record}->'sentences'->{index}->>'class' = {sql_literal(position)} "
+                f"AND {record}->'sentences'->{index}->>'verdict' = {keep})"
+                for index in range(enrich.MAX_APPENDED)
+            )
+            + ")"
+        )
+
     return (
         "EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.table_name = 'unified_sites' "
         f"AND l.column_name = 'description' AND l.row_pk = CAST({a}.id AS text) "
         f"AND l.new_value = {a}.description "
         f"AND l.evidence->>'decision' = {sql_literal(wc4.EVIDENCE_DECISION_ENRICH)} "
         f"AND l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->>'dispute' IS NOT NULL "
-        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_A}{chr(34)}%')} "
-        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})"
+        f"AND l.evidence->>'run' = {record}->>'run' "
+        f"AND {kept(wc4.DISPUTE_A)} "
+        f"AND {kept(wc4.DISPUTE_B)})"
     )
 
 
@@ -432,6 +483,45 @@ def staged_before_sql(alias: str = "u") -> str:
     )
 
 
+def _disputed_as_applied_before_d57(d50: str) -> str:
+    """The D50 leg of the invariant exactly as the wave of `WAVES_BEFORE_D57` was applied with it
+    (2026-10-24): the card test by journal order and the dispute test by the journal row's
+    classes, as `card_cleared_sql` and `dispute_enriched_sql` read until the D50 review of
+    2026-11-11, and no D84 gate. Frozen text, never edited: that wave's committed `APPLY.sql` and
+    `ROLLBACK.sql` are verified against what the lane renders (`--rehearse-rollback`); a wave planned
+    since uses the tests of today (`unretire_violation_sql`)."""
+    from phase4 import wc4
+
+    card = (
+        "(SELECT max(c.id) FROM remediation_change_log c WHERE c.table_name = 'card_stats' "
+        "AND c.column_name = 'card_description' AND c.row_pk = CAST(u.id AS text))"
+    )
+    text = (
+        "(SELECT max(d.id) FROM remediation_change_log d WHERE d.table_name = 'unified_sites' "
+        "AND d.column_name = 'description' AND d.row_pk = CAST(u.id AS text) "
+        "AND d.new_value = u.description)"
+    )
+    no_card = (
+        "NOT EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = u.id "
+        "AND cs.card_description IS NOT NULL)"
+    )
+    cleared = f"({no_card} OR coalesce({card} > {text}, false))"
+    key = sql_literal(wc4.ENRICH_EVIDENCE_KEY)
+    classes = f"l.evidence->{key}->>'classes'"
+    enriched = (
+        "EXISTS (SELECT 1 FROM remediation_change_log l WHERE l.table_name = 'unified_sites' "
+        "AND l.column_name = 'description' AND l.row_pk = CAST(u.id AS text) "
+        "AND l.new_value = u.description AND l.evidence->>'decision' = "
+        f"{sql_literal(wc4.EVIDENCE_DECISION_ENRICH)} AND l.evidence->{key}->>'dispute' IS NOT NULL "
+        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_A}{chr(34)}%')} "
+        f"AND {classes} LIKE {sql_literal(f'%{chr(34)}{wc4.DISPUTE_B}{chr(34)}%')})"
+    )
+    return (
+        f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "
+        f"AND {enriched} AND {cleared})"
+    )
+
+
 def unretire_violation_sql(*, d57: bool = True) -> str:
     """SQL over the written site `u`, TRUE for an un-retired site that rests on nothing: every
     planned site carries one of the reasons, and what that reason says holds in the same
@@ -443,8 +533,11 @@ def unretire_violation_sql(*, d57: bool = True) -> str:
     * `D58_MUSEUM_REASON_PREFIX`: no D50 site, retired by the numeric cut, a placed Museum whose
       region has the 1500 AD cutoff (Oceania, the Americas or a recognised country of the rest of
       the world - never the medieval Old World or a country no list recognises);
-    * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment and whose card
-      was written after it (`card_cleared_sql`);
+    * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment and which holds
+      no card text, or one the card lane judged against that description (`card_cleared_sql`) -
+      and, for a site D84 leaves without a country (`lane.D84_NO_COUNTRY_SITES`, the Baltic Sea
+      Anomaly), no country: shown with one it would get a country page and a `/sites/` route,
+      which D149 rules out;
     * `D57_REASON_PREFIX` (`d57`; not in the text of a wave of `WAVES_BEFORE_D57`): no D50 site,
       staged until this write (`staged_before_sql`), with a checked description
       (`description_checked_sql`) and a confirmed picture (`picture_confirmed_sql`)."""
@@ -464,10 +557,11 @@ def unretire_violation_sql(*, d57: bool = True) -> str:
     )
     disputed = (
         f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "
+        f"AND (u.country IS NULL OR NOT {d84_site_sql('u')}) "
         f"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})"
     )
     if not d57:
-        return f"NOT ({date_kept} OR {museum_kept} OR {disputed})"
+        return f"NOT ({date_kept} OR {museum_kept} OR {_disputed_as_applied_before_d57(d50)})"
     shown = (
         f"(u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')} AND NOT {d50} "
         f"AND {staged_before_sql('u')} "
@@ -532,7 +626,8 @@ def scope_unretire_readback(lane: Lane) -> str:
     """The read-only verification of an un-retire wave, before and after its write: the scope
     counts, the D58 residual, the date retirements the label window keeps (the wave's own
     population, borderline ones apart), the D50 sites shown and those shown without their dispute
-    text (0, always), the D57 sites still staged, those shown and those shown without a checked
+    text, with a card the card lane did not judge against it or with a country D84 takes from
+    them (0, always), the D57 sites still staged, those shown and those shown without a checked
     description or a confirmed picture, and the statuses the run wrote."""
     stamp = sql_literal(lane.run_stamp)
     d50 = d50_site_sql("u")
@@ -564,7 +659,7 @@ def scope_unretire_readback(lane: Lane) -> str:
                 _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {dispute_enriched_sql('u')}",
             ),
             (
-                "curated D50 sites shown with a card not written after their dispute text",
+                "curated D50 sites shown with a card not judged against their dispute text",
                 _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {card_cleared_sql('u')}",
             ),
             ("curated D57 sites staged, not shown yet", _CURATED_U + d57_staged_sql("u")),
@@ -577,6 +672,11 @@ def scope_unretire_readback(lane: Lane) -> str:
                 "curated D57 sites shown without a confirmed picture",
                 _CURATED_U + f"{d57_shown} AND NOT {picture_confirmed_sql('u')}",
             ),
+            (
+                "curated sites D84 leaves without a country shown with one",
+                _CURATED_U
+                + f"{d84_site_sql('u')} AND {not_retired('u')} AND u.country IS NOT NULL",
+            ),
             _STATUS_WITHOUT_REASON,
             (
                 "journal rows for this run that write a status other than in_scope",
@@ -587,12 +687,92 @@ def scope_unretire_readback(lane: Lane) -> str:
     )
 
 
+# ------------------------------------------------- the D84 country lane (D84 and D149, 2026-11-11)
+COUNTRY_D84_TEST_ID = "D84/country"
+_D84_COUNTRY_HELD = Residual(
+    "curated rows D84 leaves without a country that still hold one",
+    f"({d84_site_sql('unified_sites')} AND country IS NOT NULL)",
+)
+#: What the D84 write rests on, as the database prints it: the row is the site the owner named,
+#: where it lies - and it is retired. The scope status makes the order a guard (guard 5, on the
+#: apply and on the reversal alike): the cell is emptied while the site is retired, and
+#: `ROLLBACK.sql` gives the country back only to a site that is retired again - run before the
+#: un-retire wave's own `ROLLBACK.sql` it is refused, so no file of the lane leaves a D84 site
+#: shown with a country (review of 2026-11-11). `concat_ws` and the `coalesce`s keep the premise
+#: from ever being NULL.
+COUNTRY_D84_PREMISE_SQL = (
+    "concat_ws(' | ', u.name, coalesce(u.lat::text, 'NULL'), coalesce(u.lon::text, 'NULL'), "
+    "coalesce(u.scope_status, 'NULL'))"
+)
+
+
+def country_d84_lane(wave: str) -> Lane:
+    """The D84 country lane of one wave (`country_d84.py --write --wave <wave>`): a cell lane,
+    because it empties its column (`Column.clears`) - a column lane owns values and never writes
+    NULL. It owns no value: the one thing it writes is "no country", onto the sites of
+    `D84_NO_COUNTRY_SITES` and no other, which its invariant checks inside the transaction (a NULL
+    is nothing guard 4 could own). A wave like every lane of this module: a stamp is applied once
+    and a lane that has written is never re-planned, so a write that was undone (the un-retire
+    wave's `ROLLBACK.sql`, then this lane's) is made again under the next label - one fixed stamp
+    would leave D84 unwritable after its first undo (review of 2026-11-11)."""
+    if COUNTRY_D84_LANE.match(f"country-d84-{wave}") is None:
+        raise ValueError(f"{wave!r} is not a wave label like 2026-11-11 or 2026-11-11b")
+    return Lane(
+        name=f"country-d84-{wave}",
+        key_prefix=f"country-d84-{wave}",
+        run_stamp=f"{wave}_mechanical-country-d84",
+        test_id=COUNTRY_D84_TEST_ID,
+        confidence="authoritative",
+        label="D84 country emptied",
+        plan_table="_country_d84_plan",
+        out_dir_name=f"{COUNTRY_D84_ROOT}/{wave}",
+        post_commit_residual=_D84_COUNTRY_HELD,
+        rehearsal_residual=_D84_COUNTRY_HELD,
+        premise_sql=COUNTRY_D84_PREMISE_SQL,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        target=UNIFIED_SITES,
+        cells=(Column("country", "character varying", max_chars=100, clears=True),),
+        site_invariants=(
+            SiteInvariant(
+                says="planned site(s) keep a country, or are none D84 leaves without one",
+                predicate=f"u.country IS NOT NULL OR NOT {d84_site_sql('u')}",
+                probe_column="country",
+                probe_values=("Sweden", "Finland", "International waters"),
+            ),
+        ),
+    )
+
+
+@functools.cache
+def country_d84_readback(lane: Lane) -> str:
+    """The read-only verification of a D84 country wave, before and after its write: the D84 rows
+    that still hold a country, the curated rows without one, the shown ones D84 does not name,
+    the rows of the country it empties and the cards whose civilization differs."""
+    return journal_readback(
+        lane,
+        [
+            (_D84_COUNTRY_HELD.metric, _CURATED_ROWS + _D84_COUNTRY_HELD.predicate),
+            ("curated rows without a country", _CURATED_ROWS + "country IS NULL"),
+            (
+                "curated shown rows without a country that D84 does not name",
+                _CURATED_ROWS
+                + f"country IS NULL AND {not_retired('unified_sites')} "
+                + f"AND NOT {d84_site_sql('unified_sites')}",
+            ),
+            *_country_rows(sorted({held for _name, held in D84_NO_COUNTRY_SITES.values()})),
+            _CARD_COUNTRY,
+        ],
+    )
+
+
 def lane_of(name: str) -> Lane:
-    """`scope-window-2026-10-12`, `scope-unretire-...`, `name-clean-...`, `retarget-name-...` or
-    `spoken-...` -> the lane; `KeyError` for any other name."""
+    """`scope-window-2026-10-12`, `scope-unretire-...`, `country-d84-...`, `name-clean-...`,
+    `retarget-name-...` or `spoken-...` -> the lane; `KeyError` for any other name."""
     for pattern, build in (
         (SCOPE_WINDOW_LANE, scope_window_lane),
         (SCOPE_UNRETIRE_LANE, scope_unretire_lane),
+        (COUNTRY_D84_LANE, country_d84_lane),
         (SPOKEN_LANE, spoken_lane),
         (NAME_CLEAN_LANE, lambda wave: name_lane("name-clean", wave)),
         (RETARGET_NAME_LANE, lambda wave: name_lane("retarget-name", wave)),
@@ -609,6 +789,8 @@ def readback(lane: Lane) -> str:
         return scope_window_readback(lane)
     if SCOPE_UNRETIRE_LANE.match(lane.name):
         return scope_unretire_readback(lane)
+    if COUNTRY_D84_LANE.match(lane.name):
+        return country_d84_readback(lane)
     if SPOKEN_LANE.match(lane.name):
         return spoken_readback(lane)
     if NAME_CLEAN_LANE.match(lane.name) or RETARGET_NAME_LANE.match(lane.name):

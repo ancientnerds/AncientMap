@@ -411,3 +411,269 @@ class TestStatedYears:
         row["year_sentences"][0]["sentence"] = ""
         with pytest.raises(PlanError):
             M.load_years(self.write(tmp_path, row))
+
+
+# ------------------------------------------------------------------------------ D20 sourced starts
+SYRIA = {"country": "Syria", "lat": 33.25, "lon": 35.71}
+FABLE = "anthropic/claude-fable-5-2 (Claude Code agent)"
+AYYUBID = "The fortress was begun around 1200 by the Ayyubids."
+
+
+def found(url: str, quote: str) -> dict[str, str]:
+    return {"url": url, "quote": quote, "outcome": "found", "detail": "visible text"}
+
+
+def d20_row(site_id: str, **over: Any) -> dict[str, Any]:
+    """A row of a scope-window wave's PERIOD_WRONG.jsonl, as `scope_judge.build` writes it
+    (`test_identity_b_scope.py` pins the two to each other)."""
+    base: dict[str, Any] = {
+        "site_id": site_id,
+        "wave": "2026-11-12",
+        "name": "Ali Masjid Fort",
+        "stored_period_start": 1837,
+        "stored_period_name": "1500+ AD",
+        "period_start": 300,
+        "origin": "fields-wd3",
+        "recheck_d10": True,
+        "label_borderline": False,
+        "why": "The fort stands on a Kushan stronghold of the 3rd century.",
+        "answered_by": "web_verifier:r1-b01",
+        "model": FABLE,
+        "answered_at": "2026-11-11T02:00:00+00:00",
+        "quotes": [
+            found("https://example.org/ali-masjid", "The pass is guarded by the fort of Ali Masjid."),
+            found("https://example.net/khyber", "The first stronghold here was built in the 3rd century AD."),
+        ],
+        "ask": "mechanical/period_fix.py wave --no-d113 --d20 writes the corrected start (rule d20-sourced)",
+    }
+    base.update(over)
+    return base
+
+
+def kept(start: int | None = 1837, **over: Any) -> M.Live:
+    """A site the scope wave kept in scope, in Pakistan (the window runs through 1500 AD there)."""
+    return live(OTHER, start, **{"country": "Pakistan", "lat": 34.0, "lon": 71.2, **over})
+
+
+class TestD20:
+    def test_a_sourced_start_replaces_the_stored_one_with_the_answer_as_evidence(self) -> None:
+        site, links = kept(), [link(7, None, "1837", COUNTED)]
+        d = M.decide_d20(site, links, d20_row(OTHER))
+        assert isinstance(d, M.Decision)
+        assert (d.rule, d.live_start, d.new_start, d.journal_id) == ("d20-sourced", 1837, 300, 7)
+        decision, *quotes, answer = d.evidence
+        assert "D20" in decision["source"] and decision["quote"] == M.D20_QUOTE
+        assert M.D20_QUOTE in (REPO / M.DECISIONS).read_text(encoding="utf-8")
+        assert [e["url"] for e in quotes] == ["https://example.org/ali-masjid", "https://example.net/khyber"]
+        assert "3rd century AD" in quotes[1]["quote"]
+        assert "web_verifier:r1-b01" in answer["source"] and answer["model"] == FABLE
+        assert answer["reasoning"].startswith("The fort stands on a Kushan stronghold")
+        assert not any("D124" in str(e.get("source")) for e in d.evidence)
+        cells = M.step_verdicts(d, site, links)
+        assert {(c.column, c.old_value, c.new_value) for c in cells} == {
+            ("period_start", "1837", "300"),
+            ("period_name", "1500+ AD", "1 - 500 AD"),
+        }
+        assert all(c.ok and c.finding_test_id.startswith("D20/") and c.evidence == d.evidence for c in cells)
+
+    def test_a_year_no_found_quote_states_is_listed_not_written(self) -> None:
+        row = d20_row(OTHER, quotes=[found("https://example.org/ali-masjid", "An old fort of the Kushan kings.")])
+        out = M.decide_d20(kept(), [], row)
+        assert isinstance(out, M.Refusal) and out.reason == "d20-no-quote-states-year"
+        decisions, _, counters = M.build_decisions({OTHER: kept()}, {}, [], list_sha="", d20=[row])
+        assert not decisions and counters["skip:d20-no-quote-states-year"] == 1
+
+    @pytest.mark.parametrize(
+        ("year", "number"),
+        [
+            (300, "The wall is 300 metres long."),
+            (1200, "Population 1200 (2011 census)."),
+            (450, "Page 450 of the report describes the pottery."),
+            (300, "The village has about 300 houses."),
+            (300, "The wall, rebuilt in 1837, is 300 metres long."),
+        ],
+    )
+    def test_a_bare_number_that_is_no_date_does_not_state_the_year(self, year: int, number: str) -> None:
+        # fields.answers.states_year reads an unmarked number as an AD year: a measure, a count or a
+        # page number in a quote that only supports the keep verdict would source the start
+        assert M.states_year(number, year) and not M.states_date(number, year)
+        quotes = [
+            found("https://example.org/ali-masjid", "An old fort of the Kushan kings."),
+            found("https://example.net/khyber", number),
+        ]
+        out = M.decide_d20(kept(), [], d20_row(OTHER, period_start=year, quotes=quotes))
+        assert isinstance(out, M.Refusal) and out.reason == "d20-no-quote-states-year"
+
+    @pytest.mark.parametrize(
+        ("year", "quote"),
+        [
+            (1200, AYYUBID),
+            (1250, "Construido en 1250 por los incas."),
+            (1100, "The terraces were occupied from 1100 to 1450."),
+            (300, "The first stronghold here was built in the 3rd century AD."),
+            (900, "The hall was raised in 900 AD."),
+            (-3000, "The mound dates to 3000 BC and is 300 m wide."),
+            (-800, "Settled in the 8th century BC."),
+            (-3000, "The first houses stood here about 5,000 years ago."),
+        ],
+    )
+    def test_a_year_a_quote_states_as_a_date_is_stated(self, year: int, quote: str) -> None:
+        assert M.states_date(quote, year)
+
+    def test_a_start_that_moved_since_the_answer_is_refused(self) -> None:
+        out = M.decide_d20(kept(1500), [], d20_row(OTHER))
+        assert isinstance(out, M.Refusal) and out.reason == "moved-since-answer"
+        assert "1837" in out.note and "1500" in out.note
+
+    @pytest.mark.parametrize("status", [None, "pending", "retired"])
+    def test_a_site_the_scope_wave_has_not_written_in_scope_is_refused(self, status: str | None) -> None:
+        out = M.decide_d20(kept(scope_status=status), [], d20_row(OTHER))
+        assert isinstance(out, M.Refusal) and out.reason == "d20-scope-not-written"
+
+    def test_a_borderline_start_is_written_where_the_answer_was_asked_the_label(self) -> None:
+        row = d20_row(
+            OTHER,
+            stored_period_start=1227,
+            period_start=1200,
+            label_borderline=True,
+            quotes=[found("https://example.org/nimrod", AYYUBID)],
+        )
+        sites = {OTHER: live(OTHER, 1227, **SYRIA)}
+        decisions, refused, _ = M.build_decisions(sites, {}, [], list_sha="", d20=[row])
+        assert not refused and (decisions[0].rule, decisions[0].new_start) == ("d20-sourced", 1200)
+
+    def test_a_start_that_makes_a_site_borderline_unasked_is_listed_not_written(self) -> None:
+        row = d20_row(
+            OTHER, stored_period_start=1600, period_start=1200, quotes=[found("https://example.org/nimrod", AYYUBID)]
+        )
+        sites = {OTHER: live(OTHER, 1600, **SYRIA)}
+        decisions, refused, counters = M.build_decisions(sites, {}, [], list_sha="", d20=[row])
+        assert not decisions and refused[0].reason == "d58-window" and "borderline" in refused[0].note
+        assert counters["skip:d58-window"] == 1
+
+    def test_a_start_outside_the_window_is_listed_even_where_the_label_was_asked(self) -> None:
+        row = d20_row(
+            OTHER,
+            period_start=900,
+            label_borderline=True,
+            quotes=[found("https://example.org/x", "The hall was raised in 900 AD.")],
+        )
+        sites = {OTHER: live(OTHER, 1837, country="England", lat=52.6, lon=-3.0)}
+        decisions, refused, _ = M.build_decisions(sites, {}, [], list_sha="", d20=[row])
+        assert not decisions and refused[0].reason == "d58-window" and "outside" in refused[0].note
+
+    def test_a_journal_that_does_not_end_at_the_stored_start_is_refused(self) -> None:
+        journal = {OTHER: [link(7, None, "1800", COUNTED)]}
+        decisions, refused, _ = M.build_decisions({OTHER: kept()}, journal, [], list_sha="", d20=[d20_row(OTHER)])
+        assert not decisions and refused[0].reason == "journal-disagrees"
+
+    def test_a_site_named_twice_is_refused(self) -> None:
+        with pytest.raises(PlanError, match="another rule already decides"):
+            M.build_decisions({OTHER: kept()}, {}, [], list_sha="", d20=[d20_row(OTHER), d20_row(OTHER)])
+
+
+class TestLoadD20:
+    def write(self, tmp_path: Path, *rows: dict[str, Any]) -> Path:
+        path = tmp_path / "PERIOD_WRONG.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        return path
+
+    def test_the_rows_load_as_written(self, tmp_path: Path) -> None:
+        rows = [d20_row(OTHER), d20_row(RULE_SITE, stored_period_start=None)]
+        assert M.load_d20(self.write(tmp_path, *rows)) == rows
+
+    def test_a_row_without_the_answer_s_stamp_is_refused(self, tmp_path: Path) -> None:
+        stamp = ("answered_by", "model", "answered_at", "why", "label_borderline")
+        old = {k: v for k, v in d20_row(OTHER).items() if k not in stamp}
+        with pytest.raises(PlanError, match="exactly the keys"):
+            M.load_d20(self.write(tmp_path, old))
+
+    @pytest.mark.parametrize(
+        ("over", "says"),
+        [
+            ({"period_start": "300"}, "is not a year"),
+            ({"period_start": True}, "is not a year"),
+            ({"quotes": []}, "has no quote"),
+            ({"quotes": [{**found("https://example.org/p", "built in 300 AD"), "outcome": "not-found"}]}, "not found on"),
+            ({"quotes": [found("example.org/p", "built in 300 AD")]}, "not found on"),
+            ({"model": "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"}, "not answered by a Claude model"),
+            ({"answered_by": " "}, "not answered by a Claude model"),
+        ],
+    )
+    def test_a_row_that_is_no_found_claude_answer_is_refused(
+        self, tmp_path: Path, over: dict[str, Any], says: str
+    ) -> None:
+        with pytest.raises(PlanError, match=says):
+            M.load_d20(self.write(tmp_path, d20_row(OTHER, **over)))
+
+
+class TestD20Wave:
+    """The wave and its step under a temp root, production a fixture export."""
+
+    WAVE = "2026-11-12"
+
+    def export(self, start: int) -> str:
+        site = {
+            "site_id": OTHER,
+            "name": "Ali Masjid Fort",
+            "country": "Pakistan",
+            "source_id": "ancient_nerds",
+            "scope_status": "in_scope",
+            "lat": 34.0,
+            "lon": 71.2,
+            "period_start": start,
+            "period_end": None,
+            "period_name": categorize_period(start),
+        }
+        entry = {
+            "id": 7,
+            "row_pk": OTHER,
+            "run_stamp": "2026-10-04_fields-wd3-s022",
+            "test_id": "WD3/structured-fields",
+            "old_value": None,
+            "new_value": str(start),
+            "evidence": [COUNTED],
+        }
+        rows = [
+            {"kind": "site", "row": site},
+            {"kind": "journal", "row": entry},
+            {"kind": SNAPSHOT_KIND, "row": {"exported_at": "2026-11-12 08:00:00+00"}},
+        ]
+        return "\n".join(json.dumps(r) for r in rows)
+
+    def wave(self, tmp_path: Path) -> tuple[Path, Path, dict[str, Any]]:
+        hand = tmp_path / "PERIOD_WRONG.jsonl"
+        hand.write_text(json.dumps(d20_row(OTHER)) + "\n", encoding="utf-8")
+        root = tmp_path / "mechanical_period_fix"
+        summary = M.build_wave(
+            self.WAVE, d113_path=None, d20_path=hand, read=lambda _sql: self.export(1837), root=root
+        )
+        return hand, root, summary
+
+    def test_the_wave_plans_the_start_its_label_and_a_rollback(self, tmp_path: Path) -> None:
+        hand, root, summary = self.wave(tmp_path)
+        assert (summary["sites"], summary["rule:d20-sourced"], summary["steps"]) == (1, 1, 1)
+        record = M.read_wave(self.WAVE, root)
+        assert record["d20_sha256"] == M.sha256_file(hand) and record["refused"] == []
+        step = M.plan_step(self.WAVE, 1, read=lambda _sql: self.export(1837), root=root)
+        assert (step["lane"], step["sites"], step["cells"]) == (f"period-fix-{self.WAVE}-s001", 1, 2)
+        out = root / self.WAVE / "s001"
+        cells = [json.loads(line) for line in (out / "PLAN.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert {(c["column"], c["old_value"], c["new_value"]) for c in cells} == {
+            ("period_start", "1837", "300"),
+            ("period_name", "1500+ AD", "1 - 500 AD"),
+        }
+        assert all(c["rule"].startswith("d20-sourced") for c in cells)
+        assert all(any(e.get("model") == FABLE for e in c["evidence"]) for c in cells)
+        assert "d20-sourced" in (out / "PLAN.md").read_text(encoding="utf-8")
+        # the apply machinery takes the plan as it is: its validation, the pinned rollback, APPLY.sql
+        lane = M.fix_lane(self.WAVE, 1)
+        assert A.emit(A.load_records(out / "PLAN.jsonl"), out, lane, plan_path=out / "PLAN.jsonl") == 2
+        apply_sql = (out / "APPLY.sql").read_text(encoding="utf-8")
+        assert lane.run_stamp in apply_sql and "example.net/khyber" in apply_sql
+
+    def test_a_start_written_between_the_wave_and_its_step_is_refused(self, tmp_path: Path) -> None:
+        _, root, _ = self.wave(tmp_path)
+        step = M.plan_step(self.WAVE, 1, read=lambda _sql: self.export(1700), root=root)
+        assert step["cells"] == 0 and step["skip:moved-since-wave"] == 1
+        assert not (root / self.WAVE / "s001" / "PLAN.jsonl").exists()

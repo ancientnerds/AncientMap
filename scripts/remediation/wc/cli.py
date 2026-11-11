@@ -131,8 +131,11 @@ byte for byte what it was):
   sentences are under judgement) and judged exactly as lane WN's are, but their text is appended to
   the stored one (`wc4.compose(..., base=)`: the old text and its `[n]` stay, new pages are numbered
   from N+1), the record is `_description_enrichment` and the provenance lane E's for a Phase-4 text
-  (`wc4.enriched_provenance`). A site that gets no sentence is left as it is (`unchanged`). Every
-  answer names its role and the role's model (`enrich.require_role`).
+  (`wc4.enriched_provenance`). A site that gets no sentence is left as it is (`unchanged`), and so
+  is a site with a dispute brief whose two positions did not both stand (`dispute-one-position`,
+  `dispute-no-position`, D21): nothing of it is written, and the pilot's judge is not asked about
+  it (`DISPUTE_UNWRITTEN`). Every answer names its role and the role's model
+  (`enrich.require_role`).
 
 **The pilot** (`export --pilot 20 --seed S`): a seeded draw of the population, run end to end; its
 post-verification result is measured by a fresh Opus judge (`judge-*`: every kept sentence
@@ -247,6 +250,11 @@ J_THRESHOLDS = {"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}
 #: no open question the independent judge finds INVENTED ("hook invented" = 0): the writer may not
 #: make a mystery up to give the page a hook.
 ENRICH_THRESHOLDS = {**J_THRESHOLDS, "hook_invented": 0}
+#: Why the build does not plan a lane-E site whose sentences stood (`_not_planned`, owner decision
+#: D21): it has a dispute brief, and one of the two positions, or both, did not stand. Its kept
+#: sentences are written nowhere, so the pilot's judge is not asked about them (`cmd_judge_export`).
+DISPUTE_ONE_POSITION, DISPUTE_NO_POSITION = "dispute-one-position", "dispute-no-position"
+DISPUTE_UNWRITTEN = (DISPUTE_ONE_POSITION, DISPUTE_NO_POSITION)
 #: A WN pilot's size and its minimum sample (a design number, not an owner decision, measured on
 #: no corpus): the pilot draws 20 sites - or the whole population when it is smaller - and is judged
 #: only if at least half of the drawn sites ended with a text the judge could judge, and as many
@@ -791,6 +799,19 @@ def defects_block(claims: Sequence[Mapping[str, Any]] | None) -> str:
     return P2.DEFECTS_HEAD + lines + P2.DEFECTS_TAIL
 
 
+def asserting_standing(row: Mapping[str, Any], record: Mapping[str, Any]) -> list[int]:
+    """The numbers of a dispute brief's asserting sentences that still stand in the description the
+    read holds (`row`): every one of them when the brief was made for this very text
+    (`desc_sha256`), else those whose words the text still has."""
+    text = wc4.strip_markers(row["description"] or "")
+    return [
+        item["sentence"]
+        for item in record["asserting"]
+        if row["description_sha256"] == record["desc_sha256"]
+        or wc4.strip_markers(item["text"]) in text
+    ]
+
+
 def _read_disputes(
     rows: Sequence[Mapping[str, Any]], path: Path, asked: Sequence[Mapping[str, Any]]
 ) -> dict[str, dict[str, Any]]:
@@ -799,8 +820,9 @@ def _read_disputes(
     asks, and no site has two. The sentences that state one position as fact must be gone: a brief
     made for the text this read holds (`desc_sha256`) names none to repair, one made for an earlier
     text (the repair pass `defect-sites` fed from `DISPUTE_DEFECTS.jsonl` changed it) must not find
-    its asserting sentences in the text any more. The page then names both positions; it never says
-    the one while it appends the other."""
+    its asserting sentences in the text any more (`asserting_standing`). The page then names both
+    positions; it never says the one while it appends the other. A file that holds a brief this run
+    cannot take is refused whole: `disputes.py briefs --for-run` writes the briefs it can."""
     live = {row["id"]: row for row in rows}
     wanted = {entry["site_id"] for entry in asked}
     briefs: dict[str, dict[str, Any]] = {}
@@ -810,17 +832,13 @@ def _read_disputes(
             raise WcRunError(f"{path}:{number}: " + "; ".join(problems))
         site_id = record["site_id"]
         if site_id not in wanted:
-            raise WcRunError(f"{path}:{number}: {site_id} is no site this run asks")
+            raise WcRunError(
+                f"{path}:{number}: {site_id} is no site this run asks - disputes.py briefs "
+                "--for-run writes the briefs of the sites it does"
+            )
         if site_id in briefs:
             raise WcRunError(f"{path}:{number}: {site_id} has two dispute briefs")
-        row = live[site_id]
-        text = wc4.strip_markers(row["description"] or "")
-        standing = [
-            item["sentence"]
-            for item in record["asserting"]
-            if row["description_sha256"] == record["desc_sha256"]
-            or wc4.strip_markers(item["text"]) in text
-        ]
+        standing = asserting_standing(live[site_id], record)
         if standing:
             raise WcRunError(
                 f"{path}:{number}: sentence(s) {standing} of {site_id} state a position of the "
@@ -1790,11 +1808,24 @@ def _not_planned(
     nothing is written (`empty`). A site-list run does not write a Phase-4 text whose check kept
     every sentence (`unchanged`): a rewrite would only replace the pinned citations with the
     check's. One that a later web check reported a claim against and the check kept whole anyway is
-    `defect-kept`: nothing is written, and the report stands for the owner (`defects_kept`)."""
+    `defect-kept`: nothing is written, and the report stands for the owner (`defects_kept`). An
+    enrichment of a site with a dispute brief is written only with both positions kept (owner
+    decision D21: the description names both positions): one kept without the other is
+    `dispute-one-position`, neither kept beside another new sentence `dispute-no-position`. The
+    whole site stays as it is, its other new sentences included: the verified text is the one
+    with the single position in it, and any write would make the text an enriched one, which no
+    later run asks (`enrich.classify`, `enriched-before`) - the site could never take its dispute
+    text. Unwritten, a new run asks it again."""
     if kind == KIND_WN and outcome.description is None:
         return "empty"
     if kind == KIND_ENRICH and outcome.description is None:
         return "unchanged"  # no sentence was kept: the text stays as it is, nothing is written
+    if kind == KIND_ENRICH and entry["dispute"] is not None:
+        positions = len(E.positions_kept(entry, decisions))
+        if positions == 1:
+            return DISPUTE_ONE_POSITION
+        if positions == 0:
+            return DISPUTE_NO_POSITION
     if (
         kind == KIND_LIST
         and entry["marking"] == wc4.Marking.PHASE4.value
@@ -2196,7 +2227,11 @@ def cmd_judge_export(
 ) -> dict[str, Any]:
     """The pilot's measurement: one judge question per built site, on its text after the
     verification. The round records the sha256 of the gate plan it judges (`plan_sha256`): the
-    gate writes a pilot's plan only as it was judged (`pilot_approval`).
+    gate writes a pilot's plan only as it was judged (`pilot_approval`). A lane-E site whose kept
+    sentences the plan does not write (`DISPUTE_UNWRITTEN`: its dispute's positions did not both
+    stand, D21) is not asked: the verdict approves the plan, so sentences no one writes neither
+    count toward the pilot's minimum nor fail it. A round without a question is refused and not
+    recorded: it could never be imported, and such a pilot measured nothing.
 
     `sample` and `seed` (owner decision D25a of 2026-10-08) make it a **sampled** judge of a chunk
     that is no pilot: `sample` sites are drawn with `seed` from the sites the chunk will write
@@ -2215,6 +2250,11 @@ def cmd_judge_export(
     labels = sorted(
         label for label, final in finals.items() if final["of"] or kind not in WRITTEN_KINDS
     )
+    if kind == KIND_ENRICH:
+        # a dispute site without both positions kept its sentences and is not written (D21)
+        not_planned = json.loads((run / SUMMARY_FILE).read_text(encoding="utf-8"))["not_planned"]
+        unwritten = {label for why in DISPUTE_UNWRITTEN for label in not_planned.get(why, ())}
+        labels = [label for label in labels if label not in unwritten]
     drawn: dict[str, Any] | None = None
     if sample is not None and seed is not None:
         # a list run's site that is not written (`unchanged`, `defect-kept`) has no new text to judge
@@ -2228,6 +2268,11 @@ def cmd_judge_export(
         drawn = {"sites": sample, "seed": seed, "of": len(labels)}
         chosen = set(audit4.draw_sample(labels, seed=seed, count=sample, exclude=set()))
         labels = [label for label in labels if label in chosen]
+    if not labels:
+        raise WcRunError(
+            f"{run}: no site ended with a text the judge is asked about - the pilot measured "
+            "nothing and approves no plan: run a new pilot"
+        )
     for start in range(0, len(labels), batch_size):
         batch_id = f"judge-{start // batch_size + 1:04d}"
         for label in labels[start : start + batch_size]:

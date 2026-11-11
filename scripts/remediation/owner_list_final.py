@@ -15,7 +15,9 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
 
 ## The sources
 
-* **The field runs** (`FIELD_RUNS`: WD3, WD4, wd5 and their pilots and re-asks), each rebuilt with
+* **The field runs** (`FIELD_RUNS`: WD3, WD4, wd5 and their pilots and re-asks, the two D99 pilots
+  `wd5r/pilot` and `wd5r/pilot2`, the D124 re-ask `d121/d124`; then every listed-point run
+  `wd5-point/<label>`, `field_run_names`), each rebuilt with
   `fields/owner_list.build` - never read from an older `OWNER_LIST.jsonl`, which a later run may have
   answered. A `(site, field)` that several runs asked belongs to the **last** run that asked it: a
   wd5 `keep` closes what WD3 left `unresolved`. The adversarial lists (`<run>/adv/OWNER.jsonl`) are in
@@ -41,6 +43,12 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
   unsourced or unmarked point, no source URL, no Wikidata item, a pending scope, and a card whose
   Wikidata id or article link is no longer its site's (the fill-only `card_stats_ext` lane never
   corrects one an identity lane moved afterwards).
+* **The close-out's follow-ups** (`FOLLOWUPS`, `final-2026-10-08/CLOSEOUT_FOLLOWUPS.jsonl`): the
+  sites the close-out of 2026-10-24 handed to a lane. A follow-up is listed (`closeout-followup`)
+  while production still shows its defect - each has its check (`FOLLOWUP_CHECKS`: Sybaris on the
+  Traeis still at Sybaris' point, Tichit still under Dhar Tichitt's text, Qasr Qaroun without a
+  hero and not under `image-none`); one that no check is registered for stays open while its site
+  is shown. The report counts the closed ones and says how each closed.
 
 ## The small heroes (D48)
 
@@ -115,7 +123,19 @@ ROOT = REPO / "output" / "remediation"
 OUT_DIR = "final-2026-10-08"
 OUT_JSONL, OUT_MD = "OWNER_LIST_FINAL.jsonl", "OWNER_LIST_FINAL.md"
 #: The field runs, in the order they ran: a later run's answer closes an earlier run's question.
-FIELD_RUNS = ("wd3-pilot", "wd3", "wd4", "wd5-pilot", "wd5", "wd5-reask")
+#: A name is the run's directory under `fields/`: the two D99 pilots (2026-11-06/07) and the D124
+#: re-ask (2026-11-07) lie one level deeper.
+FIELD_RUNS = (
+    "wd3-pilot",
+    "wd3",
+    "wd4",
+    "wd5-pilot",
+    "wd5",
+    "wd5-reask",
+    "wd5r/pilot",
+    "wd5r/pilot2",
+    "d121/d124",
+)
 CURATED, RETIRED, SHOWN_CONTRACT = "ancient_nerds", "retired", "shorts-v1"
 #: A hero below this is "small", and a row of at least this size can replace it (owner decision
 #: D48 over the census of 2026-10-08: "809 heroes under 1600x900; 433 of the 809 have another live
@@ -134,12 +154,42 @@ OUT_OF_SCOPE: dict[str, str] = {
         "OWNER_DECISIONS_2026-10-08.md - decisions, no open site"
     ),
     "HUMAN_ONLY_DECISIONS_2026-09-26.md": "the owner's answers to HUMAN_ONLY.md - no open site",
-    "OWNER_DECISIONS_2026-10-08.md": "the decisions D1-D66 the topics cite - no open site",
+    "OWNER_DECISIONS_2026-10-08.md": (
+        "the decisions D1-D156 and the orchestrator's O1-O22 the topics cite - no open site"
+    ),
     "teaser/runs/owner-d47-2026-10-19": (
         "the 6 cards D47 cleared: each has no card text now and is listed under `card-empty` "
         "from production"
     ),
+    "fields/wd5x/OWNER_SHOWN.candidates.json": (
+        "the 30 cells drawn for the spot check of the D70 dating extractor's wave (O3); the wave "
+        "never went (gold round 1: 0.7034, D71 asks 0.95) and D99 asks the undated sites instead - "
+        "a sample of cells, no open site"
+    ),
+    "fields/wd5x/report-615/OWNER_SCOPE.jsonl": (
+        "the 5 undated sites whose start the D70 dating extractor read outside the D58 window "
+        "(O1: listed, not written); the extractor failed its gold (D71) and three spot checks "
+        "judged 26 to 29 of its 30 shown cells wrong (D99), so its reading is no finding - the "
+        "five are listed under `period-undated` from production"
+    ),
+    "insert_site/d57-2026-11-05/D114_OWNER_ROUND.json": (
+        "the question D114 released for one more research round of the D57 insert (Nan Madol's "
+        "start; `insert_site/run.py research export-reask --owner-round`) - a round's input, "
+        "decided, no open site"
+    ),
+    "insert_site/d57-2026-11-05/D130_OWNER_ROUND.json": (
+        "the questions D130 released for one more research round of the D57 insert (the starts "
+        "of three sites) - a round's input, decided, no open site"
+    ),
+    "insert_site/d57-2026-11-05/D143_OWNER_ROUND.json": (
+        "the question the D57 insert's research is asked once more under D143 (Pella's start; "
+        "O12: no sixth round, a vetoed Pella is left out of the insert) - a round's input, no "
+        "open site"
+    ),
 }
+#: Where the listed-point runs live under `fields/`: one directory per run, `wd5-point/<label>`
+#: (`fields/population.py build --stage wd5 --sites FILE --point`).
+POINT_RUNS = OL.POP.POINT_RUNS
 
 
 @dataclass(frozen=True)
@@ -429,6 +479,8 @@ FIELD_TOPIC = {
     field: f"field-{field}" for field in ("coordinates", "period_start", "site_type", "source_url")
 }
 
+#: How much of a description the export carries: enough to tell whose text it is (`FOLLOWUPS`).
+DESCRIPTION_START = 80
 #: Another live row of the site (`h` is its hero) of at least the size: a row D48 could swap in.
 _LARGER = (
     "x.site_id = u.id AND NOT x.is_excluded AND x.id <> h.id AND "
@@ -438,6 +490,7 @@ SITES_SQL = (
     "SELECT u.id::text AS site_id, u.name, u.country, u.scope_status, u.site_type, "
     "u.period_start, u.period_name, u.lat::text AS lat, u.lon::text AS lon, u.source_url, "
     "u.thumbnail_url, (u.description IS NULL OR btrim(u.description) = '') AS no_description, "
+    f"left(btrim(u.description), {DESCRIPTION_START}) AS description_start, "
     "c.card_description, coalesce(u.raw_data -> '_card_provenance' ->> 'contract', '') AS "
     "card_contract, u.raw_data -> '_coord_provenance' ->> 'kind' AS coord_kind, "
     "u.raw_data -> '_period_provenance' ->> 'kind' AS period_kind, "
@@ -565,6 +618,22 @@ def build_field_run(root: Path, name: str) -> tuple[dict[str, Any], set[tuple[st
     return OL.build([run], root / FIELDS_ROOTS[stage]), asked_cells(run)
 
 
+def field_run_names(root: Path) -> tuple[str, ...]:
+    """`FIELD_RUNS`, then the listed-point runs under `root` (`fields/wd5-point/<label>`, by
+    label): each asks a point the runs before it left open, so its answer is the last one."""
+    labels = sorted(p.parent.name for p in (root / "fields" / POINT_RUNS).glob(f"*/{R.RUN_FILE}"))
+    return (*FIELD_RUNS, *(f"{POINT_RUNS}/{label}" for label in labels))
+
+
+def _of_a_field_run(rel: str, runs: Iterable[str]) -> bool:
+    """Whether the artefact is a field run's own file: `<run>/<file>` (its `OWNER_LIST.{jsonl,md}`,
+    a `DECISIONS.pre-owner-<n>.jsonl`) or `<run>/adv/<file>` (the adversarial lists)."""
+    return any(
+        rel.startswith(f"fields/{run}/") and rel.count("/") - run.count("/") in (2, 3)
+        for run in runs
+    )
+
+
 # ------------------------------------------------------------------------------ the lane lists
 def lane_rows(
     lane: LaneList, rows: Iterable[Mapping[str, Any]], sites: Mapping[str, Mapping[str, Any]]
@@ -661,12 +730,12 @@ def unregistered_lists(root: Path, registered: Iterable[str]) -> list[str]:
     builder's own files are its output."""
     known = set(registered) | {f"{OUT_DIR}/{OUT_JSONL}", f"{OUT_DIR}/{OUT_MD}"}
     known |= {k.removesuffix(".jsonl") + ".md" for k in known if k.endswith(".jsonl")}
+    runs = field_run_names(root)
     found: list[str] = []
     for rel in owner_artefacts(root):
-        parts = rel.split("/")
         if rel in known or rel in OUT_OF_SCOPE:
             continue
-        if parts[0] == "fields" and len(parts) in (3, 4) and parts[1] in FIELD_RUNS:
+        if _of_a_field_run(rel, runs):
             continue  # <run>/OWNER_LIST.{jsonl,md} and <run>/adv/OWNER.jsonl
         found.append(rel)
     return found
@@ -678,6 +747,92 @@ def hero_sizes(sites: Iterable[Mapping[str, Any]]) -> dict[str, int]:
     small = [s for s in sites if s["scope_status"] != RETIRED and _small(s["hero"])]
     larger = sum(1 for s in small if s["hero_larger"] is not None)
     return {"small": len(small), "with_a_larger_row": larger, "without": len(small) - larger}
+
+
+# ------------------------------------------------------------------------------ the follow-ups
+#: The close-out's follow-ups (`CLOSEOUT_2026-10-24.md`): one site per line, `{"site_id", "name",
+#: "lane", "issue", "found_by"}`, handed to the lane that can repair it.
+FOLLOWUPS = f"{OUT_DIR}/CLOSEOUT_FOLLOWUPS.jsonl"
+FOLLOWUP_TOPIC, FOLLOWUP_SOURCE = "closeout-followup", "closeout-followups"
+FOLLOWUP_TITLE = "a follow-up of the close-out that production still shows"
+FOLLOWUP_UNCHECKED = "no check of this follow-up is registered (`FOLLOWUP_CHECKS`)"
+#: The record whose point follow-up 1 found on Sybaris on the Traeis.
+SYBARIS = "991bd627-65d9-40d3-a97d-dfa879756da0"
+#: How the description of Tichit began when follow-up 2 was written: the text of Dhar Tichitt.
+DHAR_TICHITT_TEXT = "The Neolithic sites of Dhar Tichitt"
+
+
+@dataclass(frozen=True)
+class Followup:
+    """How production says whether a follow-up is still open: `left` answers what is left of the
+    defect (None once it is gone) from the site's row of today and every curated site's; `closed`
+    is what the report says then; `decision` is the lane's that takes the site."""
+
+    decision: str
+    left: Callable[[Mapping[str, Any], Mapping[str, Mapping[str, Any]]], str | None]
+    closed: str
+
+
+def _another_sites_point(
+    site: Mapping[str, Any], sites: Mapping[str, Mapping[str, Any]]
+) -> str | None:
+    other = sites[SYBARIS]
+    if float(site["lat"]) == float(other["lat"]) and float(site["lon"]) == float(other["lon"]):
+        return f"its point {site['lat']}, {site['lon']} is still the point of {other['name']}"
+    return None
+
+
+def _another_sites_text(site: Mapping[str, Any], _sites: Mapping[str, Any]) -> str | None:
+    if str(site["description_start"] or "").startswith(DHAR_TICHITT_TEXT):
+        return f"its description still begins {DHAR_TICHITT_TEXT!r}"
+    return None
+
+
+def _no_hero_and_unlisted(site: Mapping[str, Any], _sites: Mapping[str, Any]) -> str | None:
+    if site["hero"] is None and TOPIC_OF["image-none"].test(site) is None:
+        return "it has no hero row and is not listed under `image-none`"
+    return None
+
+
+#: The follow-ups of 2026-10-24 by site, each with the check the close-out reads it closed by
+#: (`drivers/phase8-closeout/PLAYBOOK.md`, A4 and C2).
+FOLLOWUP_CHECKS: dict[str, Followup] = {
+    "251ac618-a557-4c31-9129-65afc47b649d": Followup(
+        "D19", _another_sites_point, "the record no longer shares the point of Sybaris"
+    ),
+    "1e5f61dd-b362-4985-b235-dadeea0eca0f": Followup(
+        "D13/D20", _another_sites_text, "the description is no longer Dhar Tichitt's"
+    ),
+    "3ac3c796-1538-47b5-8985-6807adf8dec3": Followup(
+        "D17/D82", _no_hero_and_unlisted, "a hero row exists, or `image-none` lists the site"
+    ),
+}
+
+
+def followup_rows(
+    listed: Iterable[Mapping[str, Any]], sites: Mapping[str, Mapping[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """The follow-ups production still shows, and the closed ones with how (`{site_id: how}`). A
+    follow-up is closed when its site is retired or gone, or when its check finds the defect gone
+    (`FOLLOWUP_CHECKS`); one that no check is registered for stays open while its site is shown.
+    Pure."""
+    out: list[dict[str, Any]] = []
+    closed: dict[str, str] = {}
+    for row in listed:
+        site_id = str(row["site_id"])
+        site = sites.get(site_id)
+        check = FOLLOWUP_CHECKS.get(site_id)
+        if site is None or site["scope_status"] == RETIRED:
+            closed[site_id] = "the site is retired or gone"
+            continue
+        left = FOLLOWUP_UNCHECKED if check is None else check.left(site, sites)
+        if check is not None and left is None:
+            closed[site_id] = check.closed
+            continue
+        reason = f"{left} - {row['lane']}: {row['issue']}"
+        decision = "-" if check is None else check.decision
+        out.append(_row(site, FOLLOWUP_TOPIC, FOLLOWUP_SOURCE, "open", reason, decision))
+    return out, closed
 
 
 # ------------------------------------------------------------------------------ the build
@@ -695,7 +850,7 @@ def build(
     sites = {str(s["site_id"]): s for s in rows_by_kind["site"]}
     missing: list[str] = []
     runs = []
-    for name in FIELD_RUNS:
+    for name in field_run_names(root):
         if not (root / "fields" / name / R.RUN_FILE).exists():
             missing.append(f"fields/{name}")
             continue
@@ -703,6 +858,15 @@ def build(
         runs.append((name, result, asked))
     type_merges = {alias: m.target for alias, m in STM.load_map().merges.items()}
     rows, set_aside = field_rows(runs, sites, type_merges)
+    followups: dict[str, Any] = {"open": [], "closed": {}}
+    if (root / FOLLOWUPS).exists():
+        text = (root / FOLLOWUPS).read_text(encoding="utf-8")
+        noted = [json.loads(x) for x in text.splitlines() if x]
+        still, followups["closed"] = followup_rows(noted, sites)
+        followups["open"] = [r["site_id"] for r in still]
+        rows += still
+    else:
+        missing.append(FOLLOWUPS)
     for lane in LANE_LISTS:
         path = root / lane.path
         if not path.exists():
@@ -755,6 +919,7 @@ def build(
         "out_of_scope": {k: v for k, v in OUT_OF_SCOPE.items() if (root / k).exists()},
         "hero_sizes": hero_sizes(sites.values()),
         "pending": pending,
+        "followups": followups,
     }
 
 
@@ -764,6 +929,8 @@ def _cell(text: Any) -> str:
 
 
 def _title(topic: str) -> tuple[str, str]:
+    if topic == FOLLOWUP_TOPIC:
+        return FOLLOWUP_TITLE, "/".join(sorted({c.decision for c in FOLLOWUP_CHECKS.values()}))
     if topic in TOPIC_OF:
         return TOPIC_OF[topic].title, TOPIC_OF[topic].decision
     for lane in LANE_LISTS:
@@ -793,6 +960,14 @@ def render(result: Mapping[str, Any]) -> str:
         title, decision = _title(topic)
         out.append(f"| {title} (`{topic}`) | {n} | {decision} |")
     out += ["", f"Set aside: {result['set_aside'] or 'none'}."]
+    closed = result["followups"]["closed"]
+    out += [
+        "",
+        f"**Follow-ups of the close-out** (`{FOLLOWUPS}`): {len(result['followups']['open'])} "
+        f"still open (listed under `{FOLLOWUP_TOPIC}`), {len(closed)} closed"
+        + "".join(f"; `{site_id}`: {how}" for site_id, how in sorted(closed.items()))
+        + ".",
+    ]
     sizes = result["hero_sizes"]
     out += [
         "",

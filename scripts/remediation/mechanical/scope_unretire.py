@@ -42,12 +42,24 @@ page asserts the claim." The six sites of `lane.D50_DISPUTED_SITES` come back on
 description as it stands is a lane-E dispute enrichment (`wc/disputes.py` -> `wc/cli.py export
 --enrich --disputes`, D21): the journal row that wrote the current description carries an
 enrichment's evidence (`wc4.EVIDENCE_DECISION_ENRICH`) with a well-formed adjudicated brief of this
-site (`wc.enrich.dispute_record_problems`) and appended a sentence of each position (`dispute_a`,
-`dispute_b`). Until then each is skipped `d50-no-dispute-text`, with what is missing. Its card
-must not assert the claim either: a D50 site with a card text comes back only once the latest
-journal row of its `card_stats.card_description` is later than the one of its dispute text (the
-card lane wrote the card in the knowledge of the dispute, D21); until then it is skipped
-`d50-card-not-cleared`. Premise and invariant hold the card's md5 and the same test.
+site (`wc.enrich.dispute_record_problems`), and the record that run left on the site
+(`raw_data._description_enrichment`) kept a sentence of each position (`dispute_a`, `dispute_b`) -
+kept after the verification, not merely written: a text that names one position is none D21
+allows. Until then each is skipped `d50-no-dispute-text`, with what is missing. Its card
+must not assert the claim either: a D50 site comes back without a card text (orchestrator decision
+O17 of 2026-11-10: the six cards are cleared the D47 way, `mechanical/teaser.py d50-clear`, and
+the un-retire needs no new card), or with one the card lane judged against the description it
+holds - its teaser provenance hashes that card and that description
+(`identity_lanes.card_judged_sql`; no card run asks a retired site, so none of the six holds
+such a card once lane E wrote its dispute text: the text is a new description, and the hash of
+the old one no longer matches). A later journal row is no such proof: the reversal of the clear
+is one, and it puts the old card back. Until then the site is skipped `d50-card-not-cleared`.
+Premise and invariant hold the card's md5 and the same test.
+And a site D84 leaves without a country (`lane.D84_NO_COUNTRY_SITES`: the Baltic Sea Anomaly,
+international waters) comes back only once its `country` is NULL (`country_d84.py`, a
+`country-d84-<wave>` lane): shown with a country it would get a country page and a `/sites/`
+route, which D149 rules out ("globe only"). Until then it is skipped `d84-country-not-cleared`;
+the premise holds the country and the invariant the same test.
 
 **D57, the staged inserts** (owner decision D143, orchestrator decision O12). "The 37 rows are
 inserted hidden (retired with a reason beginning `D57 staged:`), get description and pictures while
@@ -111,12 +123,14 @@ from mechanical.identity_lanes import (  # noqa: E402
     SCOPE_UNRETIRE_LANE,
     SCOPE_UNRETIRE_PREMISE_SQL,
     SCOPE_UNRETIRE_ROOT,
+    card_judged_sql,
     live_hero_sql,
     scope_unretire_lane,
 )
 from mechanical.lane import (  # noqa: E402
     D50_DISPUTED_SITES,
     D57_STAGED_PREFIX,
+    D84_NO_COUNTRY_SITES,
     NON_SITE_TYPES,
     NOT_A_SITE_PREFIX,
     Lane,
@@ -179,8 +193,7 @@ _SITE_COLUMNS = (
     "WHERE e.site_id = u.id AND e.kind = 'wikidata_qid') AS qids, "
     "EXISTS (SELECT 1 FROM card_stats cs WHERE cs.site_id = u.id "
     "AND cs.card_description IS NOT NULL) AS has_card, "
-    "(SELECT max(c.id) FROM remediation_change_log c WHERE c.table_name = 'card_stats' "
-    "AND c.column_name = 'card_description' AND c.row_pk = u.id::text) AS card_journal_id, "
+    f"{card_judged_sql('u')} AS card_judged, "
     # what a staged D57 site is shown with: its text and the records that hash it, its picture
     "(trim(coalesce(u.description, '')) <> '') AS has_description, "
     "encode(sha256(convert_to(coalesce(u.description, ''), 'UTF8')), 'hex') AS description_sha256, "
@@ -205,14 +218,17 @@ EXPORT_JOURNAL_SQL = (
 )
 _D50_IDS = ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SITES))
 #: The journal rows that wrote the description a D50 site holds now, with what their evidence says
-#: of a dispute (`wc4`'s enrichment block): the D50 gate's input.
+#: of a dispute (`wc4`'s enrichment block: the brief, and the run that wrote) and the enrichment
+#: record the site carries (`raw_data._description_enrichment`: every appended sentence's class and
+#: verdict, so what was kept): the D50 gate's input. Written as `identity_lanes.dispute_enriched_sql`
+#: is (`CAST`, `->`/`->>`), so the tests run this very text in SQLite and hand its rows to the planner.
 EXPORT_DISPUTE_SQL = (
     "SELECT l.id, l.row_pk, l.run_stamp, l.evidence->>'decision' AS decision, "
     f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->'dispute' AS dispute, "
-    f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->'classes' AS classes "
-    "FROM remediation_change_log l JOIN unified_sites u ON u.id::text = l.row_pk "
+    f"l.evidence->>'run' AS run, u.raw_data->{sql_literal(wc4.ENRICH_KEY)} AS record "
+    "FROM remediation_change_log l JOIN unified_sites u ON CAST(u.id AS text) = l.row_pk "
     "WHERE l.table_name = 'unified_sites' AND l.column_name = 'description' "
-    f"AND l.new_value = u.description AND u.id::text IN ({_D50_IDS}) ORDER BY l.id"
+    f"AND l.new_value = u.description AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"
 )
 EXPORT_PARTS = (
     ("site", EXPORT_SITES_SQL),
@@ -266,8 +282,10 @@ def latest_retirement(
 
 def dispute_text_problems(site_id: str, rows: Sequence[Mapping[str, Any]]) -> list[str]:
     """Why the description a D50 site holds now is no dispute enrichment, or nothing: the journal
-    row that wrote it (the latest such row) is an enrichment's, carries a well-formed adjudicated
-    brief of this site and appended a sentence of each position."""
+    row that wrote it (the latest such row) is an enrichment's and carries a well-formed adjudicated
+    brief of this site, and the record that run left on the site kept a sentence of each position
+    (`identity_lanes.dispute_enriched_sql`, the invariant's form of the same test). Kept, not
+    written: a position the verification dropped is not in the text (D21)."""
     mine = [row for row in rows if str(row["row_pk"]) == site_id]
     if not mine:
         return ["no journal row wrote the description the site holds now"]
@@ -280,30 +298,49 @@ def dispute_text_problems(site_id: str, rows: Sequence[Mapping[str, Any]]) -> li
     problems = list(E.dispute_record_problems(brief))
     if not problems and brief["site_id"] != site_id:
         problems.append(f"the dispute brief is of {brief['site_id']}, not of this site")
-    classes = set((row["classes"] or {}).values())
+    record = row["record"]
+    if record is None or record["run"] != row["run"]:
+        return [
+            *problems,
+            f"the site carries no enrichment record of the run of journal row {row['id']} "
+            f"({row['run']})",
+        ]
+    kept = {
+        sentence["class"]
+        for sentence in record["sentences"]
+        if sentence["verdict"] == wc4.Verdict.KEEP.value
+    }
     for needed in (wc4.DISPUTE_A, wc4.DISPUTE_B):
-        if needed not in classes:
-            problems.append(f"journal row {row['id']} appended no {needed} sentence")
+        if needed not in kept:
+            problems.append(f"journal row {row['id']} kept no {needed} sentence")
     return problems
 
 
-def card_problem(site: Mapping[str, Any], written_id: int) -> str | None:
-    """Why a D50 site's card may still assert the claim, or None: it has a card text and no
-    journal row wrote that card after the journal row `written_id` that wrote its dispute text
-    (`identity_lanes.card_cleared_sql`, the invariant's form of the same test)."""
-    if not site["has_card"]:
+def card_problem(site: Mapping[str, Any]) -> str | None:
+    """Why a D50 site's card may still assert the claim, or None: it holds a card text that the
+    card lane did not judge against the description the site holds (`card_judged`: the export's
+    answer of `identity_lanes.card_judged_sql`, the text the invariant runs in
+    `card_cleared_sql`). A card that a journal row wrote after the dispute text is not thereby
+    judged: the reversal of the clear is such a row."""
+    if not site["has_card"] or site["card_judged"]:
         return None
-    card = site["card_journal_id"]
-    if card is not None and int(card) > written_id:
-        return None
-    when = (
-        "by no journalled lane, so not after"
-        if card is None
-        else f"last by remediation_change_log:{card}, before"
-    )
     return (
-        f"its card was written {when} the dispute text (remediation_change_log:{written_id}): D50 "
-        "shows it only once no card asserts the claim - the card lane (D21) rewrites the card first"
+        "it holds a card text no teaser provenance ties to the description it holds (the card "
+        "lane did not judge this card against the dispute text): D50 shows it only once no card "
+        "asserts the claim - the card is cleared first (O17: `mechanical/teaser.py d50-clear`), "
+        "and a clear that was undone put the old card back"
+    )
+
+
+def country_problem(site: Mapping[str, Any]) -> str | None:
+    """Why a site D84 leaves without a country may not be shown yet, or None: it still holds one
+    (`identity_lanes.unretire_violation_sql`, the invariant's form of the same test)."""
+    if str(site["id"]) not in D84_NO_COUNTRY_SITES or site["country"] is None:
+        return None
+    return (
+        f"it holds the country {site['country']!r}: D84 leaves it without one and D149 shows it on "
+        "the globe only - a `country-d84-<wave>` lane (`mechanical/country_d84.py`) empties the "
+        "cell first"
     )
 
 
@@ -491,9 +528,12 @@ def _dispute_decision(
     written = max(
         (row for row in disputes if str(row["row_pk"]) == sid), key=lambda r: int(r["id"])
     )
-    card = card_problem(site, int(written["id"]))
+    card = card_problem(site)
     if card is not None:
         return _skip(site, "d50-card-not-cleared", card)
+    country = country_problem(site)
+    if country is not None:
+        return _skip(site, "d84-country-not-cleared", country)
     brief = written["dispute"]
     reason = (
         f"{D50_REASON_PREFIX}shown as disputed; its description states the scholarly position "

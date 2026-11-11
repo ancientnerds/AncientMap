@@ -168,6 +168,21 @@ def classes_of_entry(entry: Mapping[str, Any]) -> dict[int, str]:
     return dict(enumerate(entry["classes"], start=1))
 
 
+#: The most sentences one enrichment appends (`answers.parse_enrich`): the facts of a thin text,
+#: the two positions of a dispute and the open question. The scope lane's D50 gate reads the
+#: public record's sentences by position up to this number (`identity_lanes.dispute_enriched_sql`).
+MAX_APPENDED = MAX_FACTS_THIN + 2 + A.MAX_HOOKS
+
+
+def positions_kept(entry: Mapping[str, Any], decisions: Sequence[wc4.Decision]) -> set[str]:
+    """The positions of a dispute (`wc4.DISPUTE_A`, `wc4.DISPUTE_B`) whose sentence stands after
+    the verification. The writer gives both or neither (`answers.parse_enrich`), but the import and
+    each verifier drop sentence by sentence, so one may be left without the other: owner decision
+    D21 names both positions, and a text that keeps only one is not written (`cli._not_planned`)."""
+    classes = classes_of_entry(entry)
+    return {classes[d.n] for d in decisions if d.kept} & {wc4.DISPUTE_A, wc4.DISPUTE_B}
+
+
 # ------------------------------------------------------------------------------ the disputes
 def dispute_record_problems(record: Any) -> list[str]:
     """Why a dispute brief is not one (`disputes.py` writes them), or nothing."""

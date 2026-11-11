@@ -100,7 +100,7 @@ E3/O7 above stays the documented history: the applied scope-e4 and scope-review 
 | `label_scope(record, qids)` | the whole rule for a path that admits a record **without** a scope verdict: `out_of_scope` for a Viking item or a date past the window, `label_borderline` for a borderline record or one the open question on Islamic Europe holds (`label_open_question`; held: only a verdict on its subject - or the owner's answer - may admit it), else `in_scope`. Phase 4's `scope-pending` flag (`phase4/plan4.py`) holds every record that is not `in_scope`. The loader keeps only `in_scope` (a borderline record is skipped and counted as held, as E3's 500 AD skipped it), Lyra's auto-promotion leaves a borderline contribution to the founder and never promotes an `out_of_scope` one, the Prospector writes the answer as the proposal's `scope_verdict` (an `out_of_scope` one gets status `out_of_scope`; a `label_borderline` one stays in the review queue under that verdict) |
 | `passes_e3_cutoff(record)` | the E3/O7 rule under its own name (T11's census, the scope review's O7 reinstatement) |
 | `label_borderline(record)` | dated after 500 and through 1500 in a `LABEL_BORDERLINE_COUNTRIES` country: the window keeps it, the label decides |
-| `label_open_question(record)` | dated after 500 and through 1500 in the medieval Old World in Spain, Portugal or Malta (`ISLAMIC_EUROPE_COUNTRIES`) or on Sicily (`ISLAMIC_EUROPE_PARTS`, a box of Italy): the owner's open question on Islamic Europe holds it - the window keeps it at 500 AD (nothing comes back on it), and no path retires it by its region alone |
+| `label_open_question(record)` | dated after 500 and through 1500 in the medieval Old World in Spain, Portugal or Malta (`ISLAMIC_EUROPE_COUNTRIES`) or on Sicily (`ISLAMIC_EUROPE_PARTS`, a box of Italy): Islamic Europe, which the review of 2026-10-24 held as an open question. Decided by X13 (below): the window keeps it at 500 AD and the D20 lane asks and retires it like any European site; the function still holds such a record on the paths that admit without a verdict (`label_scope`) and the un-retire still skips it, so nothing comes in or back on it |
 | `in_rest_of_world(country, lat, lon)` | the country is one of `REST_OF_WORLD_COUNTRIES` (every state and territory of Asia, Africa, the Americas and Antarctica under the names `lookup_country` and `NAME_TO_ISO` give them, with their ISO codes; the borderline countries among them), or the point lies in a `NON_EUROPEAN_PARTS` box of the medieval Old World state it names |
 | `VIKING_SUBJECT_QIDS` | `Q189113` L'Anse aux Meadows: out by its subject wherever it lies. Asked through `label_scope` by the loader (`raw_data.wikidata_id` / `wikidata`), Lyra's promotion (`user_contributions.wikidata_id`) and the Prospector (the resolved item, the radar contribution's item); `POST /api/proposals/{id}/approve` answers 422 for it; the un-retire skips it (`viking-subject`); the D57 insert lane (`insert_site/candidates.py`, branch `closeout/insert-lane`) pins it in `EXCLUSIONS` |
 
@@ -137,24 +137,26 @@ the ISO alpha-2 codes listed beside the names as for Oceania):
   World at 500 AD; making it borderline needs a box or a list of republics the rows do not carry
   (`country` says "Russia"). Measured 2026-10-24: no curated row of the North Caucasus is dated
   500-1500, so the choice moves nothing today.
-* **Open owner question - Islamic Europe (held, review of 2026-10-24):** al-Andalus (711-1492: the
-  Umayyad emirate and caliphate, the taifas, the Almoravids, Almohads and Nasrids), the Emirate of
-  Sicily (831-1091) and Arab Malta (870-1091). The rule's own examples of what stays name "the
-  Islamic Golden Age" among the non-European Old World, but these lands are Europe, so the region
-  alone cuts their sites at 500 AD. Held today (read-only, 2026-10-24; all five shown, none decided,
-  none retired): Ruins of Talamanca (Spain 860), Huéscar (Spain 1201), Ponferrada (Spain 1001, the
-  Templar castle), Castle of Cola (Portugal 1000) and Villaggio Bizantino (Sicily 550) - the hold
-  is by place, so a Christian or Byzantine subject is held too until the answer. Until the owner answers,
-  `label_open_question` holds a site of Spain, Portugal, Malta or Sicily dated 500-1500: the window
-  stays 500 AD (the un-retire skips it `label-open-question`), the D20 population leaves it out
-  (`scope_window.build`, counted `held_label_open_question`) and `scope_judge.build` skips an
-  OUT_OF_WINDOW answer for it `label-open-question`, so no D20 wave retires it by its region; a
-  NOT_A_SITE answer is decided as before. The loader holds it, Lyra leaves it to the founder and the
-  Prospector files it `label_borderline`. **The owner's choice:** keep the region (the 500 AD stands,
-  a later D20 wave may retire the three) or make Islamic Europe borderline (the subject decides:
-  Umayyad, taifa, Almoravid, Almohad, Nasrid or Emirate of Sicily stays; a Christian kingdom's,
-  Visigothic or Norman site is out) - the second needs a `MEDIEVAL_SUBJECT` kind for a Christian
-  European subject and the label note in `scope-window-v2`.
+* **Islamic and Byzantine Europe - decided (X13, 2026-10-24; in the D20 lane since 2026-11-11):**
+  al-Andalus (711-1492: the Umayyad emirate and caliphate, the taifas, the Almoravids, Almohads and
+  Nasrids), the Emirate of Sicily (831-1091) and Arab Malta (870-1091). The rule's own examples of
+  what stays name "the Islamic Golden Age" among the non-European Old World, but these lands are
+  Europe, so the region cuts their sites at 500 AD; the review of 2026-10-24 held them as an open
+  owner question. Orchestrator decision X13 (`MASTER_PLAN.md`; O15 of 2026-11-10 builds it in
+  before the first D20 round) reads them as medieval Europe under D58: **they stay out, and the
+  scope-window lane treats them as outside the label window.** The D20 population asks such a site
+  like every other European site past 500 AD (`scope_window.build` holds nothing out; the count
+  `held_label_open_question` is gone) and `scope_judge.build` writes an OUT_OF_WINDOW answer the
+  re-check confirmed (the skip `label-open-question` is gone from that lane). Shown and undecided on
+  2026-11-11 (read-only): Ruins of Talamanca (Spain 860), Huéscar (Spain 1201), Ponferrada (Spain
+  1001, the Templar castle), Ponte de Rubiães (Portugal 1100) and Villaggio Bizantino (Sicily 550);
+  Castle of Cola (Portugal) is dated -1900 since the period re-research and is inside the window.
+  **Unchanged outside the D20 lane:** `dates.label_open_question` still holds such a record on the
+  paths that admit without a verdict (`label_scope`: the loader skips it, Lyra leaves it to the
+  founder, the Prospector files it `label_borderline`) and the un-retire still skips it
+  `label-open-question`. None of them admits or brings back such a site, so X13 holds there too;
+  an X13 reading of `label_scope` would answer `out_of_scope` instead of holding, which is a change
+  to `pipeline/` (deployed) that no decision has asked for.
 * **The rest of the world, positively** (`REST_OF_WORLD_COUNTRIES`, review of 2026-10-24): Asia
   (Asian Russia, Central Asia, Iran, Iraq, the Arabian Peninsula included), Africa (Morocco and
   sub-Saharan Africa), the Americas and Antarctica, by every name `lookup_country` (Natural Earth's
@@ -179,7 +181,8 @@ unrecognised country) and the residual
 and scope-review plans render it. Where the window is computed now: the identity export
 (`identity/export.py`: `outside_window`, `label_borderline`, `label_open_question`), the D20
 population (`identity/scope_window.py`, groups `outside_window`, `label_borderline`, `pending`,
-`hadrians_wall_path`; a `label_open_question` row held out), the D20 question and its calibration pool (`scope_judge.cutoff_of`,
+`hadrians_wall_path`; a `label_open_question` row is asked like any other since X13, and the
+footpath's group is empty once a wave has retired it), the D20 question and its calibration pool (`scope_judge.cutoff_of`,
 `calibration.select_scope`), the scope-window lane's residual and read-back
 (`identity_lanes.scope_window_lane`) and the un-retire (section 2.2).
 
@@ -217,6 +220,119 @@ region), `tests/remediation/test_scope_unretire.py` (`TestTheLabelWindowInSql`:
 the rendered SQL evaluated in SQLite equals the Python rule row for row),
 `tests/pipeline/test_loader_scope_rule.py`, `tests/pipeline/test_radar_auto_promote.py` and
 `tests/pipeline/test_prospector_scope_rule.py` (the doors without a verdict, the approval's 422).
+
+**A D20 site whose entry moved since its question (`export-moved`).** The scope-window plan writes a
+decision only on the entry it judged (name, type, country, point, period, scope status and reason);
+a site another lane changed in between is skipped `entry-moved`, with nothing written; the skip row
+says when the plan read production (`read_at`, the database's clock). Such a site is asked again,
+not left to the owner list:
+
+```bash
+PY=./.venv/Scripts/python.exe; I=scripts/remediation/identity
+$PY $I/export.py && $PY $I/scope_window.py     # a discovery read after the plan that skipped the site (the other
+                                               # identity lanes read EXPORT.jsonl too: only when none has a round open)
+$PY $I/run.py --lane scope-window export-moved --stage scope-window-web --handoff DIR
+#   brief, answer, validate, import as for any round; export-reask for a held answer
+$PY $I/run.py --lane scope-window export --stage scope-window-recheck --handoff DIR2        # a site never re-checked
+$PY $I/run.py --lane scope-window export-moved --stage scope-window-recheck --handoff DIR3  # a site re-checked before
+$PY $I/run.py --lane scope-window result
+$PY $I/run.py --lane scope-window wave --wave W2     # a new label; then plan and the lane's gates as ever
+```
+
+* The web command asks every site a wave's `SKIPPED.jsonl` lists as `entry-moved` and no imported
+  round asked again for that wave, on its entry as the discovery holds it now; the prompt is the
+  plain question (the earlier answer judged another entry). It prints `left_population`: skipped
+  sites the discovery no longer lists (retired by another lane, or back inside the window with no
+  decision open), which are not asked. It refuses (`REFUSED: ... build the discovery again first`)
+  a discovery that was not read after the plan that found the move (the export's `exported_at`
+  against the skip's `read_at`): building the discovery again always clears that refusal. It
+  answers `no decided site is to be asked again` when nothing is open.
+* Whether the entry still differs from the one asked is not tested. A site whose move was undone
+  since (the other lane's write rolled back) reads as it was asked and is asked again like the
+  others: its wave is past, and only an imported moved round opens it for a new one.
+* While the moved web round is exported and not imported, the answer that stands is the earlier
+  one, about the earlier entry: a `plan` of the wave that skipped the site made again (it has no
+  `APPLY.sql`) compares production with that entry (`rounds.judged_contexts`) and skips the site
+  `entry-moved` again. It never writes the earlier answer onto the entry the new round asks about.
+* A re-check answered before the web answer it would stand for confirms nothing
+  (`scope_judge.precedes`): the site is `waiting-for-recheck` in `result`, the plan refuses it, and
+  the re-check command asks it again with the new proposal.
+* Once the moved round is imported, the wave that skipped the site no longer holds it
+  (`rounds.asked_again`, `waves.planned_sites`): the next `wave` takes it when its new answer is
+  kept or confirmed, and its skip row leaves `OWNER_LIST.jsonl` (`WAVE_SKIPS.jsonl` keeps it).
+* A moved round uses up none of a stage's two re-ask rounds; a held answer of a moved round is asked
+  by `export-reask` only while one of the two is left.
+* `scope_window.py` builds the discovery also after a wave retired Hadrian's Wall Path (the export
+  shows no retired site; the footpath's group is then empty).
+
+Tests: `tests/remediation/test_identity_b_scope.py` (`TestAnEntryThatMoved`, the re-check that
+precedes), `test_identity_b_rounds.py` (the moved round, the context a decision judged),
+`test_identity_b_files.py` (a released site, a skip row kept whole), `test_identity_b_run.py` (the
+whole path through the command line, a plan made again before the import, a move that was undone).
+
+**The corrected starts of D20 (`period_fix.py wave --d20`).** D20: "a wrong period is corrected
+(sourced)". The scope-window `plan` writes `<run>/scope-window/waves/<W>/PERIOD_WRONG.jsonl`: every
+site a `PERIOD_WRONG` answer keeps on a sourced start other than the stored one, with the answer's
+found quotes, its reasoning, its agent (`answered_by`), its model stamp, when it was answered and
+whether it was asked the label question (`label_borderline`). The period lane
+(`mechanical/period_fix.py`, rule `d20-sourced`) writes those starts **after** the scope wave is
+applied and accepted - the scope wave's premise is the stored period, so a start written before it
+would make that wave refuse:
+
+```bash
+PY=./.venv/Scripts/python.exe; M=scripts/remediation/mechanical; A=$M/apply.py
+$PY $M/period_fix.py wave --wave PW --no-d113 --d20 <run>/scope-window/waves/<W>/PERIOD_WRONG.jsonl
+$PY $M/period_fix.py step --wave PW --step 1     # PLAN.md: read every old -> new start before the write
+for s in emit verify rehearse probe-guards apply verify rehearse-rollback; do $PY $A --lane period-fix-PW-s001 --$s || break; done
+$PY $M/period_fix.py accept --wave PW --step 1   # 0 deviations; then a card_stats wave (the period is a card input)
+```
+
+A gate that exits non-zero ends the sequence: `accept` and the card_stats wave run only after every
+gate exited 0 (after an `--apply` that exited 4, 5 or 6 the journal is recounted first, never a
+second `--apply`). Each scope wave's `PERIOD_WRONG.jsonl` is one period wave with a label of its
+own: `wave` reads one hand-off and a label is planned once.
+
+* `PW` is a wave label the period-fix lane has not used. The journal rows carry the run stamp
+  `<PW>_mechanical-period-fix-s001` and, as evidence, the D20 decision row, every found quote of
+  the answer and the answer itself (agent, model, reasoning) - never D124's (`--cited` is Eddisbury's
+  input and is not fed this file).
+* `wave` prints `rule:d20-sourced` and one `skip:<reason>` counter per refusal; the refused sites are
+  in `WAVE.json` (`refused`) and keep their stored start: `d20-scope-not-written` (the site is not
+  `in_scope` in production: apply the scope wave first), `moved-since-answer` (production no longer
+  holds the start the answer judged), `d20-no-quote-states-year` (no found quote states the year
+  itself, its century or its millennium as a date - `period_fix.states_date`: the fields lanes'
+  gate `fields.answers.states_year`, by a statement the dating extractor reads as a date,
+  `fields.dating.acceptable`. `states_year` alone reads every unmarked number as an AD year; here
+  "300 metres", "Population 1200" and "Page 450" state none, and an unmarked year counts after a
+  date preposition, "built in 1200", "around 900". The year is then the answer's reading, not a
+  source's), `d58-window` (the start would leave the
+  window, or make the site label-borderline although its answer was not asked the label question;
+  where it was asked, the start is written), `period-end-set`, `journal-disagrees`.
+* A `PERIOD_WRONG.jsonl` planned by code older than this input lacks the answer's stamp and is
+  refused whole (`REFUSED: ... exactly the keys`). The scope `plan` writes the hand-off, so it runs
+  on code that has this input: a wave without `APPLY.sql` is planned again and gets the stamp, an
+  emitted one is never planned again and its starts are listed for the owner.
+* The gate proves that a page the answer quoted states the year as a date. It does not prove that
+  the sentence dates the beginning of this site (any found quote of the answer may state it, also
+  one that supports only the keep verdict): that is the answer's judgement, and the reader of the
+  step's `PLAN.md` checks it before the write - the quote that states the year must date the start
+  of this site, not a later phase, a namesake or the modern town.
+* Undo is the step's `ROLLBACK.sql`, rehearsed by `--rehearse-rollback` like every step of the lane.
+* **Undo order: the period step first, then the scope wave.** The scope wave's `ROLLBACK.sql`
+  carries the same guard 5 as its write, over every planned site: the premise
+  (`SCOPE_REVIEW_PREMISE_SQL`) holds `period_start`, and a reversal keeps the plan's premise
+  (`plan.reversed_records`). Once a D20 start of one of its sites is written, that file refuses
+  as a whole - the retirements included - with `planned row(s) no longer hold the premise the plan
+  derived its value from`. To undo a scope wave whose starts were written: first the `ROLLBACK.sql`
+  of every landed step of the period wave that read its `PERIOD_WRONG.jsonl`, which restores the
+  stored starts, then the scope wave's `ROLLBACK.sql`. The cards are not undone from a file (a
+  card_stats `ROLLBACK.sql` is void once a period label moved, `card_stats.py`): a new card_stats
+  wave recomputes them after the undo.
+
+Tests: `tests/remediation/test_mechanical_period_fix.py` (`TestD20`, `TestLoadD20`, `TestD20Wave`),
+`test_identity_b_scope.py` (the hand-off's stamp, the reader on the row as the plan writes it, the
+premise in the scope wave's rollback); mutation cases
+`scripts/remediation/mechanical/mutation_sweep.py "d20 start:"` (15).
 
 ---
 
@@ -386,15 +502,26 @@ sites, a stamp applied once):
 * **D50:** the six retired mystery sites (`lane.D50_DISPUTED_SITES`: Baltic Sea Anomaly, the three
   Bosnian pyramids, Yonaguni Monument, Richat Structure) come back **only** when the description they
   hold is a lane-E dispute enrichment: the journal row that wrote it carries
-  `wc4.EVIDENCE_DECISION_ENRICH`, a well-formed adjudicated brief of the site
-  (`enrich.dispute_record_problems`) and appended a `dispute_a` and a `dispute_b` sentence. Until
-  then each is skipped `d50-no-dispute-text`. D50 also says "no card or page asserts the claim":
-  a D50 site with a card text comes back only once the latest journal row of its
-  `card_stats.card_description` is **later** than the journal row of its dispute text (the card lane
-  wrote the card in the knowledge of the dispute, D21); until then it is skipped
+  `wc4.EVIDENCE_DECISION_ENRICH` and a well-formed adjudicated brief of the site
+  (`enrich.dispute_record_problems`), and the enrichment record that run left on the site
+  (`raw_data._description_enrichment`, tied to the journal row by its `run`) **kept** a `dispute_a`
+  and a `dispute_b` sentence. Kept after the verification, not merely appended (since 2026-11-11,
+  owner decision D21: both positions are named): a position the writer gave and a verifier dropped
+  is not in the text, and a site whose text kept one position, or neither, waits (`kept no
+  dispute_a sentence` in SKIPPED.jsonl; lane E's build writes no such text, SENTENCE_CHECK.md 14.3,
+  the gate holds it whatever wrote it). The export reads the record for the plan
+  (`EXPORT_DISPUTE_SQL`: run `export` again before a wave, an export of older code has no `record`).
+  Until then each is skipped `d50-no-dispute-text`. D50 also says "no card or page asserts the claim":
+  a D50 site comes back only **without a card text**, or with one the card lane judged against the
+  description the site holds - its teaser provenance (`raw_data._card_provenance`) hashes that card
+  and that description (`identity_lanes.card_judged_sql`); until then it is skipped
   `d50-card-not-cleared`. All six have a card (read 2026-10-24; Richat's last journalled write is
-  `wb-teaser-card-s009`, the other five have none), so the card lane rewrites the six cards after
-  lane E and before the D50 wave. The dispute screen and lane E ask the six although they are
+  `wb-teaser-card-s009`, the other five have none). Since orchestrator decision O17 (2026-11-10) the
+  six cards are **cleared** the D47 way, not rewritten, and no card run asks a retired site: the
+  six come back without a card text. The test asks no journal order (until 2026-11-11 it passed any
+  card whose latest journal row was later than the dispute text - which the reversal of the clear
+  is, with the old card back). The Baltic Sea Anomaly also needs its country emptied (D84, D149) -
+  both are "The D50 wave since 2026-11-11" below. The dispute screen and lane E ask the six although they are
   retired (`wc/disputes.py screened`, `wc/cli.py hidden`), so the order is: `disputes.py`
   candidates -> research -> adjudicate -> outputs; `cli.py defect-sites` + the repair run for the
   asserting sentences; `cli.py export --enrich --disputes` and its write; the card lane's step for
@@ -434,7 +561,9 @@ retired by the numeric cut (`numeric_cut_sql`), has a point and a date, lies ins
 window, is not borderline, holds no Viking item (`viking_subject_sql`) and is of no `NON_SITE_TYPES`
 type; or a D58 museum reason, retired by the numeric cut, and is a placed Museum whose region has
 the 1500 AD cutoff (`label_cutoff_sql`: an unrecognised country fails it); or a D50 reason and is a D50 site whose description is a dispute enrichment
-(`dispute_enriched_sql`) and whose card was written after it (`card_cleared_sql`); or a D57 reason
+that kept both positions (`dispute_enriched_sql`: the journal row and the site's enrichment record,
+read by position up to `enrich.MAX_APPENDED` sentences), which holds no card text or one the card lane judged against that description (`card_cleared_sql`)
+and which, if D84 leaves it without a country (`lane.D84_NO_COUNTRY_SITES`), holds none; or a D57 reason
 and is no D50 site, was staged until this write (`staged_before_sql`: the latest journal row of its
 `scope_reason` wrote the reason it holds over one beginning `D57 staged:`), holds a checked
 description (`description_checked_sql`) and a confirmed picture (`picture_confirmed_sql`). The
@@ -506,10 +635,11 @@ a wave meant for the D57 sites must hold no site of another class.
 
 The read-back prints the scope counts, the D58 residual, the date retirements the label window keeps
 and the borderline ones, the D50 sites shown, those shown **without** a dispute text and those shown
-with a card **not written after** their dispute text (both always 0), the D57 sites still staged,
+with a card **not judged against** their dispute text (both always 0), the D57 sites still staged,
 those shown by the un-retire and those shown **without** a checked description or a confirmed
-picture (both 0 after the wave; a later hand edit of a text or a moved hero shows up here),
-statuses without a reason, and journal rows of the run that write another status. (The window metric counts every date
+picture (both 0 after the wave; a later hand edit of a text or a moved hero shows up here), the
+sites D84 leaves without a country shown with one (0), statuses without a reason, and journal rows
+of the run that write another status. (The window metric counts every date
 retirement the window keeps, D20's and the non-site types included: after the first wave it stays
 at 1, Mount Livadiyskaya.)
 **After a landed wave:** the sites are shown again at once (the site page, the sitemap and IndexNow's
@@ -529,6 +659,86 @@ still retired - but not by the row the D57 insert created the site with (`old_va
 the site is staged or its insert was undone (`public_sites.d57_staged`, `d57_undone`): that site
 never had a page. A D57 site that was shown and is retired again (this lane's rollback: `in_scope`
 -> `retired`) is announced like every other removed page.
+
+**The D50 wave since 2026-11-11 (orchestrator decision O17, owner decisions D84 and D149).** Two
+things the six need beside their dispute text, each with a command of its own, in this order:
+
+1. **The cards are cleared, not rewritten** (O17: "the six cards are cleared the D47 way, so the
+   un-retire needs no new card"). `mechanical/teaser.py d50-clear --run d50-card-clear-<wave>`
+   builds the owner run, and the card planner plans its clears although the sites are retired
+   (`CARD_DESCRIPTIONS.md` 5.11). A site without a card text passes the card test
+   (`card_cleared_sql`, `card_problem`) whatever the order of the journal rows, so the clear may
+   land before lane E reads the six or after its write step is accepted - never in between. A
+   clear that was undone does not pass it: the old card is back, and no teaser provenance ties it
+   to the dispute text (`d50-card-not-cleared` again, and the wave's invariant refuses it).
+2. **The Baltic Sea Anomaly holds no country** (D84: "Empty / international waters, no country
+   page"; D149: "Globe only: no route without a country"). It holds `'Baltic Sea'` (read
+   2026-11-11, written by no journalled lane); shown with it, it would get `/sites/baltic-sea/...`
+   and a country hub. A lane `country-d84-<wave>` (`identity_lanes.country_d84_lane`, planner
+   `mechanical/country_d84.py --write --wave <wave>`, stamp `<wave>_mechanical-country-d84`,
+   directory `mechanical_country_d84/<wave>/`, test id `D84/country`)
+   empties the cell: a cell lane whose one column may be emptied (`Column.clears`), premise the
+   row's name, point **and scope status**, and an invariant inside the transaction that every
+   planned site holds no country afterwards and is one `lane.D84_NO_COUNTRY_SITES` names. It
+   writes the site **while it is retired**, and the premise makes that a guard: guard 5 runs on
+   the apply and on `ROLLBACK.sql` alike, so the reversal refuses a site that is shown. The
+   planner lists a row that is no curated row, is named otherwise
+   (`name-moved`), holds no country (`already-empty`) or another one (`stored-value-moved`), is
+   not retired (`row-not-retired`), or
+   whose `country` journal does not end at the live value; it stops for a row the read lost and
+   for a wave that has journalled a row. It is a wave like the un-retire it is paired with: a
+   stamp is applied once, so a write that was undone is planned again under the next label
+   (`2026-11-12b`) - the row holds `'Baltic Sea'` again and its journal ends there.
+   The un-retire shows a D84 site only without a country: the planner skips it
+   `d84-country-not-cleared` (after its dispute text and its card), and `unretire_violation_sql`
+   refuses it inside the transaction. Its premise holds the country, so `scope_unretire.py
+   export` is run after the country lane's apply. The route side needs no code: the site pages,
+   the country hubs, the sitemap and IndexNow read `public_sites.curated_page` (curated, with a
+   country, not retired), the popup links a curated site without a country by its id
+   (`/site.html?id=`), and that URL answers 301 to the globe focus (`api/routes/sites_html.py`).
+
+```bash
+PY=./.venv/Scripts/python.exe
+MW=scripts/remediation/mechanical/teaser.py
+C=scripts/remediation/mechanical/country_d84.py
+A=scripts/remediation/mechanical/apply.py
+# 1. the cards (CARD_DESCRIPTIONS.md 5.11 and 5.4)
+$PY $MW d50-clear --run d50-card-clear-<wave>      # read-only; the owner run's OUTCOMES.jsonl
+$PY $MW plan --run d50-card-clear-<wave> --step N  # then both lanes of the step, and accept --step N
+# 2. the country of the Baltic Sea Anomaly
+W=<wave>                                           # the day, e.g. 2026-11-12; the next letter (2026-11-12b) for a write that was undone
+$PY $C --write --wave $W                           # read-only: mechanical_country_d84/$W/ READ.jsonl, PLAN.jsonl, SKIPPED.jsonl, PLAN.md, ROLLBACK.sql
+$PY $A --lane country-d84-$W --check-primitive
+$PY $A --lane country-d84-$W --verify              # before: "... that still hold one" = 1
+$PY $A --lane country-d84-$W --emit
+$PY $A --lane country-d84-$W --rehearse
+$PY $A --lane country-d84-$W --probe-guards        # incl. invariant-country
+$PY $A --lane country-d84-$W --apply
+$PY $A --lane country-d84-$W --verify              # after: 0; "curated shown rows without a country that D84 does not name" = 0
+$PY $A --lane country-d84-$W --rehearse-rollback   # now, while the site is retired: guard 5 refuses it once the site is shown
+# 3. the wave: a fresh export, the next label
+$PY $U export && $PY $U write --wave <wave>
+```
+
+`--write` is refused while `mechanical_country_d84/<wave>/` holds a plan (a delivered plan is never
+replaced), when the wave's stamps hold a journal row (a wave that has written is never re-planned)
+and when the read leaves nothing to write. The read-back of a `country-d84-<wave>` lane also counts the
+`card_stats` rows whose `civilization` differs from the site's country: it rises by one, because a
+card_stats wave never empties a column and lists this site `new-value-null` (the card keeps
+`civilization = 'Baltic Sea'`). **Undo, in this order:** the un-retire wave's `ROLLBACK.sql` (the site
+is retired again), then `mechanical_country_d84/<wave>/ROLLBACK.sql` (the country is back), then the card
+step's undo (`CARD_DESCRIPTIONS.md` 5.6) - never a D84 site shown with a country, never a D50 site
+shown with the card the clear removed. The first two are held by guards, not by this order alone:
+the country lane's `ROLLBACK.sql` run first is refused by its guard 5 (the premise holds
+`scope_status = retired`; nothing is written), and a card that the card step's undo put back is
+not one the un-retire shows a site with (`CARD_DESCRIPTIONS.md` 5.11, Undo). **After the undo** the
+whole part can be made again: a new `d50-clear` run and step, `country_d84.py --write` under the
+next wave label, a fresh export and the next un-retire label - no stamp is used twice.
+Tests: `tests/remediation/test_mechanical_country_d84.py`,
+`test_scope_unretire.py` (`test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied`,
+`test_a_site_d84_leaves_without_a_country_passes_only_without_one`,
+`test_a_d50_site_passes_only_without_a_card_or_with_one_judged_against_its_text`);
+`mechanical/mutation_sweep.py d84` (26 cases) and `"d50 sql" "d50 plan"` (the card test among them).
 
 ---
 
@@ -2118,8 +2328,14 @@ any list.
   `mutation_sweep.py "d57 unretire" "d57 indexnow"` - the D57 class of the un-retire (planner,
   invariant, premise, the delivered wave's text) and IndexNow's removed pages
   (`D57_GO_LIVE_CASES`, 33 cases; `tests/pipeline/test_indexnow.py` runs the statement in SQLite);
+  `mutation_sweep.py "d50 clear" d84` - what the D50 wave needs since 2026-11-11
+  (`D50_UNRETIRE_CASES`, 37 cases: the card clear of O17, the `country-d84-<wave>` lane, the un-retire's
+  D84 gate; tests in `test_mechanical_teaser.py`, `test_mechanical_country_d84.py`,
+  `test_scope_unretire.py`);
   `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20
-  window and question; `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
+  window and question; `mechanical/mutation_sweep.py x13` - Islamic Europe asked and retired like
+  any European site; `mutation_sweep_b.py moved` and `identity/mutation_sweep.py footpath` - a
+  decided site asked again after its entry moved (below); `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
   `enrich disputes` - the D50 exemptions of lane WC/E.
 * `tests/remediation/test_hero_moves.py` - D48/D49: the four problems, what qualifies a hero (never
   a new small hero), that a hero is a chosen row (never a `depicts` ranked by its pixels), the

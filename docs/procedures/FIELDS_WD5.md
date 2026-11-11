@@ -437,6 +437,52 @@ cover (a Spanish period name, a date of the fortification and not of the start):
 `unresolved` costs nothing but its question. Tests: `tests/remediation/test_fields_wd5_reask.py`; mutation family
 `wd5r:`.
 
+### 12.1 The listed-point run (`--sites FILE --point`, built 2026-11-11)
+
+`population.py build --stage wd5 --sites FILE --point` builds a wd5 run that asks the **stored point** of each site
+named in FILE and nothing else, with the open reason `listed-point` (`population.WHY_LISTED_POINT`;
+`handoff.OPEN_TEXT` says it to the agent, and `open[coordinates]["made"]` carries the reason of FILE and, where a pass
+answered the point before, the run and the first 400 characters of its latest answer). It closes the gap that
+`--sites` built a `period_start` question only: the close-out's follow-up 1 (Sybaris on the Traeis holds the point of
+Sybaris) had no tool path. FILE is the reader-gap run's: one JSON object per line `{"site_id": ..., "reason": ...}`.
+
+The build refuses, naming every offender and writing nothing, a listed site that is no curated site of the export, is
+retired, whose point's newest journal row is another lane's sourced write, or whose latest point answer (WD1, WD3
+pilot, WD3, WD4, wd5 pilot, wd5 - `REASK_HISTORY_RUNS`) is a `keep` (`check_listed_points`): a point a source stands
+behind is never asked again. No `--reask-cleared`, no `--d99`, no `--pilot`, no `--without`. **`--out` is
+`output/remediation/fields/wd5-point/<label>`** (the CLI refuses another parent directory): the final owner list reads
+every run it finds there, after all other field runs, so the run's answer is the last word on its points
+(`owner_list_final.field_run_names`), and its `adv/OWNER.jsonl` is a registered artefact. An earlier listed-point
+run's answers are not among the answers a later one reads: name a point in one listed-point run only.
+
+It is a normal wd5 run otherwise (`RUN.json` pins `recheck` and records `reask.why: "listed-point"`; `COUNTS.json` has
+`reader_gap.asked: {"listed-point": N}`): export, brief, import, adversarial re-check and wave as in sections 5 and 6.
+A `replace` moves the point (`lat`, `lon`, `geom`; `plan.REPLACEABLE` lets it land on a point no journalled lane
+sourced, and the country guard and `moved-since-classification` hold as for any wd5 point); `keep` writes nothing;
+`unresolved` leaves the point (`coordinates-unresolved`, listed in the wave's HELD.jsonl and in the owner list as
+`field-coordinates`).
+
+```bash
+P=output/remediation/fields/wd5-point/<label>          # <label>: the date, e.g. 2026-11-12
+mkdir -p $P
+printf '%s\n' '{"site_id": "251ac618-a557-4c31-9129-65afc47b649d", "reason": "the record holds the point of Sybaris (991bd627, 39.716823, 16.493846); the city lay on the Trionto (ancient Traeis), about 25 km away"}' > $P/../SITES-<label>.jsonl
+X=output/remediation/fields/wd5x                       # the newest export with its harvest (2026-11-06), as section 15
+cp $X/STORED.jsonl $X/LINKS.jsonl $X/POINTS.jsonl $X/MADE.jsonl $X/SEEDS.jsonl $P/
+$PY $F/population.py --out $P build --root $X/harvest --stage wd5 --sites $P/../SITES-<label>.jsonl --point
+$PY $F/handoff.py copy-hints --run $P --from output/remediation/fields/wd4/ORIGINAL_PERIODS.jsonl
+$PY $F/handoff.py export --run $P --handoff output/remediation/handoff/fields-wd5-point-<label>-r0
+# answer, validate, import, re-asks (5.1), adversarial.py select/export/import/apply (5.3), then the wave (section 6)
+```
+
+The export of `$X` is of 2026-11-06: if a lane wrote the point of a listed site since, refresh instead as in section 4
+step 1 (`population.py --out $P export` straight before `harvest.py --root <a harvest copy> export` and `fetch`) - the
+plan refuses a decision about a point the site no longer holds (`moved-since-classification`).
+
+Sybaris on the Traeis was asked its point by WD1, WD3 and wd5 and answered `unresolved` each time ("the exact
+location has not been found along the Trionto"): a fourth `unresolved` leaves the point where it is, and the site
+stays on the owner list (`closeout-followup` while it shares Sybaris' point, and `field-coordinates`). Tests:
+`tests/remediation/test_fields_listed_point.py`; mutation family `p8 point:`.
+
 ## 13. Phase 8: the type merge, card_stats and its five dead columns, the owner list (2026-10-24)
 
 The close-out order of the map (`plans/fields.md`, "Type merge, then card_stats (last)"), after the last wd5 wave and
@@ -570,8 +616,14 @@ into it, and `scripts/merge_rewrites.py` no longer copies into it either (a merg
 ### 13.5 The owner list (`scripts/remediation/owner_list_final.py`)
 
 One list of everything that stays empty, unsourced or open: the field runs (each rebuilt with `owner_list.build`, the
-**last** run that asked a `(site, field)` decides it), the identity lanes' `OWNER_LIST.jsonl` (retarget, scope
-window), and production's own gaps (no description, no card, an old card kept under D5, no picture, a thumbnail
+**last** run that asked a `(site, field)` decides it; since 2026-11-11 `FIELD_RUNS` also holds the D99 pilots
+`wd5r/pilot` and `wd5r/pilot2` and the D124 re-ask `d121/d124`, and every listed-point run `wd5-point/<label>` of
+section 12.1 is read after them - `field_run_names`), the identity lanes' `OWNER_LIST.jsonl` (retarget, scope
+window), the close-out's follow-ups (`final-2026-10-08/CLOSEOUT_FOLLOWUPS.jsonl`, topic `closeout-followup`: a row is
+listed while production still shows its defect - `FOLLOWUP_CHECKS`: Sybaris on the Traeis at Sybaris' point, Tichit
+under Dhar Tichitt's text, Qasr Qaroun without a hero and not under `image-none`; a follow-up without a registered
+check stays open while its site is shown; the printed JSON's `followups` names the open and the closed ones, and a
+missing file is a missing source), and production's own gaps (no description, no card, an old card kept under D5, no picture, a thumbnail
 without any gallery row, a hero below 1600x900 that a larger live row could replace (D48) or one without the
 credit its licence asks, no type, Undated, a rule-made or
 unmarked period, an unsourced or unmarked point, no source URL, no Wikidata item, a pending scope, a card whose
@@ -581,7 +633,12 @@ alias) is no later write, so its question stays open. Every owner-facing artefac
 directory whose name holds `owner` or `human_only`, caches left out - is a source, a field run's own list, the
 builder's output, or one of `OUT_OF_SCOPE` with its reason (HUMAN_ONLY.md, HUMAN_ONLY_DECISIONS_2026-09-26.md,
 OWNER_DECISIONS_2026-10-08.md: decisions, no open site; `teaser/runs/owner-d47-2026-10-19`: the 6 cleared cards, listed
-under `card-empty`); the report names the out-of-scope ones, and anything else is `unregistered` (0 on 2026-10-24).
+under `card-empty`; since 2026-11-11 `fields/wd5x/OWNER_SHOWN.candidates.json` and
+`fields/wd5x/report-615/OWNER_SCOPE.jsonl`: the failed D70 extractor's sample and its 5 scope readings, the sites are
+under `period-undated`; `insert_site/d57-2026-11-05/D114_`, `D130_` and `D143_OWNER_ROUND.json`: the inputs of the D57
+research's owner rounds); the report names the out-of-scope ones, and anything else is `unregistered` (0 on
+2026-10-24; a field run's own files - `<run>/OWNER_LIST.*`, `<run>/DECISIONS.pre-owner-<n>.jsonl`, `<run>/adv/*` -
+belong to the run, `_of_a_field_run`).
 `hero-small` is D48's population as the census of 2026-10-08 defined it (`state-2026-10-08/workflow_result.json`,
 "Served hero size buckets"; `census_digest.md`): a hero - the first `is_hero`, non-excluded row - below 1600x900
 whose site holds another non-excluded row of at least 1600x900; each row names the largest such row and how many

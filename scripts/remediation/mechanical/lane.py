@@ -1195,6 +1195,24 @@ def d57_staged_sql(alias: str = "u") -> str:
     return d57_staged(alias)
 
 
+#: D84 (owner, 2026-11-05) with D149 (owner, 2026-11-10): the Baltic Sea Anomaly lies in
+#: international waters. Its `country` is empty, it has no country page and no `/sites/` route
+#: ("Globe only: no route without a country"). By site id, the name and the country it held (read
+#: on production 2026-11-11: 'Baltic Sea', written by no journalled lane). A `country-d84-<wave>`
+#: lane empties the cell (`identity_lanes.country_d84_lane`, `country_d84.py`), and the un-retire
+#: shows such a site only without a country (`identity_lanes.unretire_violation_sql`,
+#: `scope_unretire.py`).
+D84_NO_COUNTRY_SITES: Mapping[str, tuple[str, str]] = {
+    "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded": ("Baltic Sea Anomaly", "Baltic Sea"),
+}
+
+
+def d84_site_sql(alias: str = "u") -> str:
+    """SQL: the row is one of `D84_NO_COUNTRY_SITES`."""
+    listed = ", ".join(sql_literal(site_id) for site_id in sorted(D84_NO_COUNTRY_SITES))
+    return f"CAST({alias}.id AS text) IN ({listed})"
+
+
 #: The scope lanes that retire (`scope-review-<wave>`, `scope-window-<wave>`) never retire a D50
 #: site: D50 shows them as disputed, and the question that retired them on 2026-09-30 (natural
 #: formation, no site) would retire them again. The second leg - no site of these lanes leaves with
@@ -3081,9 +3099,11 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 #: 2026-10-24): `card-exact-sNNN`, built by `card_disclosure_exact.lane_of` (the pinned site list).
 CARD_EXACT_LANE = re.compile(r"^card-exact-s(\d{3})\Z")
 #: The identity package's wave lanes (`mechanical/identity_lanes.py`, owner decisions D13, D20, D23 of
-#: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`.
+#: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`,
+#: the un-retire `scope-unretire-<wave>` (D58, D50) and its D84 country lane `country-d84-<wave>`.
 IDENTITY_WAVE_LANE = re.compile(
-    r"^(?:scope-window|scope-unretire|name-clean|retarget-name|spoken)-\d{4}-\d{2}-\d{2}[a-z]?\Z"
+    r"^(?:scope-window|scope-unretire|country-d84|name-clean|retarget-name|spoken)"
+    r"-\d{4}-\d{2}-\d{2}[a-z]?\Z"
 )
 
 

@@ -298,6 +298,88 @@ class TestTheImport:
                 tmp_path / "other", SPEC, tmp_path / "h3", questions(), earlier={A_ID: "x"}
             )
 
+    def test_a_moved_round_asks_a_decided_site_again_on_the_context_it_is_given_now(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        """The plan found the entry of a decided site changed: the site is asked again in a round
+        of its own, its prompt the plain question on the new context, and the decision and the
+        stored context are that round's from its import on."""
+        record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
+        yes = {A_ID: {"site_id": A_ID, "ok": True}, B_ID: {"site_id": B_ID, "ok": True}}
+        answer_all(tmp_path / "h1", record, SPEC, yes)
+        run_import(out)
+        renamed = R.Question(A_ID, {"site_id": A_ID, "name": "Alpha the Great"})
+        again = R.export_round(
+            out, SPEC, tmp_path / "h2", [renamed], moved={A_ID: "wave w1"}, now=lambda: NOW
+        )
+        assert (again.name, again.sites, again.moved, again.earlier) == (
+            "r2",
+            [A_ID],
+            {A_ID: "wave w1"},
+            {},
+        )
+        assert R.find_round(out, "r2") == again and R.find_round(out, "r1").moved == {}
+        prompt = (tmp_path / "h2" / "r2-b01" / "toy-web" / f"{A_ID}.prompt.txt").read_text("utf-8")
+        assert prompt == "Question about Alpha the Great."
+        assert R.asked_again(out) == set(), "exported only: the round has decided nothing yet"
+        # ... and the decision that stands judged the entry of its own round, not the new one
+        assert R.load_contexts(out)[A_ID]["name"] == "Alpha the Great"
+        judged = R.judged_contexts(out)
+        assert sorted(judged) == [A_ID, B_ID]
+        assert judged[A_ID] == questions()[0].context != renamed.context
+        answer_all(tmp_path / "h2", again, SPEC, {A_ID: {"site_id": A_ID, "ok": False}})
+        summary = run_import(out, "r2")
+        assert (summary["held"], summary["sites_decided_overall"]) == (1, 1)
+        assert R.asked_again(out) == {(A_ID, "wave w1")}
+        assert R.load_contexts(out)[A_ID]["name"] == "Alpha the Great"
+        assert R.judged_contexts(out)[A_ID] == renamed.context
+        # the new answer is held: the re-ask asks it on the moved round's context, and the moved
+        # round used up neither of the two re-asks
+        for number in (3, 4):
+            held = R.reask_sites(out)
+            assert set(held) == {A_ID}
+            reask = R.export_round(
+                out,
+                SPEC,
+                tmp_path / f"h{number}",
+                [R.Question(A_ID, R.load_contexts(out)[A_ID])],
+                earlier=held,
+                now=lambda: NOW,
+            )
+            answer_all(tmp_path / f"h{number}", reask, SPEC, {A_ID: {"site_id": A_ID, "ok": False}})
+            run_import(out, f"r{number}")
+        with pytest.raises(R.RoundError, match="2 re-ask rounds are out"):
+            R.reask_sites(out)
+
+    def test_a_moved_round_asks_exactly_the_decided_sites_it_names(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        a, b = questions()
+        with pytest.raises(R.RoundError, match="a later round of its own"):
+            R.export_round(out, SPEC, tmp_path / "h0", [a], moved={A_ID: "w"})
+        record = R.export_round(out, SPEC, tmp_path / "h1", [a, b], now=lambda: NOW)
+        with pytest.raises(R.RoundError, match="not imported"):
+            R.export_round(out, SPEC, tmp_path / "h2", [a], moved={A_ID: "w"})
+        answer_all(
+            tmp_path / "h1",
+            record,
+            SPEC,
+            {A_ID: {"site_id": A_ID, "ok": True}, B_ID: {"site_id": B_ID, "ok": False}},
+        )
+        run_import(out)
+        with pytest.raises(R.RoundError, match="a later round of its own"):
+            R.export_round(
+                out, SPEC, tmp_path / "h2", [a], moved={A_ID: "w"}, earlier={A_ID: "held"}
+            )
+        with pytest.raises(R.RoundError, match="exactly the decided sites"):
+            R.export_round(out, SPEC, tmp_path / "h2", [a, b], moved={A_ID: "w"})
+        with pytest.raises(R.RoundError, match="exactly the decided sites"):
+            R.export_round(out, SPEC, tmp_path / "h2", [b], moved={B_ID: "w"})
+        never = R.Question("cccccccc-0000-4000-8000-000000000003", {"site_id": "c", "name": "C"})
+        with pytest.raises(R.RoundError, match="exactly the decided sites"):
+            R.export_round(out, SPEC, tmp_path / "h2", [never], moved={never.site_id: "w"})
+        assert not (tmp_path / "h2").exists() or not any((tmp_path / "h2").iterdir())
+
 
 class TestTheRoleCheck:
     """An answer is the stage's role's or it is not imported; nothing is written for a round whose

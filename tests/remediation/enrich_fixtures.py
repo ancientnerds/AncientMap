@@ -108,6 +108,34 @@ def nothing(site_id: str) -> str:
     return answer(site_id, note="no reputable page frames anything about this site as open")
 
 
+def dispute_pair(site_id: str, *more: dict) -> str:
+    """Both positions of the dispute, then `more` sentences (an open question)."""
+    return answer(
+        site_id,
+        sentence("dispute_a", POSITION_A, Q_A),
+        sentence("dispute_b", POSITION_B, Q_B),
+        *more,
+    )
+
+
+def dispute_brief(
+    site_id: str, *, asserting: list[dict] | None = None, desc_sha256: str | None = None
+) -> dict:
+    """An adjudicated dispute brief as `disputes.py outputs` writes it (`enrich.DISPUTE_KEYS`), made
+    for the Phase-4 text unless `desc_sha256` says otherwise."""
+    source = {"url": POSITIONS, "title": "Dating Tarxien", "quote": Q_A["quote"]}
+    return {
+        "site_id": site_id, "name": "Tarxien Temples", "verdict": "dispute",
+        "desc_sha256": desc_sha256 or FX.M.text_sha256(WX.P4_TEXT),
+        "position_a": {"claim": "The first phase is near 3600 BC", "holders": "the excavators",
+                       "sources": [source]},
+        "position_b": {"claim": "The first phase is near 3150 BC", "holders": "radiocarbon dating",
+                       "sources": [{**source, "quote": Q_B["quote"]}]},
+        "asserting": asserting or [], "note": "a documented controversy",
+        "researched_by": "field_researcher:r", "adjudicated_by": "adversarial:a",
+    }  # fmt: skip
+
+
 def record_enriched(
     handoff: Path,
     answers: Mapping[str, str],

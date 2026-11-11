@@ -24,6 +24,11 @@ probe-guards, apply, read-back, rehearse-rollback.
     #   (no --calibration for a role that stands by owner decision D157/D154: every role on Opus)
     $PY $I/run.py --lane L export-reask --stage S --handoff DIR2              # the held sites, r2/r3
     $PY $I/run.py --lane L status --stage S
+    # D20 only: the decided sites a wave's plan skipped `entry-moved`, asked again on their entry as
+    # a discovery read after that plan holds it (export.py, scope_window.py first); then, for the
+    # re-check stage, the retirements whose re-check was answered before that new web answer
+    $PY $I/run.py --lane scope-window export-moved --stage scope-window-web --handoff DIR3
+    $PY $I/run.py --lane scope-window export-moved --stage scope-window-recheck --handoff DIR4
 
     # a pilot is a first round; once it is imported, `export` again asks the sites never asked (a
     # follow-on round); a held site is asked again at most twice (`export-reask`)
@@ -208,6 +213,32 @@ def _asked(stage_dir: Path) -> list[Question]:
     return [Question(sid, ctx) for sid, ctx in sorted(R.load_contexts(stage_dir).items())]
 
 
+def _scope_skip_files(wave: str) -> list[Path]:
+    """The file a scope-window wave's plan lists its skips in."""
+    return [A.lane_dir(scope_judge.scope_window_lane(wave)) / "SKIPPED.jsonl"]
+
+
+def moved_round(
+    args: argparse.Namespace, run: Path, out: Path, population: Callable[[], list[Question]]
+) -> tuple[list[Question], dict[str, str], list[str]]:
+    """The questions of a moved round of the scope window, why each site is asked again, and the
+    skipped sites that left the population. The web stage asks the sites a wave's plan skipped
+    `entry-moved` (`scope_judge.moved_questions`); the re-check stage asks the retirements whose
+    re-check has not read the web answer that stands now (`scope_judge.stale_rechecks`)."""
+    if args.lane != scope_judge.LANE:
+        raise UsageError(
+            f"lane {args.lane} asks no decided site again: only the scope-window plan skips a "
+            "site because its entry moved"
+        )
+    fresh = {q.site_id: q for q in population()}
+    if args.stage == scope_judge.WEB:
+        skips = waves.wave_skips(run / scope_judge.LANE, _scope_skip_files)
+        return scope_judge.moved_questions(skips, R.asked_again(out), fresh)
+    web = R.decisions_by_site(R.stage_dir(run, scope_judge.web_spec()))
+    stale = scope_judge.stale_rechecks(web, R.decisions_by_site(out))
+    return [fresh[sid] for sid in stale], stale, []
+
+
 def _pick(questions: list[Question], args: argparse.Namespace) -> list[Question]:
     if args.sites_file:
         wanted = [
@@ -253,6 +284,24 @@ def cmd_stage(args: argparse.Namespace, run: Path) -> int:
             [Question(sid, stored[sid]) for sid in sorted(held)],
             earlier=held,
         )
+    elif command == "export-moved":
+        R.latest_imported(out, "a moved round")
+        questions, moved, left = moved_round(args, run, out, definition.population)
+        if not questions:
+            raise UsageError(
+                "no decided site is to be asked again"
+                + (f" ({len(left)} left the population: {left[:3]})" if left else "")
+            )
+        record = R.export_round(out, spec, Path(args.handoff).resolve(), questions, moved=moved)
+        _print(
+            {
+                "round": record.name,
+                "sites": len(record.sites),
+                "batches": len(record.batches),
+                "left_population": left,
+            }
+        )
+        return 0
     elif command == "brief":
         print(R.brief(out, spec, args.round, args.batch_id))
         return 0
@@ -479,6 +528,9 @@ def cmd_scope(args: argparse.Namespace, run: Path) -> int:
     lane_dir = run / scope_judge.LANE
     command = args.command
     final = scope_judge.final_state(web, second)
+    # a site a wave's plan skipped because its entry moved and that a moved round asked again: the
+    # wave no longer holds it, and its state is the new answer's
+    released = R.asked_again(web_dir)
     if command == "result":
         asked = R.load_contexts(web_dir)
         common.write_jsonl(lane_dir / "RESULT.jsonl", final)
@@ -487,10 +539,10 @@ def cmd_scope(args: argparse.Namespace, run: Path) -> int:
              "verdict": r["verdict"], "reason": (web.get(r["site_id"]) or {}).get("reason", "")}
             for r in final if r["state"] in ("rejected", "held", "waiting-for-recheck")
         ]  # fmt: skip
-        skips = _write_wave_skips(
-            lane_dir, lambda w: [A.lane_dir(scope_judge.scope_window_lane(w)) / "SKIPPED.jsonl"]
+        skips = _write_wave_skips(lane_dir, _scope_skip_files)
+        owner += _skip_owner_rows(
+            [s for s in skips if (s["site_id"], s["wave"]) not in released], ""
         )
-        owner += _skip_owner_rows(skips, "")
         common.write_jsonl(lane_dir / "OWNER_LIST.jsonl", owner)
         counts: dict[str, int] = {}
         for r in final:
@@ -507,13 +559,32 @@ def cmd_scope(args: argparse.Namespace, run: Path) -> int:
         return 0
     writable = {r["site_id"] for r in final if r["state"] in ("kept", "confirmed")}
     if command == "wave":
-        _print(waves.select_wave(lane_dir, args.wave, writable, limit=args.limit, built_at=_now()))
+        _print(
+            waves.select_wave(
+                lane_dir,
+                args.wave,
+                writable,
+                limit=args.limit,
+                built_at=_now(),
+                released=released,
+            )
+        )
         return 0
-    ids = waves.load_wave(lane_dir, args.wave)["sites"]
+    # a site this wave released belongs to the wave that takes it next: a plan of this wave made
+    # again (no APPLY.sql yet) would otherwise plan it a second time, on its new answer
+    taken = waves.load_wave(lane_dir, args.wave)["sites"]
+    ids = [s for s in taken if (s, args.wave) not in released]
     lane = scope_judge.scope_window_lane(args.wave)
     out = A.lane_dir(lane)
     if command == "plan":
-        asked = R.load_contexts(web_dir)
+        if not ids:
+            raise UsageError(
+                f"wave {args.wave} holds no site any more: every one of its {len(taken)} was "
+                "asked again after its entry moved and belongs to a later wave"
+            )
+        # the entry each decision judged: a moved round that is exported and not imported has
+        # stored the site's new entry already, and the answer that stands is not about that one
+        asked = R.judged_contexts(web_dir)
         live = {str(r["site_id"]): r for r in read_only_reader()(scope_judge.live_sql(ids))}
         built = scope_judge.build({s: web[s] for s in ids}, second, asked, live, args.wave)
         mech = scope_judge.to_plan(built, _now())
@@ -707,7 +778,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         return cmd
 
-    for name in ("export", "export-reask"):
+    for name in ("export", "export-reask", "export-moved"):
         cmd = stage_command(name, "a round of questions into a new handoff directory")
         cmd.add_argument("--handoff", required=True, type=Path)
         if name == "export":
@@ -764,6 +835,7 @@ def build_parser() -> argparse.ArgumentParser:
 STAGE_COMMANDS = {
     "export",
     "export-reask",
+    "export-moved",
     "brief",
     "check-answer",
     "import",
