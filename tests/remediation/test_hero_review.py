@@ -4,6 +4,7 @@ REVIEW.jsonl that `hero_moves.py emit --review` reads. DB-less and offline."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -74,6 +75,49 @@ def test_export_writes_one_question_per_planned_site_with_both_pictures(tmp_path
     assert "CURRENT HERO (replaced): image 1" in prompt
     # a second export of the same plan is a no-op, never a second question
     assert HR.export(run, handoff, _pictures(tmp_path))["exported"] == 0
+
+
+def test_a_small_plan_is_asked_whether_the_current_hero_is_the_better_picture(
+    tmp_path: Path,
+) -> None:
+    """D82: a small-hero move gains only size, so the reviewer is told to veto a worse picture -
+    and is not told D49's opposite (never veto for the nicer current hero: it lacks its credit),
+    which is false for a hero whose only problem is its size."""
+    run, served = T._small_site_run(tmp_path)
+    HM.write_plan(run, [served], [T._check_run(tmp_path, target="B.jpg")])
+    [line] = HM._jsonl(run / HM.PLANNED)
+    prompt = HR.prompt_for(line, HM.load_read(run))
+    assert "Why the site is planned: small -> hero moved" in prompt
+    for text in (*HR.SMALL_WHY, *HR.SMALL_RULE):
+        assert text + "\n" in prompt
+    rule = " ".join(HR.SMALL_RULE)
+    assert "the only gain of the move is the size" in rule
+    assert "Veto it when the current hero is the better main picture of the site" in rule
+    assert prompt.index(HR.SMALL_WHY[0]) < prompt.index("PLANNED NEW HERO")
+    assert prompt.index("Open the picture(s) and decide") < prompt.index(HR.SMALL_RULE[0])
+    assert prompt.index(HR.SMALL_RULE[-1]) < prompt.index("Answer with exactly one JSON object")
+    # the question names its own decision and carries nothing of the D49 rule it replaces
+    assert prompt.splitlines()[0].endswith("(owner decision D82).")
+    for text in HR.MOVE_RULE:
+        assert text not in prompt
+    for words in ("do NOT veto", "nicer picture", "lacks its credit", "D48/D49"):
+        assert words not in prompt
+    assert prompt.count("veto otherwise, naming the reason.") == 1
+
+
+def test_a_plan_of_another_kind_is_asked_what_it_was_asked_before(tmp_path: Path) -> None:
+    """The import rebuilds the prompt byte for byte: a review of a D48/D49 plan exported before
+    the small heroes were planned must still be importable (pinned on the fixture's strip)."""
+    run = _planned_run(tmp_path)
+    [line] = HM._jsonl(run / HM.PLANNED)
+    prompt = HR.prompt_for(line, HM.load_read(run))
+    assert HR.SMALL_WHY[0] not in prompt and HR.SMALL_RULE[0] not in prompt
+    assert prompt.splitlines()[0].endswith("(owner decisions D48/D49).")
+    for text in HR.MOVE_RULE:
+        assert text + "\n" in prompt
+    assert hashlib.sha256(prompt.encode("utf-8")).hexdigest() == (
+        "e50c62417a64401819b5fd705a3555f30091b405f48bca9649b7d9868d904e8b"
+    )
 
 
 def test_an_opus_review_imports_into_the_file_emit_reads(tmp_path: Path) -> None:

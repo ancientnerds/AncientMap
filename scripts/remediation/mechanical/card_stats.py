@@ -52,6 +52,17 @@ not read):
 * anything else - a write to the twelve columns this lane did not make - refuses: no basis
   explains it.
 
+One kind of card_stats row is not a write to a card a basis explains, and is not read as the last
+row: **a journalled creation** (the D57 insert lane, `insert_site/writer.py`). It creates the
+`card_stats` row of a site that did not exist - the zeroed placeholder - and journals each column it
+names from NULL, the row's `site_id` among them. No stored card of any basis changes by it. The
+site itself is out of the counterfactual while its insert lies past the basis's horizon
+(`counterfactual_sites`), and a later basis holds it like any site: while it has no description
+nothing recomputes or compares it, and the wave that first recomputes it journals every cell that
+differs from the stored one - the placeholder's, or whatever an API start made of it
+(`generator.backfill_placeholder_stats` recomputes a zeroed row on every start, unjournalled; a
+cell it already set to the recompute's value has nothing left to write).
+
 The basis wave's journal rows must be exactly the cells its `BASIS.json` names (and an undo's
 rows their exact inverse), so a `BASIS.json` of a plan that was not the one applied refuses too.
 A like, a new content link or a journalled write that lands between an export and its apply is
@@ -573,6 +584,20 @@ def first_wave_basis(sites: Sequence[Mapping[str, Any]]) -> Basis:
     )
 
 
+def created_cards(journal: Sequence[Mapping[str, Any]]) -> set[tuple[str, str]]:
+    """`(run_stamp, row_pk)` of every `card_stats` row the journal says was created: its `site_id`
+    row runs from NULL to the row's own key (the D57 insert lane, `insert_site/writer.py`). The
+    rows that stamp wrote from NULL on that card are the creation; any other row is a write."""
+    return {
+        (j["run_stamp"], j["row_pk"])
+        for j in journal
+        if j["table_name"] == "card_stats"
+        and j["column_name"] == "site_id"
+        and j["old_value"] is None
+        and j["new_value"] == j["row_pk"]
+    }
+
+
 def basis_pointer(journal: Sequence[Mapping[str, Any]]) -> tuple[str, str] | None:
     """`(wave, side)` of the basis the stored cards have now, read off the last card_stats journal
     row of the twelve columns: `after` a wave's write, `before` it once its undo ran. `None` when
@@ -581,8 +606,17 @@ def basis_pointer(journal: Sequence[Mapping[str, Any]]) -> tuple[str, str] | Non
     A row of another card_stats column is not read: Phase 5 journals `card_description`
     (`phase4/write4.py`, `phase5:p5-NNNN:chunk-NNNN`), which is neither an input nor a cell of
     the recompute, so it cannot change what the proof compares.
+
+    Nor is a row of a journalled creation (`created_cards`): it wrote the first values of a card
+    that did not exist, and changed no card a basis explains.
     """
     cards = [j for j in journal if j["table_name"] == "card_stats" and j["column_name"] in COLUMNS]
+    created = created_cards(journal)
+    cards = [
+        j
+        for j in cards
+        if not (j["old_value"] is None and (j["run_stamp"], j["row_pk"]) in created)
+    ]
     if not cards:
         return None
     last = max(cards, key=lambda j: int(j["id"]))

@@ -14,14 +14,40 @@ What a site can be planned for (`problems_of`), each measured on the read:
 * `hotlink` (D48) - the site serves live rows but its `thumbnail_url` is a remote address or the
   empty string, so the globe shows a picture nobody checked or credited;
 * `no_author` (D49) - the live hero's licence asks for an author (`licenses.credit_columns`) and the
-  row has none (50).
+  row has none (50);
+* `small` (D82, owner decision of 2026-11-05: "the D48/D49 rest lists (433 small heroes, ...) stay
+  live and are searched within D17") - the site has none of the problems above, its live hero is
+  below 1600x900 and it holds another live row of at least 1600x900 (`larger_rows`, the census
+  definition of D48's small hero). D48 only listed these sites; D82 has them searched like the other
+  rest lists: the image roles judge the site's own large rows (`check-pictures`), and their confirmed
+  pick becomes the hero after the review. A site with one of the four problems above is planned for
+  that one alone, under its own rule and bounds; the next fresh read names it `small` when it still
+  is. Two things hold for `small` alone, because its hero has no defect but its size:
+
+  - **The owner's own picture stays** (`owner_linked`). The owner made the picture he linked by hand
+    in the 2025 import the hero (2026-10-05) and lowered the floor to 800x300 so that it is the hero
+    at a small size too (2026-10-06; runbook 3.7 and 3.7.2: "the hero count under the lane's own
+    floor rises, and that is the point"). D48 listed the small heroes and D82 has them searched;
+    neither names a move away from that picture to another row of the gallery. So a `small` site
+    whose hero is the import's linked file is not planned and not offered to the image roles: it
+    goes on `OWNER_LIST.jsonl` with that reason (`OWNER_LINK_KEPT`), and the owner decides.
+    Measured 2026-11-11 on the read of 2026-11-06: 279 of the 413 `small` heroes are that picture.
+    `read --import` joins the import to the read (`with_owner_links`); a read without the join
+    plans no `small` site (refused).
+  - **Only a fresh judgement moves it.** The replacement stage's pick of an earlier run is no
+    choice here (`chosen_by`): it was chosen against the hero of its day, and where it is not the
+    hero now a later decision stands between (measured 2026-11-11 in the journal: all 17 picks of
+    at least 1600x900 at a `small` site of the read of 2026-11-06 were the hero from 2026-10-02
+    until the owner's import-hero wave of 2026-10-06 took the flag away). Such a row goes to the
+    image roles with the others, and only their confirmed pick is planned.
 
 **The new hero is always a qualifying row** (`qualifies`), whatever the problem: live, judged
 `depicts` by a Claude check of that very file, at least 800x300, with every credit column its licence
-demands; for a strip larger than the hero it replaces, and for any other move not below 1600x900 where
-the hero it replaces is not (the move would otherwise make one of D48's small heroes). A qualifying row
-is never chosen because it is the only one: a site without one is not planned and goes on the owner
-list with the measured reason. "Checked" has two sources, never a guess:
+demands; for a strip larger than the hero it replaces, for a small hero at least 1600x900 (the move
+has no other purpose), and for any other move not below 1600x900 where the hero it replaces is not
+(the move would otherwise make one of D48's small heroes). A qualifying row is never chosen because
+it is the only one: a site without one is not planned and goes on the owner list with the measured
+reason. "Checked" has two sources, never a guess:
 
 1. the served-image runs (`--verdicts-run`, `CHECK.jsonl` and `REPLACE.jsonl`, in the order given;
    a later run's verdict on an image replaces an earlier one): Claude stamps only (D6/D10);
@@ -35,7 +61,8 @@ vision.py`), so it does not say the picture is the site's main picture. A row be
 when a judgement chose it as that: the confirmed pick of a check run (the depicts role's quality, "suits
 the main picture of the site's page", then the adversarial re-check), the served-image replacement
 stage's own `pick` ("the best main image of the site - a clear photograph of its remains before a
-drawing, a plan or an object"), or - for an unflagged site only - the row the page already shows, which
+drawing, a plan or an object"; never for a `small` site, see above), or - for an unflagged site only
+- the row the page already shows, which
 the served check judged as the page's main image and which the flag leaves in place. A `depicts` row
 nobody chose is not ranked by its pixels; `check-pictures` hands it to the image roles with the rows
 nobody judged, and their confirmed pick comes back through `--check-run`.
@@ -55,8 +82,8 @@ only `emit --review` turns the accepted sites into chunks of the shared writer; 
 carries the review line that accepted it. A vetoed row goes to `VETOED.jsonl`, in the shape `--veto`
 reads, for the next plan in a new run directory.
 
-    hero_moves.py read           --run-dir R
-    hero_moves.py check-pictures --run-dir R --verdicts-run S [S ...] --check-run C
+    hero_moves.py read           --run-dir R --import data/raw/ancient_nerds/ancient_nerds_original.geojson
+    hero_moves.py check-pictures --run-dir R --verdicts-run S [S ...] --check-run C [--veto V]
     hero_moves.py plan           --run-dir R --verdicts-run S [S ...] [--check-run C ...] [--veto V]
     hero_moves.py emit           --run-dir R --review REVIEW.jsonl
     chunk_writer.py R/chunks/chunk-NNN --check | --rehearse | --apply | --readback | --rehearse-rollback
@@ -68,7 +95,13 @@ line of `PLANNED.jsonl`, `new_image_id` the planned new hero, `by` `owner` or a 
 
 `plan` also writes `OWNER_LIST.jsonl` (every site with a problem and no qualifying chosen row, with the
 reason) and `SMALL_HEROES.jsonl` (D48's 433: a live hero below 1600x900 at a site that holds another
-live row of at least 1600x900 - the census definition, reproduced on 2026-10-24 at 433).
+live row of at least 1600x900 - the census definition, reproduced on 2026-10-24 at 433). That list
+states the read: it holds every such hero, also the one whose site is planned for another problem
+or moved by this very plan. What the plan did with the `small` sites is in `PLAN_SUMMARY.json`
+(`by_problem.small`: `owner_link_kept`, `owner_list`, `hero moved`, `deferred_d15`), and the ones
+whose hero is the owner's own picture or that no checked row could replace are on
+`OWNER_LIST.jsonl`. A site whose planned move the review vetoed is on neither: `emit` names it in
+`VETOED.jsonl` with the reviewer's reason, and it keeps its hero.
 """
 
 from __future__ import annotations
@@ -109,10 +142,15 @@ RULE_D48_HERO = "d48-hero"
 RULE_D48_ALIGN = "d48-align"
 RULE_D49_HERO = "d49-hero"
 RULE_D49_ALIGN = "d49-align"
+RULE_D82_HERO = "d82-hero"
+RULE_D82_ALIGN = "d82-align"
 
 UNFLAGGED, STRIP, HOTLINK, NO_AUTHOR = "unflagged", "strip", "hotlink", "no_author"
-#: The order a site's problems are named in; the first one names the rule (D48 before D49).
-PROBLEMS = (UNFLAGGED, STRIP, HOTLINK, NO_AUTHOR)
+#: D82's rest list: a small hero beside a large live row, at a site with none of the four above.
+SMALL = "small"
+#: The order a site's problems are named in; the first one names the rule (D48 before D49). `small`
+#: is named only alone (`problems_of`), so it names its own rule (D82).
+PROBLEMS = (UNFLAGGED, STRIP, HOTLINK, NO_AUTHOR, SMALL)
 D48_PROBLEMS = frozenset({UNFLAGGED, STRIP, HOTLINK})
 
 FLAGGED, MOVED, ALIGNED = "hero flagged", "hero moved", "thumbnail aligned"
@@ -146,10 +184,25 @@ SMALLER = (
     f"below {LARGE[0]}x{LARGE[1]} while the hero it would replace is not: the move would make "
     "a D48 small hero"
 )
+NOT_LARGE = (
+    f"below {LARGE[0]}x{LARGE[1]}: the hero it would replace is moved only because it is below "
+    "that size"
+)
 CREDIT = "its licence demands a credit the row does not carry"
 NOT_CHOSEN = (
     "judged depicts, but no judgement chose it as the site's main picture - the image roles "
     "choose among such rows (check-pictures)"
+)
+EARLIER_PICK = (
+    "the replacement stage's pick of an earlier run, made against the hero of its day: no choice "
+    "against a hero whose only problem is its size - the image roles judge it again "
+    "(check-pictures)"
+)
+#: Why a `small` site is not planned and not searched: its hero is the owner's own picture.
+OWNER_LINK_KEPT = (
+    "the hero is the picture the owner linked by hand in the 2025 import, the hero by his decision "
+    f"of 2026-10-05 (down to {FLOOR[0]}x{FLOOR[1]} by that of 2026-10-06); D82 names no move away "
+    "from it, so the planner makes none - the owner decides"
 )
 
 #: How a qualifying row was chosen as the site's main picture (`chosen_by`), best first.
@@ -168,7 +221,7 @@ class HeroMovesError(ST.StateError):
 # ---------------------------------------------------------------------------------- the read
 SITES_SQL = f"""SELECT row_to_json(t) FROM (
   SELECT u.id::text AS id, u.name, u.country, u.site_type, u.lat, u.lon, u.thumbnail_url,
-         left(coalesce(u.description, ''), 700) AS description,
+         u.source_url, left(coalesce(u.description, ''), 700) AS description,
          (SELECT min(e.value) FROM site_external_ids e
            WHERE e.site_id = u.id AND e.kind = 'wikidata_qid') AS qid,
          (SELECT min(e.value) FROM site_external_ids e
@@ -195,6 +248,40 @@ def read_production() -> dict[str, Any]:
         "sites": CW.pv.read_rows(SITES_SQL),
         "images": CW.pv.read_rows(IMAGES_SQL),
     }
+
+
+#: The key of a read's site that holds the picture the owner linked by hand (`with_owner_links`).
+OWNER_LINK = "owner_link"
+
+
+def with_owner_links(
+    data: Mapping[str, Any], features: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """The read with, per site, the image the 2025 import links for it (`owner_link`, None where
+    the import links none). `features` are the import's (`import_hero.plan.read_import`), and the
+    join is the import-hero lane's own (`join_import`: the source URL first, the folded title
+    second) - the lane that made that picture the hero - so `source_url` is part of the read's
+    sites."""
+    sites = {str(s["id"]): s for s in data["sites"]}
+    state = ST.State(str(data["read_at"]), sites, {}, frozenset(), "")
+    links = IH.join_import(state, features)
+    return dict(data) | {
+        "sites": [dict(s) | {OWNER_LINK: links[sid]["image"]} for sid, s in sites.items()]
+    }
+
+
+def owner_linked(site: Mapping[str, Any], hero: Mapping[str, Any]) -> bool:
+    """Whether `hero` is the picture the owner linked by hand for `site`: the import's link names
+    the row's Commons file (the identity the D15 re-check is given as `owner_link_file`). A read
+    that does not say what the import links was made without `--import` and is refused: a small
+    hero is never planned without knowing whether it is the owner's own picture."""
+    if OWNER_LINK not in site:
+        raise HeroMovesError(
+            f"{site['id']}: the read does not say which picture the owner linked (it was made "
+            "without --import) - read again in a new run directory"
+        )
+    wanted = ST.file_of_url(site[OWNER_LINK])
+    return wanted is not None and ST.file_of_row(hero) == wanted
 
 
 @dataclass(frozen=True)
@@ -414,10 +501,18 @@ def is_local(thumbnail: str) -> bool:
     return thumbnail.startswith("/data/")
 
 
+def larger_rows(hero: Mapping[str, Any], live: Sequence[Mapping[str, Any]]) -> list[int]:
+    """The ids of the live rows of at least 1600x900 beside a hero below that size - the census
+    definition of D48's small hero. Empty for a hero that is not small or has no such row."""
+    if not below(hero, LARGE):
+        return []
+    return [int(r["id"]) for r in live if int(r["id"]) != int(hero["id"]) and not below(r, LARGE)]
+
+
 def problems_of(
     site: Mapping[str, Any], live: Sequence[Mapping[str, Any]], hero: Mapping[str, Any] | None
 ) -> list[str]:
-    """The D48/D49 problems of one site, in `PROBLEMS` order (see the module docstring)."""
+    """The D48/D49/D82 problems of one site, in `PROBLEMS` order (see the module docstring)."""
     if not live:
         return []
     found = []
@@ -430,6 +525,9 @@ def problems_of(
         found.append(HOTLINK)
     if hero is not None and "author" in missing_credit(hero):
         found.append(NO_AUTHOR)
+    # D82's small hero is named only alone: another problem is planned first, under its own bounds
+    if not found and hero is not None and larger_rows(hero, live):
+        found.append(SMALL)
     return found
 
 
@@ -438,9 +536,11 @@ def size_and_credit(
     *,
     larger_than: Mapping[str, Any] | None = None,
     keeps_large: Mapping[str, Any] | None = None,
+    large: bool = False,
 ) -> str | None:
     """What the row itself lacks as a hero, or None: the floor, larger than a strip it replaces
-    (`larger_than`), not small beside a large hero it replaces (`keeps_large`), its credit."""
+    (`larger_than`), not small beside a large hero it replaces (`keeps_large`), at least 1600x900
+    where it replaces a small hero (`large`), its credit."""
     if below(row, FLOOR):
         return BELOW_FLOOR
     if larger_than is not None:
@@ -450,6 +550,8 @@ def size_and_credit(
             return NOT_LARGER
     if keeps_large is not None and not below(keeps_large, LARGE) and below(row, LARGE):
         return SMALLER
+    if large and below(row, LARGE):
+        return NOT_LARGE
     missing = missing_credit(row)
     if missing:
         return f"{CREDIT}: {', '.join(missing)}"
@@ -462,6 +564,7 @@ def qualifies(
     *,
     larger_than: Mapping[str, Any] | None = None,
     keeps_large: Mapping[str, Any] | None = None,
+    large: bool = False,
 ) -> str | None:
     """Why `row` cannot be the site's hero, or None when it can (see the module docstring)."""
     if check is None:
@@ -470,7 +573,7 @@ def qualifies(
         return f"judged {check.verdict} ({check.source})"
     if ST.file_of_row(row) != check.file:
         return OTHER_FILE
-    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large)
+    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large, large=large)
 
 
 def chosen_by(
@@ -479,14 +582,17 @@ def chosen_by(
     *,
     hero: Mapping[str, Any] | None,
     shown: Mapping[str, Any] | None,
+    small: bool = False,
 ) -> str | None:
     """How a judgement chose `row` as the site's main picture (`CHOICES`), or None: a `depicts`
     alone is no such choice (see the module docstring). `shown` is the row the page shows now
     (`gallery_audit.worklist.served_row`); it counts only for a site without a hero flag, where
-    flagging it changes nothing a visitor sees."""
+    flagging it changes nothing a visitor sees. For a `small` site only a confirmed check-run pick
+    is a choice: the replacement stage chose its pick against the hero of its day, and where that
+    pick is not the hero now a later decision stands between (see the module docstring)."""
     if check.confirmed:
         return CONFIRMED_PICK
-    if check.picked:
+    if check.picked and not small:
         return REPLACEMENT_PICK
     if hero is None and shown is not None and int(shown["id"]) == int(row["id"]):
         return SHOWN
@@ -512,6 +618,9 @@ class Decision:
     plan: SP.SitePlan | None = None
     owner_reason: str | None = None
     rejected: dict[int, str] | None = None
+    #: A `small` site whose hero is the owner's own picture (`owner_linked`): on the owner list
+    #: with `OWNER_LINK_KEPT`, and no row of it is offered to the image roles.
+    owner_link_kept: bool = False
     deferred: Check | None = None
     hero: Mapping[str, Any] | None = None
     new: Mapping[str, Any] | None = None
@@ -532,18 +641,24 @@ def _reason_text(problems: Sequence[str], hero: Mapping[str, Any] | None) -> str
             parts.append("the globe's thumbnail is no local file of the site")
         elif problem == NO_AUTHOR and hero is not None:
             parts.append(f"the hero {hero['id']}'s licence asks for an author and it has none")
+        elif problem == SMALL and hero is not None:
+            parts.append(
+                f"the hero {hero['id']} is {_size(hero)[0]}x{_size(hero)[1]}, below "
+                f"{LARGE[0]}x{LARGE[1]}, and the site holds a live row of at least that size"
+            )
     return "; ".join(parts)
 
 
-def bounds_of(
-    hero: Mapping[str, Any] | None, problems: Sequence[str]
-) -> dict[str, Mapping[str, Any] | None]:
+def bounds_of(hero: Mapping[str, Any] | None, problems: Sequence[str]) -> dict[str, Any]:
     """The size bounds a new hero of this site must keep (`size_and_credit`'s keywords): larger
-    than a strip, not small beside any other hero it replaces."""
+    than a strip, at least 1600x900 for a small hero, not small beside any other hero it
+    replaces."""
     if hero is None:
         return {"larger_than": None, "keeps_large": None}
     if STRIP in problems:
         return {"larger_than": hero, "keeps_large": None}
+    if SMALL in problems:
+        return {"larger_than": None, "keeps_large": None, "large": True}
     return {"larger_than": None, "keeps_large": hero}
 
 
@@ -554,7 +669,7 @@ def decide(
     picks: Mapping[str, Check],
     vetoes: Mapping[int, str] | None = None,
 ) -> Decision | None:
-    """One site's decision: None when it has no D48/D49 problem. `vetoes` are rows a reviewer
+    """One site's decision: None when it has no D48/D49/D82 problem. `vetoes` are rows a reviewer
     refused as the site's hero (`image id -> reason`); a vetoed row is never chosen."""
     sid = str(site["id"])
     live = ST.live_rows(rows)
@@ -571,11 +686,18 @@ def decide(
     if hero_check is not None and hero_check.verdict == RC.OTHER_SITE:
         decision.deferred = hero_check
         return decision
+    small = SMALL in problems
+    if small and hero is not None and owner_linked(site, hero):
+        decision.owner_reason, decision.rejected = OWNER_LINK_KEPT, {}
+        decision.owner_link_kept = True
+        return decision
     rule_hero, rule_align = (
         (RULE_D48_HERO, RULE_D48_ALIGN)
         if D48_PROBLEMS & set(problems)
         else (RULE_D49_HERO, RULE_D49_ALIGN)
     )
+    if small:
+        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN
     why = _reason_text(problems, hero)
     # the hero itself can stay when the only problem is the globe's thumbnail and it qualifies
     if (
@@ -603,9 +725,9 @@ def decide(
         choice = None
         if reason is None:
             assert check is not None
-            choice = chosen_by(row, check, hero=hero, shown=shown)
+            choice = chosen_by(row, check, hero=hero, shown=shown, small=small)
             if choice is None:
-                reason = NOT_CHOSEN
+                reason = EARLIER_PICK if check.picked else NOT_CHOSEN
         if reason is None and int(row["id"]) in vetoes:
             reason = f"vetoed: {vetoes[int(row['id'])]}"
         if reason is None:
@@ -702,18 +824,13 @@ def _owner_reason(rejected: Mapping[int, str]) -> str:
 
 def small_heroes(read: Read) -> list[dict[str, Any]]:
     """D48's small heroes: a live hero below 1600x900 at a site holding another live row of at least
-    1600x900 (the census definition; 433 on 2026-10-24). Owner list only, nothing moves."""
+    1600x900 (the census definition; 433 on 2026-10-24). The list of the read: it moves nothing and
+    names every such hero, whatever the plan does with its site (see the module docstring)."""
     out = []
     for sid, site in read.sites.items():
         live = ST.live_rows(read.rows.get(sid, ()))
         for hero in (r for r in live if r.get("is_hero")):
-            if not below(hero, LARGE):
-                continue
-            larger = [
-                int(r["id"])
-                for r in live
-                if int(r["id"]) != int(hero["id"]) and not below(r, LARGE)
-            ]
+            larger = larger_rows(hero, live)
             if larger:
                 out.append(
                     {
@@ -873,6 +990,8 @@ def write_plan(
         status = (
             "deferred_d15"
             if d.deferred
+            else "owner_link_kept"
+            if d.owner_link_kept
             else "owner_list"
             if d.owner_reason
             else d.plan.outcome
@@ -1033,6 +1152,10 @@ OFFER_UNCHOSEN = (
     "a live gallery row a Claude check judged depicts and no judgement chose as the site's main "
     "picture (D48/D49)"
 )
+OFFER_EARLIER_PICK = (
+    "a live gallery row an earlier check picked as the site's main picture; it is not the hero "
+    "now, and the hero's only problem is its size (D82)"
+)
 
 
 def offer_reason(
@@ -1041,18 +1164,19 @@ def offer_reason(
     *,
     hero: Mapping[str, Any] | None,
     shown: Mapping[str, Any] | None,
+    small: bool = False,
 ) -> str | None:
     """Why the image roles should judge `row` for its site's hero, or None: a row nobody judged
-    (or whose check judged another file than it holds now), or a `depicts` nobody chose. A row
-    judged anything but `depicts` keeps that verdict and is not asked again; a chosen row needs no
-    second choice."""
+    (or whose check judged another file than it holds now), a `depicts` nobody chose or, at a
+    `small` site, the replacement stage's earlier pick (`chosen_by`). A row judged anything but
+    `depicts` keeps that verdict and is not asked again; a chosen row needs no second choice."""
     if check is None or ST.file_of_row(row) != check.file:
         return OFFER_UNJUDGED
     if check.verdict != CJ.DEPICTS:
         return None
-    if chosen_by(row, check, hero=hero, shown=shown) is not None:
+    if chosen_by(row, check, hero=hero, shown=shown, small=small) is not None:
         return None
-    return OFFER_UNCHOSEN
+    return OFFER_EARLIER_PICK if check.picked else OFFER_UNCHOSEN
 
 
 def check_pictures(
@@ -1060,6 +1184,7 @@ def check_pictures(
     check_run: Path,
     verdict_runs: Sequence[Path],
     path_of: Any,
+    veto: Path | None = None,
 ) -> dict[str, Any]:
     """The image roles' population and pictures for the sites the plan cannot settle:
     `C/POPULATION.jsonl` and `C/PICTURES.jsonl` (the shape `image_roles/flow.py` reads after its
@@ -1067,9 +1192,16 @@ def check_pictures(
     run on them unchanged and their confirmed pick - the depicts role's best quality, confirmed by
     the adversarial re-check - comes back through `plan --check-run`. Offered is a live row other
     than the hero that `offer_reason` names and that keeps the site's bounds (`size_and_credit`:
-    the floor, the credit, larger than a strip, not small beside a large hero). `path_of(site_id,
-    filename)` is the offsite copy of a row; a row without one is refused by name in
-    `C/PICTURE_REFUSALS.jsonl`, never skipped."""
+    the floor, the credit, larger than a strip, at least 1600x900 for a small hero, not small
+    beside a large hero). No row is offered for a `small` site whose hero is the owner's own
+    picture (`OWNER_LINK_KEPT`): nothing would follow from a pick. A `small` site is never
+    settled before this step (`chosen_by`), so every other one is offered here. `veto` is the
+    veto file the plan will be given (`plan --veto`): a site whose only chosen row a reviewer
+    refused is not settled either, so its other rows are offered, and the refused row is not
+    (measured 2026-11-11: without it none of the 8 sites of `hero-moves-2026-11-06/VETOED.jsonl`
+    was offered - the step saw each as planned, and the plan then put it on the owner list
+    unsearched). `path_of(site_id, filename)` is the offsite copy of a row; a row without one is
+    refused by name in `C/PICTURE_REFUSALS.jsonl`, never skipped."""
     from candidate_search import population as PP
     from image_roles import flow as FL
 
@@ -1079,24 +1211,30 @@ def check_pictures(
     _refuse_existing(targets, "a check run's population")
     read = load_read(run)
     served = served_checks(verdict_runs)
+    vetoes = load_vetoes(veto, read)
     population: list[dict[str, Any]] = []
     pictures: list[dict[str, Any]] = []
     refusals: list[dict[str, str]] = []
     offered: dict[str, int] = {}
     for sid in sorted(read.sites):
-        decision = decide(read.sites[sid], read.rows.get(sid, ()), served, {})
-        if decision is None or decision.owner_reason is None:
+        vetoed = vetoes.get(sid, {})
+        decision = decide(read.sites[sid], read.rows.get(sid, ()), served, {}, vetoed)
+        if decision is None or decision.owner_reason is None or decision.owner_link_kept:
             continue
         site = read.sites[sid]
         live = ST.live_rows(read.rows.get(sid, ()))
         hero = decision.hero
         shown = served_row(live)
         bounds = bounds_of(hero, decision.problems)
+        small = SMALL in decision.problems
         candidates = []
         for row in live:
             if hero is not None and int(row["id"]) == int(hero["id"]):
                 continue
-            why = offer_reason(row, row_check(row, served, {}), hero=hero, shown=shown)
+            if int(row["id"]) in vetoed:
+                continue
+            check = row_check(row, served, {})
+            why = offer_reason(row, check, hero=hero, shown=shown, small=small)
             if why is None or size_and_credit(row, **bounds) is not None:
                 continue
             file = ST.file_of_row(row)
@@ -1156,6 +1294,9 @@ def check_pictures(
                 "hero_moves_run": str(run.resolve()),
                 "read_sha256": read.sha256,
                 "verdict_runs": _resolved(verdict_runs),
+                "veto": None
+                if veto is None
+                else {"file": str(veto.resolve()), "sha256": ST.file_sha256(veto)},
             }
         ),
     )
@@ -1165,6 +1306,7 @@ def check_pictures(
         "offered": {
             "unjudged": offered.get(OFFER_UNJUDGED, 0),
             "depicts_unchosen": offered.get(OFFER_UNCHOSEN, 0),
+            "earlier_pick": offered.get(OFFER_EARLIER_PICK, 0),
         },
         "refused": len(refusals),
     }
@@ -1203,9 +1345,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         command.add_argument("--run-dir", required=True, type=Path)
     for name in ("check-pictures", "plan"):
         sub.choices[name].add_argument("--verdicts-run", required=True, type=Path, nargs="+")
+    sub.choices["read"].add_argument(
+        "--import", dest="source", required=True, type=Path, help="the 2025 import's GeoJSON"
+    )
     sub.choices["check-pictures"].add_argument("--check-run", required=True, type=Path)
     sub.choices["plan"].add_argument("--check-run", type=Path, nargs="*", default=[])
-    sub.choices["plan"].add_argument("--veto", type=Path, default=None)
+    for name in ("check-pictures", "plan"):
+        sub.choices[name].add_argument("--veto", type=Path, default=None)
     sub.choices["emit"].add_argument("--review", required=True, type=Path)
     sub.choices["accept"].add_argument("--chunk", required=True, type=Path)
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -1213,18 +1359,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "read":
             lane_for(run)
-            digest = ST.write_text_once(run / READ_FILE, ST.json_text(read_production()))
+            features = IH.read_import(args.source)  # first: no import, no production read
+            data = with_owner_links(read_production(), features)
+            data["import"] = {"file": args.source.name, "sha256": ST.file_sha256(args.source)}
+            digest = ST.write_text_once(run / READ_FILE, ST.json_text(data))
             read = load_read(run)
             payload: Any = {
                 "sha256": digest,
                 "sites": len(read.sites),
                 "images": sum(len(r) for r in read.rows.values()),
+                "owner_links": sum(1 for s in read.sites.values() if s[OWNER_LINK]),
             }
         elif args.command == "check-pictures":
             from gallery_audit.vision import Images
 
             images = Images()
-            payload = check_pictures(run, args.check_run, args.verdicts_run, images.path_for)
+            payload = check_pictures(
+                run, args.check_run, args.verdicts_run, images.path_for, args.veto
+            )
         elif args.command == "plan":
             payload = write_plan(run, args.verdicts_run, args.check_run, args.veto)
         elif args.command == "emit":
@@ -1233,7 +1385,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = accept(run, args.chunk)
             print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
             return 0 if not payload["deviations"] else 1
-    except ST.StateError as exc:
+    except (ST.StateError, IH.ImportHeroError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))

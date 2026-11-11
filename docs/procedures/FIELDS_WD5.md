@@ -587,7 +587,12 @@ under `card-empty`); the report names the out-of-scope ones, and anything else i
 whose site holds another non-excluded row of at least 1600x900; each row names the largest such row and how many
 there are, because swapping is the owner's call. A small hero without a larger row has nothing to swap: the report
 counts it, the list does not carry it (2026-10-24: 809 small, 433 with a larger row - the census's figure - 376
-without). **Run it from the main checkout** (the waves name their run by the main checkout's path):
+without). Since D82 the hero-moves lane searches these sites (problem `small`,
+`docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.8.1): `hero-small` is measured on production, so it lists
+what is still small after that lane, and the last plan's `OWNER_LIST.jsonl` row of such a site (`hero-problem-kept`,
+problem `small`) says why the hero stayed: it is the picture the owner linked by hand (the lane never moves that
+one for its size), or what each other row of the site lacks. A site whose planned move the review vetoed has no
+such row: it is in that run's `VETOED.jsonl` with the reviewer's reason and on `hero-small` alone. **Run it from the main checkout** (the waves name their run by the main checkout's path):
 
 ```bash
 cd C:/PythonProjects/AncientMap
@@ -595,8 +600,17 @@ cd C:/PythonProjects/AncientMap
 ./.venv/Scripts/python.exe scripts/remediation/owner_list_final.py build --final   # at the very end
 ```
 
+The image lanes' lists are sources too since 2026-11-11 (`RUN_LISTS`, found by glob because every run writes its own
+into its own run directory): each `candidate_search/*/D17_OWNER_LIST.jsonl` (`image_roles/d59.py research-outcomes`;
+topic `image-research-none`, the reason of a site without a picture), each `candidate_search/*/D59_OWNER_LIST.jsonl`
+(`image-hotlink-uncredited`) and the last `served_image/hero-moves-*/OWNER_LIST.jsonl` (`hero-problem-kept`); a row is
+set aside once production shows the picture, a hero row once the site measures none of the problems it names any
+more (`hero_moves.problems_of` on today's row; it lists only the ones still measured). Every shown site without any picture has to carry a research row; the
+report names the ones without (`image_none_unresearched`) -
+`docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.8.7.
+
 It writes `output/remediation/final-2026-10-08/OWNER_LIST_FINAL.{jsonl,md}`. `--final` refuses while a source is
-missing, a list is unregistered or an open field row is `pending`. A dry run of 2026-10-24 (before the identity lanes,
+missing, a list is unregistered, an open field row is `pending` or a site without a picture carries no research row. A dry run of 2026-10-24 (before the identity lanes,
 the marker lanes and the card waves) listed 18,044 rows over all 4,900 shown sites: image-none 952,
 image-thumbnail-only 140, hero-small 433, hero-credit-missing 50, description-empty 28, card-empty 169, card-old-kept 4,672, Undated 619, site-type-empty 86, source-url-empty 47,
 wikidata-id-none 361, scope-pending 5, both markers absent on 4,900, open field rows 682 (899 superseded by later

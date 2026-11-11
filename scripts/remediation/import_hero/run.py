@@ -1,10 +1,13 @@
-"""The import-hero lane's commands: `plan`, `fetch`, `insert-plan`, `accept`, `insert-accept`, `remainder`.
+"""The import-hero lane's commands: `plan`, `fetch`, `insert-plan`, `transfer`, `accept`, `insert-accept`,
+`served`, `remainder`, `offsite-merge`.
 
 ```bash
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py plan     --run-dir $R
 run.py fetch    --run-dir $R --root $OFFSITE
 run.py insert-plan  --run-dir $R
+run.py transfer --run-dir $R --root $OFFSITE [--rehearse]
 run.py insert-accept --run-dir $R
+run.py served   --run-dir $R
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py accept   --run-dir $R
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py remainder --run-dir $R
 ```
@@ -18,7 +21,13 @@ section 3.7 of `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md`.
 `FETCHED.json` manifest that `plan --fetched` reads. It takes the same read and the same join,
 so it names the same sites, and it is resumable - `fetch.run_fetch` carries the manifest along
 after every file, because `download_image` opens with `O_EXCL`. Its `--root` is the offsite
-copy of the image tree; the VPS copy has to follow it, the two must not drift.
+copy of the image tree (`<offsite>/images/wiki`, never the offsite root: the waves of 2026-10
+fetched there, and `offsite-merge` is what brings those files home); the VPS copy has to follow
+it, the two must not drift.
+
+`transfer` is that following step for the INSERT wave, and it comes before the first `--apply`:
+the files of the planned rows go to the VPS with sha256 on both ends (`import_hero/transfer.py`).
+`served` asks the site for each of them once the rows are written.
 
 `accept` is the other half: it reads production **again**, after the chunks landed, and asks the
 owner's three questions per planned site. It never reuses the plan's read - that one describes what
@@ -42,6 +51,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +67,7 @@ from import_hero import fetch as IF  # noqa: E402
 from import_hero import insert as IN  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
 from import_hero import read as RD  # noqa: E402
+from import_hero import transfer as TR  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
 
 DEFAULT_IMPORT = Path("data/raw/ancient_nerds/ancient_nerds_original.geojson")
@@ -166,7 +177,7 @@ def cmd_plan(
     data, sha = _read_once(run)
     state = ST.load_read(run / RD.READ)
     features = IH.read_import(source)
-    claims = IH.join_import(state, features)
+    claims = IH.join_import(state, features, staged=RD.staged(data))
     run.mkdir(parents=True, exist_ok=True)
     (run / CLAIMS).write_text(
         json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -213,6 +224,12 @@ def cmd_fetch(
     `out` writes the manifest somewhere else than the run directory, for a pilot that has to leave
     the wave's own path free.
     """
+    if (root / "images" / "wiki").is_dir():
+        raise IH.ImportHeroError(
+            f"--root {root} is the offsite root, not its image tree: the lanes read a picture "
+            f"from {root / 'images' / 'wiki'}, and a file fetched beside that tree is one they "
+            "never find (the waves of 2026-10 left 920 there)"
+        )
     served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
     data, sha, claims, refusals = _wave_of(run, source, start=start, floor=served)
     # after `_wave_of`, never before it: `_wave_of` refuses a run that does not exist by name, and
@@ -285,6 +302,10 @@ def _wave_of(
     whose plan holds nothing to write never got that far - `write_chunks` refuses an empty plan by
     name, which is right for a writer - so those records are absent, and the run's own `READ.json`
     decides: the same read, the same join, the same refusals, and still no second production read.
+
+    That join is the 2025 import's, and it leaves the read's staged D57 sites out (`RD.staged`,
+    `IH.join_import`): a run directory that holds a read but not the claims `insert-claims` writes
+    must not give a hidden site the import's unjudged picture.
     """
     claims_path = run / CLAIMS
     refusals_path = run / REFUSALS
@@ -304,7 +325,7 @@ def _wave_of(
         # fetch is what the plan's refusals are needed for, so it takes the first read itself.
         data, sha = _read_once(run)
         state = ST.load_read(run / RD.READ)
-        claims = IH.join_import(state, IH.read_import(source))
+        claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))
         claims_path.parent.mkdir(parents=True, exist_ok=True)
         claims_path.write_text(
             json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
@@ -315,7 +336,7 @@ def _wave_of(
         return data, sha, claims, [r.as_json() for r in planned.refusals]
     data, sha = _read_once(run)
     state = ST.load_read(read_path)
-    claims = IH.join_import(state, IH.read_import(source))
+    claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))
     claims_path.parent.mkdir(parents=True, exist_ok=True)
     claims_path.write_text(
         json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -411,6 +432,7 @@ def cmd_read(run: Path) -> int:
         "read_sha256": sha,
         "read_at": state.read_at,
         "shown_sites": len(state.sites),
+        "staged_sites": len(RD.staged(data)),
         "rows": sum(len(rows) for rows in state.rows.values()),
     }
     (run / READ_SUMMARY).write_text(
@@ -507,6 +529,89 @@ def cmd_insert_accept(run: Path) -> int:
     return 0
 
 
+def _write_record(path: Path, record: dict[str, Any]) -> None:
+    path.write_text(
+        json.dumps(record, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def cmd_transfer(
+    run: Path, *, root: Path, rehearse: bool = False, vps: TR.Vps | None = None
+) -> dict[str, Any]:
+    """The files of the planned rows onto the VPS, sha256 on both ends. Writes TRANSFER.json once.
+
+    It reads the run's chunks and its `READ.json`, the offsite tree under `root`, and - read-only -
+    what the API container holds of the wave's names. `--rehearse` sends the same files into a
+    scratch directory under `/tmp` on the VPS and removes it; its record is
+    TRANSFER_REHEARSAL.json, and it may be repeated.
+    """
+    path = run / (TR.REHEARSAL if rehearse else TR.RECORD)
+    if not rehearse and path.is_file():
+        raise IH.ImportHeroError(
+            f"{path} exists - this run's files are on the VPS and the record is written once"
+        )
+    inserts = _planned_inserts(run)
+    state = ST.load_read(run / RD.READ)
+    record = {
+        "run_id": run.name,
+        "offsite_root": str(root),
+        **TR.transfer(run, root, inserts, state, vps or TR.Vps(), rehearse=rehearse),
+        "at": _now(),
+    }
+    _write_record(path, record)
+    return {**record, "files": len(record["files"]), "record": path.name}
+
+
+def cmd_served(run: Path, *, get: Any = TR.http_get) -> int:
+    """Every transferred file as the site serves it. Writes TRANSFER_HTTP.json; may be repeated."""
+    path = run / TR.RECORD
+    if not path.is_file():
+        raise IH.ImportHeroError(
+            f"{path} does not exist - `transfer --run-dir {run}` writes it, and only a "
+            "transferred file can be asked for"
+        )
+    result = TR.served(_load(path), get)
+    record = {"run_id": run.name, **result, "at": _now()}
+    _write_record(run / TR.HTTP_RECORD, record)
+    _print(record)
+    if not result["ok"]:
+        print(
+            f"REFUSED: {len(result['problems'])} file(s) are not served as they were sent",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def cmd_offsite_merge(
+    run: Path, *, stray: Path, root: Path, apply: bool = False, vps: TR.Vps | None = None
+) -> dict[str, Any]:
+    """The stray fetches of the offsite copy, measured against production; `--apply` copies home
+    the ones production serves. Without it nothing but OFFSITE_MERGE_PLAN.json is written."""
+    path = run / (TR.MERGE_RECORD if apply else TR.MERGE_PLAN)
+    if apply and path.is_file():
+        raise IH.ImportHeroError(f"{path} exists - a merge's record is written once")
+    rows = TR.merge_plan(stray, root, vps or TR.Vps())
+    merged = TR.merge_apply(stray, root, rows) if apply else 0
+    summary = {
+        "stray": str(stray),
+        "offsite_root": str(root),
+        "applied": apply,
+        "merged": merged,
+        **TR.merge_summary(rows),
+        "at": _now(),
+    }
+    run.mkdir(parents=True, exist_ok=True)
+    _write_record(path, {**summary, "files": rows})
+    return {**summary, "record": path.name}
+
+
 def _stamp(run: Path) -> str:
     """The run stamp every journal row of this wave carries: the run directory's own name."""
     return run.name
@@ -564,6 +669,9 @@ def main(argv: list[str] | None = None) -> int:
         "remainder": "what the lane would still write over this run's read, and what it refuses",
         "read": "read production once into READ.json, for a run that is prepared rather than fetched",
         "insert-seed": "write IMPORT_CLAIMS.json and IMPORT_HERO_REFUSALS.jsonl out of an import run, for the sites named",
+        "transfer": "send the files of the planned rows to the VPS, sha256 on both ends -> TRANSFER.json",
+        "served": "ask the site for every transferred file: 200, image/webp, the same bytes",
+        "offsite-merge": "measure the offsite copy's stray fetches against production; --apply copies them home",
     }
     for name, help_text in helps.items():
         commands[name] = sub.add_parser(name, help=help_text)
@@ -611,6 +719,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     commands["fetch"].add_argument(
         "--out", type=Path, default=None, help="write the manifest here instead of into the run dir"
+    )
+    commands["transfer"].add_argument(
+        "--root",
+        required=True,
+        type=Path,
+        help="the offsite copy of the image tree the wave was fetched into",
+    )
+    commands["transfer"].add_argument(
+        "--rehearse",
+        action="store_true",
+        help="send the wave into a scratch directory under /tmp on the VPS, verify, remove it",
+    )
+    commands["offsite-merge"].add_argument(
+        "--stray",
+        required=True,
+        type=Path,
+        help="the directory whose <id8>/ folders hold the stray fetches (the offsite root)",
+    )
+    commands["offsite-merge"].add_argument(
+        "--root", required=True, type=Path, help="the offsite copy of the image tree"
+    )
+    commands["offsite-merge"].add_argument(
+        "--apply",
+        action="store_true",
+        help="copy the files production serves into the tree (without it: the plan only)",
     )
     commands["fetch"].add_argument(
         "--start",
@@ -686,6 +819,16 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_remainder(args.run_dir)
         if args.command == "read":
             return cmd_read(args.run_dir)
+        if args.command == "transfer":
+            _print(cmd_transfer(args.run_dir, root=args.root, rehearse=args.rehearse))
+            return 0
+        if args.command == "served":
+            return cmd_served(args.run_dir)
+        if args.command == "offsite-merge":
+            _print(
+                cmd_offsite_merge(args.run_dir, stray=args.stray, root=args.root, apply=args.apply)
+            )
+            return 0
         _print(
             cmd_plan(
                 args.run_dir,

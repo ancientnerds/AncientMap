@@ -91,6 +91,7 @@ def row(
     *,
     raw_data: dict[str, Any] | None = None,
     scope_status: str | None = None,
+    scope_reason: str | None = None,
     snapshot: str | None = "The pre-March text.",
     in_snapshot: bool = True,
     name: str = "Tarxien Temples",
@@ -100,6 +101,7 @@ def row(
     return {
         "id": site_id,
         "scope_status": scope_status,
+        "scope_reason": scope_reason,
         "name": name,
         "country": "Malta",
         "site_type": "Temple complex",
@@ -138,10 +140,9 @@ def legacy_raw(description: str, **extra: Any) -> dict[str, Any]:
 
 def plan_site(site_row: Mapping[str, Any]) -> M.PlanSite:
     from phase4 import plan4
+    from wc import cli
 
-    return plan4.plan_site(
-        {k: v for k, v in site_row.items() if k != "scope_status"}, flags=frozenset()
-    )
+    return plan4.plan_site(cli.plan_row(site_row), flags=frozenset())
 
 
 # ------------------------------------------------------------------------------------ pages

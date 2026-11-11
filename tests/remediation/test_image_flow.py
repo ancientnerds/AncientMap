@@ -24,6 +24,7 @@ import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 from candidate_search import judge as CJ  # noqa: E402
 from candidate_search import search as CS  # noqa: E402
+from image_roles import d59 as D59  # noqa: E402
 from image_roles import depicts as DP  # noqa: E402
 from image_roles import flow as FL  # noqa: E402
 from image_roles import hero_recheck as HR  # noqa: E402
@@ -142,6 +143,179 @@ def recheck_answers(run: Path, spec: SG.Spec, verdicts: dict[str, str]) -> dict[
         )
         out[label] = json.dumps({"verdict": verdict, "shows": shows, "basis": basis})
     return out
+
+
+def depicted_run(tmp_path: Path) -> Path:
+    """A run after the depicts stage: Alpha has one `depicts` (A-front, 5), Gamma two (C-better 4,
+    C-good 3), Beta none (its only picture is a map)."""
+    run = search_run(tmp_path)
+    FL.pictures(run, Client())
+    FL.prefilter_export(run, tmp_path / "h-pre", read=lambda c: jpeg())
+    plan = dict.fromkeys(
+        ("A-front.jpg", "A-back.jpg", "C-good.jpg", "C-better.jpg"), ("site_photo", True)
+    )
+    plan["B-map.jpg"] = ("map_or_document", True)
+    answer(tmp_path / "h-pre", PF.SPEC, {"pre-0001": kinds(run, plan)})
+    SG.import_answers(run, tmp_path / "h-pre", PF.SPEC)
+    FL.depicts_export(run, tmp_path / "h-dep", cache=None, read=lambda c: jpeg())
+    verdicts = {
+        (A, "A-front.jpg"): ("depicts", 5), (A, "A-back.jpg"): ("region_or_type", None),
+        (C, "C-good.jpg"): ("depicts", 3), (C, "C-better.jpg"): ("depicts", 4),
+    }  # fmt: skip
+    answer(tmp_path / "h-dep", DP.SPEC, judged(run, DP.SPEC, verdicts))
+    FL.depicts_import(run, tmp_path / "h-dep")
+    return run
+
+
+def recheck_round(tmp_path: Path, run: Path, verdicts: dict[str, str], **kwargs: Any) -> int:
+    """Export, answer and import the next re-check round; returns its number."""
+    number = FL.next_round(run)
+    handoff = tmp_path / f"h-rck-{number}"
+    FL.recheck_export(run, handoff, read=lambda p: jpeg(), **kwargs)
+    spec = HR.spec_for_round(number)
+    answer(handoff, spec, recheck_answers(run, spec, verdicts))
+    SG.import_answers(run, handoff, spec)
+    return number
+
+
+def insert_run(tmp_path: Path, name: str, refused: dict[str, tuple[str, str]]) -> Path:
+    """An INSERT run that claimed `{site: (file, refusal reason)}` and whose plan refused each:
+    its seeds, its claims, its plan's refusals and - for a `not_fetched` - the fetch's failure."""
+    run = tmp_path / name
+    run.mkdir()
+    seeds = [{"site_id": sid, "reason": "no_target_row"} for sid in refused]
+    (run / D59.INSERT_SEEDS).write_text(ST.jsonl_text(seeds), encoding="utf-8")
+    claims = {
+        sid: {"image": f"https://upload.wikimedia.org/wikipedia/commons/a/ab/{file}"}
+        for sid, (file, _) in refused.items()
+    }
+    (run / D59.INSERT_CLAIMS).write_text(json.dumps(claims), encoding="utf-8")
+    refusals = [{"site_id": sid, "reason": why, "detail": "d"} for sid, (_, why) in refused.items()]
+    (run / D59.INSERT_REFUSALS).write_text(ST.jsonl_text(refusals), encoding="utf-8")
+    failures = [
+        {
+            "site_id": sid,
+            "commons_file": file,
+            "why": f"the fetch failed: {sid}: the fetch of {file!r} names no author, which the "
+            "licence 'CC BY-SA 4.0' demands",
+        }
+        for sid, (file, why) in refused.items()
+        if why == "not_fetched"
+    ]
+    (run / D59.FETCH_FAILURES).write_text(ST.jsonl_text(failures), encoding="utf-8")
+    return run
+
+
+def targets_of(run: Path) -> dict[str, str]:
+    lines = (run / CJ.TARGETS).read_text(encoding="utf-8").splitlines()
+    return {t["site_id"]: t["commons_file"] for t in map(json.loads, lines)}
+
+
+class TestTheNextCandidateAfterAnInsertRefusal:
+    """A confirmed pick the INSERT lane refuses for a reason that lies in the file (a missing
+    credit, an upscale, a file type, a file a row already holds) is not the site's end."""
+
+    def _first_wave(self, tmp_path: Path) -> Path:
+        run = depicted_run(tmp_path)
+        recheck_round(tmp_path, run, {A: "depicts", C: "depicts"})
+        FL.write_targets(run)
+        assert targets_of(run) == {A: "A-front.jpg", C: "C-better.jpg"}
+        return run
+
+    def test_the_next_ranked_depicts_is_re_checked_and_becomes_the_target(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._first_wave(tmp_path)
+        insert = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "not_fetched")})
+        refused = D59.refused_files([insert])
+        assert list(refused) == [(C, "C-better.jpg")]
+        assert refused[(C, "C-better.jpg")]["insert_refusal"] == "not_fetched"
+        # the targets are not written while the site's next candidate waits for its re-check
+        with pytest.raises(SG.StageError, match="wait for a re-check round"):
+            FL.write_targets(run, refused)
+        assert recheck_round(tmp_path, run, {C: "depicts"}, refused=refused) == 2
+        asked = SG.load_questions(run, HR.spec_for_round(2))
+        assert [(q.meta["site_id"], q.meta["file"]) for q in asked.values()] == [(C, "C-good.jpg")]
+        summary = FL.write_targets(run, refused)
+        assert summary["sites_to_fetch"] == 2 and summary["insert_refused"] == 1
+        assert targets_of(run) == {A: "A-front.jpg", C: "C-good.jpg"}
+
+    def test_a_site_with_no_candidate_left_loses_its_target_line(self, tmp_path: Path) -> None:
+        run = self._first_wave(tmp_path)
+        insert = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "already_holds_the_file")})
+        refused = D59.refused_files([insert])
+        recheck_round(tmp_path, run, {C: "region_or_type"}, refused=refused)
+        summary = FL.write_targets(run, refused)
+        assert targets_of(run) == {A: "A-front.jpg"}
+        assert (summary["sites_to_fetch"], summary["exhausted"]) == (1, 1)
+        with pytest.raises(FL.FlowError, match="no site waits"):
+            FL.recheck_export(run, tmp_path / "h-x", read=lambda p: jpeg(), refused=refused)
+
+    def test_a_refusal_that_speaks_of_the_site_passes_nothing_over(self, tmp_path: Path) -> None:
+        run = self._first_wave(tmp_path)
+        insert = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "retired")})
+        assert D59.refused_files([insert]) == {}
+        with pytest.raises(FL.FlowError, match="no site waits"):
+            FL.recheck_export(run, tmp_path / "h-x", read=lambda p: jpeg(), refused={})
+
+    def test_a_pick_a_later_run_wrote_or_whose_fetch_got_no_answer_stays_the_target(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """The runs are read together and a refusal only by the fetch's own word: the pick the
+        retry run plans is live, and a download that got no answer says nothing about the file."""
+        from image_roles import run as CLI
+
+        run = self._first_wave(tmp_path)
+        refusing = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "not_fetched")})
+        retry = insert_run(tmp_path, "insert-1b", {C: ("C-better.jpg", "not_fetched")})
+        (retry / D59.INSERT_REFUSALS).write_text("", encoding="utf-8")
+        (retry / "chunk-001").mkdir()
+        (retry / "chunk-001" / "INSERT.jsonl").write_text(
+            ST.jsonl_text([{"site_id": C}]), encoding="utf-8"
+        )
+        assert D59.refused_files([refusing, retry]) == {}
+        runs = ["--insert-run", str(refusing), str(retry)]
+        assert CLI.main(["write-targets", "--run-dir", str(run), *runs]) == 0
+        assert json.loads(capsys.readouterr().out)["insert_refused"] == 0
+        assert targets_of(run) == {A: "A-front.jpg", C: "C-better.jpg"}
+        throttled = insert_run(tmp_path, "insert-2", {C: ("C-better.jpg", "not_fetched")})
+        line = {
+            "site_id": C,
+            "commons_file": "C-better.jpg",
+            "why": "the fetch failed: HTTP 503: u",
+        }
+        (throttled / D59.FETCH_FAILURES).write_text(ST.jsonl_text([line]), encoding="utf-8")
+        assert D59.refused_files([throttled]) == {}
+        with pytest.raises(FL.FlowError, match="no site waits"):
+            FL.recheck_export(
+                run, tmp_path / "h-x", read=lambda p: jpeg(), refused=D59.refused_files([throttled])
+            )
+
+    def test_the_command_line_names_the_insert_runs(self, tmp_path: Path, capsys: Any) -> None:
+        from image_roles import run as CLI
+
+        run = self._first_wave(tmp_path)
+        insert = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "not_fetched")})
+        argv = ["--run-dir", str(run), "--insert-run", str(insert)]
+        assert CLI.main(["write-targets", *argv]) == 1
+        assert "wait for a re-check round" in capsys.readouterr().err
+        cache = tmp_path / "wiki"
+        cache.mkdir()
+        (cache / "INDEX.jsonl").write_text("", encoding="utf-8")
+        handoff = tmp_path / "h-cli"
+        export = ["recheck-export", *argv, "--handoff", str(handoff), "--wiki-cache", str(cache)]
+        assert CLI.main(export) == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert (printed["round"], printed["picks"]) == (2, 1)
+        spec = HR.spec_for_round(2)
+        answer(handoff, spec, recheck_answers(run, spec, {C: "depicts"}))
+        SG.import_answers(run, handoff, spec)
+        assert CLI.main(["write-targets", *argv]) == 0
+        assert targets_of(run)[C] == "C-good.jpg"
+        args = CLI.build_parser().parse_args(
+            ["recheck-export", "--run-dir", "r", "--handoff", "h", "--insert-run", "i1", "i2"]
+        )
+        assert args.insert_run == [Path("i1"), Path("i2")]
 
 
 class TestTheChain:
@@ -505,8 +679,8 @@ class TestThePoolStep:
         assert got == {"sites": 1, "pictures": 1, "pictures_gone": 2}
         sites = [json.loads(x) for x in (run / FL.PICTURES).read_text().splitlines()]
         assert [s["site_id"] for s in sites] == ["a"]
-        picks = FL.pool_picks(run, old, served_state(tmp_path, {"b": []}))
-        assert [p["file"] for p in picks] == ["Here.jpg"]
+        picks, left_out = FL.pool_picks(run, old, served_state(tmp_path, {"b": []}), {})
+        assert [p["file"] for p in picks] == ["Here.jpg"] and left_out == []
 
     def test_a_written_hero_is_re_checked_with_the_site_record_of_the_read(
         self, tmp_path: Path
@@ -519,7 +693,8 @@ class TestThePoolStep:
         run = tmp_path / "pool"
         FL.write_population(run, [read_line("b", "Site b")])
         state = served_state(tmp_path, {"a": [(5, "Here.jpg")], "b": []})
-        (pick,) = FL.pool_picks(run, old, state)
+        ((pick,), left_out) = FL.pool_picks(run, old, state, {})
+        assert left_out == []
         assert (pick["site_id"], pick["file"], pick["name"], pick["lat"]) == (
             "a",
             "Here.jpg",
@@ -536,7 +711,76 @@ class TestThePoolStep:
         run = tmp_path / "pool"
         FL.write_population(run, [read_line("b", "Site b")])
         state = served_state(tmp_path, {"a": [(5, "Other.jpg")], "b": []})
-        assert FL.pool_picks(run, old, state) == []
+        assert FL.pool_picks(run, old, state, {}) == ([], [])
+
+    GIVEN_UP = {("a", "Here.jpg"): "refused: names another width than the lane's 1280 px"}
+
+    def _without_pictures(self, tmp_path: Path) -> Path:
+        from tests.remediation.test_candidate_routes import _pool_run
+
+        old = _pool_run(tmp_path)
+        for picture in (old / "pictures").iterdir():
+            picture.unlink()
+        return old
+
+    def test_a_target_no_page_serves_and_no_rendering_exists_for_is_left_out_by_name(
+        self, tmp_path: Path
+    ) -> None:
+        """Qasr Qaroun (3ac3c796): the site shows nothing, its old target is stored at a width the
+        lane does not show, and the re-download recorded that. The step names it and goes on."""
+        old = self._without_pictures(tmp_path)
+        run = tmp_path / "stage"
+        FL.write_population(run, [read_line("a", "Site a")])
+        picks, left_out = FL.pool_picks(run, old, served_state(tmp_path, {"a": []}), self.GIVEN_UP)
+        assert picks == []
+        assert left_out == [
+            {"site_id": "a", "file": "Here.jpg", "reason": self.GIVEN_UP[("a", "Here.jpg")]}
+        ]
+
+    def test_a_missing_rendering_the_re_download_has_not_given_up_on_stops_the_step(
+        self, tmp_path: Path
+    ) -> None:
+        old = self._without_pictures(tmp_path)
+        run = tmp_path / "stage"
+        FL.write_population(run, [read_line("a", "Site a")])
+        with pytest.raises(FL.PL.PoolError, match="repicture.py --need recheck"):
+            FL.pool_picks(run, old, served_state(tmp_path, {"a": []}), {})
+
+    def test_a_live_hero_without_a_rendering_is_never_left_out(self, tmp_path: Path) -> None:
+        """A written hero must be judged: its missing picture stops the step even where the
+        re-download gave it up."""
+        old = self._without_pictures(tmp_path)
+        run = tmp_path / "stage"
+        FL.write_population(run, [read_line("b", "Site b")])
+        state = served_state(tmp_path, {"a": [(5, "Here.jpg")], "b": []})
+        with pytest.raises(FL.PL.PoolError, match="the picture of target 'Here.jpg' is gone"):
+            FL.pool_picks(run, old, state, self.GIVEN_UP)
+
+    def test_a_rendering_on_disk_is_a_pick_whatever_an_old_manifest_says(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.remediation.test_candidate_routes import _pool_run
+
+        old = _pool_run(tmp_path)
+        run = tmp_path / "stage"
+        FL.write_population(run, [read_line("a", "Site a")])
+        picks, left_out = FL.pool_picks(run, old, served_state(tmp_path, {"a": []}), self.GIVEN_UP)
+        assert [p["file"] for p in picks] == ["Here.jpg"] and left_out == []
+
+    def test_a_stage_site_s_old_depicts_the_fresh_search_did_not_find_blocks_no_denial(
+        self, tmp_path: Path
+    ) -> None:
+        """Part F in a D17 stage run: site a is in the stage, MiniMax called `Here.jpg` depicts in
+        the old pool, the stage's own search never judged that file. It is no page's picture, so
+        the denial list is made (and is empty)."""
+        from tests.remediation.test_candidate_routes import _pool_run
+
+        old = _pool_run(tmp_path)
+        run = tmp_path / "stage"
+        FL.write_population(run, [read_line("a", "Site a")])
+        for name in (PF.SPEC.result_file, FL.VERDICTS):
+            (run / name).write_text("", encoding="utf-8")
+        assert FL.denied(run, old, served_state(tmp_path, {"a": []})) == []
 
     def _denial_run(self, tmp_path: Path, verdict: str | None) -> tuple[Path, Path, ST.State]:
         from tests.remediation.test_candidate_routes import _pool_run
@@ -574,3 +818,22 @@ class TestThePoolStep:
         old, run, state = self._denial_run(tmp_path, None)
         with pytest.raises(FL.FlowError, match="no Claude re-check judged"):
             FL.denied(run, old, state)
+
+    def test_a_target_the_run_re_checked_already_is_not_asked_a_second_time(
+        self, tmp_path: Path
+    ) -> None:
+        """One candidate judged twice with two verdicts stops every later step, so a target this
+        run's re-check holds a row for is named with that verdict and is no pick - a hero as well
+        as the old target a stage re-checked as its own pick before part F."""
+        old, run, state = self._denial_run(tmp_path, "other_site")
+        picks, left_out = FL.pool_picks(run, old, state, {})
+        assert picks == []
+        assert left_out == [
+            {
+                "site_id": "a",
+                "file": "Here.jpg",
+                "reason": "re-checked in this run already: other_site",
+            }
+        ]
+        # the row that exists is the one the denial reads
+        assert [h["image_id"] for h in FL.denied(run, old, state)] == [5]

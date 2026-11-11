@@ -115,7 +115,11 @@ byte for byte what it was):
   the verification (`verify`, `verify2`), the build, the judge and the writer are WC's, unchanged,
   over the sentences that were written (`DRAFTS.jsonl`, merged into `read_sites`). A site whose text
   ends empty is not planned: it stays without a description. No re-ask: a sentence whose quote is not
-  found at the import is dropped (`unverified`).
+  found at the import is dropped (`unverified`). With `--sites F` the listed sites are the frame, and
+  only so does a WN run ask a **staged D57 site** (orchestrator decision O12 of 2026-11-10, `staged`:
+  inserted hidden, retired with a reason beginning `D57 staged:`, and written its description before
+  the scope lane shows it); a WN run without the list, and every other kind of run, lists it
+  `retired`.
 
 * `wn-enrich` (`export --enrich --sites F`, owner decisions D3, D4 and D21 of 2026-10-08, orchestrator
   decision X1, section 14) - lane E: to each listed site that has a description a Sonnet agent
@@ -161,7 +165,10 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 import opus_handoff as OH  # noqa: E402 - the one contract every model answer goes through
 import roles as RO  # noqa: E402 - the roles that answer (owner decision D6, 2026-10-08)
 import run_files as RF  # noqa: E402 - the shared clock and JSON writers
-from mechanical.lane import D50_DISPUTED_SITES  # noqa: E402 - D50's retired sites
+from mechanical.lane import (  # noqa: E402 - the retired sites a lane asks: D50's, D57's staged
+    D50_DISPUTED_SITES,
+    D57_STAGED_PREFIX,
+)
 from opus_audit import quotes as Q  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - the read-only psql seam
 from phase3.run import read_jsonl  # noqa: E402
@@ -248,10 +255,17 @@ ENRICH_THRESHOLDS = {**J_THRESHOLDS, "hook_invented": 0}
 WN_PILOT_SITES = 20
 WN_PILOT_MIN_WITH_TEXT = 0.5
 
+#: The scope columns the read adds to Phase 4's plan read; `plan_row` takes them off again. A
+#: `ROWS.jsonl` written by code without the reason column holds the status alone, whatever its
+#: date: `staged` refuses such a read where a run asks it.
+SCOPE_KEYS = ("scope_status", "scope_reason")
 #: The one production read: the columns of Phase 4's plan read (`plan4.PLAN_SQL`, so a WC site is
-#: the same `PlanSite` lane L and P4 plan from) and the scope status, in one statement.
+#: the same `PlanSite` lane L and P4 plan from) and the scope status with its reason, in one
+#: statement.
 WC_SQL = plan4.PLAN_SQL.replace(
-    "SELECT u.id::text AS id, ", "SELECT u.id::text AS id, u.scope_status, ", 1
+    "SELECT u.id::text AS id, ",
+    "SELECT u.id::text AS id, " + "".join(f"u.{key}, " for key in SCOPE_KEYS),
+    1,
 )
 if WC_SQL == plan4.PLAN_SQL:  # pragma: no cover - a changed plan read is a contract change
     raise ImportError("plan4.PLAN_SQL no longer opens with the site id: lane WC's read is stale")
@@ -261,11 +275,35 @@ class WcRunError(ValueError):
     """The run directory, a round or an answer is not what the lane needs: the command stops."""
 
 
+def plan_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A row of the read as Phase 4's plan read holds it (`plan4.ROW_KEYS`): without the scope
+    columns `WC_SQL` adds."""
+    return {key: value for key, value in row.items() if key not in SCOPE_KEYS}
+
+
 def hidden(row: Mapping[str, Any]) -> bool:
     """Whether a row of the read is out of every lane's population: retired, and not one of the
     D50 sites (owner, 2026-10-19), whose description lane E writes before the scope lane shows
     them again (`mechanical.lane.D50_DISPUTED_SITES`, `mechanical/scope_unretire.py`)."""
     return row["scope_status"] == "retired" and row["id"] not in D50_DISPUTED_SITES
+
+
+def staged(row: Mapping[str, Any]) -> bool:
+    """Whether a row of the read is a staged D57 insert (orchestrator decision O12, 2026-11-10):
+    retired with a reason that begins `mechanical.lane.D57_STAGED_PREFIX`. The insert lane creates
+    its sites hidden, and lane WN writes their description while they are (`_classify`: only a WN
+    run whose `--sites` list names the site asks it). A retired row of a read without the reason
+    column may be staged or not, and the read cannot say: it is refused by name, not listed
+    `retired` (a run has one population, so the site would be dropped from it for good)."""
+    if row["scope_status"] != "retired":
+        return False
+    if "scope_reason" not in row:
+        raise WcRunError(
+            f"the read holds no scope_reason for the retired site {row['id']}: it was made by code "
+            "that does not read the column and cannot say whether the site is a staged D57 insert "
+            "- run `read` again with this code, then the export"
+        )
+    return str(row["scope_reason"] or "").startswith(D57_STAGED_PREFIX)
 
 
 # ------------------------------------------------------------------------------------ files
@@ -301,7 +339,7 @@ def _ids(path: Path) -> set[str]:
 # ------------------------------------------------------------------------------------ the read
 def cmd_read(run: Path, *, runner: W.SqlRunner = W.run_sql, host: str = W.SSH_HOST) -> dict:
     """The one read-only SELECT (`WC_SQL`): every curated row, as Phase 4 reads it, with its scope
-    status. Written to `ROWS.jsonl`; `READ.json` records when and the file's sha256."""
+    status and reason. Written to `ROWS.jsonl`; `READ.json` records when and the file's sha256."""
     rows = W._json_rows(runner(WC_SQL, host=host))
     RF.write_jsonl(run / ROWS_FILE, rows)
     record = {"read_at": RF.now(), "rows": len(rows), "sha256": _sha256(run / ROWS_FILE)}
@@ -321,16 +359,16 @@ def population(
     """The sites to ask, in site-id order (each `{site_id, name, marking, sentences, plan_site}`),
     and every other curated site of the read, by the reason it is not asked. `kind` is the run's
     (`run_kind`); `only` is a site-list run's list (every other site is left out and not listed: the
-    list is the population's frame)."""
+    list is the population's frame). A staged D57 site (`staged`) is asked by a lane-WN run whose
+    list names it, and is `retired` to every other run."""
     asked: list[dict[str, Any]] = []
     listed: dict[str, list[str]] = {}
     for row in sorted(rows, key=lambda row: row["id"]):
         if only is not None and row["id"] not in only:
             continue
-        site_row = {key: value for key, value in row.items() if key != "scope_status"}
-        site = plan4.plan_site(site_row, flags=frozenset())
+        site = plan4.plan_site(plan_row(row), flags=frozenset())
         reason, marking, sentences = _classify(
-            row, site, excluded=excluded, earlier=earlier, kind=kind
+            row, site, excluded=excluded, earlier=earlier, kind=kind, named=only is not None
         )
         if reason is not None:
             listed.setdefault(reason, []).append(site.site_id)
@@ -355,8 +393,11 @@ def _classify(
     excluded: set[str],
     earlier: set[str],
     kind: str = KIND_WC,
+    named: bool = False,
 ) -> tuple[str | None, str | None, tuple[str, ...]]:
-    if hidden(row):
+    """`named`: the run's `--sites` list names the row (the list is the frame, so every row of a
+    site-list run is named)."""
+    if hidden(row) and not (kind == KIND_WN and named and staged(row)):
         return "retired", None, ()
     if kind == KIND_ENRICH:
         return E.classify(site, excluded=excluded, earlier=earlier)
@@ -823,7 +864,8 @@ def cmd_export(
     one question per site. `POPULATION.json` records every count, reason and input (the run's
     `kind` among them); `SITES.jsonl` the asked sites. `sites` (a file of site ids) makes a
     site-list run: the population is those curated sites, whatever their text; `wn` lane WN's: the
-    sites without a description, and round 1 is the write round. `defects` (the `.report.json` of
+    sites without a description, and round 1 is the write round (with `sites`, the listed ones of
+    them - the one run that asks a staged D57 site, `staged`). `defects` (the `.report.json` of
     `defect-sites`, a site-list run only) puts each listed site's reported claims into its question
     (`defects_block`): the check must settle them, not find the sentence's own source again.
     `adversarial` (with `defects`) makes the run the second check of a site whose reported claim the

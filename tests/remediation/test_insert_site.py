@@ -5,7 +5,8 @@ Wikipedia API from a census `Fetcher` over one, and production is a fake reader 
 text. What is pinned: the candidate list resolves merges and refuses what it cannot resolve; a
 research answer counts only in the fields lanes' format with every quote found; the plan writes the
 curated column set with its provenance and refuses every site its rules name; the transaction carries
-every guard, journals every write, and its undo retires - never deletes.
+every guard, journals every write, creates every row hidden (O12) with its `card_stats` row, and its
+undo keeps the rows retired - never deletes.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import hashlib
 import json
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,7 @@ from insert_site import writer as W  # noqa: E402
 from mechanical.field_prov import sha_of  # noqa: E402
 
 from pipeline import periods as PE  # noqa: E402
+from pipeline.utils.public_sites import D57_STAGED_PREFIX  # noqa: E402
 
 COLOSSEUM = "Q10285"
 TERRACOTTA = "Q47672"
@@ -867,11 +870,59 @@ class TestThePlannedRow:
     def test_the_row_carries_the_curated_column_set(self) -> None:
         [row] = build().inserts
         columns = row.site_columns()
-        assert columns["source_id"] == "ancient_nerds" and columns["scope_status"] == "in_scope"
+        assert columns["source_id"] == "ancient_nerds"
         assert columns["period_name"] == "1 - 500 AD" and columns["period_start"] == "72"
         assert columns["geom"] == "SRID=4326;POINT(12.4922 41.8902)"
         assert columns["edited_by"] == P.EDITED_BY and len(P.EDITED_BY) <= 20
         assert columns["source_record_id"] == "d57-Q10285" and "D57" in row.scope_reason
+
+    def test_the_row_is_planned_hidden_with_the_staged_reason(self) -> None:
+        """O12: the insert writes no description and no picture, so the row is written retired -
+        with the reason every lane knows a staged site by - and never `in_scope`."""
+        step = build()
+        [row] = step.inserts
+        columns = row.site_columns()
+        assert columns["scope_status"] == "retired"
+        assert columns["scope_reason"] == P.staged_reason(step.run_stamp) == row.scope_reason
+        assert row.scope_reason.startswith(D57_STAGED_PREFIX + " ")
+        assert step.run_stamp in row.scope_reason
+        md = P.render_md(step)
+        assert "written hidden" in md and D57_STAGED_PREFIX in md and "`card_stats` row" in md
+
+    def test_the_card_row_is_the_zeroed_placeholder_of_the_admin_import(self) -> None:
+        """The nine columns `POST /api/v1/sites/import` writes for a new site, and their values."""
+        source = (REPO / "api" / "routes" / "sites.py").read_text(encoding="utf-8")
+        insert = source[source.index("INSERT INTO card_stats (site_id, card_description") :]
+        insert = insert[: insert.index("ON CONFLICT")]
+        named = re.search(r"confidence_score,\s*(.*?)\)\s*VALUES", insert, re.DOTALL)
+        assert named is not None
+        columns = [c.strip() for c in named[1].split(",")]
+        assert columns == [c for c, _ in P.CARD_PLACEHOLDER]
+        assert "0, 0, 0, 0, 0, 0, 0, 0, 'unknown')" in insert
+        assert [v for _, v in P.CARD_PLACEHOLDER] == [0, 0, 0, 0, 0, 0, 0, 0, "unknown"]
+        [row] = build().inserts
+        assert row.card_columns() == {
+            "site_id": SITE_ID,
+            **{c: "0" for c, v in P.CARD_PLACEHOLDER if v == 0},
+            "category_group": "unknown",
+            "civilization": "Italy",
+        }
+        assert dict(P.CARD_PLACEHOLDER)[P.CARD_TIER] == 0
+
+    def test_the_card_row_leaves_no_null_the_card_stats_lane_cannot_fill(self) -> None:
+        """The card_stats lane moves a cell from a value: a NULL in one of its twelve columns stops
+        the plan of the first wave that recomputes the site (`apply._validate_value`). Every such
+        column the insert or the table's default leaves is a value - the civilization the insert
+        writes itself, `empires` and `empire_count` by the catalog's defaults (read on production
+        2026-11-10: `'[]'::jsonb`, `0`) - unless the lane fills it."""
+        from mechanical import card_stats as CS
+
+        [row] = build().inserts
+        defaults = {"empires", "empire_count"}
+        for cell in CS.CELLS:
+            assert cell.name in row.card_columns() or cell.name in defaults or cell.fills_null
+        assert P.CARD_CIVILIZATION in row.card_columns() and row.country == "Italy"
+        assert not next(c for c in CS.CELLS if c.name == P.CARD_CIVILIZATION).fills_null
 
     def test_the_names_are_the_label_and_the_proposals_names(self) -> None:
         [row] = build().inserts
@@ -925,7 +976,8 @@ class TestThePlannedRow:
 
     def test_the_journal_rows_are_counted_per_write(self) -> None:
         [row] = build().inserts
-        assert row.journal_rows == len(row.site_columns()) + 2 + 4 * 3 + 2 + 6
+        assert len(row.card_columns()) == 11
+        assert row.journal_rows == len(row.site_columns()) + 2 + 4 * 3 + 2 + 11 + 6
 
     def test_pg_float_prints_as_postgres_does(self) -> None:
         assert P.pg_float(12.0) == "12" and P.pg_float(41.8902) == "41.8902"
@@ -1035,7 +1087,7 @@ class TestTheRefusals:
                 "old": {"enrichment_status": "enriched", "promoted_site_id": None},
             }
         ]
-        assert row.journal_rows == len(row.site_columns()) + 2 + 4 * 3 + 2 + 6 + 2
+        assert row.journal_rows == len(row.site_columns()) + 2 + 4 * 3 + 2 + 11 + 6 + 2
 
     def test_a_proposal_without_a_contribution_promotes_none(self) -> None:
         [row] = build().inserts
@@ -1119,6 +1171,21 @@ class TestThePlanStep:
         with pytest.raises(P.InsertPlanError, match="re-ask"):
             P.plan_step(run, 1, export=fake_export(read_rows()), country_check=agrees)
 
+    def test_the_plan_waits_for_the_import_of_the_last_exported_round(self, run: Path) -> None:
+        """A re-ask round exported after the last import (D130's round 5 of Pella): REASK.json
+        names no waiting field, but it speaks for the round before."""
+        write_decisions(run, decided())
+        C.write_json(run / RS.REASK_FILE, {"after_round": 4, "fields": {}})
+        C.write_jsonl(run / RS.ROUNDS_FILE, [{"round": n} for n in range(6)])
+        assert RS.unimported_rounds(run) == [5]
+        with pytest.raises(P.InsertPlanError, match="round 5 was exported after the last import"):
+            P.plan_step(run, 1, export=fake_export(read_rows()), country_check=agrees)
+        assert not P.step_dir(run, 1).exists()
+        C.write_json(run / RS.REASK_FILE, {"after_round": 5, "fields": {}})
+        assert RS.unimported_rounds(run) == []
+        step = P.plan_step(run, 1, export=fake_export(read_rows()), country_check=agrees)
+        assert [i.qid for i in step.inserts] == [COLOSSEUM]
+
     def test_a_site_without_its_required_fields_is_refused_before_the_read(self, run) -> None:
         exhausted = {**decided()["coordinates"], "status": RS.EXHAUSTED, "decision": None}
         write_decisions(run, decided(coordinates=exhausted))
@@ -1157,8 +1224,9 @@ def _between(sql: str, start: str, stop: str) -> str:
     return sql[at : sql.index(stop, at)]
 
 
-def landed(step: P.Step) -> Any:
-    """A fake read-only reader that answers as production would after the step committed."""
+def landed(step: P.Step, card: dict[str, str] | None = None) -> Any:
+    """A fake read-only reader that answers as production would after the step committed; `card`
+    replaces columns of the `card_stats` row (an API start that recomputed it)."""
     i = step.inserts[0]
     columns = i.site_columns()
     site_row = {
@@ -1180,6 +1248,11 @@ def landed(step: P.Step) -> Any:
         for c, v in [*columns.items(), ("raw_data", "{}"), ("updated_at", "now")]
     ]  # fmt: skip
     journal += [
+        {"site_id": i.site_id, "table_name": "card_stats", "column_name": c, "new_value": v,
+         "test_id": P.TEST_ID, "confidence": P.CONFIDENCE}
+        for c, v in i.card_columns().items()
+    ]  # fmt: skip
+    journal += [
         {"site_id": i.site_id, "table_name": "other", "column_name": "x", "new_value": "x",
          "test_id": P.TEST_ID, "confidence": P.CONFIDENCE}
     ] * (i.journal_rows - len(journal))  # fmt: skip
@@ -1195,6 +1268,8 @@ def landed(step: P.Step) -> Any:
             ]  # fmt: skip
         if "FROM site_external_ids" in sql:
             return [{"site_id": i.site_id, **x} for x in i.external_ids]
+        if "FROM card_stats" in sql:
+            return [{**i.card_columns(), **(card or {})}]
         if "FROM site_proposals" in sql:
             return [
                 {"id": p["proposal_id"], "status": "approved", "promoted_site_id": i.site_id,
@@ -1234,10 +1309,85 @@ class TestTheStatements:
         assert "INSERT INTO site_external_ids" in sql and "UPDATE site_proposals" in sql
         assert "SET LOCAL statement_timeout" in sql
 
-    def test_the_undo_retires_through_the_scope_write_path(self, step: P.Step) -> None:
+    def test_the_row_is_written_retired_and_never_in_scope(self, step: P.Step) -> None:
+        """O12: the INSERT itself writes `retired`; no statement of the lane says `in_scope`."""
+        sql = W.render_apply(step)
+        insert = _between(sql, "INSERT INTO unified_sites", "FROM _ins_site p ORDER BY p.seq;")
+        assert "p.raw_data,\n           'retired', p.scope_reason, now()" in insert
+        assert "in_scope" not in code(sql) and "in_scope" not in code(W.render_rollback(step))
+        assert f"{W._lit(step.inserts[0].scope_reason)}, " in _values(sql, "_ins_site")
+
+    def test_the_rows_invariant_holds_the_row_staged_and_without_a_page(self, step) -> None:
+        """A row that is shown, or retired under another reason, stops the transaction: a staged
+        site is curated, retired with its planned reason, and has no page."""
+        rows = W.apply_invariants(step.run_stamp)["rows"]
+        staged = (
+            "(u.scope_status IS NOT DISTINCT FROM 'retired' AND COALESCE(u.scope_reason, '') "
+            "LIKE 'D57 staged:%')"
+        )
+        assert f" OR NOT {staged} OR " in rows
+        assert (
+            " OR (u.source_id = 'ancient_nerds' AND u.country IS NOT NULL AND u.country != '' "
+            "AND u.scope_status IS DISTINCT FROM 'retired') OR " in rows
+        )
+        assert "u.source_id IS DISTINCT FROM 'ancient_nerds'" in rows
+        assert "u.country IS DISTINCT FROM p.country" in rows
+        assert "u.scope_reason IS DISTINCT FROM p.scope_reason" in rows
+        assert "u.description IS NOT NULL" in rows and "u.thumbnail_url IS NOT NULL" in rows
+
+    def test_a_plan_without_the_staged_reason_is_never_rendered(self, step: P.Step) -> None:
+        """A step planned before O12 carries "in scope under D58": neither statement renders, so
+        nothing of it can be emitted, rehearsed or applied."""
+        old = replace(step.inserts[0], scope_reason="D57 (owner, 2026-10-24): in scope under D58")
+        plain = replace(step, inserts=[old])
+        with pytest.raises(W.WriterError, match="not a staged insert"):
+            W.render_apply(plain)
+        with pytest.raises(W.WriterError, match="not a staged insert"):
+            W.render_rollback(plain)
+        with pytest.raises(W.WriterError, match=COLOSSEUM):
+            W.render_checked(plain)
+
+    def test_the_card_row_is_created_and_journalled_with_the_site(self, step: P.Step) -> None:
+        sql = W.render_apply(step)
+        card = _between(sql, "INSERT INTO card_stats", "-- the proposals the insert closes")
+        assert (
+            "INSERT INTO card_stats (site_id, antiquity, fortification, cultural_influence, "
+            "mystery, legacy, total_power, rarity_score, rarity_tier, category_group, "
+            "civilization)\n"
+            "        SELECT p.site_id, 0, 0, 0, 0, 0, 0, 0, 0, 'unknown', p.country FROM _ins_site p"
+            in card
+        )
+        assert "ON CONFLICT" not in sql
+        assert "'card_stats', t.col, ins.site_id::text, NULL, t.val," in card
+        assert "p.change_key || ':card:' || t.col" in card and "ins.site_id\n" in card
+        for column in step.inserts[0].card_columns():
+            assert f"('{column}', ins.{column}::text)" in card
+        assert card.count("::text)") == 11
+        # after the row it references, before the invariants
+        assert sql.index("INSERT INTO unified_sites") < sql.index("INSERT INTO card_stats")
+        assert sql.index("INSERT INTO card_stats") < sql.index("-- invariant: rows")
+
+    def test_the_cards_invariant_holds_the_whole_placeholder(self, step: P.Step) -> None:
+        cards = W.apply_invariants(step.run_stamp)["cards"]
+        assert (
+            "LEFT JOIN card_stats c ON c.site_id = p.site_id WHERE c.site_id IS NULL OR " in cards
+        )
+        for column, value in P.CARD_PLACEHOLDER:
+            assert f"c.{column} IS DISTINCT FROM {W._lit(value)}" in cards
+        assert "c.category_group IS DISTINCT FROM 'unknown'" in cards
+        assert "c.rarity_tier IS DISTINCT FROM 0" in cards
+        assert "c.civilization IS DISTINCT FROM p.country" in cards
+        assert "c.card_description IS NOT NULL" in cards
+        assert "c.empires IS DISTINCT FROM '[]'::jsonb" in cards
+        assert "c.empire_count IS DISTINCT FROM 0" in cards
+        assert f"-- invariant: cards\n    SELECT count(*) INTO bad FROM ({cards}) g;" in (
+            W.render_apply(step)
+        )
+
+    def test_the_undo_moves_the_reason_through_the_scope_write_path(self, step: P.Step) -> None:
         sql = W.render_rollback(step)
         W.lint(sql, "rollback")
-        assert "apply_remediation_change('unified_sites', 'scope_status'" in sql
+        assert "apply_remediation_change('unified_sites', 'scope_reason'" in sql
         assert "'retired'" in sql and "INSERT INTO unified_sites" not in sql
         assert "DELETE" not in code(sql) and step.rollback_stamp in sql
         for says in W.UNDO_SAYS.values():
@@ -1253,7 +1403,7 @@ class TestTheStatements:
                 lambda s: s.replace("INSERT INTO unified_sites\n", "INSERT INTO x\n"),
                 "creates no",
             ),
-            ("rollback", lambda s: s.replace("apply_remediation_change(", "f("), "retires"),
+            ("rollback", lambda s: s.replace("apply_remediation_change(", "f("), "moves the"),
         ],
     )
     def test_the_lint_refuses_another_shape(self, step: P.Step, kind, edit, why) -> None:
@@ -1307,8 +1457,8 @@ class TestTheStatements:
         assert f"AND {W.contribution_written()}" in contributions
         for says in [*W.UNDO_SAYS.values(), *W.UNDO_WRITE_SAYS.values()]:
             assert says in sql
-        # 2 per site, 6 per proposal, 2 per contribution
-        assert "c.n <> 10" in sql
+        # 1 per site, 6 per proposal, 2 per contribution
+        assert "c.n <> 9" in sql
 
     def test_each_invariant_reads_what_it_names(self, step: P.Step) -> None:
         inv = W.apply_invariants(step.run_stamp)
@@ -1321,12 +1471,34 @@ class TestTheStatements:
         assert "sp.promoted_site_id IS DISTINCT FROM q.site_id" in inv["proposals"]
         assert W.contribution_written() in inv["contributions"]
 
-    def test_the_undo_moves_in_scope_to_retired_and_nothing_else(self, step: P.Step) -> None:
+    def test_the_undo_moves_only_the_staged_reason(self, step: P.Step) -> None:
+        """The site is retired already: the undo journals one row per site, its reason from the
+        staged one to the undo's, and never touches `scope_status` (a site the scope lane has
+        shown is refused by guard 1 instead of being hidden by this file)."""
         sql = W.render_rollback(step)
-        assert "'in_scope', 'retired', 'D57/insert-site'" in sql
-        assert "r.scope_reason, r.retire_reason" in sql
+        assert sql.count("PERFORM apply_remediation_change(") == 1
+        assert (
+            "PERFORM apply_remediation_change('unified_sites', 'scope_reason', 'id', "
+            "r.site_id::text,\n            r.scope_reason, r.retire_reason, 'D57/insert-site'"
+            in sql
+        )
+        assert "'scope_status'" not in code(sql)
+        # 1 per site, 6 per proposal: the plan's one proposal
+        assert "c.n <> 7" in sql
+        [row] = step.inserts
+        reason = W.retire_reason(step)
+        assert not reason.startswith(D57_STAGED_PREFIX)
+        # the prefix IndexNow knows an undone insert by (`pipeline/indexnow.py`)
+        assert reason.startswith(f"{W.D57_UNDONE_PREFIX} ({step.rollback_stamp}): retired, ")
+        assert f"{W._lit(row.scope_reason)}, {W._lit(reason)}, " in _values(sql, "_ins_undo")
         checks = W.undo_checks(step.rollback_stamp, 8)
-        assert "u.scope_reason IS DISTINCT FROM p.scope_reason" in checks[1]
+        staged = (
+            "(u.scope_status IS NOT DISTINCT FROM 'retired' AND COALESCE(u.scope_reason, '') "
+            "LIKE 'D57 staged:%')"
+        )
+        assert f" OR NOT {staged} OR u.scope_reason IS DISTINCT FROM p.scope_reason" in checks[1]
+        assert "u.scope_status IS DISTINCT FROM 'retired'" in checks["rows"]
+        assert "u.scope_reason IS DISTINCT FROM p.retire_reason" in checks["rows"]
         assert "c.n <> 8" in checks["journal"]
 
     def test_a_refusal_text_that_would_break_its_literal_is_refused(self) -> None:
@@ -1456,6 +1628,60 @@ class TestTheReadback:
 
         assert any("journal holds" in p for p in W.readback(step, read=short))
 
+    def test_a_missing_card_row_is_a_deviation(self, step: P.Step) -> None:
+        read = landed(step)
+
+        def without(sql: str):
+            return [] if "FROM card_stats" in sql else read(sql)
+
+        assert any("no card_stats row" in p for p in W.readback(step, read=without))
+        assert W.recomputed_cards(step, read=without) == []
+
+    def test_a_placeholder_that_differs_is_a_deviation(self, step: P.Step) -> None:
+        """Still `rarity_tier` 0, so no API start recomputed it: the row must be the one written."""
+        problems = W.readback(step, read=landed(step, card={"category_group": "Religious"}))
+        assert problems == [
+            f"{COLOSSEUM}: card_stats.category_group is 'Religious', the insert wrote 'unknown'"
+        ]
+        problems = W.readback(step, read=landed(step, card={"civilization": None}))
+        assert problems == [
+            f"{COLOSSEUM}: card_stats.civilization is None, the insert wrote 'Italy'"
+        ]
+
+    def test_a_card_an_api_start_recomputed_is_said_and_is_no_deviation(self, step, capsys) -> None:
+        """`generator.backfill_placeholder_stats` recomputes a zeroed row on every API start,
+        unjournalled: the row is the generator's then, the journal rows still are the plan's."""
+        recomputed = {"antiquity": "6", "total_power": "23", "rarity_score": "14",
+                      "rarity_tier": "1", "category_group": "Monuments"}  # fmt: skip
+        read = landed(step, card=recomputed)
+        assert W.readback(step, read=read) == []
+        assert W.recomputed_cards(step, read=read) == [COLOSSEUM]
+        assert W.recomputed_cards(step, read=landed(step)) == []
+        W._say_recomputed([COLOSSEUM])
+        said = capsys.readouterr().out
+        assert "NOTE: 1 card_stats row(s)" in said and "backfill_placeholder_stats" in said
+        W._say_recomputed([])
+        assert capsys.readouterr().out == ""
+
+    def test_a_card_journal_row_that_differs_is_a_deviation(self, step: P.Step) -> None:
+        read = landed(step)
+
+        def moved(sql: str):
+            rows = read(sql)
+            if "remediation_change_log" in sql:
+                rows = [
+                    {**r, "new_value": "3"}
+                    if (r["table_name"], r["column_name"]) == ("card_stats", "rarity_tier")
+                    else r
+                    for r in rows
+                ]
+            return rows
+
+        problems = W.readback(step, read=moved)
+        assert problems == [
+            f"{COLOSSEUM}: the journal says card_stats.rarity_tier is '3', the plan wrote '0'"
+        ]
+
     def test_a_radar_contribution_reads_back(self, radar_step: P.Step) -> None:
         read = landed(radar_step)
         assert W.readback(radar_step, read=read) == []
@@ -1501,9 +1727,23 @@ class TestTheReadback:
         W.emit(target)
         result = W.accept(target, read=landed(step))
         assert result["accepted"] and result["deviations"] == 0
+        assert result["card_rows_recomputed"] == []
         assert (target / W.INSERTED_FILE).read_text(encoding="utf-8") == f"{SITE_ID}\n"
         with pytest.raises(W.WriterError, match="accepted once"):
             W.accept(target, read=landed(step))
+
+    def test_accept_holds_after_an_api_start_and_records_the_recomputed_cards(
+        self, run, step: P.Step
+    ) -> None:
+        target = P.step_dir(run, 1)
+        P.write_step(step, target)
+        W.write_rollback(step, target)
+        W.emit(target)
+        read = landed(step, card={"rarity_tier": "2", "category_group": "Monuments"})
+        result = W.accept(target, read=read)
+        assert result["accepted"] and result["card_rows_recomputed"] == [COLOSSEUM]
+        recorded = json.loads((target / W.ACCEPTED_FILE).read_text(encoding="utf-8"))
+        assert recorded["card_rows_recomputed"] == [COLOSSEUM] and recorded["deviations"] == 0
 
 
 #: The temp table each APPLY guard selects from: its probe has to change that table's rows.

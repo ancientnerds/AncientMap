@@ -98,6 +98,20 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     ]
 
 
+def unobtainable(old_run: Path, need: str) -> dict[tuple[str, str], str]:
+    """`{(site id, file): reason}` of the pictures the last run of `need` gave up on: its manifest's
+    `gone` and `refused` lines. A need that never ran has given up on nothing; a run a CommonsError
+    stopped (`stopped`) has not either - it is made again."""
+    path = old_run / manifest_name(need)
+    if not path.is_file():
+        return {}
+    return {
+        (str(line["site_id"]), str(line["file"])): f"{line['status']}: {line['reason']}"
+        for line in _jsonl(path)
+        if line["status"] in (GONE, REFUSED)
+    }
+
+
 # -------------------------------------------------------------------------------- the needs
 def need_targets(
     old_run: Path, population: Sequence[Mapping[str, Any]], site_ids: set[str]

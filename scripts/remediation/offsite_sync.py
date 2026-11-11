@@ -166,17 +166,19 @@ def build_evidence_tar(source: Path, out: Path) -> None:
 # ---- transport -------------------------------------------------------------------------------
 
 
-def _run(argv: list[str], timeout: int) -> str:
-    proc = subprocess.run(
-        argv, capture_output=True, text=True, encoding="utf-8", timeout=timeout, check=False
-    )
+def _run(argv: list[str], timeout: int, stdin: bytes | None = None) -> str:
+    """Bytes in, bytes out, decoded here: a text pipe on Windows would turn every `\\n` of `stdin`
+    into `\\r\\n`, and the far side reads the `\\r` as part of a file name."""
+    proc = subprocess.run(argv, input=stdin, capture_output=True, timeout=timeout, check=False)
     if proc.returncode != 0:
-        raise OffsiteError(f"{argv[0]} exited {proc.returncode}: {proc.stderr.strip()}")
-    return proc.stdout
+        raise OffsiteError(
+            f"{argv[0]} exited {proc.returncode}: {proc.stderr.decode('utf-8', 'replace').strip()}"
+        )
+    return proc.stdout.decode("utf-8")
 
 
-def ssh(host: str, command: str, timeout: int = SSH_TIMEOUT_S) -> str:
-    return _run(["ssh", *SSH_OPTIONS, host, command], timeout)
+def ssh(host: str, command: str, timeout: int = SSH_TIMEOUT_S, stdin: bytes | None = None) -> str:
+    return _run(["ssh", *SSH_OPTIONS, host, command], timeout, stdin)
 
 
 def scp_from(host: str, remote: str, local: Path) -> None:

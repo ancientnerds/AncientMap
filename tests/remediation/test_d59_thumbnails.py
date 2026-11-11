@@ -7,14 +7,19 @@ the D59 wording and marker of the INSERT claim, the INSERT plan's lift of the th
 thumbnails - when no research found a picture (only once the research is finished) or the INSERT lane
 refused the confirmed one for good, and never for a site whose INSERT has not ended -, the D59 run's
 way past the prefilter to the depicts role, the per-site outcomes and owner list, and the write
-order (nothing is written before the Commons answers are in).
+order (nothing is written before the Commons answers are in). The INSERT lane's end of a pick is
+read in its own records: a fetch that got no answer refuses no file, the runs that claim one file
+answer together, and a target line that is gone proves nothing without the refusal behind it.
 """
 
 from __future__ import annotations
 
+import inspect
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -30,9 +35,12 @@ from candidate_search import population as PP  # noqa: E402
 from gallery_audit import chunk_writer as CW  # noqa: E402
 from image_roles import d59 as D59  # noqa: E402
 from image_roles import prefilter as PF  # noqa: E402
+from import_hero import fetch as IF  # noqa: E402
 from import_hero import insert as IN  # noqa: E402
 from served_image import commons as CM  # noqa: E402
 from served_image import state as ST  # noqa: E402
+
+from pipeline import wiki_image_downloader as DL  # noqa: E402
 
 SITE = "11111111-1111-4111-8111-111111111111"
 SITE_B = "22222222-2222-4222-8222-222222222222"
@@ -43,6 +51,35 @@ THUMB = (
     "400px-Monte_Lazzu_dolmen.jpg"
 )
 BLOG = "https://1.bp.blogspot.com/x/Monte.jpg"
+
+
+def _recorded(call: Callable[[], Any]) -> str:
+    """The line `import_hero.fetch.run_fetch` records for the failure `call` raises."""
+    try:
+        call()
+    except (IF.FetchError, DL.DownloadError, OSError) as exc:
+        return f"the fetch failed: {exc}"
+    raise AssertionError("the call did not fail")
+
+
+def _raising(error: Exception) -> Callable[[], Any]:
+    def call() -> Any:
+        raise error
+
+    return call
+
+
+def _entry(license_name: str = "CC BY-SA 4.0", width: int = 1600, height: int = 1200) -> Any:
+    """`fetch.manifest_entry` for FILE as Commons answers a file without an author."""
+    metadata = {"license": license_name, "original_url": UPLOAD, "license_url": "https://l"}
+    stored = SimpleNamespace(width=width, height=height, file_size=5000)
+    return IF.manifest_entry(SITE, FILE, metadata, stored, floor=(800, 300))
+
+
+#: The fetch's own refusal of a file whose licence demands an author it does not name.
+NO_AUTHOR = _recorded(_entry)
+#: A download that got no answer, recorded by the fetch in the same file and the same form.
+NO_ANSWER = _recorded(_raising(DL.DownloadError(UPLOAD, "HTTP 503")))
 
 
 # --------------------------------------------------------------------------- the populations
@@ -311,6 +348,35 @@ def _write(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
 
+NEXT = "Monte Lazzu from the south.jpg"
+
+
+def _judged(run: Path, depicts: dict[str, int], rechecks: dict[str, str]) -> None:
+    """The run's Claude judgements of SITE: `depicts` rows `{file: quality}` and the re-check's
+    verdicts `{file: verdict}`, with the candidates they judge."""
+    _write(run / CJ.CANDIDATES, [{"site_id": SITE, "candidates": [{"file": f} for f in depicts]}])
+    _write(
+        run / CJ.VERDICTS,
+        [
+            {"site_id": SITE, "file": f, "verdict": "depicts", "quality": q, "width": 2000,
+             "height": 1500}
+            for f, q in depicts.items()
+        ],
+    )  # fmt: skip
+    _rechecked(run, rechecks)
+
+
+def _rechecked(run: Path, rechecks: dict[str, str]) -> None:
+    _write(
+        run / "RECHECK_01.jsonl",
+        [
+            {"verdict": v, "model": OH.ANSWER_MODELS["claude-fable-5-2"],
+             "meta": {"site_id": SITE, "file": f}}
+            for f, v in rechecks.items()
+        ],
+    )  # fmt: skip
+
+
 def _research(tmp_path: Path, *, targets: list[dict[str, Any]], refused: bool = False) -> Path:
     run = tmp_path / "candidates-2026-10-25"
     run.mkdir()
@@ -336,8 +402,14 @@ def _null_run(tmp_path: Path, sites: list[dict[str, Any]]) -> Path:
     return run
 
 
-def _prefilter(monkeypatch: pytest.MonkeyPatch, survives: bool | None) -> None:
-    rows = [] if survives is None else [{"site_id": SITE, "file": FILE, "survives": survives}]
+def _prefilter(
+    monkeypatch: pytest.MonkeyPatch, survives: bool | None, files: tuple[str, ...] = (FILE,)
+) -> None:
+    rows = (
+        []
+        if survives is None
+        else [{"site_id": SITE, "file": file, "survives": survives} for file in files]
+    )
     monkeypatch.setattr(D59.SG, "read_results", lambda run, spec: [])
     monkeypatch.setattr(PF, "judged", lambda results: rows)
 
@@ -414,18 +486,101 @@ def test_a_confirmed_site_whose_insert_was_refused_for_good_is_emptied_with_the_
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _judged(research, {FILE: 5}, {FILE: "depicts"})
     _prefilter(monkeypatch, survives=True)
     run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
-    insert = _insert_run(
-        tmp_path, refusal="not_fetched", fetch_failure="the fetch failed: no author"
-    )
+    insert = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
     summary = D59.null_plan(run, [research], [insert])
     assert summary["cleared_by"] == {"insert_refused:not_fetched": 1}
     [change] = CW.check_delivered(run / "chunks" / "chunk-001").changes
     assert change.new_value is None and "INSERT lane refused it" in change.reason
     [proof] = [e for e in change.evidence if e["source"].startswith("import_hero/")]
     assert proof["insert_refusal"] == "not_fetched"
-    assert proof["fetch_failure"] == "the fetch failed: no author"
+    assert proof["fetch_failure"] == NO_AUTHOR
+
+
+@pytest.mark.parametrize(
+    ("rechecks", "waiting"),
+    [
+        ({FILE: "depicts"}, NEXT),  # the next-ranked depicts waits for its re-check
+        ({FILE: "depicts", NEXT: "depicts"}, NEXT),  # ... or is confirmed and not written yet
+    ],
+)
+def test_a_thumbnail_is_not_emptied_while_another_depicts_of_the_site_is_untried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rechecks: dict[str, str], waiting: str
+) -> None:
+    """The INSERT lane refused the confirmed file for a reason that lies in the file; the research
+    still holds a `depicts` nobody tried. D59's NULL is the end of a research with nothing left."""
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _judged(research, {FILE: 5, NEXT: 3}, rechecks)
+    _prefilter(monkeypatch, survives=True)
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    insert = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    with pytest.raises(D59.D59Error, match=f"next depicts {waiting!r} is not tried yet"):
+        D59.null_plan(run, [research], [insert])
+    assert not (run / "chunks").exists()
+
+
+def test_a_thumbnail_is_emptied_once_every_depicts_of_the_site_was_tried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _judged(research, {FILE: 5, NEXT: 3}, {FILE: "depicts", NEXT: "other_site"})
+    _prefilter(monkeypatch, survives=True)
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    insert = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    assert D59.null_plan(run, [research], [insert])["cleared_by"] == {
+        "insert_refused:not_fetched": 1
+    }
+
+
+def test_the_picks_refused_for_the_file_are_named_and_no_others(tmp_path: Path) -> None:
+    gone = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    held = _insert_run(tmp_path, refusal="already_holds_the_file", name="insert-held")
+    assert D59.refused_files([gone]) == {
+        (SITE, FILE): {
+            "source": "import_hero/insert-2026-10-25-d17",
+            "claimed": UPLOAD,
+            "insert_refusal": "not_fetched",
+            "detail": "d",
+            "fetch_failure": NO_AUTHOR,
+        }
+    }
+    [proof] = D59.refused_files([held]).values()
+    assert (proof["source"], proof["insert_refusal"]) == (
+        "import_hero/insert-held",
+        "already_holds_the_file",
+    )
+    # a fetch that never ran or got no answer, a planned row and a refusal that speaks of the site
+    # refuse no file
+    for name, kwargs in (
+        ("insert-never", {"refusal": "not_fetched"}),
+        ("insert-no-answer", {"refusal": "not_fetched", "fetch_failure": NO_ANSWER}),
+        ("insert-planned", {"planned": True}),
+        ("insert-retired", {"refusal": "retired"}),
+        ("insert-moved", {"refusal": "d59_thumbnail_moved"}),
+        ("insert-open", {}),
+    ):
+        assert D59.refused_files([_insert_run(tmp_path, name=name, **kwargs)]) == {}, name
+
+
+def test_the_run_that_claims_the_next_pick_answers_for_it(tmp_path: Path) -> None:
+    """A site's second pick: the first run claimed and refused the first file for good, the second
+    run claims the next one. Each file is answered by the run that claims it."""
+    first = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    other = UPLOAD.replace("Monte_Lazzu_dolmen", "Monte_Lazzu_from_the_south")
+    second = _insert_run(tmp_path, planned=True, claimed=other, name="insert-b")
+    assert D59.insert_state([first, second], SITE, NEXT)[0] == D59.PLANNED
+    assert D59.insert_state([first], SITE, FILE)[:2] == (D59.REFUSED, "not_fetched")
+    assert D59.insert_state([first], SITE, NEXT)[0] == D59.NOT_CLAIMED
+    # targets written again without the INSERT runs name the refused file once more: the run that
+    # plans the next pick is then a claim of another file, and the state is refused by name
+    with pytest.raises(D59.D59Error, match="not the research's"):
+        D59.insert_state([first, second], SITE, FILE)
+    # an earlier claim of another file that was not refused for the file is no predecessor
+    moved = _insert_run(tmp_path, refusal="d59_thumbnail_moved", name="insert-moved")
+    with pytest.raises(D59.D59Error, match="not the research's"):
+        D59.insert_state([moved, second], SITE, NEXT)
 
 
 def test_an_insert_refusal_about_another_state_of_the_site_empties_nothing(
@@ -439,16 +594,233 @@ def test_an_insert_refusal_about_another_state_of_the_site_empties_nothing(
         D59.null_plan(run, [research], [insert])
 
 
-def test_an_insert_claim_of_another_file_or_by_two_runs_is_refused(
-    tmp_path: Path,
-) -> None:
+def test_an_insert_claim_of_another_file_is_refused(tmp_path: Path) -> None:
     other = _insert_run(tmp_path, refusal="not_fetched", claimed=UPLOAD.replace("Monte", "Other"))
     with pytest.raises(D59.D59Error, match="not the research's"):
         D59.insert_state([other], SITE, FILE)
-    one = _insert_run(tmp_path, refusal="not_fetched", name="insert-a")
-    two = _insert_run(tmp_path, refusal="not_fetched", name="insert-b")
-    with pytest.raises(D59.D59Error, match="two INSERT runs"):
-        D59.insert_state([one, two], SITE, FILE)
+
+
+# ------------------------------------------- the INSERT lane's end of a pick, read in its records
+def _fetch_site(metadata: dict[str, Any] | None, tmp_path: Path) -> Callable[[], Any]:
+    """`fetch.fetch_site` for FILE with Commons answering `metadata` (None: no answer at all)."""
+    answers = {} if metadata is None else {f"File:{FILE}": metadata}
+
+    def call() -> Any:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(DL, "fetch_image_metadata_batch", lambda titles: answers)
+            return IF.fetch_site(SITE, FILE, tmp_path / "offsite", floor=(800, 300))
+
+    return call
+
+
+def _strip_on_disk(tmp_path: Path) -> Callable[[], Any]:
+    from PIL import Image
+
+    dest = IF.site_dest(tmp_path / "offsite", SITE, FILE)
+    dest.parent.mkdir(parents=True)
+    Image.new("RGB", (1600, 200)).save(dest, "WEBP")
+    return _fetch_site({"original_url": UPLOAD, "width": 4000, "height": 500}, tmp_path)
+
+
+def test_the_fetch_s_refusals_of_the_file_are_told_from_a_fetch_that_got_no_answer(
+    tmp_path: Path,
+) -> None:
+    """Every wording is read out of the code that records it (`fetch.py`, the downloader), so a
+    reworded refusal fails here instead of turning silently into "fetch it again"."""
+    tif = UPLOAD.replace(".jpg", ".tif")
+    of_the_file = {
+        "a credit the licence demands": _entry,
+        "the download is below the floor": lambda: _entry("CC0", width=700),
+        "the original is narrower than the floor": _fetch_site(
+            {"original_url": UPLOAD, "width": 640, "height": 480}, tmp_path
+        ),
+        "the original stores below the floor": _fetch_site(
+            {"original_url": UPLOAD, "width": 4000, "height": 500}, tmp_path
+        ),
+        "Commons hosts no such file": _fetch_site({"original_url": None, "width": None}, tmp_path),
+        "a file type without a thumbnail rule": lambda: DL.fetch_plan(tif, 5000),
+        "a name the file system refuses": lambda: IF.local_name('A "quoted" stone.jpg'),
+        "a name without an extension": lambda: IF.local_name("stone"),
+    }
+    recorded = {what: _recorded(call) for what, call in of_the_file.items()}
+    recorded["a stored strip"] = _recorded(_strip_on_disk(tmp_path))
+    for what, line in recorded.items():
+        assert D59.lies_in_the_file(line), what
+    # the two the download itself words (an upscale, a file over the byte limit) are read where
+    # `download_image` raises them; no wording of the list is one the code no longer says
+    download = inspect.getsource(DL.download_image)
+    for wording in ("wider than the", "is over the limit"):
+        assert wording in D59.FILE_FAILURES and wording in download
+    for wording in D59.FILE_FAILURES:
+        assert wording in download or any(wording in line for line in recorded.values()), wording
+    # what says nothing about the file: Commons or the network gave no answer, an HTTP status, a
+    # download that is no picture, a file in the way, the disk
+    exists = "C:/offsite/11111111/Monte Lazzu dolmen.webp exists and is never overwritten"
+    said_by_the_download = (
+        "no response (ConnectTimeout: timed out)",
+        "HTTP 503",
+        "HTTP 404",
+        "not an image (text/html)",
+        "only 312 bytes",
+        "not a decodable image (cannot identify image file)",
+        exists,
+    )
+    silent = [
+        _fetch_site(None, tmp_path),
+        *(_raising(DL.DownloadError(UPLOAD, reason)) for reason in said_by_the_download),
+        _raising(OSError(28, "No space left on device")),
+    ]
+    for call in silent:
+        line = _recorded(call)
+        assert not D59.lies_in_the_file(line), line
+
+
+def test_a_fetch_that_got_no_answer_is_no_refusal_of_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`insert-plan` records `not_fetched` for a throttled download as for a missing credit. Only
+    the second refuses the file: the first is a claim the run left open - no pick is passed over
+    for it and no thumbnail is emptied on it."""
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _judged(research, {FILE: 5, NEXT: 3}, {FILE: "depicts"})
+    _prefilter(monkeypatch, survives=True)
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    throttled = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_ANSWER)
+    state, why, proof = D59.claim_state(throttled, SITE, UPLOAD)
+    assert state == D59.NOT_PLANNED and "fetch it again in a new INSERT run" in why
+    assert proof["fetch_failure"] == NO_ANSWER
+    assert D59.refused_files([throttled]) == {}
+    assert D59.untried_pick(research, SITE, D59.refused_files([throttled])) == FILE
+    with pytest.raises(D59.D59Error, match="has not ended it \\(not_planned: .*HTTP 503"):
+        D59.null_plan(run, [research], [throttled])
+    assert not (run / "chunks").exists()
+    # the retry in a new INSERT run answers for the file, whatever the first run recorded
+    again = _insert_run(tmp_path, planned=True, name="insert-2026-10-25-d17b")
+    assert D59.insert_state([throttled, again], SITE, FILE)[0] == D59.PLANNED
+    refused = _insert_run(
+        tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR, name="insert-2026-10-25-d17c"
+    )
+    assert D59.insert_state([throttled, refused], SITE, FILE)[:2] == (D59.REFUSED, "not_fetched")
+    assert set(D59.refused_files([throttled, refused])) == {(SITE, FILE)}
+
+
+def test_the_runs_that_claim_one_file_answer_together(tmp_path: Path) -> None:
+    """A later run is the retry of an earlier one. The run that plans the row answers, else the
+    last run named: no run's refusal is read in isolation."""
+    gone = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR, name="i")
+    planned = _insert_run(tmp_path, planned=True, name="ib")
+    held = _insert_run(tmp_path, refusal="already_holds_the_file", name="ic")
+    moved = _insert_run(tmp_path, refusal="d59_thumbnail_moved", name="id")
+    open_ = _insert_run(tmp_path, name="ie")
+    # a file one run refused and another plans is live, in either order
+    for runs in ([gone, planned], [planned, gone]):
+        assert D59.insert_state(runs, SITE, FILE)[0] == D59.PLANNED
+        assert D59.refused_files(runs) == {}
+    # the first wave wrote the row; a second run that claims the site again finds it there
+    assert D59.insert_state([planned, held], SITE, FILE)[0] == D59.PLANNED
+    assert D59.refused_files([planned, held]) == {}
+    # no run plans it: the last run named answers
+    assert D59.insert_state([moved, gone], SITE, FILE)[:2] == (D59.REFUSED, "not_fetched")
+    assert D59.insert_state([gone, moved], SITE, FILE)[:2] == (D59.REFUSED, "d59_thumbnail_moved")
+    assert set(D59.refused_files([moved, gone])) == {(SITE, FILE)}
+    assert D59.refused_files([gone, moved]) == {}
+    # ... and a retry that has not decided the file yet keeps it open
+    assert D59.insert_state([gone, open_], SITE, FILE)[0] == D59.NOT_PLANNED
+    assert D59.refused_files([gone, open_]) == {}
+    # a run whose write stopped at a guard and the new run that planned the row again: planned
+    again = _insert_run(tmp_path, planned=True, name="if")
+    state, why, proof = D59.insert_state([planned, again], SITE, FILE)
+    assert (state, why, proof["source"]) == (
+        D59.PLANNED,
+        "if/chunk-001 plans the row",
+        "import_hero/if",
+    )
+
+
+def test_a_site_refused_twice_for_its_state_stops_no_outcome_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The second INSERT wave is built over the whole target list, so it claims again the file of
+    a site the first wave refused for a reason that speaks of the site. That is a retry, not a
+    conflict: the outcome list is written, and the NULL plan names the site's own refusal."""
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": FILE}])
+    _judged(research, {FILE: 5}, {FILE: "depicts"})
+    _prefilter(monkeypatch, survives=True)
+    first = _insert_run(tmp_path, refusal="d59_thumbnail_moved", name="insert-s01")
+    second = _insert_run(tmp_path, refusal="d59_thumbnail_moved", name="insert-s01b")
+    summary = D59.research_outcomes(research, [first, second])
+    assert summary["outcomes"]["target:refused"] == 1
+    reasons = {
+        line["site_id"]: line["reason"]
+        for line in map(json.loads, (research / D59.D17_OWNER_LIST).read_text().splitlines())
+    }
+    assert reasons[SITE] == (
+        f"the INSERT lane refused the confirmed file {FILE!r}: d59_thumbnail_moved"
+    )
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    with pytest.raises(D59.D59Error, match="insert-s01b refused the row as 'd59_thumbnail_moved'"):
+        D59.null_plan(run, [research], [first, second])
+
+
+def test_a_pick_the_targets_dropped_is_emptied_on_the_insert_lane_s_refusal_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After `write-targets --insert-run` the site has no target line. That line's absence is no
+    evidence: the NULL is planned only with the INSERT run that refused the confirmed file, and
+    carries that refusal."""
+    research = _research(tmp_path, targets=[])
+    _judged(research, {FILE: 5, NEXT: 3}, {FILE: "depicts", NEXT: "other_site"})
+    _prefilter(monkeypatch, survives=True, files=(FILE, NEXT))
+    assert D59.research_outcome(research, SITE) == (
+        D59.INSERT_REFUSED,
+        "2 candidate(s): 1 depicts, not confirmed, 1 confirmed, refused by the INSERT lane",
+    )
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    # no INSERT run named, one that plans that very file, one whose fetch only got no answer
+    planned = _insert_run(tmp_path, planned=True, name="insert-planned")
+    throttled = _insert_run(
+        tmp_path, refusal="not_fetched", fetch_failure=NO_ANSWER, name="insert-429"
+    )
+    for runs in ([], [planned], [throttled]):
+        with pytest.raises(D59.D59Error, match=f"does not name {FILE!r}, a depicts of the site"):
+            D59.null_plan(run, [research], runs)
+        assert not (run / "chunks").exists()
+    refused = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    summary = D59.null_plan(run, [research], [refused])
+    assert summary["cleared_by"] == {"insert_refused:not_fetched": 1}
+    [change] = CW.check_delivered(run / "chunks" / "chunk-001").changes
+    assert change.new_value is None
+    assert f"confirmed {FILE!r}, and the INSERT lane refused it (not_fetched)" in change.reason
+    assert "found no checked Commons picture" not in change.reason
+    assert change.evidence[0]["outcome"] == D59.INSERT_REFUSED
+    [proof] = [e for e in change.evidence if e["source"].startswith("import_hero/")]
+    assert (proof["insert_refusal"], proof["fetch_failure"]) == ("not_fetched", NO_AUTHOR)
+
+
+def test_every_pick_the_insert_lane_refused_is_in_the_null_s_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two confirmed picks, each refused by its own run: the target is the second, and the row
+    names both refusals."""
+    research = _research(tmp_path, targets=[{"site_id": SITE, "commons_file": NEXT}])
+    _judged(research, {FILE: 5, NEXT: 3}, {FILE: "depicts", NEXT: "depicts"})
+    _prefilter(monkeypatch, survives=True, files=(FILE, NEXT))
+    run = _null_run(tmp_path, [{"id": SITE, "name": "A", "thumbnail_url": BLOG}])
+    first = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    other = UPLOAD.replace("Monte_Lazzu_dolmen", "Monte_Lazzu_from_the_south")
+    second = _insert_run(tmp_path, refusal="already_holds_the_file", claimed=other, name="insert-b")
+    summary = D59.null_plan(run, [research], [first, second])
+    assert summary["cleared_by"] == {"insert_refused:already_holds_the_file": 1}
+    [change] = CW.check_delivered(run / "chunks" / "chunk-001").changes
+    assert (
+        f"confirmed {FILE!r}, {NEXT!r}, and the INSERT lane refused each (not_fetched, "
+        "already_holds_the_file)"
+    ) in change.reason
+    proofs = [e for e in change.evidence if e["source"].startswith("import_hero/")]
+    assert [e["source"] for e in proofs] == [
+        "import_hero/insert-2026-10-25-d17",
+        "import_hero/insert-b",
+    ]
 
 
 def test_the_null_plan_refuses_a_thumbnail_the_research_did_not_see(
@@ -628,12 +1000,181 @@ def test_an_insert_refusal_puts_a_confirmed_d59_site_on_the_owner_list(tmp_path:
     assert summary["outcomes"]["target:refused"] == 1 and summary["owner_list"] == 3
     planned = _insert_run(tmp_path, planned=True, name="insert-planned")
     assert D59.outcomes(run, [planned])["owner_list"] == 2
+    # a target line that is gone is read back in the INSERT run that refused the file
+    _rechecked(run, {FILE: "depicts"})
+    _write(run / CJ.TARGETS, [])
+    assert D59.outcomes(run, [insert])["outcomes"][D59.INSERT_REFUSED] == 1
+    owner = {
+        line["site_id"]: line["reason"]
+        for line in map(json.loads, (run / D59.OWNER_LIST).read_text().splitlines())
+    }
+    assert owner[SITE] == (
+        f"the INSERT lane refused the confirmed file {FILE!r}: already_holds_the_file"
+    )
+    with pytest.raises(D59.D59Error, match="no INSERT run given refused"):
+        D59.outcomes(run, [planned])
 
 
 def test_outcomes_need_a_d59_run(tmp_path: Path) -> None:
     research = _research(tmp_path, targets=[])
     with pytest.raises(D59.D59Error, match="no D59 candidate run"):
         D59.outcomes(research)
+
+
+# ------------------------------------------------------------- the D17 run: outcomes, owner list
+def _d17_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A D17 research run of three sites that show nothing: SITE has a confirmed pick (FILE) and a
+    second `depicts` (NEXT), the search found nothing for SITE_B, and of SITE_C's two survivors one
+    was judged `region_or_type` and one was left out of the depicts stage."""
+    run = tmp_path / "d17-2026-11-11-s01"
+    _write(
+        run / PP.POPULATION_FILE,
+        [
+            {"site_id": s, "name": s[:4], "country": "Italy", "thumbnail_url": None}
+            for s in (SITE, SITE_B, SITE_C)
+        ],
+    )
+    _judged(run, {FILE: 5, NEXT: 3}, {FILE: "depicts"})
+    _write(run / CJ.TARGETS, [{"site_id": SITE, "commons_file": FILE}])
+    _write(
+        run / "CANDIDATE_REFUSALS.jsonl",
+        [{"site_id": SITE_B, "reason": "no_candidate", "detail": "Commons names no file"}],
+    )
+    candidates = [json.loads(x) for x in (run / CJ.CANDIDATES).read_text().splitlines()]
+    candidates.append({"site_id": SITE_C, "candidates": [{"file": "X.jpg"}, {"file": "Y.jpg"}]})
+    _write(run / CJ.CANDIDATES, candidates)
+    verdicts = [json.loads(x) for x in (run / CJ.VERDICTS).read_text().splitlines()]
+    verdicts.append({"site_id": SITE_C, "file": "X.jpg", "verdict": "region_or_type"})
+    _write(run / CJ.VERDICTS, verdicts)
+    _write(run / "DEPICTS_LEFT_OUT.jsonl", [{"site_id": SITE_C, "file": "Y.jpg"}])
+    survivors = [
+        {"site_id": s, "file": f, "survives": True}
+        for s, f in ((SITE, FILE), (SITE, NEXT), (SITE_C, "X.jpg"), (SITE_C, "Y.jpg"))
+    ]
+    monkeypatch.setattr(D59.SG, "read_results", lambda run, spec: [])
+    monkeypatch.setattr(PF, "judged", lambda results: survivors)
+    return run
+
+
+def _d17_lists(run: Path) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    lines = [json.loads(x) for x in (run / D59.D17_OUTCOMES).read_text("utf-8").splitlines()]
+    owner = [json.loads(x) for x in (run / D59.D17_OWNER_LIST).read_text("utf-8").splitlines()]
+    return {x["site_id"]: x for x in lines}, {x["site_id"]: x["reason"] for x in owner}
+
+
+def test_a_d17_run_gives_every_site_it_leaves_without_a_picture_its_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _d17_run(tmp_path, monkeypatch)
+    summary = D59.research_outcomes(run)
+    assert summary == {
+        "sites": 3,
+        "owner_list": 3,
+        "outcomes": {"target:not_claimed": 1, "no_candidate": 1, "none_confirmed": 1},
+    }
+    lines, owner = _d17_lists(run)
+    assert {s: x["research"] for s, x in lines.items()} == {
+        SITE: D59.TARGET,
+        SITE_B: D59.NO_CANDIDATE,
+        SITE_C: D59.NONE_CONFIRMED,
+    }
+    assert lines[SITE_B]["country"] == "Italy"
+    assert owner[SITE_B] == (
+        "the search found no Commons candidate (no_candidate: Commons names no file)"
+    )
+    assert owner[SITE_C] == (
+        "no candidate was confirmed to show the site (2 candidate(s): 1 left out of the depicts "
+        "stage, never judged, 1 not depicts)"
+    )
+    assert owner[SITE] == (
+        f"the confirmed file {FILE!r} was not written (not_claimed: no INSERT run given claims "
+        "the file for the site)"
+    )
+
+
+def test_a_d17_site_whose_row_an_insert_run_plans_is_off_the_owner_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _d17_run(tmp_path, monkeypatch)
+    planned = _insert_run(tmp_path, planned=True)
+    summary = D59.research_outcomes(run, [planned])
+    assert summary["owner_list"] == 2 and summary["outcomes"]["target:planned"] == 1
+    lines, owner = _d17_lists(run)
+    assert SITE not in owner and lines[SITE]["insert"] == D59.PLANNED
+    # the lists are a statement about the run as it stands: a second call writes them again
+    assert D59.research_outcomes(run)["owner_list"] == 3
+
+
+def test_a_d17_refusal_names_the_fetch_s_reason_and_the_untried_next_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _d17_run(tmp_path, monkeypatch)
+    refused = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    assert D59.research_outcomes(run, [refused])["outcomes"]["target:refused"] == 1
+    _, owner = _d17_lists(run)
+    said = f"the INSERT lane refused the confirmed file {FILE!r}: not_fetched ({NO_AUTHOR})"
+    assert owner[SITE] == f"{said}; the site's next depicts {NEXT!r} is not tried yet"
+    # once the next candidate was re-checked and rejected, nothing is left to try
+    _rechecked(run, {FILE: "depicts", NEXT: "other_site"})
+    D59.research_outcomes(run, [refused])
+    assert _d17_lists(run)[1][SITE] == said
+    # ... and targets written after the refusals hold no line for the site: the list still names
+    # the INSERT lane's refusal, read in the run that made it
+    _write(run / CJ.TARGETS, [])
+    counts = "2 candidate(s): 1 depicts, not confirmed, 1 confirmed, refused by the INSERT lane"
+    assert D59.research_outcome(run, SITE) == (D59.INSERT_REFUSED, counts)
+    summary = D59.research_outcomes(run, [refused])
+    assert summary["outcomes"] == {"insert_refused": 1, "no_candidate": 1, "none_confirmed": 1}
+    lines, owner = _d17_lists(run)
+    assert lines[SITE]["research"] == D59.INSERT_REFUSED
+    assert owner[SITE] == f"{said}; no other candidate was confirmed ({counts})"
+    # without that run the missing line is no reason: nothing is listed on an inference
+    for runs in ([], [_insert_run(tmp_path, planned=True, name="insert-planned")]):
+        with pytest.raises(D59.D59Error, match=f"does not name {FILE!r}, a depicts of the site"):
+            D59.research_outcomes(run, runs)
+
+
+def test_a_d17_owner_row_names_the_picks_refused_before_the_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The next pick became the target after the first was refused; while it is not written, the
+    owner still reads why the first one failed."""
+    run = _d17_run(tmp_path, monkeypatch)
+    _rechecked(run, {FILE: "depicts", NEXT: "depicts"})
+    _write(run / CJ.TARGETS, [{"site_id": SITE, "commons_file": NEXT}])
+    refused = _insert_run(tmp_path, refusal="not_fetched", fetch_failure=NO_AUTHOR)
+    D59.research_outcomes(run, [refused])
+    assert _d17_lists(run)[1][SITE] == (
+        f"the confirmed file {NEXT!r} was not written (not_claimed: no INSERT run given claims "
+        f"the file for the site); before it the INSERT lane refused {FILE!r}: not_fetched "
+        f"({NO_AUTHOR})"
+    )
+
+
+def test_a_candidate_left_out_of_the_depicts_stage_still_stops_an_empty_thumbnail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _d17_run(tmp_path, monkeypatch)
+    with pytest.raises(D59.D59Error, match="'Y.jpg' was left out of the depicts stage"):
+        D59.research_outcome(run, SITE_C)
+    assert D59.research_outcome(run, SITE_C, count_left_out=True)[0] == D59.NONE_CONFIRMED
+
+
+def test_the_d17_outcomes_are_not_a_d59_run_s(tmp_path: Path) -> None:
+    with pytest.raises(D59.D59Error, match="is a D59 candidate run"):
+        D59.research_outcomes(_d59_run(tmp_path))
+
+
+def test_the_command_line_writes_the_d17_lists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = _d17_run(tmp_path, monkeypatch)
+    planned = _insert_run(tmp_path, planned=True)
+    argv = ["research-outcomes", "--run-dir", str(run), "--insert-run", str(planned)]
+    assert D59.main(argv) == 0
+    assert json.loads(capsys.readouterr().out)["owner_list"] == 2
+    assert D59.main(["research-outcomes", "--run-dir", str(_d59_run(tmp_path))]) == 1
+    assert "REFUSED" in capsys.readouterr().err
 
 
 def test_a_commons_failure_leaves_no_candidate_run_behind(tmp_path: Path) -> None:

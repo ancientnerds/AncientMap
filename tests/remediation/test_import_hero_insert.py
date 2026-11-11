@@ -10,6 +10,8 @@ has the columns for it - and undoes it with a DELETE named by the triple it wrot
 from __future__ import annotations
 
 import json
+import socket
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -890,3 +892,195 @@ class TestTheAcceptance:
         result = IN.check(state, [row])
         assert result["ok"] is False
         assert any("live hero row" in p for p in result["problems"])
+
+
+class TestAStagedD57Site:
+    """Orchestrator decision O12 (2026-11-10): the insert lane creates its sites hidden - retired,
+    with a reason beginning `D57 staged:` - and each gets its first picture before the scope lane
+    shows it. The lane's read holds such a site with the shown ones; every other retired site
+    stays out of it."""
+
+    STAGED = "D57 staged: inserted hidden by the insert lane, d57-test-001"
+
+    def _unified(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE u (id TEXT, scope_status TEXT, scope_reason TEXT)")
+        conn.executemany(
+            "INSERT INTO u VALUES (?, ?, ?)",
+            [
+                ("shown", None, None),
+                ("in-scope", "in_scope", None),
+                ("shown-again", "in_scope", self.STAGED),
+                ("staged", "retired", self.STAGED),
+                ("retired", "retired", "out of the time window"),
+                ("retired-bare", "retired", None),
+                ("retired-undone", "retired", "D57 insert undone (x-rollback): retired"),
+            ],
+        )
+        return conn
+
+    def _ids(self, where: str) -> set[str]:
+        return {row[0] for row in self._unified().execute(f"SELECT id FROM u WHERE {where}")}
+
+    def test_the_read_holds_a_staged_site_with_the_shown_ones(self) -> None:
+        from import_hero import read as RD
+
+        where = f"   WHERE u.source_id = 'ancient_nerds' AND {RD.IN_THE_READ}\n"
+        assert where + "   ORDER BY u.id\n" in RD.SITES_SQL
+        assert where + "   ORDER BY w.site_id, w.id\n" in RD.IMAGES_SQL
+        assert self._ids(RD.IN_THE_READ) == {"shown", "in-scope", "shown-again", "staged"}
+
+    def test_a_staged_site_is_not_among_the_reads_retired_and_every_other_retired_site_is(
+        self,
+    ) -> None:
+        from import_hero import read as RD
+
+        where = f"   WHERE u.source_id = 'ancient_nerds' AND NOT {RD.IN_THE_READ}\n"
+        assert where + "   ORDER BY u.id\n" in RD.RETIRED_SQL
+        retired = self._ids(f"NOT {RD.IN_THE_READ}")
+        assert retired == {"retired", "retired-bare", "retired-undone"}
+        # the two lists part the curated sites: `state.load_read` refuses a site in both
+        assert not retired & self._ids(RD.IN_THE_READ)
+        assert len(retired | self._ids(RD.IN_THE_READ)) == 7
+
+    def test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The whole path of a staged site, from the read's own statements: `read` holds it (the
+        statements answer from a production that holds a staged site, a shown one and one retired
+        for another reason), `insert-plan` plans its row like a shown one's and still refuses the
+        other retired site, and `insert-accept` answers its three questions from a fresh read - it
+        opens no connection, so a site whose page still answers 410 is accepted on what production
+        holds."""
+        from import_hero import read as RD
+        from import_hero import run as IR
+
+        production = _Production(
+            sites=[
+                (SITE_A, "retired", self.STAGED, None),  # the staged site: no row, no thumbnail
+                (SITE_B, "retired", "out of the time window", None),
+                (SITE_C, None, None, "/x/hero.webp"),
+            ],
+            images=[_row(7, SITE_C, hero=True)],
+        )
+        monkeypatch.setattr(RD.CW.pv, "read_rows", production.read_rows)
+        run = tmp_path / "insert-2026-11-10-d57"
+        assert IR.main(["read", "--run-dir", str(run)]) == 0
+        read = json.loads((run / RD.READ).read_text(encoding="utf-8"))
+        assert [(s["id"], s["staged"]) for s in read["sites"]] == [(SITE_A, True), (SITE_C, False)]
+        assert read["retired"] == [SITE_B] and RD.staged(read) == {SITE_A}
+        assert [image["site_id"] for image in read["images"]] == [SITE_C]
+        summary = json.loads((run / IR.READ_SUMMARY).read_text(encoding="utf-8"))
+        assert (summary["shown_sites"], summary["staged_sites"]) == (2, 1)
+
+        # the run's records as `judge_run.py insert-claims` and the fetch leave them
+        (run / IR.REFUSALS).write_text(
+            "".join(json.dumps(_refusal(site)) + "\n" for site in (SITE_A, SITE_B)),
+            encoding="utf-8",
+        )
+        (run / IR.FETCHED).write_text(json.dumps(_fetched(SITE_A, SITE_B)), encoding="utf-8")
+        planned = IR.cmd_insert_plan(run)
+        assert (planned["planned_sites"], planned["refusals"]) == (1, {"retired": 1})
+        refused = (run / "INSERT_REFUSALS.jsonl").read_text(encoding="utf-8")
+        assert SITE_B in refused and SITE_A not in refused
+        (row,) = IR._planned_inserts(run)
+        assert (row.site_id, row.demoted_id, row.old_thumbnail) == (SITE_A, None, None)
+
+        # what the writer's transaction leaves: the row with the flag, the thumbnail on its file;
+        # the site is still staged
+        production.insert_image(99, SITE_A, {**VALUES, "is_hero": True})
+        production.set_thumbnail(SITE_A, row.new_thumbnail)
+
+        def no_connection(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("insert-accept opened a connection")
+
+        monkeypatch.setattr(socket, "socket", no_connection)
+        monkeypatch.setattr(socket, "create_connection", no_connection)
+        assert IR.cmd_insert_accept(run) == 0
+        record = json.loads((run / IR.ACCEPTANCE_INSERT).read_text(encoding="utf-8"))
+        assert record["ok"] is True and record["problems"] == []
+        assert (record["sites"], record["one_hero"], record["thumbnail_follows"]) == (1, 1, 1)
+        assert record["shown_sites"] == 2  # the fresh read holds the staged site as well
+
+
+class _Production:
+    """Production behind `persist_verdicts.read_rows`, for the lane's own read: the statements of
+    `import_hero/read.py` run as they are written, in SQLite, over two tables with the columns
+    they name. Only what SQLite does not speak is taken off - the `row_to_json` wrapper and the
+    `::text` cast - so the predicate that decides which site the read holds is the statement's."""
+
+    IMAGE_COLUMNS = (
+        "id",
+        "site_id",
+        "filename",
+        "title",
+        "commons_page_url",
+        "original_url",
+        "author",
+        "author_url",
+        "license",
+        "license_url",
+        "is_hero",
+        "is_lead",
+        "is_excluded",
+        "sort_order",
+        "file_size_bytes",
+        "width",
+        "height",
+    )
+    BOOLEANS = ("staged", "is_hero", "is_lead", "is_excluded")
+
+    def __init__(
+        self,
+        *,
+        sites: list[tuple[str, str | None, str | None, str | None]],
+        images: list[dict[str, Any]],
+    ) -> None:
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute(
+            "CREATE TABLE unified_sites (id TEXT, source_id TEXT, name TEXT, country TEXT, "
+            "site_type TEXT, lat REAL, lon REAL, thumbnail_url TEXT, source_url TEXT, "
+            "scope_status TEXT, scope_reason TEXT)"
+        )
+        self.conn.execute(f"CREATE TABLE wiki_images ({', '.join(self.IMAGE_COLUMNS)})")
+        for site_id, status, reason, thumbnail in sites:
+            self.conn.execute(
+                "INSERT INTO unified_sites VALUES (?, 'ancient_nerds', 'Herakleia Siris', 'Italy', "
+                "'City/town/settlement', 40.2, 16.7, ?, ?, ?, ?)",
+                (
+                    site_id,
+                    thumbnail,
+                    "https://en.wikipedia.org/wiki/Herakleia_Siris",
+                    status,
+                    reason,
+                ),
+            )
+        for image in images:
+            self.insert_image(image["id"], image["site_id"], image)
+
+    def insert_image(self, row_id: int, site_id: str, values: dict[str, Any]) -> None:
+        row = {"is_hero": False, "is_lead": False, "is_excluded": False, "sort_order": 0}
+        row |= {**values, "id": row_id, "site_id": site_id}
+        self.conn.execute(
+            f"INSERT INTO wiki_images VALUES ({', '.join('?' * len(self.IMAGE_COLUMNS))})",
+            [row.get(column) for column in self.IMAGE_COLUMNS],
+        )
+
+    def set_thumbnail(self, site_id: str, thumbnail: str) -> None:
+        self.conn.execute(
+            "UPDATE unified_sites SET thumbnail_url = ? WHERE id = ?", (thumbnail, site_id)
+        )
+
+    def read_rows(self, sql: str) -> list[dict[str, Any]]:
+        from import_hero import read as RD
+
+        if sql == RD.READ_AT_SQL:
+            return [{"read_at": "2026-11-10T00:00:00Z"}]
+        head, tail = "SELECT row_to_json(t) FROM (\n", "\n) t;"
+        assert sql.startswith(head) and sql.endswith(tail), sql
+        rows = self.conn.execute(sql[len(head) : -len(tail)].replace("::text", "")).fetchall()
+        return [
+            {key: bool(row[key]) if key in self.BOOLEANS else row[key] for key in row.keys()}
+            for row in rows
+        ]

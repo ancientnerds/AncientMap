@@ -43,20 +43,34 @@ and the write therefore stops the insert instead of being overwritten, and the j
 (the plan's value) is the value the UPDATE replaced.
 
 **The invariants** (after the writes, same transaction): each row stands with its planned values,
-its key, its point and its bucket label, and has a page (`curated_page`); its two `field_prov`
-markers hash the values they describe; each site has exactly its planned names and ids; each closed
-proposal is `approved` and names the site; each mirrored radar contribution is `promoted` and names
-the site (`api/routes/proposals.py:_mirror_contribution`); the parent invariants hold; and the
-journal holds exactly the planned rows per site.
+its key, its point and its bucket label, and is **staged** - curated, with a country, retired with
+its planned reason, which begins `D57_STAGED_PREFIX`, so it has no page (`curated_page` is false:
+orchestrator decision O12, a page without text and picture is never public); its two `field_prov`
+markers hash the values they describe; each site has exactly its planned names and ids and the
+zeroed `card_stats` placeholder; each closed proposal is `approved` and names the site; each
+mirrored radar contribution is `promoted` and names the site
+(`api/routes/proposals.py:_mirror_contribution`); the parent invariants hold; and the journal holds
+exactly the planned rows per site.
 
-**The undo is a retirement, never a DELETE** (`ancient_nerds` is a protected source). `ROLLBACK.sql`
-moves each site `in_scope -> retired` and its reason to the undo's, through
-`apply_remediation_change()` - the scope lanes' own write path - under the stamp
-`<run stamp>-rollback`, and puts each closed proposal and each promoted radar contribution back to
-the values the plan read (locked first, then restored only from the values the insert wrote, the
-row count checked). The site's
-names and ids stay with the retired row: a retired site is hidden everywhere but kept for matching
-(migration 0020), so the Prospector does not propose it again. Running it is a decision, never
+**The `card_stats` row** (`plan.CARD_PLACEHOLDER`, and the country as its `civilization`) is created
+and journalled with the site, because the card_stats lane and the card lane only UPDATE - and the
+card_stats lane fills no NULL, hence the civilization. `generator.backfill_placeholder_stats` recomputes
+every row with `rarity_tier = 0` on each API start, unjournalled. The read-back therefore holds the
+journal rows of the card to the plan always, and the row itself only while it is still a placeholder
+(`rarity_tier` 0): a recomputed row is the generator's, it is no deviation, and `readback` and
+`accept` say how many there are. The next card_stats wave journals every cell of such a card that
+differs from its recompute (`mechanical/card_stats.py` reads past the creation's journal rows).
+
+**The undo keeps the rows retired, and is never a DELETE** (`ancient_nerds` is a protected source).
+The sites are written retired, so `ROLLBACK.sql` moves only each site's reason, from the staged one
+to the undo's, through `apply_remediation_change()` - the scope lanes' own write path - under the
+stamp `<run stamp>-rollback` (one journal row per site): without the staged reason no lane works on
+the row and the scope lane never shows it. It puts each closed proposal and each promoted radar
+contribution back to the values the plan read (locked first, then restored only from the values the
+insert wrote, the row count checked). The site's names, ids and card row stay with the retired row:
+a retired site is hidden everywhere but kept for matching (migration 0020), so the Prospector does
+not propose it again. Undo guard 1 expects the staged pair: once the scope lane has shown a site,
+the undo refuses, and the site leaves through the scope lanes. Running it is a decision, never
 automatic: `ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map
 -v ON_ERROR_STOP=1" < ROLLBACK.sql`, then `readback --rollback`.
 """
@@ -85,6 +99,7 @@ from mechanical.lane import (  # noqa: E402
     PARENT_METRES,
     STATEMENT_TIMEOUT,
     bucket_case,
+    d57_staged_sql,
     parent_invariants,
     sql_literal,
 )
@@ -94,7 +109,13 @@ from prod_write import OutcomeUnknown, pin_line  # noqa: E402
 from insert_site import candidates as C  # noqa: E402
 from insert_site import plan as P  # noqa: E402
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402
-from pipeline.utils.public_sites import RETIRED, curated_page, not_retired  # noqa: E402
+from pipeline.utils.public_sites import (  # noqa: E402
+    D57_STAGED_PREFIX,
+    D57_UNDONE_PREFIX,
+    RETIRED,
+    curated_page,
+    not_retired,
+)
 
 APPLY_FILE, ROLLBACK_FILE, ACCEPTED_FILE = "APPLY.sql", "ROLLBACK.sql", "ACCEPTED.json"
 INSERTED_FILE = "INSERTED_SITES.txt"
@@ -129,13 +150,14 @@ INVARIANT_SAYS = {
     "markers": "inserted site(s) hold a provenance marker that does not hash its value",
     "names": "inserted site(s) do not hold exactly their planned names",
     "ids": "inserted site(s) do not hold exactly their planned external ids",
+    "cards": "inserted site(s) do not hold the zeroed card_stats placeholder",
     "proposals": "closed proposal(s) do not name the inserted site as approved",
     "contributions": "promoted radar contribution(s) do not name the inserted site",
     "parents": "inserted site(s) break a parent invariant",
     "journal": "inserted site(s) do not have exactly their planned journal rows",
 }
 UNDO_SAYS = {
-    1: "planned site(s) no longer hold the scope the insert wrote",
+    1: "planned site(s) are no longer staged with the reason the insert wrote",
     2: "planned proposal(s) no longer hold what the insert wrote",
     3: "planned radar contribution(s) no longer hold what the insert wrote",
     "rows": "undone site(s) are not retired with the reason of the undo",
@@ -445,7 +467,9 @@ def apply_invariants(stamp: str) -> dict[str, str]:
     row_breaks = " OR ".join(
         [
             "u.id IS NULL",
-            f"NOT ({curated_page('u')})",
+            f"u.source_id IS DISTINCT FROM {_lit(P.CURATED)}",
+            f"NOT {d57_staged_sql('u')}",
+            f"({curated_page('u')})",
             "u.source_record_id IS DISTINCT FROM p.source_record_id",
             "u.name IS DISTINCT FROM p.name",
             "u.name_normalized IS DISTINCT FROM p.name_key",
@@ -461,7 +485,6 @@ def apply_invariants(stamp: str) -> dict[str, str]:
             "u.country IS DISTINCT FROM p.country",
             "u.source_url IS DISTINCT FROM p.source_url",
             "u.raw_data IS DISTINCT FROM p.raw_data",
-            f"u.scope_status IS DISTINCT FROM {_lit(P.IN_SCOPE)}",
             "u.scope_reason IS DISTINCT FROM p.scope_reason",
             "u.parent_site_id IS DISTINCT FROM p.parent_site_id",
             "u.description IS NOT NULL",
@@ -496,6 +519,13 @@ def apply_invariants(stamp: str) -> dict[str, str]:
             "ALL SELECT p.site_id FROM _ins_site p WHERE (SELECT count(*) FROM site_external_ids "
             "e WHERE e.site_id = p.site_id) <> (SELECT count(*) FROM _ins_ext x WHERE x.site_id "
             "= p.site_id)"
+        ),
+        "cards": (
+            "SELECT p.site_id FROM _ins_site p LEFT JOIN card_stats c ON c.site_id = p.site_id "
+            "WHERE c.site_id IS NULL OR "
+            + " OR ".join(f"c.{col} IS DISTINCT FROM {_lit(v)}" for col, v in P.CARD_PLACEHOLDER)
+            + f" OR c.{P.CARD_CIVILIZATION} IS DISTINCT FROM p.country OR c.empires IS DISTINCT "
+            "FROM '[]'::jsonb OR c.empire_count IS DISTINCT FROM 0 OR c.card_description IS NOT NULL"
         ),
         "proposals": (
             "SELECT q.proposal_id FROM _ins_prop q LEFT JOIN site_proposals sp ON sp.id = "
@@ -532,6 +562,7 @@ def render_apply(step: P.Step) -> str:
     """APPLY.sql: the guards, the writes and their journal, the invariants - one transaction."""
     if not step.inserts:
         raise WriterError("refusing to render a transaction with no site")
+    check_staged(step)
     stamp = step.run_stamp
     st = _lit(stamp)
     test, conf = _lit(P.TEST_ID), _lit(P.CONFIDENCE)
@@ -547,11 +578,17 @@ def render_apply(step: P.Step) -> str:
     names = _values_block("_ins_name", _name_rows(step.inserts))
     ext = _values_block("_ins_ext", _ext_rows(step.inserts))
     key_p, key_n = site_key_sql("p.name"), site_key_sql("n.name")
+    card_columns = ", ".join([*(c for c, _ in P.CARD_PLACEHOLDER), P.CARD_CIVILIZATION])
+    card_values = ", ".join([*(_lit(v) for _, v in P.CARD_PLACEHOLDER), "p.country"])
+    card_journal = ",\n".join(
+        f"            ({_lit(c)}, ins.{c}::text)" for c in step.inserts[0].card_columns()
+    )
     return f"""-- Generated by scripts/remediation/insert_site/writer.py - do not edit by hand.
 {pin_line(step.digest)}
 -- lane {C.LANE!r} (D57), {len(step.inserts)} site(s) to create; run stamp {stamp!r}.
--- Every row is created together with its journal rows inside this transaction; the undo is
--- ROLLBACK.sql, a retirement (never a DELETE: ancient_nerds is a protected source).
+-- Every row is created hidden (retired, its reason beginning {D57_STAGED_PREFIX!r}: O12) together
+-- with its journal rows inside this transaction; the undo is ROLLBACK.sql, which keeps the rows
+-- retired (never a DELETE: ancient_nerds is a protected source).
 \\set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL lock_timeout = '{LOCK_TIMEOUT}';
@@ -597,7 +634,7 @@ BEGIN
     SELECT p.site_id, {_lit(P.CURATED)}, p.source_record_id, p.name, {key_p}, p.lat, p.lon,
            ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326), p.site_type, p.period_start,
            p.period_name, p.country, p.source_url, {_lit(P.EDITED_BY)}, p.raw_data,
-           {_lit(P.IN_SCOPE)}, p.scope_reason, now(), p.parent_site_id
+           {_lit(RETIRED)}, p.scope_reason, now(), p.parent_site_id
       FROM _ins_site p ORDER BY p.seq;
 
     -- their journal: one row per written column, read back from the created row
@@ -633,6 +670,21 @@ BEGIN
     SELECT {st}, {test}, 'site_external_ids', 'value', ins.site_id::text || '|' || ins.kind,
            NULL, ins.value, p.change_key || ':ext:' || ins.kind, {conf}, p.evidence, ins.site_id
       FROM ins JOIN _ins_site p ON p.site_id = ins.site_id;
+
+    -- the card_stats row: the zeroed placeholder the admin import writes, with the country as its
+    -- civilization (the card_stats lane and the card lane only UPDATE, and fill no NULL; an API
+    -- start recomputes a zeroed row, unjournalled)
+    WITH ins AS (
+        INSERT INTO card_stats (site_id, {card_columns})
+        SELECT p.site_id, {card_values} FROM _ins_site p ORDER BY p.seq
+        RETURNING site_id, {card_columns})
+    {_JOURNAL}
+    SELECT {st}, {test}, 'card_stats', t.col, ins.site_id::text, NULL, t.val,
+           p.change_key || ':card:' || t.col, {conf}, p.evidence, ins.site_id
+      FROM ins JOIN _ins_site p ON p.site_id = ins.site_id
+     CROSS JOIN LATERAL (VALUES
+{card_journal}
+           ) AS t(col, val);
 
     -- the proposals the insert closes (D57: approved, with promoted_site_id), each only while it
     -- holds every value the plan read - the old-value guard of apply_remediation_change()
@@ -712,21 +764,33 @@ _SITE_TEMP = (
 )
 
 
+def check_staged(step: P.Step) -> None:
+    """Refuse a plan whose rows do not carry the staged reason (a plan of before O12 says "in
+    scope"): the reason is what the description, picture and scope lanes know a staged site by."""
+    plain = [i.qid for i in step.inserts if not i.scope_reason.startswith(D57_STAGED_PREFIX)]
+    if plain:
+        raise WriterError(
+            f"{len(plain)} planned site(s) carry no reason beginning {D57_STAGED_PREFIX!r} "
+            f"({', '.join(plain[:5])}): the plan is not a staged insert - move the step aside and "
+            "plan again"
+        )
+
+
 def retire_reason(step: P.Step) -> str:
     return (
-        f"D57 insert undone ({step.rollback_stamp}): retired, never deleted - ancient_nerds is a "
-        "protected source"
+        f"{D57_UNDONE_PREFIX} ({step.rollback_stamp}): retired, never deleted - ancient_nerds is "
+        "a protected source"
     )
 
 
 def undo_checks(stamp: str, planned: int) -> dict[Any, str]:
-    """The undo's guards (1, 2) and invariants, each a query with a row for every refusal."""
+    """The undo's guards (1, 2, 3) and invariants, each a query with a row for every refusal."""
     restored = " OR ".join(f"sp.{c}::text IS DISTINCT FROM q.{_old(c)}" for c in P.PROPOSAL_COLUMNS)
     return {
         1: (
             "SELECT p.site_id FROM _ins_undo p LEFT JOIN unified_sites u ON u.id = p.site_id "
-            f"WHERE u.id IS NULL OR u.source_id <> {_lit(P.CURATED)} OR u.scope_status IS "
-            f"DISTINCT FROM {_lit(P.IN_SCOPE)} OR u.scope_reason IS DISTINCT FROM p.scope_reason"
+            f"WHERE u.id IS NULL OR u.source_id <> {_lit(P.CURATED)} OR NOT "
+            f"{d57_staged_sql('u')} OR u.scope_reason IS DISTINCT FROM p.scope_reason"
         ),
         2: (
             "SELECT q.proposal_id FROM _ins_prop q LEFT JOIN site_proposals sp ON sp.id = "
@@ -757,10 +821,12 @@ def undo_checks(stamp: str, planned: int) -> dict[Any, str]:
 
 
 def render_rollback(step: P.Step) -> str:
-    """ROLLBACK.sql: each site `in_scope -> retired` through `apply_remediation_change()`, each
-    closed proposal back to the values the plan read - one transaction, journalled."""
+    """ROLLBACK.sql: each site's reason from the staged one to the undo's, through
+    `apply_remediation_change()` (the site stays retired), each closed proposal and promoted radar
+    contribution back to the values the plan read - one transaction, journalled."""
     if not step.inserts:
         raise WriterError("refusing to render a reversal with no site")
+    check_staged(step)
     stamp = step.rollback_stamp
     st = _lit(stamp)
     test, conf = _lit(P.TEST_ID), _lit(P.CONFIDENCE)
@@ -772,7 +838,7 @@ def render_rollback(step: P.Step) -> str:
     proposal_rows = _proposal_rows(step, step.inserts)
     contribution_rows = _contribution_rows(step.inserts)
     planned = (
-        2 * len(step.inserts)
+        len(step.inserts)
         + len(P.PROPOSAL_COLUMNS) * len(proposal_rows)
         + len(P.CONTRIBUTION_COLUMNS) * len(contribution_rows)
     )
@@ -787,14 +853,12 @@ def render_rollback(step: P.Step) -> str:
     undo = _values_block("_ins_undo", undo_rows)
     proposals = _values_block("_ins_prop", proposal_rows)
     contributions = _values_block("_ins_contrib", contribution_rows)
-    retired = _lit(RETIRED)
-    in_scope = _lit(P.IN_SCOPE)
     return f"""-- Generated by scripts/remediation/insert_site/writer.py - do not edit by hand.
 {pin_line(step.digest)}
--- The undo of lane {C.LANE!r} (D57), run stamp {step.run_stamp!r}: {len(step.inserts)} site(s)
--- retired (never deleted - ancient_nerds is a protected source), {len(proposal_rows)} proposal(s)
--- and {len(contribution_rows)} radar contribution(s) restored. Journalled under {stamp!r}.
--- Running it is a decision, never automatic.
+-- The undo of lane {C.LANE!r} (D57), run stamp {step.run_stamp!r}: {len(step.inserts)} staged
+-- site(s) kept retired under the reason of the undo (never deleted - ancient_nerds is a protected
+-- source), {len(proposal_rows)} proposal(s) and {len(contribution_rows)} radar contribution(s)
+-- restored. Journalled under {stamp!r}. Running it is a decision, never automatic.
 \\set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL lock_timeout = '{LOCK_TIMEOUT}';
@@ -830,11 +894,9 @@ BEGIN
     PERFORM 1 FROM user_contributions uc JOIN _ins_contrib c ON c.contribution_id = uc.id
       ORDER BY uc.id FOR UPDATE OF uc;
 {guards}
-    -- the retirement, through the scope lanes' one write path
+    -- the reason, through the scope lanes' one write path: the sites are retired already (O12),
+    -- and without the staged reason no lane works on them or shows them
     FOR r IN SELECT * FROM _ins_undo ORDER BY seq LOOP
-        PERFORM apply_remediation_change('unified_sites', 'scope_status', 'id', r.site_id::text,
-            {in_scope}, {retired}, {test}, {st}, r.change_key || ':undo:scope_status',
-            {conf}, r.evidence, r.site_id);
         PERFORM apply_remediation_change('unified_sites', 'scope_reason', 'id', r.site_id::text,
             r.scope_reason, r.retire_reason, {test}, {st}, r.change_key || ':undo:scope_reason',
             {conf}, r.evidence, r.site_id);
@@ -948,10 +1010,10 @@ def lint(sql: str, kind: str) -> None:
         if inserting:
             raise WriterError("an undo creates no row")
         if (
-            "apply_remediation_change('unified_sites', 'scope_status'" not in sql
+            "apply_remediation_change('unified_sites', 'scope_reason'" not in sql
             or "PERFORM apply_remediation_change(''" not in code
         ):
-            raise WriterError("the undo retires through apply_remediation_change()")
+            raise WriterError("the undo moves the reason through apply_remediation_change()")
     if "remediation_change_log" not in code[: commits[0].start()]:
         raise WriterError("the statement journals nothing before its COMMIT")
 
@@ -1025,8 +1087,39 @@ def _ids(step: P.Step) -> str:
     return ", ".join(f"{_lit(i.site_id)}::uuid" for i in step.inserts)
 
 
+def _card_rows(step: P.Step, read) -> dict[str, Mapping[str, Any]]:
+    """The `card_stats` rows of the planned sites, each column the insert wrote as text."""
+    written = [c for c in step.inserts[0].card_columns() if c != "site_id"]
+    columns = ", ".join(f"c.{c}::text AS {c}" for c in written)
+    return {
+        str(r["site_id"]): r
+        for r in read(
+            f"SELECT c.site_id::text AS site_id, {columns} FROM card_stats c "
+            f"WHERE c.site_id IN ({_ids(step)})"
+        )
+    }
+
+
+def _is_placeholder(card: Mapping[str, Any]) -> bool:
+    """The row is still the zeroed placeholder: no API start has recomputed it (`plan.CARD_TIER`)."""
+    return card[P.CARD_TIER] == str(dict(P.CARD_PLACEHOLDER)[P.CARD_TIER])
+
+
+def recomputed_cards(step: P.Step, *, read=None) -> list[str]:
+    """The planned sites whose `card_stats` row an API start has recomputed since the write
+    (`generator.backfill_placeholder_stats`, unjournalled): no deviation, but said - the next
+    card_stats wave journals every cell of them that differs from its recompute."""
+    cards = _card_rows(step, read or _reader())
+    return [
+        i.qid for i in step.inserts if i.site_id in cards and not _is_placeholder(cards[i.site_id])
+    ]
+
+
 def readback(step: P.Step, *, read=None) -> list[str]:
-    """Every difference between the plan, the journal and the data. Empty means confirmed."""
+    """Every difference between the plan, the journal and the data. Empty means confirmed.
+
+    A `card_stats` row is held to the plan while it is the placeholder; a row an API start has
+    recomputed is the generator's (`recomputed_cards` names it). Its journal rows are held always."""
     read = read or _reader()
     ids = _ids(step)
     rows = {
@@ -1046,6 +1139,7 @@ def readback(step: P.Step, *, read=None) -> list[str]:
     ext = read(
         f"SELECT site_id::text AS site_id, kind, value FROM site_external_ids WHERE site_id IN ({ids})"
     )
+    cards = _card_rows(step, read)
     proposal_ids = [p["proposal_id"] for i in step.inserts for p in i.proposals]
     props = (
         {
@@ -1114,6 +1208,16 @@ def readback(step: P.Step, *, read=None) -> list[str]:
         mine_ext = sorted((x["kind"], x["value"]) for x in ext if x["site_id"] == i.site_id)
         if mine_ext != sorted((x["kind"], x["value"]) for x in i.external_ids):
             problems.append(f"{i.qid}: external ids {mine_ext} are not the planned ones")
+        card = cards.get(i.site_id)
+        if card is None:
+            problems.append(f"{i.qid}: no card_stats row holds {i.site_id}")
+        elif _is_placeholder(card):
+            for column, want in i.card_columns().items():
+                if card[column] != want:
+                    problems.append(
+                        f"{i.qid}: card_stats.{column} is {card[column]!r}, the insert wrote "
+                        f"{want!r}"
+                    )
         for p in i.proposals:
             got = props.get(p["proposal_id"])
             if (
@@ -1147,6 +1251,13 @@ def readback(step: P.Step, *, read=None) -> list[str]:
                     problems.append(
                         f"{i.qid}: the journal says {row['column_name']} is {row['new_value']!r}, "
                         f"the plan wrote {want!r}"
+                    )
+            if row["table_name"] == "card_stats":
+                want = i.card_columns().get(str(row["column_name"]))
+                if row["new_value"] != want:
+                    problems.append(
+                        f"{i.qid}: the journal says card_stats.{row['column_name']} is "
+                        f"{row['new_value']!r}, the plan wrote {want!r}"
                     )
     extra = sorted(set(by_site) - {i.site_id for i in step.inserts})
     if extra:
@@ -1330,7 +1441,19 @@ def command_readback(target: Path, *, rollback: bool = False) -> int:
             print(f"  {problem}")
         return MA.EXIT_COMMITTED_UNCONFIRMED
     print(f"READBACK OK: {len(step.inserts)} site(s)" + (" retired" if rollback else ""))
+    if not rollback:
+        _say_recomputed(recomputed_cards(step))
     return MA.EXIT_OK
+
+
+def _say_recomputed(qids: Sequence[str]) -> None:
+    if qids:
+        print(
+            f"NOTE: {len(qids)} card_stats row(s) are no longer the placeholder the insert wrote "
+            f"({', '.join(qids[:5])}{', ...' if len(qids) > 5 else ''}): an API start recomputed "
+            "them, unjournalled (generator.backfill_placeholder_stats). No deviation; the next "
+            "card_stats wave journals their cells."
+        )
 
 
 # ------------------------------------------------------------------------------------ the probes
@@ -1438,6 +1561,8 @@ def accept(target: Path, *, read=None) -> dict[str, Any]:
         "journal_rows": sum(i.journal_rows for i in step.inserts),
         "deviations": len(problems),
         "problems": problems,
+        # rows an API start recomputed since the write (unjournalled; no deviation)
+        "card_rows_recomputed": recomputed_cards(step, read=read),
     }
     if problems:
         return {"accepted": False, **result}

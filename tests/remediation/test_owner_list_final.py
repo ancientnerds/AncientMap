@@ -308,12 +308,136 @@ class TestTheLaneLists:
         ]
 
 
+class TestTheRunLists:
+    """The image lanes' lists: each run writes its own, into its own dated run directory."""
+
+    D17, D59, MOVES = F.RUN_LISTS
+    BARE: dict[str, Any] = {"thumbnail_url": None, "images": 0, "hero": None}
+
+    def test_a_research_row_is_the_reason_of_a_site_that_still_shows_no_picture(self) -> None:
+        listed = [{"site_id": SITE, "reason": "the search found no Commons candidate (x)"}]
+        rows, aside = F.run_list_rows(self.D17, "d17-s01", listed, {SITE: site(**self.BARE)})
+        assert (rows[0]["topic"], rows[0]["source"], rows[0]["state"]) == (
+            "image-research-none",
+            "images-d17:d17-s01",
+            "listed",
+        )
+        assert rows[0]["reason"] == listed[0]["reason"] and rows[0]["decision"] == "D17/D82"
+        assert not aside
+
+    def test_a_research_row_of_a_site_that_got_a_picture_since_is_superseded(self) -> None:
+        listed = [{"site_id": SITE, "reason": "r"}, {"site_id": OTHER, "reason": "r"},
+                  {"site_id": THIRD, "reason": "r"}]  # fmt: skip
+        sites = {SITE: site(), OTHER: site(OTHER, scope_status="retired", **self.BARE)}
+        rows, aside = F.run_list_rows(self.D17, "d17-s01", listed, sites)
+        assert rows == [] and aside == {"superseded": 1, "retired-or-gone": 2}
+
+    def test_a_hotlink_row_is_open_while_the_site_shows_only_its_thumbnail(self) -> None:
+        listed = [{"site_id": SITE, "reason": "below the owner's floor"}]
+        hotlink = site(images=0, hero=None, thumbnail_url="https://upload.wikimedia.org/x.jpg")
+        rows, _ = F.run_list_rows(self.D59, "candidates-d59", listed, {SITE: hotlink})
+        assert rows[0]["topic"] == "image-hotlink-uncredited" and rows[0]["decision"] == "D59"
+        for moved in (site(), site(**self.BARE)):  # a credited row since, or emptied
+            assert F.run_list_rows(self.D59, "x", listed, {SITE: moved}) == (
+                [],
+                {"superseded": 1},
+            )
+
+    def test_a_hero_row_names_its_problems(self) -> None:
+        listed = [{"site_id": SITE, "problems": ["strip", "no_author"], "reason": "no qualifying row"}]  # fmt: skip
+        strip = site(hero=HERO | {"width": 700, "height": 200, "author": None})
+        rows, _ = F.run_list_rows(self.MOVES, "hero-moves-2026-11-06b", listed, {SITE: strip})
+        assert rows[0]["reason"] == "strip, no_author: no qualifying row"
+        assert rows[0]["topic"] == "hero-problem-kept" and rows[0]["decision"] == "D48/D49/D82"
+
+    def test_a_hero_row_is_open_while_the_site_still_has_a_problem_it_names(self) -> None:
+        """The list is the last plan's read. A later lane may have answered a row since: a D15
+        swap of the strip, an INSERT wave, a credit repair, the flag, the thumbnail."""
+        run = "hero-moves-2026-11-06b"
+
+        def listed(*problems: str) -> list[dict[str, Any]]:
+            return [{"site_id": SITE, "problems": list(problems), "reason": "no qualifying row"}]
+
+        def reasons(problems: tuple[str, ...], now: dict[str, Any]) -> list[str]:
+            rows, aside = F.run_list_rows(self.MOVES, run, listed(*problems), {SITE: now})
+            assert bool(rows) != bool(aside.get("superseded"))
+            return [row["reason"] for row in rows]
+
+        no_author = site(hero=HERO | {"author": None})
+        # the strip was swapped for a larger row that still names no author: one problem is left
+        assert reasons(("strip", "no_author"), no_author) == ["no_author: no qualifying row"]
+        # every problem the row names is answered: the row is set aside, whatever else is open
+        assert reasons(("strip", "no_author"), site()) == []
+        assert reasons(("strip",), no_author) == []
+        # an unflagged site and a hotlinked globe picture are measured on today's row too
+        assert reasons(("unflagged",), site(hero=None)) == ["unflagged: no qualifying row"]
+        assert reasons(("unflagged",), site()) == []
+        remote = site(thumbnail_url="https://upload.wikimedia.org/x.jpg")
+        assert reasons(("hotlink",), remote) == ["hotlink: no qualifying row"]
+        assert reasons(("hotlink",), site()) == []
+        # a site that serves no live row any more has none of the planner's problems
+        assert reasons(("unflagged", "hotlink"), site(images=0, hero=None, thumbnail_url="")) == []
+
+    def test_a_small_hero_row_is_open_while_a_larger_live_row_stands_beside_the_hero(self) -> None:
+        """D82: the planner's `small` asks for another live row of at least 1600x900, which the
+        production read holds as `hero_larger` (the same measure in SQL)."""
+        listed = [{"site_id": SITE, "problems": ["small"], "reason": "no qualifying row"}]
+        small = HERO | {"id": 7, "width": 1200, "height": 800}
+
+        def rows_of(now: dict[str, Any]) -> list[str]:
+            rows, _ = F.run_list_rows(self.MOVES, "hero-moves-2026-11-20", listed, {SITE: now})
+            return [row["reason"] for row in rows]
+
+        assert rows_of(site(hero=small, **LARGER)) == ["small: no qualifying row"]
+        # no larger row any more (excluded since), or the hero moved to a large row: answered
+        assert rows_of(site(hero=small)) == []
+        assert rows_of(site(hero=HERO | {"id": 58086}, **LARGER)) == []
+
+    def test_every_research_and_hotlink_run_is_read_and_only_the_last_hero_plan(
+        self, tmp_path: Path
+    ) -> None:
+        for rel in (
+            "candidate_search/d17-2026-11-11-s01/D17_OWNER_LIST.jsonl",
+            "candidate_search/d17-2026-11-12-s02/D17_OWNER_LIST.jsonl",
+            "served_image/hero-moves-2026-11-06/OWNER_LIST.jsonl",
+            "served_image/hero-moves-2026-11-06b/OWNER_LIST.jsonl",
+            "served_image/hero-moves-2026-11-12/OWNER_LIST.jsonl",
+        ):
+            write_list(tmp_path, rel, [])
+        read, found = F.run_list_paths(tmp_path, self.D17)
+        assert [p.parent.name for p in read] == ["d17-2026-11-11-s01", "d17-2026-11-12-s02"]
+        assert read == found
+        read, found = F.run_list_paths(tmp_path, self.MOVES)
+        assert [p.parent.name for p in read] == ["hero-moves-2026-11-12"] and len(found) == 3
+        assert F.run_list_paths(tmp_path, self.D59) == ([], [])
+
+    def test_a_site_without_a_picture_and_without_a_research_row_is_named(self) -> None:
+        sites = [site(**self.BARE), site(OTHER, **self.BARE), site(THIRD),
+                 site("4", scope_status="retired", **self.BARE)]  # fmt: skip
+        rows = [{"site_id": OTHER, "topic": F.RESEARCH_TOPIC},
+                {"site_id": SITE, "topic": "image-none"}]  # fmt: skip
+        assert F.unresearched(sites, rows) == [SITE]
+
+
 def tagged(sites: list[dict[str, Any]]) -> str:
     lines = [json.dumps({"kind": "site", "row": s}) for s in sites]
     lines.append(
         json.dumps({"kind": SNAPSHOT_KIND, "row": {"exported_at": "2026-10-25 10:00:00+00"}})
     )
     return "\n".join(lines) + "\n"
+
+
+#: One run directory per run-list lane (`F.RUN_LISTS`), as the image lanes name them.
+RUN_DIRS = {
+    "images-d17": "candidate_search/d17-2026-11-11-s01/D17_OWNER_LIST.jsonl",
+    "images-d59": "candidate_search/candidates-2026-11-11-d59/D59_OWNER_LIST.jsonl",
+    "hero-moves": "served_image/hero-moves-2026-11-06b/OWNER_LIST.jsonl",
+}
+
+
+def write_list(root: Path, rel: str, rows: list[dict[str, Any]]) -> None:
+    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+    (root / rel).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
 
 def make_root(tmp_path: Path, runs: tuple[str, ...] = F.FIELD_RUNS, lanes: bool = True) -> Path:
@@ -323,11 +447,11 @@ def make_root(tmp_path: Path, runs: tuple[str, ...] = F.FIELD_RUNS, lanes: bool 
         (root / "fields" / name / "RUN.json").write_text("{}", encoding="utf-8")
     if lanes:
         for lane in F.LANE_LISTS:
-            (root / lane.path).parent.mkdir(parents=True, exist_ok=True)
-            (root / lane.path).write_text(
-                json.dumps({"site_id": OTHER, "state": "held", "reason": "unreadable"}) + "\n",
-                encoding="utf-8",
+            write_list(
+                root, lane.path, [{"site_id": OTHER, "state": "held", "reason": "unreadable"}]
             )
+        for rel in RUN_DIRS.values():
+            write_list(root, rel, [])
     return root
 
 
@@ -375,6 +499,72 @@ class TestTheBuild:
         # a pending cell whose value moved was written by a step the run does not show: not open
         moved = self.field_run({"wd4": [run_row(state="pending", stored=-3000)]})
         assert F.build(root=root, read=read, field_run=moved, final=True)["pending"] == 0
+
+    def test_the_image_lanes_lists_are_sources_and_no_longer_unregistered(
+        self, tmp_path: Path
+    ) -> None:
+        root = make_root(tmp_path)
+        bare = {"thumbnail_url": None, "images": 0, "hero": None}
+        write_list(root, RUN_DIRS["images-d17"], [{"site_id": SITE, "reason": "no candidate"}])
+        write_list(root, RUN_DIRS["images-d59"], [{"site_id": OTHER, "reason": "below the floor"}])
+        earlier = "served_image/hero-moves-2026-11-06/OWNER_LIST.jsonl"
+        write_list(root, earlier, [{"site_id": THIRD, "problems": ["strip"], "reason": "old"}])
+        write_list(
+            root,
+            RUN_DIRS["hero-moves"],
+            [
+                {"site_id": THIRD, "problems": ["no_author"], "reason": "no qualifying row"},
+                # a strip the plan read, at a site a later lane left without any live row
+                {"site_id": OTHER, "problems": ["strip"], "reason": "no qualifying row"},
+            ],
+        )
+        hotlink = site(OTHER, images=0, hero=None, thumbnail_url="https://upload.wikimedia.org/x")
+        uncredited = site(THIRD, hero=HERO | {"author": None})
+        built = F.build(
+            root=root,
+            read=lambda _sql: tagged([site(**bare), hotlink, uncredited]),
+            field_run=self.field_run({}),
+            final=True,
+        )
+        listed = {(r["site_id"], r["topic"]): r for r in built["rows"] if ":" in r["source"]}
+        assert set(listed) == {
+            (SITE, "image-research-none"),
+            (OTHER, "image-hotlink-uncredited"),
+            (THIRD, "hero-problem-kept"),
+        }
+        assert listed[(THIRD, "hero-problem-kept")]["reason"] == "no_author: no qualifying row"
+        assert built["set_aside"]["hero-moves:superseded"] == 1
+        assert listed[(SITE, "image-research-none")]["source"] == "images-d17:d17-2026-11-11-s01"
+        assert built["unregistered"] == [] and built["missing"] == []
+        assert built["run_lists"]["hero-moves"] == [RUN_DIRS["hero-moves"]]  # the last plan only
+        assert built["image_none_unresearched"] == []
+        md = F.render(built)
+        assert "| no usable Commons picture: why the picture research left" in md
+        assert f"`{RUN_DIRS['images-d17']}`" in md and earlier not in md
+
+    def test_a_missing_run_list_is_named_and_refused_when_final(self, tmp_path: Path) -> None:
+        root = make_root(tmp_path)
+        (root / RUN_DIRS["images-d59"]).unlink()
+        read = lambda _sql: tagged([site()])  # noqa: E731
+        built = F.build(root=root, read=read, field_run=self.field_run({}))
+        assert built["missing"] == ["candidate_search/*/D59_OWNER_LIST.jsonl"]
+        with pytest.raises(F.OwnerListFinalError, match="not final"):
+            F.build(root=root, read=read, field_run=self.field_run({}), final=True)
+
+    def test_a_site_without_a_picture_needs_its_research_reason_to_be_final(
+        self, tmp_path: Path
+    ) -> None:
+        root = make_root(tmp_path)
+        bare = site(thumbnail_url=None, images=0, hero=None)
+        read = lambda _sql: tagged([bare])  # noqa: E731
+        built = F.build(root=root, read=read, field_run=self.field_run({}))
+        assert built["image_none_unresearched"] == [SITE]
+        assert "**1 site(s) without a picture carry no reason**" in F.render(built)
+        with pytest.raises(F.OwnerListFinalError, match="1 site\\(s\\) without a picture"):
+            F.build(root=root, read=read, field_run=self.field_run({}), final=True)
+        write_list(root, RUN_DIRS["images-d17"], [{"site_id": SITE, "reason": "no candidate"}])
+        final = F.build(root=root, read=read, field_run=self.field_run({}), final=True)
+        assert final["image_none_unresearched"] == []
 
     def test_the_files_are_written_and_rerunnable(self, tmp_path: Path) -> None:
         root = make_root(tmp_path)

@@ -25,7 +25,7 @@ import hashlib
 import json
 import shutil
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -349,12 +349,15 @@ def recheck_export(
     cache: WikiCache | None = None,
     picks: Sequence[Mapping[str, Any]] | None = None,
     read: Callable[[Mapping[str, Any]], bytes] = _read_picture,
+    refused: Collection[tuple[str, str]] = (),
 ) -> dict[str, Any]:
     """The next round of the hero re-check: the best-ranked `depicts` of every site that has no
-    confirmed pick yet. With `picks` (the pool's old targets) those are asked instead."""
+    confirmed pick yet. With `picks` (the pool's old targets) those are asked instead. `refused`
+    are the confirmed picks the INSERT lane refused for good (`d59.refused_files`): their sites
+    go on with the next-ranked `depicts` (`targets.pick_round`)."""
     round_number = next_round(run)
     if picks is None:
-        state = TG.pick_round(_jsonl(run / VERDICTS), recheck_results(run))
+        state = TG.pick_round(_jsonl(run / VERDICTS), recheck_results(run), refused)
         if not state.to_check:
             raise FlowError("no site waits for a re-check: write the targets")
         picks = _picks_for(run, state.to_check, cache)
@@ -369,8 +372,10 @@ def recheck_export(
     return summary | {"round": round_number, "picks": len(picks)}
 
 
-def write_targets(run: Path) -> dict[str, Any]:
-    return TG.write_targets(run, _jsonl(run / VERDICTS), recheck_results(run))
+def write_targets(run: Path, refused: Collection[tuple[str, str]] = ()) -> dict[str, Any]:
+    """`TARGETS.jsonl` as the run stands: the confirmed picks, after the picks the INSERT lane
+    refused for good (`refused`, see `targets.py`). Written again by every call."""
+    return TG.write_targets(run, _jsonl(run / VERDICTS), recheck_results(run), refused)
 
 
 def prune_pictures(run: Path) -> dict[str, Any]:
@@ -434,11 +439,43 @@ def pool_pick_sites(
     return list(records.values()), wanted
 
 
-def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
-    """The old run's targets that Claude has to re-check (`pool_pick_sites`), as picks for
-    `recheck_export`."""
+def pool_picks(
+    run: Path, old_run: Path, state: ST.State, unobtainable: Mapping[tuple[str, str], str]
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """`(picks, left out)`: the old run's targets that Claude has to re-check (`pool_pick_sites`),
+    as picks for `recheck_export`, and the targets that cannot be shown to it.
+
+    `unobtainable` is `{(site id, file): reason}` of the renderings the re-download recorded as
+    `gone` or `refused` (`candidate_search.repicture.unobtainable`: Qasr Qaroun's old target is
+    stored at 960 px, a width the lane does not show). Such a target whose picture is not on disk
+    is left out by name when no page serves it: it is the old target of a site that still shows
+    nothing, it can be written only after a Claude re-check (`judge.targets_without_claude`), which
+    it now cannot get, and the site stays in the D17 research. A target that **is** a live hero is
+    never left out - it must be judged, so its missing picture stops the step (`PL.target_picks`),
+    as does every missing picture the re-download has not given up on.
+
+    A target this run's re-check has judged already is not asked again, and is named with that
+    verdict: a D17 stage re-checks its own picks before part F, an old target can be one of them,
+    and one candidate judged twice with two verdicts would stop every later step
+    (`targets.judged_by_recheck`). `denied` reads the row that exists."""
     records, wanted = pool_pick_sites(run, old_run, state)
-    return PL.target_picks(old_run, records, wanted)
+    heroes = PL.live_hero_files(state)
+    judged = TG.judged_by_recheck(recheck_results(run))
+    left_out: list[dict[str, str]] = []
+    for site, candidate, _ in PL.target_candidates(old_run, records, wanted):
+        site_id, file = str(site["site_id"]), str(candidate["file"])
+        if (site_id, file) in judged:
+            said = f"re-checked in this run already: {judged[(site_id, file)]}"
+            left_out.append({"site_id": site_id, "file": file, "reason": said})
+            continue
+        reason = unobtainable.get((site_id, file))
+        if reason is None or PL.picture_path(old_run, candidate).is_file():
+            continue
+        if ST.canonical_file(file) in heroes.get(site_id, ()):
+            continue
+        left_out.append({"site_id": site_id, "file": file, "reason": reason})
+    shown = wanted - {line["site_id"] for line in left_out}
+    return PL.target_picks(old_run, records, shown), left_out
 
 
 def denied(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
@@ -447,7 +484,11 @@ def denied(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
 
     A live hero that is an old target must have a Claude re-check row (`pool-picks` +
     `recheck-export`): the written heroes are judged by the re-check alone, since they were never in
-    the pool. One without a row is refused by name - it would stay on its page unjudged."""
+    the pool. One without a row is refused by name - it would stay on its page unjudged.
+
+    `run` may be a D17 stage (a fresh search) as well as a pool run (`pool`): an old `depicts` of
+    one of its sites that its own search did not find again is no page's picture, so nothing asks
+    for a judgement of it (`PL.denied_pairs` refuses only an unjudged **live hero**)."""
     rechecks = recheck_results(run)
     judged = {(str(r["meta"]["site_id"]), str(r["meta"]["file"])) for r in rechecks}
     heroes = PL.live_hero_files(state)
@@ -468,5 +509,6 @@ def denied(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
         _jsonl(run / VERDICTS),
         rechecks,
         {s["site_id"] for s in _population(run)},
+        heroes,
     )
     return PL.denied_heroes(state, pairs)

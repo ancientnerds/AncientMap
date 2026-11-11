@@ -103,6 +103,33 @@ def test_a_gone_address_is_recorded_and_the_run_fails(tmp_path: Path) -> None:
     assert "HTTP 404" in out["not_on_disk"][0]
 
 
+def test_the_pictures_a_need_gave_up_on_are_read_from_its_manifest(tmp_path: Path) -> None:
+    """`gone` and `refused` are the two ends the re-download does not try again; a picture on disk
+    and one a stopped run never asked are none of them, and a need that never ran names nothing."""
+    assert RP.unobtainable(tmp_path, "recheck") == {}
+    narrow = URL.replace("1280px", "960px")
+    commons = FakeCommons({URL: CM.Unfetchable(f"{URL}: HTTP 404"), URL + "x": _ok()})
+    needed = [
+        (SITE, _candidate()),
+        (SITE, _candidate(URL + "x", "Other.jpg")),
+        (SITE_B, _candidate(narrow, "Narrow.jpg")),
+    ]
+    RP.repicture(tmp_path, "recheck", needed, commons)
+    given_up = RP.unobtainable(tmp_path, "recheck")
+    assert set(given_up) == {(SITE, "Tomb.jpg"), (SITE_B, "Narrow.jpg")}
+    assert (
+        given_up[(SITE, "Tomb.jpg")].startswith("gone: ")
+        and "HTTP 404" in given_up[(SITE, "Tomb.jpg")]
+    )
+    assert given_up[(SITE_B, "Narrow.jpg")].startswith("refused: ")
+    assert "another width than the lane's 1280 px" in given_up[(SITE_B, "Narrow.jpg")]
+    assert RP.unobtainable(tmp_path, "credit") == {}
+    stopped = FakeCommons({URL: CM.CommonsError(f"{URL}: HTTP 429")})
+    with pytest.raises(CM.CommonsError):
+        RP.repicture(tmp_path, "recheck", needed[:1], stopped)
+    assert RP.unobtainable(tmp_path, "recheck") == {}
+
+
 def test_a_429_stops_the_run_instead_of_refusing_the_picture(tmp_path: Path) -> None:
     commons = FakeCommons({URL: CM.CommonsError(f"{URL}: HTTP 429")})
     with pytest.raises(CM.CommonsError, match="429"):

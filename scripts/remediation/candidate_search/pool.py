@@ -167,12 +167,18 @@ def target_picks(
     return picks
 
 
+def _serves(heroes: Mapping[str, Collection[str]], pair: tuple[str, str]) -> bool:
+    """Whether the pair's file is a live hero of its site (`live_hero_files`)."""
+    return ST.canonical_file(pair[1]) in heroes.get(pair[0], ())
+
+
 def denied_pairs(
     old_verdicts: Sequence[Mapping[str, Any]],
     prefiltered: Sequence[Mapping[str, Any]],
     depicts_rows: Sequence[Mapping[str, Any]],
     rechecks: Sequence[Mapping[str, Any]],
     pool_sites: Collection[str],
+    heroes: Mapping[str, Collection[str]],
 ) -> list[dict[str, Any]]:
     """The `(site, file)` pairs MiniMax called `depicts` that Claude does not confirm.
 
@@ -181,9 +187,13 @@ def denied_pairs(
     adversarial re-check (`rechecks`, the rows of `RECHECK_NN.jsonl`) did not confirm it - denied,
     with what the re-check saw. A pair with a re-check row needs nothing else: the old targets that
     were written as heroes sit at sites outside the pool (`pool_sites`) and only the re-check judges
-    them. A pair of a pool site that Claude has not judged yet is an error: the denial list is made
-    after the re-judge, never before. A pair outside the pool without a re-check is no one's
-    business here (the page does not serve it, or `flow.denied` refuses it as an unchecked hero)."""
+    them. A pair of a pool site that Claude has not judged and that is a **live hero** of the read
+    (`heroes`, `live_hero_files`) is an error: it would stay on its page unjudged. One that no page
+    serves is nobody's business here - the run's own search need not have found that file again (a
+    D17 stage searches afresh; only `flow.pool` hands every old candidate to Claude) and a denial
+    names live heroes only (`denied_heroes`). A pair outside the pool without a re-check is no
+    one's business either (the page does not serve it, or `flow.denied` refuses it as an unchecked
+    hero)."""
     pre = {(r["site_id"], r["file"]): r for r in prefiltered}
     dep = {(str(r["site_id"]), str(r["file"])): r for r in depicts_rows}
     rck = {(str(r["meta"]["site_id"]), str(r["meta"]["file"])): r for r in rechecks}
@@ -223,9 +233,10 @@ def denied_pairs(
                         "answered_by": rck[key]["answered_by"],
                     }
                 )
-        elif key[0] in pool_sites and key not in dep:
+        elif key[0] in pool_sites and key not in dep and _serves(heroes, key):
             raise PoolError(
-                f"{key[0]}: {key[1]!r} was called depicts by MiniMax and Claude has not judged it"
+                f"{key[0]}: {key[1]!r} was called depicts by MiniMax, is a live hero and Claude "
+                "has not judged it"
             )
     return out
 

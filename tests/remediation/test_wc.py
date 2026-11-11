@@ -937,7 +937,7 @@ def test_a_run_exported_before_the_size_was_recorded_keeps_its_five(tmp_path: Pa
 def test_the_read_is_phase4s_plan_read_with_the_scope_status_and_nothing_written(
     tmp_path: Path,
 ) -> None:
-    assert C.WC_SQL.replace("u.scope_status, ", "", 1) == C.plan4.PLAN_SQL
+    assert C.WC_SQL.replace("u.scope_status, u.scope_reason, ", "", 1) == C.plan4.PLAN_SQL
     run = tmp_path / "run"
     run.mkdir()
     record = C.cmd_read(run, runner=_Runner(_rows()))

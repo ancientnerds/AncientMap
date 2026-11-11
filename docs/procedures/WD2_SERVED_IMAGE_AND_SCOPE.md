@@ -357,9 +357,9 @@ next WF export (`public_sites.not_retired()`); IndexNow and a push as in WF. The
 **no card_stats recompute**: they write only `scope_status` and `scope_reason`, and neither is an
 input of a card (`mechanical/card_stats.py`, `INPUT_COLUMNS`).
 
-### 2.2 The un-retire (D58 and D50) - `mechanical/scope_unretire.py`, lane `scope-unretire-<wave>`
+### 2.2 The un-retire (D58, D50 and D57) - `mechanical/scope_unretire.py`, lane `scope-unretire-<wave>`
 
-Two decisions bring retired curated sites back (`retired` -> `in_scope`, a new reason), each wave a
+Three decisions bring retired curated sites back (`retired` -> `in_scope`, a new reason), each wave a
 lane of its own (`identity_lanes.scope_unretire_lane`: stamp `<wave>_mechanical-scope-unretire`, test
 id `D58/scope-unretire`, directory `output/remediation/mechanical_scope_unretire/<wave>/`, at most 100
 sites, a stamp applied once):
@@ -406,6 +406,25 @@ sites, a stamp applied once):
   site invariant `lane.D50_NOT_RETIRED`, which refuses a planned D50 site left `retired` (and any
   site those lanes give a D50 reason - the leg `--probe-guards` corrupts, since a probe cannot plant
   a D50 site into a plan).
+* **D57 - a staged insert goes live** (owner decision D143, orchestrator decision O12 of
+  2026-11-10; `INSERT_SITES.md` section 6): a curated row the insert lane created hidden - `retired`
+  with a reason beginning `D57 staged:` (`public_sites.D57_STAGED_PREFIX`), the retirement in the
+  journal - comes back when it holds both:
+  * **a checked description**: the text is not blank and its check record or its provenance
+    hashes it (`raw_data._description_check` / `_description_provenance`, `desc_sha256` = the
+    sha256 of the stored text) - the text a lane wrote and checked, not one edited since. Otherwise
+    it is skipped `d57-no-description`;
+  * **a confirmed picture**: exactly one live hero row (`is_hero`, not `is_excluded`) and a
+    `thumbnail_url` that names that row's file (`/data/images/wiki/<id8>/<filename>`) - what the
+    image INSERT lane writes for a picture the image roles judged. Otherwise it is skipped
+    `d57-no-picture` (a site that lacks both is listed for its text).
+
+  The new reason begins `D57 new site (owner D143, O12 of 2026-11-10): ` and never with the staged
+  prefix: a shown site is no staged one for any lane. No card is asked (O12: the card follows on
+  the shown site). A site that ends without text or picture stays hidden and stays in every wave's
+  SKIPPED.jsonl - that file is the list O12 asks for. An insert that was undone (`D57 insert undone
+  ...`) is no staged site: no class names it, it is not listed. A site whose un-retirement was
+  rolled back holds the staged reason again and is planned again once it qualifies.
 
 The guards: guard 3 (old values `retired` and the old reason), guard 5 (the premise: name, type,
 point, country, dates, **`md5(description)` and the md5 of the card text** - a D50 text or card
@@ -415,8 +434,22 @@ retired by the numeric cut (`numeric_cut_sql`), has a point and a date, lies ins
 window, is not borderline, holds no Viking item (`viking_subject_sql`) and is of no `NON_SITE_TYPES`
 type; or a D58 museum reason, retired by the numeric cut, and is a placed Museum whose region has
 the 1500 AD cutoff (`label_cutoff_sql`: an unrecognised country fails it); or a D50 reason and is a D50 site whose description is a dispute enrichment
-(`dispute_enriched_sql`) and whose card was written after it (`card_cleared_sql`). The rollback is
-the retirement again: `ROLLBACK.sql` restores `retired` and the old reason.
+(`dispute_enriched_sql`) and whose card was written after it (`card_cleared_sql`); or a D57 reason
+and is no D50 site, was staged until this write (`staged_before_sql`: the latest journal row of its
+`scope_reason` wrote the reason it holds over one beginning `D57 staged:`), holds a checked
+description (`description_checked_sql`) and a confirmed picture (`picture_confirmed_sql`). The
+rollback is the retirement again: `ROLLBACK.sql` restores `retired` and the old reason (for a D57
+site the staged one: the site is hidden and staged again).
+
+Since the D57 class the premise (guard 5, of the write and of its rollback) also holds **the
+picture**: `thumbnail_url` and the file names of the site's live hero rows, for a site of any class
+(`SCOPE_UNRETIRE_PREMISE_SQL`). A text, a card, a thumbnail or a hero row that moved after the
+export is refused: export and plan again (the next wave label). The same holds for the rollback:
+once lane WB has written the card of a shown D57 site, or an image lane has moved its hero, this
+wave's `ROLLBACK.sql` no longer applies to it (guard 5) and the site leaves through the scope lanes
+that retire. The wave applied before the class (`identity_lanes.WAVES_BEFORE_D57`: `2026-10-24`)
+keeps the premise and the invariant its committed `APPLY.sql` and `ROLLBACK.sql` were rendered with,
+so `--rehearse-rollback` and its rollback still verify.
 
 **The population measured on production (read-only export, 2026-10-24, dry plan
 `write --wave 2026-10-24 --out <scratch>`, after the review fixes):** 104 retired curated rows; **9
@@ -462,12 +495,21 @@ $PY $A --lane $L --verify              # after: the planned deltas, 0 deviations
 $PY $A --lane $L --rehearse-rollback
 # the D50 wave, once lane E wrote the six texts: a fresh export, the next label
 $PY $U export && $PY $U write --wave 2026-10-24b
+# a D57 wave, once lane WN and the image INSERT lane wrote text and picture of the staged sites:
+# a fresh export, a new label (a date, or a date and one letter), then the same nine steps
+$PY $U export && $PY $U write --wave 2026-11-12
 ```
+
+`write` prints the counters (`d57_staged`, `skipped_d57-no-description`, `skipped_d57-no-picture`
+beside the D58/D50 ones) and plans every class the export allows: read `PLAN.md` before `--emit`,
+a wave meant for the D57 sites must hold no site of another class.
 
 The read-back prints the scope counts, the D58 residual, the date retirements the label window keeps
 and the borderline ones, the D50 sites shown, those shown **without** a dispute text and those shown
-with a card **not written after** their dispute text (both always 0), statuses without a reason,
-and journal rows of the run that write another status. (The window metric counts every date
+with a card **not written after** their dispute text (both always 0), the D57 sites still staged,
+those shown by the un-retire and those shown **without** a checked description or a confirmed
+picture (both 0 after the wave; a later hand edit of a text or a moved hero shows up here),
+statuses without a reason, and journal rows of the run that write another status. (The window metric counts every date
 retirement the window keeps, D20's and the non-site types included: after the first wave it stays
 at 1, Mount Livadiyskaya.)
 **After a landed wave:** the sites are shown again at once (the site page, the sitemap and IndexNow's
@@ -475,7 +517,18 @@ at 1, Mount Livadiyskaya.)
 export (`rebuild_static`, `static_export_check.py`), IndexNow for the un-retired URLs and the Qdrant
 vector sync (`api/routes/vector_sync.py`, `not_retired`) bring the globe and the search along. No
 card_stats recompute (the lane writes no card input). An un-retired site has no D20 verdict: it is
-in the window, so D20 does not ask it.
+in the window, so D20 does not ask it. A D57 site is public for the first time: IndexNow's hourly
+cycle announces a shown site only when a page column was journalled in the last two hours
+(`last_change`), and the un-retire writes none, so announce the new URLs by hand when the image wave
+is older (`INSERT_SITES.md` section 6, step 6); the card_stats wave and lane WB follow on the shown
+site (steps 7 there).
+
+**IndexNow and a hidden site** (`pipeline/indexnow.py`, `_RETIRED_SITES_SQL`): the removed pages are
+the curated sites whose journal wrote `scope_status = 'retired'` in the last two hours and that are
+still retired - but not by the row the D57 insert created the site with (`old_value` NULL) while
+the site is staged or its insert was undone (`public_sites.d57_staged`, `d57_undone`): that site
+never had a page. A D57 site that was shown and is retired again (this lane's rollback: `in_scope`
+-> `retired`) is announced like every other removed page.
 
 ---
 
@@ -1019,6 +1072,29 @@ have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other
 * The row's journalled `reason` and evidence `source` are read **out of the refusal** that named
   the site. Nothing in a candidate wave came from the 2025 import, and a journal row signed with the
   import's name is not an audit.
+* **A staged D57 site** (orchestrator decision O12 of 2026-11-10, `INSERT_SITES.md` section 6:
+  inserted hidden, `retired` with a `scope_reason` beginning `D57 staged:`) gets its first picture
+  before the scope lane shows it. Two reads admit it, by `mechanical.lane.d57_staged_sql`:
+  `image_roles/run.py population --run-dir <candidate run> --sites <file>` reads a staged site the
+  file names (`population_sql`; a population without `--sites` and D59's credit lane never hold
+  one), and `import_hero/run.py read` holds the staged sites and their rows with the shown ones and
+  not among `retired` (`read.IN_THE_READ`; `shown_sites` in its summary counts them). `insert-plan`
+  therefore plans the row of a staged site that the run's claims name - any other retired site is
+  still refused `retired` - and `insert-accept` answers its three questions from a fresh read of
+  production alone: no step of the lane asks the site's page, which answers 410 until the un-retire
+  (section 2.2).
+  **The read says which of its sites is staged** (the `staged` column of every site row, `read.staged`;
+  `staged_sites` in the summary), **and the 2025 import's join leaves those out**
+  (`plan.join_import(..., staged=...)`: `plan`, `fetch --start`, and `fetch` in a run directory that
+  holds a read but no `IMPORT_CLAIMS.json` / `IMPORT_HERO_REFUSALS.jsonl`). The owner's decision of
+  2026-10-05 is about the sites the platform shows, and no image role judged the import's picture;
+  measured 2026-11-11, 2 of the 37 planned D57 sites (Pella, Nan Madol) join a feature of the import
+  by source URL, each with a Commons image, and were refused `no_target_row` - the class
+  `fetch --target insert` downloads and `insert-plan` writes. A staged site's claim therefore comes
+  from `judge_run.py insert-claims` alone. A `READ.json` whose site rows carry no `staged` column
+  (made by code without it) cannot say, and those three commands refuse it by name
+  (`REFUSED: N site(s) of the read carry no` ... `column`): read again into a new run directory. `insert-plan`, `accept`, `insert-accept` and `remainder` join nothing and read such a
+  run as before.
 
 **The row rule, and what it had to be measured against.** `insert.plan` refused all nine targets as
 `no_row_at_all`: *"the owner decided on 2026-10-05 (18:32) that such a site keeps its
@@ -1033,6 +1109,62 @@ untouched, and their refusal keeps the old wording and its date.
 used to print all five on one line - a command that cannot run (`error: argument --rehearse: not allowed
 with argument --check`, exit 2). They are five calls, in that order, each one green before the next.
 
+**The files go to the VPS before the rows: `transfer` (2026-11-11, `import_hero/transfer.py`).** A
+row that names a missing file shows a broken picture at once; a file without a row is shown
+nowhere. Until this command the step was typed by hand (October's waves left only
+`FETCHED_PACKED.json` of a lost scratch script). `run.py transfer --run-dir $I --root $OFFSITE`,
+once for all chunks, after `insert-plan` and before the first `--apply`:
+
+* The wave is the file of every planned row (`chunk-0*/INSERT.jsonl`), `<id8>/<filename>`. Each must
+  lie under `--root` at its exact-case name and at the byte count its row will hold, and no row of
+  the site in the run's `READ.json` may already carry that filename (`insert-plan` refuses a site
+  that holds the same `original_url`, but `X.jpg` and `X.png` are both `X.webp`: the row would
+  credit one picture and show another). Either one refuses the wave by name before anything is sent.
+* sha256 on both ends. The API container is asked, read-only, what production holds of the wave's
+  names (the names go over stdin, never onto a command line). A file there with **other bytes**
+  refuses the wave and is never overwritten; a file with the **same bytes** arrived on an earlier
+  call and is not sent again. The rest is packed (`tar`, uncompressed), copied to
+  `/tmp/import-hero-transfer-<sha>.tar` on the VPS, its sha256 compared there, and only then
+  unpacked with `umask 000 && tar -C /var/www/ancientnerds/public/data/images/wiki -xkf` (`-k`: an
+  existing file is an error; the umask keeps the tree's own modes, files 666 and folders 777,
+  measured 2026-11-11). Then every file of the wave is hashed inside `ancient_nerds_api`
+  (`/app/public/data/images/wiki`) and compared with the offsite file.
+* `TRANSFER.json` is written once, only after that comparison: per file its site, path, bytes,
+  sha256 and whether this call sent it. Any failure exits 1 with `REFUSED:` and writes no record;
+  the same command is then simply run again (a file that arrived whole is found and skipped). There
+  is no rollback of files: a chunk abandoned after the transfer leaves them on the VPS, unshown,
+  and the record names them.
+* `--rehearse` sends the whole wave the same way into a scratch directory under `/tmp` on the VPS,
+  compares the hashes there and removes it (`TRANSFER_REHEARSAL.json`, repeatable). Nothing lands
+  in the tree; the question to production is asked too, so it also says what is already there.
+* After `insert-accept`: `run.py served --run-dir $I` asks the site for every file of
+  `TRANSFER.json` - 200, `image/webp`, and the sha256 the transfer recorded
+  (`TRANSFER_HTTP.json`, exit 1 with the files that fail).
+
+`$OFFSITE` is the offsite copy of the image tree, `C:/PythonProjects/AncientMap-Offsite/images/wiki`
+- the tree `gallery_audit.vision.Images` reads. The waves of 2026-10 passed the offsite root
+instead, so 920 files lie in `AncientMap-Offsite/<id8>/` where no lane finds them; `fetch` now
+refuses a `--root` that holds `images/wiki`. **`run.py offsite-merge --run-dir <record dir> --stray
+C:/PythonProjects/AncientMap-Offsite --root $OFFSITE`** measures them against production (sha256
+inside the API container, read-only) and writes `OFFSITE_MERGE_PLAN.json`; with `--apply` it copies
+into the tree what production serves (`copy`; `replace` where the tree holds a stale file of that
+name) and writes `OFFSITE_MERGE.json` once. Everything else is named and left: `not_on_the_vps` (a
+fetch whose row was never written), `tree_is_production` (the stray file is the stale one),
+`not_production`, `case_collision`. The stray files are never moved or deleted. Measured read-only
+2026-11-11: 920 stray files (404 MB), 378 `same`, 331 `copy`, 2 `replace`, 16
+`tree_is_production`, 193 `not_on_the_vps` (no `wiki_images` row names one of those 193; rows name
+274 of the 331, all 16 and both `replace` files).
+
+Measured 2026-11-11 against the VPS, nothing written into the tree: a rehearsal of six copies of
+offsite files under site ids production does not hold (names with `ä`, `å`, CJK, `'`, `&`, `;`,
+parentheses and commas) - packed, sent, sha256 equal in the scratch directory, `/tmp` empty
+afterwards - once with Git's ssh and once with Windows OpenSSH; the same pieces by hand in a
+scratch directory (Git's ssh): files 666 and folders 777, a second unpack refused by `tar`
+(`Cannot open: File exists`, exit 2), a truncated and a removed file both seen by the comparison;
+and on a copy of run `insert-2026-10-07-011`, whose 7 files production holds: `transfer` found all
+7 with the offsite sha256 and sent nothing, `served` answered 7 of 7. **Not measured: an unpack
+into the served tree itself** - the first real wave is that proof, and its rehearsal comes first.
+
 ```bash
 $PY scripts/remediation/candidate_search/judge_run.py judge-export   --run-dir <run>          # images + questions
 $PY scripts/remediation/candidate_search/judge_run.py judge-import   --run-dir <run>          # answers -> VERDICTS
@@ -1041,10 +1173,13 @@ $PY scripts/remediation/candidate_search/judge_run.py insert-claims  --run-dir <
 $PY $IH/run.py read          --run-dir $I
 $PY $IH/run.py fetch         --run-dir $I --root $OFFSITE --target insert
 $PY $IH/run.py insert-plan   --run-dir $I
+$PY $IH/run.py transfer      --run-dir $I --root $OFFSITE --rehearse   # optional: into /tmp on the VPS, removed
+$PY $IH/run.py transfer      --run-dir $I --root $OFFSITE              # the files, before the first --apply
 for step in --check --rehearse --apply --readback --rehearse-rollback; do
     $PY $IH/insert_writer.py $I/chunk-001 $step        # one at a time, they exclude each other
 done
 $PY $IH/run.py insert-accept --run-dir $I
+$PY $IH/run.py served        --run-dir $I                              # every file over HTTPS
 ```
 
 **A wave whose file is the 2025 import's, not the judge's**, adds one step in front:
@@ -1399,15 +1534,58 @@ row of a site to another and the globe's `thumbnail_url` follows it (rules `d48-
 hero is below 800x300), `hotlink` (live rows, but a remote or empty `thumbnail_url`) or `no_author`
 (the hero's licence asks for an author, `licenses.credit_columns`, and it has none).
 
+Since 2026-11-11 the planner knows a fifth problem, **`small`** (owner decision D82: the rest lists
+"stay live and are searched within D17"; rules `d82-hero`/`d82-align`): the site has none of the
+four problems above, its hero is below 1600x900 and it holds another live row of at least 1600x900
+(D48's small hero as the census defined it). D48 only listed these sites. Now they run through the
+same steps as the other rest lists: `check-pictures` offers the image roles the site's rows of at
+least 1600x900 that carry their credit and that no judgement chose, the confirmed pick comes back
+through `--check-run`, and the review decides. `small` is named only alone: a site that also
+measures one of the four problems is planned for that one, under its own rule and bounds, and a
+later fresh read names it `small` when it still is.
+
+Two rules hold for `small` alone, because its hero has no defect but its size (the review of
+2026-11-11, measured in the journal and on the read of 2026-11-06):
+
+* **The owner's own picture stays.** The owner made the picture he linked by hand in the 2025
+  import the hero (2026-10-05, section 3.7) and lowered the floor to 800x300 so that it is the
+  hero at a small size too (2026-10-06, section 3.7.2: "the hero count under the lane's own floor
+  *rises*, and that is the point"). D48 listed the small heroes and D82 has them searched; neither
+  names a move away from that picture to another row of the gallery. So a `small` site whose hero
+  is the file the import links (`hero_moves.owner_linked`, the identity the D15 re-check is given
+  as `owner_link_file`) is not planned and none of its rows is offered to the image roles: it is
+  on `OWNER_LIST.jsonl` with the reason `OWNER_LINK_KEPT`, counted as `owner_link_kept` in
+  `PLAN_SUMMARY.json`, and **the owner decides** whether such a hero may move for its size. 279 of
+  the 413 `small` heroes are that picture (production, the same day: of the 433 small heroes with
+  a larger live row 200 got their flag last from the import-hero waves, test id
+  `import-hero/owner-2026-10-05`, 66 from `WD2/served-image`, and 167 - every one a loader's
+  `hero.webp` - have no journalled flag at all). The planner knows the link from the
+  read: **`read` takes `--import`**, the 2025 import's GeoJSON, joins it as the import-hero lane
+  does (`import_hero.plan.join_import`: the source URL first, the folded title second; the read's
+  sites carry `source_url` for it) and stores each site's link as `owner_link` beside the import
+  file's sha256. A read made without it plans the four other problems as before and refuses a
+  `small` site (`REFUSED: ... made without --import`). The four other problems never ask: a strip
+  or an uncredited hero moves away from the owner's link as D48/D49 say.
+* **Only a fresh judgement moves a small hero.** The replacement stage's `pick` of an earlier run
+  is no choice for a `small` site (`chosen_by(small=)`): it was chosen against the hero of its
+  day, and where it is not the hero now a later decision stands between. Measured in
+  `remediation_change_log`: all 17 picks of at least 1600x900 at a `small` site of that read were
+  written as the hero on 2026-10-02 (`WD2/served-image`) and lost the flag on 2026-10-06 to the
+  owner's import-hero wave - among them a helmet fragment (Gevninge), a map (Ham Hill), a terrain
+  model (Lambert's Castle) and a book page (Frilford). Such a row is offered to the image roles
+  with the others (`why`: an earlier pick), so no `small` site is settled before they ran and
+  none is left out of `check-pictures`; only their confirmed pick is planned.
+
 **The new hero is a qualifying row**: live, judged `depicts` by a Claude check of that very file (a
 served-image run's `CHECK.jsonl`/`REPLACE.jsonl`, or an image-roles check run's confirmed
 `TARGETS.jsonl` pick), at least 800x300, with every credit column its licence demands; for a strip
-larger than the hero, for any other move not below 1600x900 where the replaced hero is not (it would
-make a D48 small hero). **And a chosen row**: a served check's `depicts` includes a find from the site,
+larger than the hero, for a small hero at least 1600x900 (a row that is larger than the hero and
+still below that size is refused: the move has no other purpose), for any other move not below
+1600x900 where the replaced hero is not (it would make a D48 small hero). **And a chosen row**: a served check's `depicts` includes a find from the site,
 a drawing and a reconstruction, so it does not say "main picture". A row becomes the hero only as a
 confirmed check-run pick (the depicts role's quality, then the adversarial re-check), as the served-
 image replacement stage's own `pick` ("a clear photograph of its remains before a drawing, a plan or an
-object"), or - unflagged sites only - as the row the page already shows. A `depicts` nobody chose is
+object"; never at a `small` site, see above), or - unflagged sites only - as the row the page already shows. A `depicts` nobody chose is
 never ranked by its pixels: `check-pictures` hands it to the image roles with the rows nobody judged.
 Ranking among chosen rows: check-run pick, replacement pick, shown row, then quality, pixels,
 `sort_order`/id. A hero the latest Claude check called `other_site` is not planned
@@ -1424,6 +1602,19 @@ names another new hero or another site, and a plan changed since; it writes the 
 sites only - every journal row carries its review line as evidence - and `VETOED.jsonl`, the vetoed
 rows in the shape `--veto` reads, for the next plan in a new run directory.
 
+The Claude half of that review is `served_image/hero_review.py` (`export`, `check-answer`,
+`import`; one question per planned site with both pictures). The question of a `small` plan names
+D82, says what `small` means, and carries its own veto rule in the place of D49's: the move gains
+only size, so the reviewer vetoes it when the current hero is the better main picture of the site.
+D49's sentence ("do NOT veto only because the current hero is the nicer picture: the move exists
+because the current hero lacks its credit") is not part of that question - it is false for a hero
+whose only problem is its size, and a reviewer who followed it would accept the very move the
+review exists to stop. The wording is not measured: no review of a `small` plan was answered yet,
+and no calibration is run (D154). A plan of another kind is asked byte for byte what it was asked
+before (pinned by `test_a_plan_of_another_kind_is_asked_what_it_was_asked_before`), so a review
+exported before 2026-11-11 is imported unchanged. A site whose move the review vetoes keeps its
+hero and is named in `VETOED.jsonl` with the reviewer's reason; it is not on `OWNER_LIST.jsonl`.
+
 Measured read-only 2026-10-24 (read `df451b59`, 4,900 shown sites, 48,846 rows; verdict run
 `served-image-2026-09-30`, no check run yet):
 
@@ -1438,7 +1629,40 @@ Measured read-only 2026-10-24 (read `df451b59`, 4,900 shown sites, 48,846 rows; 
 drawing (`Idolos de los ingas.jpg`) - the review decides it. `check-pictures` offers 549 rows of the 51
 unsettled sites (510 nobody judged, 39 judged `depicts` and never chosen) to the image roles; their
 confirmed picks feed a second plan through `--check-run`. `SMALL_HEROES.jsonl` reproduces D48's 433: a
-hero below 1600x900 at a site that holds another live row of at least 1600x900 - owner list only.
+hero below 1600x900 at a site that holds another live row of at least 1600x900. It states the read:
+it names every such hero, also the one whose site is planned for another problem or moved by the
+plan. What the plan did with the `small` sites is in `PLAN_SUMMARY.json` (`by_problem.small`:
+`owner_link_kept`, `owner_list`, `hero moved`, `deferred_d15`), and the ones whose hero is the
+owner's own picture or that no checked row could replace are on `OWNER_LIST.jsonl`, each with its
+reason.
+
+`small`, measured offline on 2026-11-11 with the planner on the read of 2026-11-06
+(`hero-moves-2026-11-06b/READ.json` with `source_url` from production and the import joined in a
+scratch copy, verdict run `served-image-2026-09-30`, the veto file of `hero-moves-2026-11-06`, no
+check run; nothing written):
+
+| | sites |
+|---|---:|
+| D48's census list (`SMALL_HEROES.jsonl`) | 433 |
+| of them planned for another problem (12 `strip`, 7 `no_author`, 1 both) | 20 |
+| problem `small` | 413 |
+| the hero is the owner's own picture: kept, on the owner list, not searched | 279 |
+| searched | 134 |
+| planned before the image roles ran | 0 (17 before the review of 2026-11-11: replacement picks, all 17 at a site that keeps the owner's picture) |
+| of the 134 with a row to offer (`check-pictures`) | 119, with 594 rows (470 nobody judged, 124 `depicts` nobody chose, 0 earlier picks) |
+| of the 134 without any row to offer (owner list) | 15 |
+
+`check-pictures --veto` (the veto file of `hero-moves-2026-11-06`) printed `sites` 180 and
+`pictures` 1,298 on that scratch copy: the 119 small sites and the other rest lists' 61 sites with
+704 rows. **`check-pictures` takes the veto file the plan will be given** (`--veto`, the same file):
+a site whose only chosen row a reviewer refused is not settled, so its other rows are offered and
+the refused row is not. Without it the step saw such a site as planned and left it out, and the
+plan then put it on the owner list unsearched - none of the 8 sites vetoed on 2026-11-06 was
+offered (54 sites with 595 rows; with the veto 7 of the 8 have rows to offer, 109 in all). The
+other rest lists of that read stay as they were (75 sites: 44 `no_author` incl. 1 with `strip`, 18
+`strip`, 8 `unflagged`, 2 `hotlink`, 3 deferred to D15). 64 of the 413 small heroes are the replacement stage's own pick of 2026-09-30 and
+231 were judged `depicts` by the served check: the planner does not hold a hero back for that - only
+the owner's own picture is held - and the review sees both pictures and decides.
 
 Order: after the D15 chunk was accepted and, for D49, after the D18 author backfill (A5 may give a
 hero its author); always from a fresh read, with every served-image run as a verdict run, oldest
@@ -1452,8 +1676,10 @@ R=output/remediation/served_image/hero-moves-<date>             # the date names
 S1=output/remediation/served_image/served-image-2026-09-30
 S2=output/remediation/served_image/served-image-<date>-os47       # the D15 run, once accepted
 C=output/remediation/candidate_search/candidates-<date>-heromoves
-$PY $HM read --run-dir $R                                         # production, read-only, once
-$PY $HM check-pictures --run-dir $R --verdicts-run $S1 $S2 --check-run $C
+$PY $HM read --run-dir $R --import data/raw/ancient_nerds/ancient_nerds_original.geojson
+#   production, read-only, once; the import (main checkout only) says which picture the owner linked
+$PY $HM check-pictures --run-dir $R --verdicts-run $S1 $S2 --check-run $C [--veto V]
+#   V: the veto file the plan below is given, when there is one
 #   then image_roles/run.py prefilter-export / depicts-export / recheck-export (+ brief,
 #   check-answer, import per stage) and write-targets on $C - section 3.7.3 and run.py's docstring
 $PY $HM plan --run-dir $R --verdicts-run $S1 $S2 --check-run $C [--veto V]
@@ -1513,7 +1739,8 @@ $PY scripts/remediation/candidate_search/judge_run.py insert-claims --run-dir $C
 $PY scripts/remediation/import_hero/run.py read --run-dir $I
 $PY scripts/remediation/import_hero/run.py fetch --run-dir $I --root $OFFSITE --target insert --min-width 800 --min-height 300
 $PY scripts/remediation/import_hero/run.py insert-plan --run-dir $I
-#   insert_writer.py's five steps per chunk, then insert-accept (section 3.7, "The INSERT waves")
+$PY scripts/remediation/import_hero/run.py transfer --run-dir $I --root $OFFSITE   # the files, before the first --apply
+#   insert_writer.py's five steps per chunk, then insert-accept and `served` (section 3.7, "The INSERT waves")
 $PY $D59 outcomes --run-dir $C --insert-run $I                    # the per-site outcome + owner list
 # the third-party ones, after the D17 research run(s) wrote their targets and their INSERT waves ran:
 N=output/remediation/d59/d59-thumb-<date>
@@ -1665,8 +1892,8 @@ Owner answers of 2026-11-06 evening to the image-roles-v2 report:
   its judge line called every museum object `other_site`, and the 2026-09-19 labels called the
   Ishtar Gate in Berlin a foreign place. Now one rule in both places: the depicts prompt
   (`image-depicts-v2`: verdict terms and judge line) and the re-check (`served-check-v3`,
-  `vision._VERDICT_TERMS_D116`, `CHECK_PROMPT_V3`; `hero_recheck.PROMPT_ID` and D15's re-check bind
-  to it). A museum object that nothing in the picture ties to the site stays `other_site`. The first
+  `vision._VERDICT_TERMS_D116`, `CHECK_PROMPT_V3`; `hero_recheck.PROMPT_ID` and D15's re-check bound
+  to it until D127's `served-check-v4`, section 3.8.7). A museum object that nothing in the picture ties to the site stays `other_site`. The first
   check's frozen prompt (`served-check-v1`) and `served-check-v2` keep their text: their recorded
   questions are read back against it.
 * **D118 (prefilter at Opus first):** `image_roles/prefilter_probe.py` asks v2's five prefilter
@@ -1724,6 +1951,135 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
 # then as for $D3: disputes, label c, spotcheck, fix, export --role image_prefilter, evaluate
 ```
 
+#### 3.8.7 The four code gaps of the lane scouts (2026-11-11): D127 in the re-check, part F in a stage run, the next candidate, the D17 outcome list
+
+**The re-check asks `served-check-v4` (D127).** `served-check-v3` counted every "object of this site
+in a museum"; on the clean gold that was 11 of the re-check's 15 real errors in 200 cases. v4
+(`vision._VERDICT_TERMS_D127`, `CHECK_PROMPT_V4`) keeps D116 for an architectural part (a gate, a
+wall, a frieze, a relief, a mosaic, a sculpture: always the site) and lets a loose find (a coin, a
+vessel, a tool, a figurine, a tablet, a stele or milestone on its own) count only when the picture
+itself shows where it comes from - a label, a caption, an inscription naming the site; what only the
+file page, its categories or a catalogue say does not count, and such a find is `region_or_type`.
+Both re-checks ask it: D15's check stage and the hero re-check (`vision.RECHECK_PROMPT_ID`,
+`hero_recheck.PROMPT_ID`). The replace prompt (`served-replace-v2`) is unchanged.
+
+How a version moves, so that a recorded round stays what it was:
+
+* a version's text never changes (`RECHECK_PROMPTS`, each sha256 pinned in
+  `test_served_image_recheck.py`); a changed rule is a new id beside the old ones;
+* a D15 question records the version it asks (`recheck_prompt_id` in `QUESTIONS_CHECK.jsonl`) and
+  its import renders it from that version's text - so a check stage exported under v3 is answered
+  and imported under this code as v3 (a question without the key was exported before v4 and asked
+  v3, `RECHECK_PROMPT_UNNAMED`); a version the code does not hold is refused by name;
+* a hero re-check round records the exact text of every question and its version in
+  `EXPORT_RECHECK_NN.json`; its import stamps that recorded version on the rows
+  (`stage.import_answers`), not the code's of the day.
+
+The sealed calibrations (`image-roles-v3`) pin v3's text, which is unchanged; no calibration is run
+on v4 (D154). `clean_gold.prompt_pins` still names v3: a new clean gold would have to pin the
+version its re-check questions ask first.
+
+**Part F in a D17 stage run.** The D10 re-check of the heroes MiniMax picked runs in the first
+stage's run directory, whose candidates come from a fresh search and not from the old pool. Two
+refusals assumed a pool run and are narrowed to what the output needs:
+
+* `denied` refuses an old `depicts` Claude has not judged only when it is a **live hero** of the
+  read (`pool.denied_pairs`): the denial names live heroes only, and a stage's own search need not
+  find an old file again. A live hero that is an old target still needs its re-check row.
+* `pool-picks` leaves out, by name, an old target whose rendering the re-download recorded as `gone`
+  or `refused` (`repicture.unobtainable` over `OLD/REPICTURE_recheck.jsonl`) **and** that no page
+  serves - Qasr Qaroun Temple (`3ac3c796`): the site shows nothing, its old target is stored at
+  960 px, a width the lane does not show. It writes them beside the picks
+  (`<out>_LEFT_OUT.jsonl`, also when empty) and prints them. A live hero without a rendering, and
+  any missing rendering the re-download has not given up on, still stop the step.
+* `pool-picks` does not ask again a target this run's re-check holds a row for (the stage
+  re-checked it as its own pick, or an earlier pool round did): it is named in the same file with
+  that verdict, which `denied` reads. One candidate judged twice with two verdicts would stop every
+  later step of the run (`targets.judged_by_recheck`).
+
+**The next candidate after a final INSERT refusal.** A confirmed pick can fail at the INSERT lane
+for a reason that lies in the file: `not_fetched` with its line in `FETCH_FAILURES.jsonl` (a credit
+the licence demands and the file lacks, an original below the floor, an upscale, a file type) or
+`already_holds_the_file` (`d59.FILE_REFUSALS`). The site then goes on with its next-ranked `depicts`
+exactly as after a rejection by the re-check (`targets.pick_round`); a refusal that speaks of the
+site (`retired`, `d59_thumbnail_moved`, ...) passes nothing over. After the wave's `insert-plan`
+and before `prune-pictures`:
+
+```bash
+$PY $RUN recheck-export --run-dir $C --handoff <H>-rckN --insert-run $I   # REFUSED "no site waits" = nothing to retry
+#   the round's agents, then: run.py import --run-dir $C --handoff <H>-rckN --stage image-recheck --round N
+$PY $RUN write-targets  --run-dir $C --insert-run $I    # TARGETS.jsonl again: the next pick, or no line
+#   then a new INSERT run (<I>b) for the sites that have a new target, from the target check on
+```
+
+From the first retry on, every `recheck-export` and `write-targets` of the run names every INSERT
+run of it, **in the order they ran**: `TARGETS.jsonl` is the list of picks the INSERT lane has still
+to try, written again by each call, and a call without the runs would name the refused file once
+more (the INSERT lane would refuse it again; `d59.insert_state` refuses the mixed state by name).
+`null-plan` empties no third-party thumbnail while a `depicts` of the site is untried
+(`REFUSED: ... the site's next depicts '<file>' is not tried yet`).
+
+What the INSERT lane's records say about a pick is read by three rules (review of 2026-11-11,
+`d59.claim_state`, `claim_answer`, `refused_picks`):
+
+* **A `not_fetched` lies in the file only by the fetch's own word.** The fetch writes every failure
+  into `FETCH_FAILURES.jsonl` in one form - its refusals of the file and a download that got no
+  answer alike. `d59.FILE_FAILURES` lists the wordings that refuse the file (a credit the licence
+  demands, a size below the floor, an upscale, a file over the byte limit, a file type, a name the
+  file system refuses, a file Commons does not host; `test_d59_thumbnails.py` reads each out of
+  `fetch.py` and the downloader). Every other line (`Commons answered no imageinfo`, `no response`,
+  `HTTP <status>`, `not an image`, `exists and is never overwritten`, an OS error) is a claim the
+  run left open: its state is `not_planned` with `... fetch it again in a new INSERT run`, it
+  passes no pick over, and `null-plan` refuses the site by name. The retry is a new INSERT run
+  from the target check; the pick is still in `TARGETS.jsonl`.
+* **The runs that claim one file answer together.** A later run is the retry of an earlier one (a
+  new run after a refusal that speaks of the site, after a fetch that got no answer, or after a run
+  whose write stopped at a guard). A run that plans the row answers; otherwise the last run named
+  does. So a file one run refused and a later run wrote is live and is not passed over, and a
+  second wave that claims again a site the first refused as `d59_thumbnail_moved` or
+  `no_row_at_all` is no conflict.
+* **A target line that is gone proves nothing.** After `write-targets --insert-run` a refused site
+  has no line in `TARGETS.jsonl`; its outcome is `insert_refused`, not `none_confirmed`.
+  `null-plan`, `research-outcomes` and `outcomes` read the refusal of every such pick in the INSERT
+  runs they are given and refuse without it (`REFUSED: ... TARGETS.jsonl does not name '<file>', a
+  depicts of the site no INSERT run given refused for a reason that lies in the file`): name every
+  INSERT run of the stage. The NULL's journal row carries each refusal with the fetch's own line,
+  under `insert_refused:<reason>`.
+
+**The outcome list of a D17 run.** `d59.py research-outcomes` is `outcomes` for a D17 research run:
+
+```bash
+$PY $D59 research-outcomes --run-dir $C --insert-run $I [<I>b ...]    # after the stage's last INSERT wave
+```
+
+It writes `D17_OUTCOMES.jsonl` (one line per site: `target`, `no_candidate`, `none_confirmed` or
+`insert_refused`, the counts, and for a target the INSERT's state) and `D17_OWNER_LIST.jsonl`: every
+site the run leaves without a picture, with the reason - the search's refusal, the counts of what
+was judged (a candidate left out of the depicts stage is counted as never judged), the INSERT
+lane's refusal with the fetch's own reason, or a confirmed file no run wrote. The INSERT lane's
+reason stays on the list after the targets were written again: an `insert_refused` site reads `the
+INSERT lane refused the confirmed file '<file>': <reason> (<the fetch's line>); no other candidate
+was confirmed (...)`, and a site whose next pick is not written names the picks refused before it
+(`...; before it the INSERT lane refused '<file>': ...`). A site is off the list only when an
+INSERT run plans its row. Like `outcomes` it is rewritten by every call and refused while the
+targets are not written, a candidate still waits for an answer, or a dropped pick's refusal is in
+no INSERT run named.
+
+`owner_list_final.py` reads the image lanes' lists by glob (`RUN_LISTS`): every
+`candidate_search/*/D17_OWNER_LIST.jsonl` (topic `image-research-none`, open while the site has no
+live image row), every `candidate_search/*/D59_OWNER_LIST.jsonl` (`image-hotlink-uncredited`, open
+while the site shows only its thumbnail) and the last `served_image/hero-moves-*/OWNER_LIST.jsonl`
+(`hero-problem-kept`; each plan lists the whole population, so earlier ones are registered and not
+read). A hero row is open while the site still measures one of the problems it names
+(`hero_moves.problems_of` on today's production row) and names only those: the plan states its
+read, and a later D15 swap, INSERT wave or credit repair sets the row aside (`hero-moves:
+superseded`; measured 2026-11-11 on `hero-moves-2026-11-06b`: 72 rows, 68 open, 4 `no_author`
+answered since). A `small` row (D82) is open while the hero is below 1600x900 beside a larger live
+row (`hero_larger` of the production read) and the site measures none of the four other problems;
+its reason is the plan's: the hero is the owner's own picture, or what each other row lacks. Every shown site without any picture has to carry a research row: the report names the ones
+without (`image_none_unresearched`) and `build --final` refuses them, as it refuses a lane without
+any list.
+
 ---
 
 ## 4. Tests and the mutation sweep
@@ -1759,13 +2115,24 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   `tests/remediation/test_disputes.py`, `test_wc.py`, `test_wc_list.py` - the D50 sites in the
   dispute screen and lane E.
 * `scripts/remediation/mechanical/mutation_sweep.py d58 d50` - the D58/D50 guards (`D58_CASES`);
+  `mutation_sweep.py "d57 unretire" "d57 indexnow"` - the D57 class of the un-retire (planner,
+  invariant, premise, the delivered wave's text) and IndexNow's removed pages
+  (`D57_GO_LIVE_CASES`, 33 cases; `tests/pipeline/test_indexnow.py` runs the statement in SQLite);
   `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20
   window and question; `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
   `enrich disputes` - the D50 exemptions of lane WC/E.
 * `tests/remediation/test_hero_moves.py` - D48/D49: the four problems, what qualifies a hero (never
   a new small hero), that a hero is a chosen row (never a `depicts` ranked by its pixels), the
   ranking, the D15 deferral, vetoes, the check population (unjudged and unchosen rows), the review
-  `emit` requires, the write order, the small heroes, the acceptance.
+  `emit` requires, the write order, the small heroes, the acceptance. D82: `small` as a problem of
+  its own, named only alone, replaced only by a confirmed check-run pick of at least 1600x900 under
+  `d82-hero` (never by an earlier replacement pick, which goes to the image roles), never where the
+  hero is the owner's own picture, the read's `--import` join, its check population (which knows
+  the veto the plan is given);
+  `tests/remediation/test_hero_review.py` - the question of a `small` plan (its own veto rule in
+  the place of D49's) and the unchanged question of every other plan
+  (`scripts/remediation/image_roles/mutation_sweep.py "img a6"`,
+  `scripts/remediation/mechanical/mutation_sweep.py "d25-owner: a6"`).
 * `tests/remediation/test_d59_thumbnails.py` - D59: both populations, the one candidate and its
   refusals, the claims' wording and marker, the INSERT plan's lift, the NULL plan (a finished research
   or a final INSERT refusal, never a site whose INSERT has not ended), the D59 run's way past the
@@ -1787,6 +2154,46 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
   files in place and restores them: run it on an otherwise idle worktree.
+* The staged D57 sites (2026-11-10): `tests/remediation/test_candidate_routes.py` (the research
+  reads one only when its list names it; the credit lane never) and
+  `tests/remediation/test_import_hero_insert.py`, `TestAStagedD57Site` (the read's predicate run in
+  SQLite; and the whole path from the read's own statements, run in SQLite behind
+  `persist_verdicts.read_rows`: `read` holds a staged site of production and marks it, `insert-plan`
+  plans its row and refuses another retired site, `insert-accept` accepts it with no connection
+  opened) and `tests/remediation/test_import_hero.py`, `TestAStagedD57SiteIsOutsideTheImportsJoin`
+  (the join, `plan`, `fetch` over a read without claims, `fetch --start`, and the refusal of a read
+  without the `staged` column); `mechanical/mutation_sweep.py "wd2 d57"`: 16 cases, 16 fired
+  (2026-11-11).
+* The files of an INSERT wave (2026-11-11): `tests/remediation/test_import_hero_transfer.py` - the
+  wave's files and the three refusals before anything is sent (a name that cannot travel, a name a
+  row of the site holds, an offsite file missing, in another case or at another byte count), the
+  transfer against a VPS of two directories (other bytes never overwritten, a file that arrived not
+  sent twice, a file that arrives wrong, the rehearsal's scratch directory, the record written
+  once), the real transport's command lines (the container question with the names on stdin, the
+  tar's sha256 before the unpack, the one path prefix that is ever removed; the hash script and the
+  `tar -k` unpack are run through a local `sh` and GNU tar where they exist, skipped by name
+  otherwise), `served`, the merge's outcome table and its copy, and `fetch` refusing the offsite
+  root. `mechanical/mutation_sweep.py "wd2 transfer"`: 42 cases, 42 fired (2026-11-11). Not
+  covered offline: ssh and scp themselves - the section 3.7 measurement of 2026-11-11 is their
+  proof.
+* The four gaps of section 3.8.7 (2026-11-11): `test_served_image_recheck.py` (D127's terms, the
+  pinned text of every re-check version, a question rendered in the version it recorded, a check
+  stage exported before v4 imported as v3), `test_image_roles.py` (the hero re-check's text is its
+  version's, an import stamps the exported version, a pick the INSERT lane refused passes the site
+  on), `test_candidate_routes.py` and `test_image_flow.py` (an old `depicts` no page serves needs no
+  judgement, the targets left out of the pool picks, the next candidate from the refusal to the
+  rewritten targets, also through the command line), `test_repicture.py` (what a need gave up on),
+  `test_image_roles_cli.py` (`pool-picks` and its two files), `test_d59_thumbnails.py` (the picks
+  refused for the file, the run that claims the next pick, no NULL while a `depicts` is untried, the
+  D17 outcomes and owner list) and `test_owner_list_final.py` (the run lists, the last hero plan, the
+  research reason `--final` asks for). The review's rules: `test_d59_thumbnails.py` (the fetch's
+  wordings that refuse the file, read out of the code that records them, and the ones that do not;
+  a fetch that got no answer; the runs that claim one file; a site refused twice for its state; a
+  dropped pick emptied on the INSERT refusal alone, with every refusal in the evidence; the owner
+  list's reason after the targets were written again), `test_image_flow.py` (a pick a later run
+  wrote stays the target) and `test_owner_list_final.py` (a hero row a later lane answered).
+  `image_roles/mutation_sweep.py "img a5"`: 46 cases, and `mechanical/mutation_sweep.py
+  "d25-owner: a5"`: 12 cases (the numbers of the last run are in the commit that added them).
 
 ---
 

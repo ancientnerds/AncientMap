@@ -7,9 +7,12 @@ the registry (`roles.ROLES`) names the model, this module only names the role.
 The page's picture is the one candidate the depicts role called `depicts` with the best quality - and
 the one whose mistake the page shows to everybody. Before it is written, a second judge looks at it
 alone, with the context the first one had and the first one's verdict: the same question and the same
-stricter answer shape as the D15 re-check of the 47 heroes (`served_image.vision.CHECK_PROMPT_V3`, D116,
-`parse_check`), so the two re-checks cannot drift apart. An `other_site` verdict must name what the
-picture shows and cite its Commons page.
+stricter answer shape as the D15 re-check of the 47 heroes (`served_image.vision.RECHECK_PROMPT_ID`:
+`CHECK_PROMPT_V4` since D127, `parse_check`), so the two re-checks cannot drift apart. An `other_site`
+verdict must name what the picture shows and cite its Commons page. A round records the version it
+was exported under (`EXPORT_RECHECK_NN.json`) and the exact text of every question, and its import
+stamps that version on its rows (`stage.import_answers`): a round asked under `served-check-v3`
+stays one.
 
 A pick the re-check confirms (`depicts`) is written; a pick it does not confirm is dropped, and the
 site's next-best `depicts` candidate is re-checked in the next round (`targets.pick_round`) until a
@@ -35,7 +38,7 @@ from served_image import vision as V  # noqa: E402
 from image_roles import pictures as PX  # noqa: E402
 from image_roles import stage as SG  # noqa: E402
 
-PROMPT_ID = V.CHECK_PROMPT_V3_ID
+PROMPT_ID = V.RECHECK_PROMPT_ID
 PER_BATCH = V.CHECK_PER_BATCH
 #: The earlier stage the context names: the depicts role's verdict is what is re-checked.
 EARLIER_STAGE = "image-depicts"
@@ -90,6 +93,7 @@ def build_questions(
                 image=image.path,
                 jpeg_sha256=image.sha256,
                 context=context,
+                recheck_prompt_id=PROMPT_ID,
             )
             meta = {
                 "site_id": str(pick["site_id"]),

@@ -16,9 +16,13 @@ from pathlib import Path
 import pytest
 
 from pipeline.utils.public_sites import (
+    D57_STAGED_PREFIX,
+    D57_UNDONE_PREFIX,
     RETIRED,
     SCOPE_STATUSES,
     curated_page,
+    d57_staged,
+    d57_undone,
     duplicate_survivor_id,
     is_retired,
     journal_join,
@@ -63,6 +67,56 @@ def test_is_retired_is_the_exact_complement(engine):
     assert retired == {"gone"}
     assert shown | retired == {"never", "kept", "open", "gone"}
     assert not shown & retired
+
+
+@pytest.fixture
+def staged_engine() -> sqlite3.Connection:
+    """Rows of every scope state, with and without the staged reason (orchestrator decision O12)."""
+    conn = sqlite3.connect(":memory:")
+    conn.execute("PRAGMA case_sensitive_like = ON")  # Postgres' LIKE is case-sensitive
+    conn.execute("CREATE TABLE unified_sites (id TEXT, scope_status TEXT, scope_reason TEXT)")
+    conn.executemany(
+        "INSERT INTO unified_sites VALUES (?, ?, ?)",
+        [
+            ("staged", "retired", f"{D57_STAGED_PREFIX} inserted hidden by the insert lane"),
+            ("retired-no-reason", "retired", None),
+            ("retired-window", "retired", "outside the time window"),
+            ("retired-undone", "retired", "D57 insert undone (x-rollback): retired"),
+            ("retired-other-case", "retired", "d57 STAGED: not the lane's spelling"),
+            ("shown-again", "in_scope", f"{D57_STAGED_PREFIX} a reason nobody replaced"),
+            ("never", None, None),
+        ],
+    )
+    return conn
+
+
+def test_d57_staged_is_a_retired_row_with_the_staged_reason(staged_engine):
+    assert _ids(staged_engine, d57_staged()) == {"staged"}
+    assert _ids(staged_engine, d57_staged("u")) == {"staged"}
+
+
+def test_leaving_the_staged_rows_out_keeps_every_other_retired_row(staged_engine):
+    """The NULL trap again: a retired row without a reason must survive `NOT (staged)`, or a reader
+    that skips the staged rows (IndexNow's removed pages) silently loses real retirements."""
+    others = _ids(staged_engine, f"{is_retired('u')} AND NOT {d57_staged('u')}")
+    assert others == {"retired-no-reason", "retired-window", "retired-undone", "retired-other-case"}
+    assert _ids(staged_engine, f"NOT {d57_staged('u')}") == others | {"shown-again", "never"}
+
+
+def test_d57_undone_is_a_retired_row_with_the_undos_reason(staged_engine):
+    """The insert's undo keeps the row retired under its own reason: no staged row any more, and
+    a reader that leaves the undone rows out keeps the retired row without a reason too."""
+    assert _ids(staged_engine, d57_undone()) == {"retired-undone"}
+    assert _ids(staged_engine, d57_undone("u")) == {"retired-undone"}
+    others = _ids(staged_engine, f"{is_retired('u')} AND NOT {d57_undone('u')}")
+    assert others == {"staged", "retired-no-reason", "retired-window", "retired-other-case"}
+
+
+def test_the_staged_prefix_is_safe_in_a_like_pattern():
+    for prefix, predicate in ((D57_STAGED_PREFIX, d57_staged), (D57_UNDONE_PREFIX, d57_undone)):
+        assert not set(prefix) & set("%_'\\")
+        assert f"LIKE '{prefix}%'" in predicate()
+    assert not D57_UNDONE_PREFIX.startswith(D57_STAGED_PREFIX)
 
 
 @pytest.mark.parametrize("alias", ["us; DROP TABLE x", "u.id", "1us", "u s"])

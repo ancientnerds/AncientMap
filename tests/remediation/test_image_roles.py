@@ -8,6 +8,7 @@ that the role is registered to (`roles.ROLES`).
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import io
 import json
@@ -171,6 +172,20 @@ class TestTheTransport:
         (row,) = SG.read_results(run, spec)
         assert row["answered_by"] == "image_prefilter:b-001" and row["model"] == stamp_of(spec.role)
         assert row["meta"] == {"n": 1} and row["prompt_id"] == "tiny-v1"
+
+    def test_an_import_stamps_the_version_the_stage_was_exported_under(
+        self, tmp_path: Path
+    ) -> None:
+        """A round exported under one version of its prompt and imported after the code moved to
+        the next: the questions are the recorded ones, and the rows name the version they asked."""
+        spec = _tiny_spec()
+        run, handoff, _ = _tiny_export(tmp_path, spec)
+        answer_all(handoff, spec, {"q1": '{"ok": true}'})
+        later = dataclasses.replace(spec, prompt_id="tiny-v2")
+        assert SG.import_answers(run, handoff, later)["answers"] == 1
+        (row,) = SG.read_results(run, later)
+        assert row["prompt_id"] == "tiny-v1"
+        assert row["prompt_sha256"] == OH.prompt_sha256("Look and say ok.")
 
     def test_an_answer_in_another_role_is_refused(self, tmp_path: Path) -> None:
         spec = _tiny_spec()
@@ -595,6 +610,14 @@ class TestTheHeroRecheck:
         assert "is, or is about to become, the main image" in q.prompt
         assert q.label == "a" and q.meta == {"site_id": "a", "file": "1.jpg", "round": 1}
 
+    def test_the_question_is_the_version_the_stage_names(self) -> None:
+        """`served-check-v4` (D127): a loose museum find counts only when the picture itself
+        shows where it comes from. The stage's `prompt_id` and the text it exports are one
+        version - a question built without the version would ask v3's terms under v4's name."""
+        (q,), _ = HR.build_questions([_pick()], lambda p: jpeg(), round_number=1)
+        assert V._VERDICT_TERMS_D127 in q.prompt and V._VERDICT_TERMS_D116 not in q.prompt
+        assert "only when the picture itself shows where it comes from" in q.prompt
+
     def test_the_cached_wikipedia_page_is_named_in_the_prompt(self) -> None:
         pick = _pick() | {"wikipedia_cache_file": "C:/cache/en/a.json"}
         (q,), _ = HR.build_questions([pick], lambda p: jpeg(), round_number=1)
@@ -704,6 +727,46 @@ class TestTheTargets:
         state = TG.pick_round(verdicts, [_r("a", "1.jpg", "region_or_type")])
         assert list(state.exhausted) == ["a"] and state.exhausted["a"][0]["file"] == "1.jpg"
         assert state.counts() == {"confirmed": 0, "to_check": 0, "exhausted": 1}
+
+    def test_a_confirmed_pick_the_insert_lane_refused_passes_the_site_on(self) -> None:
+        """A confirmed pick whose file the INSERT lane refused for good is no target: the site goes
+        on with its next-ranked depicts - to its re-check, to that pick, or to no picture."""
+        verdicts = [_v("a", "first.jpg", 5), _v("a", "second.jpg", 3), _v("b", "only.jpg", 4)]
+        confirmed = [_r("a", "first.jpg", "depicts"), _r("b", "only.jpg", "depicts")]
+        refused = {("a", "First.jpg")}  # the file in title form, as a claim's URL names it
+        state = TG.pick_round(verdicts, confirmed, refused)
+        assert [r["file"] for r in state.to_check] == ["second.jpg"]
+        assert state.confirmed["b"]["file"] == "only.jpg" and "a" not in state.confirmed
+        assert [r["file"] for r in state.insert_refused["a"]] == ["first.jpg"]
+        state = TG.pick_round(verdicts, [*confirmed, _r("a", "second.jpg", "depicts")], refused)
+        assert state.confirmed["a"]["file"] == "second.jpg" and not state.to_check
+        state = TG.pick_round(verdicts, [*confirmed, _r("a", "second.jpg", "other_site")], refused)
+        assert [r["file"] for r in state.exhausted["a"]] == ["first.jpg", "second.jpg"]
+        # a refusal of another site's file, or of a file the re-check did not confirm, moves nothing
+        assert TG.pick_round(verdicts, confirmed, {("b", "First.jpg")}).confirmed["a"]["file"] == (
+            "first.jpg"
+        )
+
+    def test_the_targets_after_an_insert_refusal_name_the_next_pick_or_no_line(
+        self, tmp_path: Path
+    ) -> None:
+        verdicts = [_v("a", "first.jpg", 5), _v("a", "second.jpg", 3), _v("b", "only.jpg", 4)]
+        rechecks = [_r("a", "first.jpg", "depicts"), _r("b", "only.jpg", "depicts")]
+        refused = {("a", "First.jpg"), ("b", "Only.jpg")}
+        with pytest.raises(SG.StageError, match="1 site\\(s\\) wait for a re-check round"):
+            TG.write_targets(tmp_path, verdicts, rechecks, refused)
+        rechecks.append(_r("a", "second.jpg", "depicts"))
+        summary = TG.write_targets(tmp_path, verdicts, rechecks, refused)
+        assert (summary["sites_to_fetch"], summary["exhausted"], summary["insert_refused"]) == (
+            1,
+            1,
+            2,
+        )
+        (line,) = (tmp_path / CJ.TARGETS).read_text(encoding="utf-8").splitlines()
+        assert (json.loads(line)["site_id"], json.loads(line)["commons_file"]) == (
+            "a",
+            "second.jpg",
+        )
 
     def test_a_candidate_rechecked_twice_with_two_verdicts_is_refused(self) -> None:
         with pytest.raises(SG.StageError, match="twice with two verdicts"):
@@ -1076,7 +1139,8 @@ class TestTheWikiCache:
 
 def test_the_hero_recheck_shares_the_served_image_question_and_its_strict_parser() -> None:
     """One re-check, two lanes: the D15 prompt and the D17 prompt are the same text."""
-    assert HR.PROMPT_ID == V.CHECK_PROMPT_V3_ID
+    assert HR.PROMPT_ID == V.RECHECK_PROMPT_ID == "served-check-v4"
+    assert HR.SPEC.prompt_id == HR.spec_for_round(2).prompt_id == "served-check-v4"
     assert (
         V.parse_check(
             json.dumps(

@@ -6909,8 +6909,483 @@ WD2_CASES: list[Case] = [
         "test_a_run_of_2026_10_08_is_stamped_attribution_and_its_date",
         "tests/remediation/test_gallery_attribution.py",
     ),
+    # -- a staged D57 site (O12, 2026-11-10): read by the research that names it and by the image
+    #    INSERT lane's read, and by neither as a retired site
+    Case(
+        "wd2 d57: the research leaves a staged site its list names out",
+        REPO / "scripts/remediation/candidate_search/population.py",
+        "            scope = f\"({scope} OR {d57_staged_sql('u')})\"",
+        "            pass",
+        "test_the_research_reads_a_staged_d57_site_that_its_site_list_names",
+        "tests/remediation/test_candidate_routes.py",
+    ),
+    Case(
+        "wd2 d57: a population without a list reads the staged sites",
+        REPO / "scripts/remediation/candidate_search/population.py",
+        "    scope = \"u.scope_status IS DISTINCT FROM 'retired'\"",
+        "    scope = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "test_a_population_without_a_site_list_never_reads_a_staged_site",
+        "tests/remediation/test_candidate_routes.py",
+    ),
+    Case(
+        "wd2 d57: the credit lane reads a staged site",
+        REPO / "scripts/remediation/candidate_search/population.py",
+        '        if kind == RESEARCH:\n            scope = f"(',
+        '        if True:\n            scope = f"(',
+        "test_the_credit_lane_never_reads_a_staged_site",
+        "tests/remediation/test_candidate_routes.py",
+    ),
+    Case(
+        "wd2 d57: the insert lane's read holds the shown sites only",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "IN_THE_READ = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "IN_THE_READ = \"(u.scope_status IS DISTINCT FROM 'retired')\"",
+        "test_the_read_holds_a_staged_site_with_the_shown_ones",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: the insert lane's read holds every retired site with a reason",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "IN_THE_READ = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "IN_THE_READ = \"(u.scope_status IS DISTINCT FROM 'retired' OR u.scope_reason IS NOT NULL)\"",
+        "test_a_staged_site_is_not_among_the_reads_retired_and_every_other_retired_site_is",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: the read's sites are the shown ones",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "   WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}\n   ORDER BY u.id",
+        "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'\n"
+        "   ORDER BY u.id",
+        "test_the_read_holds_a_staged_site_with_the_shown_ones",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: the read's image rows are the shown sites' only",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "   WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}\n   ORDER BY w.site_id, w.id",
+        "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'\n"
+        "   ORDER BY w.site_id, w.id",
+        "test_the_read_holds_a_staged_site_with_the_shown_ones",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: a staged site is listed among the read's retired",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "   WHERE u.source_id = 'ancient_nerds' AND NOT {IN_THE_READ}",
+        "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status = 'retired'",
+        "test_a_staged_site_is_not_among_the_reads_retired_and_every_other_retired_site_is",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    Case(
+        "wd2 d57: a site retired for another reason is planned a row",
+        REPO / "scripts/remediation/import_hero/insert.py",
+        '        if site is None:\n            out.append(Refusal(site_id, "retired", "the site is not in the read"))\n'
+        "            continue\n        rows = state.rows.get(site_id, ())\n        d59 =",
+        '        if False:\n            out.append(Refusal(site_id, "retired", "the site is not in the read"))\n'
+        "            continue\n        rows = state.rows.get(site_id, ())\n        d59 =",
+        "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    # the same path from the read's own statements (`read` -> `insert-plan` -> `insert-accept`)
+    Case(
+        "wd2 d57: insert-plan refuses a staged site of production as retired",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "IN_THE_READ = f\"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\"",
+        "IN_THE_READ = \"(u.scope_status IS DISTINCT FROM 'retired')\"",
+        "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    # -- the read says which of its sites is staged, and the 2025 import's join leaves those out:
+    #    no image role judged the import's picture (Pella, Nan Madol: measured 2026-11-11)
+    Case(
+        "wd2 d57: the read marks no site staged",
+        REPO / "scripts/remediation/import_hero/read.py",
+        '{d57_staged_sql("u")} AS staged',
+        "false AS staged",
+        "test_a_staged_site_of_the_read_gets_its_first_row_and_is_accepted_from_the_read_alone",
+        "tests/remediation/test_import_hero_insert.py",
+    ),
+    guard(
+        "wd2 d57: a read that cannot say which site is staged is joined",
+        REPO / "scripts/remediation/import_hero/read.py",
+        "    if unmarked:",
+        "test_a_read_that_cannot_say_which_site_is_staged_is_refused_where_the_join_asks",
+        "tests/remediation/test_import_hero.py",
+    ),
+    guard(
+        "wd2 d57: the 2025 import's join claims a staged site",
+        REPO / "scripts/remediation/import_hero/plan.py",
+        "        if sid in staged:",
+        "test_the_join_claims_no_staged_site",
+        "tests/remediation/test_import_hero.py",
+    ),
+    Case(
+        "wd2 d57: a fetch over a read without claims joins the staged sites",
+        REPO / "scripts/remediation/import_hero/run.py",
+        "    state = ST.load_read(read_path)\n"
+        "    claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))",
+        "    state = ST.load_read(read_path)\n"
+        "    claims = IH.join_import(state, IH.read_import(source))",
+        "test_a_fetch_in_a_run_that_holds_a_read_but_no_claims_gives_a_staged_site_nothing",
+        "tests/remediation/test_import_hero.py",
+    ),
+    Case(
+        "wd2 d57: a fetch that starts a wave joins the staged sites",
+        REPO / "scripts/remediation/import_hero/run.py",
+        "        claims = IH.join_import(state, IH.read_import(source), staged=RD.staged(data))",
+        "        claims = IH.join_import(state, IH.read_import(source))",
+        "test_a_fetch_that_starts_a_wave_joins_no_staged_site",
+        "tests/remediation/test_import_hero.py",
+    ),
+    Case(
+        "wd2 d57: a plan joins the read's staged sites",
+        REPO / "scripts/remediation/import_hero/run.py",
+        "    claims = IH.join_import(state, features, staged=RD.staged(data))",
+        "    claims = IH.join_import(state, features)",
+        "test_a_plan_over_the_read_joins_no_staged_site",
+        "tests/remediation/test_import_hero.py",
+    ),
 ]
 CASES += WD2_CASES
+
+# --------------------- the INSERT wave's files on the VPS, and the offsite copy's stray fetches
+#                       (import_hero/transfer.py, 2026-11-11: code gaps images#6/#7, d57-insert#6)
+TRANSFER = REPO / "scripts/remediation/import_hero/transfer.py"
+IMPORT_HERO_RUN = REPO / "scripts/remediation/import_hero/run.py"
+TRANSFER_TESTS = "tests/remediation/test_import_hero_transfer.py"
+_SERVED_IF = (
+    '        if status != 200 or content_type != "image/webp" or sha256 != entry["sha256"]:'
+)
+_TO_SEND = (
+    "        to_send = list(files) if rehearse else "
+    "[file for file in files if file.rel not in before]"
+)
+WD2_TRANSFER_CASES: list[Case] = [
+    guard(
+        "wd2 transfer: a name with a separator travels",
+        TRANSFER,
+        "        if illegal:",
+        "test_a_name_that_cannot_travel_as_one_line_and_one_member_is_refused",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: a name a row already holds is sent",
+        TRANSFER,
+        "    if held:",
+        "test_a_name_a_row_of_the_site_already_holds_is_refused_before_anything_is_sent",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a row of another site holds the name",
+        TRANSFER,
+        "        for row in state.rows.get(file.site_id, ())",
+        "        for rows in state.rows.values()\n        for row in rows",
+        "test_a_row_of_another_site_with_the_same_name_does_not_refuse",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a file at another size is sent",
+        TRANSFER,
+        "        elif hit[1] != file.size:",
+        "        elif False:",
+        "test_a_file_at_another_byte_count_than_its_row_is_refused",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: an unfit offsite file is sent",
+        TRANSFER,
+        "    if unfit:",
+        "test_a_file_in_another_case_is_not_the_rows_file",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: other bytes on the VPS pass",
+        TRANSFER,
+        "        if other:",
+        "test_a_name_production_holds_with_other_bytes_refuses_the_wave_and_is_never_overwritten",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a file that arrived is sent twice",
+        TRANSFER,
+        _TO_SEND,
+        "        to_send = list(files)",
+        "test_a_file_that_arrived_whole_on_an_earlier_call_is_not_sent_twice",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal sends only what is missing",
+        TRANSFER,
+        _TO_SEND,
+        "        to_send = [file for file in files if file.rel not in before]",
+        "test_a_rehearsal_sends_the_whole_wave_into_a_scratch_directory_and_removes_it",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal unpacks into the tree",
+        TRANSFER,
+        "        vps.unpack(remote_tar, scratch)",
+        "        vps.unpack(remote_tar, vps.tree)",
+        "test_a_rehearsal_sends_the_whole_wave_into_a_scratch_directory_and_removes_it",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal leaves its scratch directory",
+        TRANSFER,
+        "        vps.remove(scratch)\n        vps.remove(remote_tar)",
+        "        vps.remove(remote_tar)",
+        "test_a_rehearsal_is_verified_in_its_scratch_directory",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: a file that arrived wrong passes",
+        TRANSFER,
+        "    if wrong:",
+        "test_a_file_that_does_not_arrive_as_it_left_fails_the_transfer",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the tree is not asked after the unpack",
+        TRANSFER,
+        "        after = landed if rehearse else vps.in_production(rels)",
+        "        after = landed if rehearse else local",
+        "test_a_file_that_does_not_arrive_as_it_left_fails_the_transfer",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the scratch directory is not asked",
+        TRANSFER,
+        "        after = landed if rehearse else vps.in_production(rels)",
+        "        after = local if rehearse else vps.in_production(rels)",
+        "test_a_rehearsal_is_verified_in_its_scratch_directory",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the unpack replaces an existing file",
+        TRANSFER,
+        "-xkf {shlex.quote(remote_tar)}",
+        "-xf {shlex.quote(remote_tar)}",
+        "test_the_unpack_never_replaces_a_file_and_keeps_the_trees_modes",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the unpack runs under the login umask",
+        TRANSFER,
+        '    return f"umask 000 && tar -C',
+        '    return f"tar -C',
+        "test_the_unpack_never_replaces_a_file_and_keeps_the_trees_modes",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the tar's sha256 is not compared",
+        TRANSFER,
+        "        O.require_same_hash(name, sha256, O.remote_sha256(self.host, REMOTE_TMP, name))",
+        "        O.remote_sha256(self.host, REMOTE_TMP, name)",
+        "test_the_tar_is_unpacked_only_after_its_sha256_matched_on_the_vps",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: any path is removed",
+        TRANSFER,
+        '        if not path.startswith(REMOTE_PREFIX) or "/" in path[len(REMOTE_PREFIX) :]:',
+        "test_only_a_scratch_path_of_the_transfer_is_ever_removed",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a path that climbs out of /tmp is removed",
+        TRANSFER,
+        '        if not path.startswith(REMOTE_PREFIX) or "/" in path[len(REMOTE_PREFIX) :]:',
+        "        if not path.startswith(REMOTE_PREFIX):",
+        "test_only_a_scratch_path_of_the_transfer_is_ever_removed",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: an answer nobody asked for is taken",
+        TRANSFER,
+        "    if unasked:",
+        "test_an_answer_for_a_file_nobody_asked_about_is_refused",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: production is asked on the host, not in the container",
+        TRANSFER,
+        "        return self._hashes(container_command(self.container, self.container_tree), rels)",
+        "        return self._hashes(hash_script(self.tree), rels)",
+        "test_production_is_asked_inside_the_api_container_with_the_names_on_stdin",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the hash script answers for a name that is no file",
+        TRANSFER,
+        'if [ -f "$f" ]; then sha256sum -- "$f"; fi;',
+        'sha256sum -- "$f";',
+        "test_the_hash_script_answers_for_the_files_that_exist_and_only_those",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: the record is written twice",
+        IMPORT_HERO_RUN,
+        "    if not rehearse and path.is_file():",
+        "test_the_command_writes_the_record_once",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal writes the transfer's record",
+        IMPORT_HERO_RUN,
+        "    path = run / (TR.REHEARSAL if rehearse else TR.RECORD)",
+        "    path = run / TR.RECORD",
+        "test_a_rehearsal_writes_its_own_record_and_never_the_transfers",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: a fetch into the offsite root",
+        IMPORT_HERO_RUN,
+        '    if (root / "images" / "wiki").is_dir():',
+        "test_a_fetch_into_the_offsite_root_is_refused",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: stdin goes through a text pipe",
+        REPO / "scripts/remediation/offsite_sync.py",
+        "    proc = subprocess.run(argv, input=stdin, capture_output=True",
+        '    proc = subprocess.run(argv, input=stdin and stdin.replace(b"\\n", b"\\r\\n"), '
+        "capture_output=True",
+        "test_stdin_reaches_the_far_side_byte_for_byte",
+        TRANSFER_TESTS,
+    ),
+    # -- served: each of the three conditions
+    Case(
+        "wd2 transfer served: any status passes",
+        TRANSFER,
+        _SERVED_IF,
+        '        if content_type != "image/webp" or sha256 != entry["sha256"]:',
+        "test_a_file_that_is_not_served_as_it_was_sent_is_a_problem",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer served: any content type passes",
+        TRANSFER,
+        _SERVED_IF,
+        '        if status != 200 or sha256 != entry["sha256"]:',
+        "test_a_file_that_is_not_served_as_it_was_sent_is_a_problem",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer served: any bytes pass",
+        TRANSFER,
+        _SERVED_IF,
+        '        if status != 200 or content_type != "image/webp":',
+        "test_a_file_that_is_not_served_as_it_was_sent_is_a_problem",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer served: a rehearsal's record is asked",
+        TRANSFER,
+        '    if record.get("mode") != "transfer":',
+        "test_a_rehearsals_record_is_no_proof_of_a_served_file",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer served: a run without a transfer is asked",
+        IMPORT_HERO_RUN,
+        "    if not path.is_file():\n        raise IH.ImportHeroError(\n"
+        '            f"{path} does not exist - `transfer --run-dir {run}` writes it, and only a "',
+        "test_served_before_a_transfer_is_refused_by_name",
+        TRANSFER_TESTS,
+    ),
+    # -- the offsite merge
+    guard(
+        "wd2 transfer merge: a file the tree holds is planned",
+        TRANSFER,
+        "    if tree == stray:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: a file the VPS lacks enters the tree",
+        TRANSFER,
+        "    if production is None:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: bytes production does not serve enter the tree",
+        TRANSFER,
+        "    if production == stray:",
+        "    if production is not None:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: a stale stray file is not told from a foreign one",
+        TRANSFER,
+        "    if production == tree:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: a name in another case is written over",
+        TRANSFER,
+        "            elif name.casefold() in other_case:",
+        "            elif False:",
+        "test_a_name_the_tree_holds_in_another_case_is_left_alone",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: every folder beside the tree is a site's",
+        TRANSFER,
+        "for s, names in pilot.build_tree(stray).items() if SHARD.fullmatch(s)}",
+        "for s, names in pilot.build_tree(stray).items()}",
+        "test_the_merge_plan_reads_the_site_folders_beside_the_tree_and_asks_production",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: production is asked about every stray file",
+        TRANSFER,
+        'if "outcome" not in row and row["tree_sha256"] != row["sha256"]',
+        'if "outcome" not in row',
+        "test_production_is_not_asked_about_a_file_the_tree_already_holds",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: every stray file is copied",
+        TRANSFER,
+        '        if row["outcome"] not in (COPY, REPLACE):',
+        "test_the_merge_copies_what_production_serves_and_leaves_everything_else",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: a copy that differs from the plan is swapped in",
+        TRANSFER,
+        '        if copied != row["sha256"]:',
+        "test_a_stray_file_that_changed_since_the_plan_is_not_merged",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: the tree is merged into itself",
+        TRANSFER,
+        "    if stray.resolve() == root.resolve():",
+        "test_the_tree_is_not_merged_into_itself",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: an applied merge is recorded twice",
+        IMPORT_HERO_RUN,
+        "    if apply and path.is_file():",
+        "test_the_merge_command_plans_without_apply_and_records_an_apply_once",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: a plan is applied",
+        IMPORT_HERO_RUN,
+        "    merged = TR.merge_apply(stray, root, rows) if apply else 0",
+        "    merged = TR.merge_apply(stray, root, rows)",
+        "test_the_merge_command_plans_without_apply_and_records_an_apply_once",
+        TRANSFER_TESTS,
+    ),
+]
+CASES += WD2_TRANSFER_CASES
 
 # ------------------------------------------------------ the WD1 structured-field lane (2026-09-26)
 FIELDS = REPO / "scripts/remediation/fields"
@@ -12749,11 +13224,11 @@ INSERT_SITE_CASES: list[Case] = [
         INSERT_TESTS,
     ),
     Case(
-        "insert-site: the undo retires from in_scope",
+        "insert-site: the undo moves only the reason",
         INSERT_WRITER,
-        "{in_scope}, {retired}, {test}, {st}, r.change_key || ':undo:scope_status',",
-        "{retired}, {retired}, {test}, {st}, r.change_key || ':undo:scope_status',",
-        "test_the_undo_moves_in_scope_to_retired_and_nothing_else",
+        "        len(step.inserts)\n        + len(P.PROPOSAL_COLUMNS) * len(proposal_rows)",
+        "        2 * len(step.inserts)\n        + len(P.PROPOSAL_COLUMNS) * len(proposal_rows)",
+        "test_the_undo_moves_only_the_staged_reason",
         INSERT_TESTS,
     ),
     guard(
@@ -12974,7 +13449,177 @@ INSERT_SITE_CASES: list[Case] = [
         "test_accept_records_once_and_lists_the_sites",
         INSERT_TESTS,
     ),
+    # O12 (2026-11-10): the staged insert - written retired with the staged reason, no page
+    Case(
+        "insert-site: the row is planned retired",
+        INSERT_PLAN,
+        '            "scope_status": RETIRED,  # O12: written hidden, shown by the scope lane\'s '
+        "un-retire",
+        '            "scope_status": "in_scope",',
+        "test_the_row_is_planned_hidden_with_the_staged_reason",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the reason is the staged one",
+        INSERT_PLAN,
+        '        f"{D57_STAGED_PREFIX} inserted hidden as an Ancient Nerds Original by the insert '
+        'lane, "',
+        '        f"D57: inserted hidden as an Ancient Nerds Original by the insert lane, "',
+        "test_the_row_is_planned_hidden_with_the_staged_reason",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the row is written retired",
+        INSERT_WRITER,
+        "           {_lit(RETIRED)}, p.scope_reason, now(), p.parent_site_id",
+        "           'in_scope', p.scope_reason, now(), p.parent_site_id",
+        "test_the_row_is_written_retired_and_never_in_scope",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: a row that is not staged breaks the invariant",
+        INSERT_WRITER,
+        "            f\"NOT {d57_staged_sql('u')}\",\n",
+        "",
+        "test_the_rows_invariant_holds_the_row_staged_and_without_a_page",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: a row with a page breaks the invariant",
+        INSERT_WRITER,
+        "            f\"({curated_page('u')})\",\n",
+        "",
+        "test_the_rows_invariant_holds_the_row_staged_and_without_a_page",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: only a staged plan is rendered",
+        INSERT_WRITER,
+        "    if plain:",
+        "test_a_plan_without_the_staged_reason_is_never_rendered",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the undo expects the staged pair",
+        INSERT_WRITER,
+        '            f"WHERE u.id IS NULL OR u.source_id <> {_lit(P.CURATED)} OR NOT "\n'
+        "            f\"{d57_staged_sql('u')} OR u.scope_reason IS DISTINCT FROM p.scope_reason\"",
+        '            f"WHERE u.id IS NULL OR u.source_id <> {_lit(P.CURATED)} OR "\n'
+        '            "u.scope_reason IS DISTINCT FROM p.scope_reason"',
+        "test_the_undo_moves_only_the_staged_reason",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: leaving the staged rows out keeps a retired row without a reason",
+        REPO / "pipeline/utils/public_sites.py",
+        "f\"AND COALESCE({_column(alias, 'scope_reason')}, '') LIKE '{prefix}%')\"",
+        "f\"AND {_column(alias, 'scope_reason')} LIKE '{prefix}%')\"",
+        "test_leaving_the_staged_rows_out_keeps_every_other_retired_row",
+        "tests/pipeline/test_public_sites.py",
+    ),
+    # the card_stats row of each new site, created and journalled in the insert's transaction
+    Case(
+        "insert-site: the card row is counted in the journal",
+        INSERT_PLAN,
+        "            + len(self.card_columns())\n",
+        "",
+        "test_the_journal_rows_are_counted_per_write",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the card row carries its civilization",
+        INSERT_PLAN,
+        "            CARD_CIVILIZATION: self.country,\n",
+        "",
+        "test_the_card_row_leaves_no_null_the_card_stats_lane_cannot_fill",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the cards invariant holds the civilization",
+        INSERT_WRITER,
+        '            + f" OR c.{P.CARD_CIVILIZATION} IS DISTINCT FROM p.country OR c.empires IS '
+        'DISTINCT "',
+        '            + " OR c.empires IS DISTINCT "',
+        "test_the_cards_invariant_holds_the_whole_placeholder",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the card row is journalled from the created row",
+        INSERT_WRITER,
+        "    SELECT {st}, {test}, 'card_stats', t.col, ins.site_id::text, NULL, t.val,",
+        "    SELECT {st}, {test}, 'card_stats', t.col, ins.site_id::text, t.val, t.val,",
+        "test_the_card_row_is_created_and_journalled_with_the_site",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a missing card row deviates",
+        INSERT_WRITER,
+        "        if card is None:",
+        "test_a_missing_card_row_is_a_deviation",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a placeholder that differs deviates",
+        INSERT_WRITER,
+        "                if card[column] != want:",
+        "test_a_placeholder_that_differs_is_a_deviation",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: a recomputed card is no deviation",
+        INSERT_WRITER,
+        "        elif _is_placeholder(card):",
+        "        else:",
+        "test_a_card_an_api_start_recomputed_is_said_and_is_no_deviation",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a recomputed card is said",
+        INSERT_WRITER,
+        "    if qids:",
+        "test_a_card_an_api_start_recomputed_is_said_and_is_no_deviation",
+        INSERT_TESTS,
+    ),
+    guard(
+        "insert-site: a card journal row is held to the plan",
+        INSERT_WRITER,
+        '                if row["new_value"] != want:',
+        "test_a_card_journal_row_that_differs_is_a_deviation",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: accept records the recomputed cards",
+        INSERT_WRITER,
+        '        "card_rows_recomputed": recomputed_cards(step, read=read),',
+        '        "card_rows_recomputed": [],',
+        "test_accept_holds_after_an_api_start_and_records_the_recomputed_cards",
+        INSERT_TESTS,
+    ),
     # the card_stats lane after an insert (its counterfactual must know the new sites)
+    Case(
+        "insert-site: card_stats reads past a created card",
+        CARD_STATS,
+        '        if not (j["old_value"] is None and (j["run_stamp"], j["row_pk"]) in created)',
+        "        if True",
+        "test_a_card_the_insert_lane_created_is_not_a_foreign_write",
+        CARD_TESTS,
+    ),
+    Case(
+        "insert-site: card_stats reads past a creation and nothing else",
+        CARD_STATS,
+        '        if not (j["old_value"] is None and (j["run_stamp"], j["row_pk"]) in created)',
+        '        if (j["run_stamp"], j["row_pk"]) not in created',
+        "test_only_the_rows_of_a_creation_are_read_past",
+        CARD_TESTS,
+    ),
+    Case(
+        "insert-site: a creation is told by the card's own key",
+        CARD_STATS,
+        '        and j["new_value"] == j["row_pk"]\n    }\n\n\ndef basis_pointer(',
+        "    }\n\n\ndef basis_pointer(",
+        "test_only_the_rows_of_a_creation_are_read_past",
+        CARD_TESTS,
+    ),
     Case(
         "insert-site: card_stats leaves an inserted site out",
         CARD_STATS,
@@ -12990,6 +13635,31 @@ INSERT_SITE_CASES: list[Case] = [
         "and True",
         "test_a_site_the_insert_lane_created_after_the_horizon_was_not_there",
         CARD_TESTS,
+    ),
+    # the plan and the last exported round (G8); the undo's reason IndexNow reads (G7)
+    guard(
+        "insert-site: the last exported round is imported",
+        INSERT_PLAN,
+        "    if unimported:",
+        "test_the_plan_waits_for_the_import_of_the_last_exported_round",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the rounds after the import are the unimported ones",
+        INSERT_RESEARCH,
+        '    return [r["round"] for r in read_rounds(run) if r["round"] > imported]\n',
+        '    return [r["round"] for r in read_rounds(run) if r["round"] < imported]\n',
+        "test_the_plan_waits_for_the_import_of_the_last_exported_round",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the undo's reason begins with the undone prefix",
+        INSERT_WRITER,
+        '        f"{D57_UNDONE_PREFIX} ({step.rollback_stamp}): retired, never deleted - '
+        'ancient_nerds is "\n',
+        '        f"D57 undone ({step.rollback_stamp}): retired, never deleted - ancient_nerds is "\n',
+        "test_the_undo_moves_only_the_staged_reason",
+        INSERT_TESTS,
     ),
 ]
 CASES += INSERT_SITE_CASES
@@ -13511,7 +14181,7 @@ D58_CASES: list[Case] = [
     Case(
         "d58 lane: the invariant is the violation SQL",
         IDENTITY_LANES,
-        "                predicate=unretire_violation_sql(),\n",
+        "                predicate=unretire_violation_sql(d57=d57),\n",
         '                predicate="1 = 0",\n',
         "test_the_one_transition_is_a_guarded_un_retirement_and_its_rollback_retires",
         UNRETIRE_TESTS,
@@ -13592,7 +14262,7 @@ D58_CASES: list[Case] = [
     guard(
         "d58 plan: no decision names another retirement",
         UNRETIRE,
-        "        if not d50 and not reason_now.startswith((DATE_RETIRED_PREFIX, MUSEUM_PREFIX)):",
+        "        if not d50 and not reason_now.startswith(CLASS_PREFIXES):",
         "test_a_retirement_no_decision_names_is_left_alone_and_not_listed",
         UNRETIRE_TESTS,
     ),
@@ -14382,7 +15052,7 @@ D25_OWNER_CASES: list[Case] = [
              '    if row["card_qid"] is not None and row["card_qid"] != row["qid"]:',
              "test_each_gap_is_its_own_topic"),
             ("final refuses an unfinished list",
-             "    if final and (missing or unregistered or pending):",
+             "    if final and (missing or unregistered or pending or without_reason):",
              "test_a_missing_source_is_named_and_refused_when_final"),
         )
     ),
@@ -14464,6 +15134,112 @@ D25_OWNER_CASES: list[Case] = [
         '        if site is None or site["scope_status"] == RETIRED:\n            aside += 1',
         "        if False:\n            aside += 1",
         "test_a_lane_row_of_a_retired_site_is_set_aside",
+        OWNER_FINAL_TESTS,
+    ),
+    # Task A5 (2026-11-11), gap images#9: the image lanes' run lists and the research reason every
+    # site without a picture carries. Every label holds "d25-owner: a5".
+    Case(
+        "d25-owner: a5 a run row of a retired site is set aside",
+        OWNER_FINAL,
+        '        if site is None or site["scope_status"] == RETIRED:\n            aside["retired',
+        '        if False:\n            aside["retired',
+        "test_a_research_row_of_a_site_that_got_a_picture_since_is_superseded",
+        OWNER_FINAL_TESTS,
+    ),
+    guard(
+        "d25-owner: a5 a run row production answered is superseded",
+        OWNER_FINAL,
+        "        if not lane.still_open(row, site):",
+        "test_a_research_row_of_a_site_that_got_a_picture_since_is_superseded",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 a hotlink row needs the thumbnail still there",
+        OWNER_FINAL,
+        '        lambda row, site: site["images"] == 0 and not _blank(site["thumbnail_url"]),',
+        '        lambda row, site: site["images"] == 0,',
+        "test_a_hotlink_row_is_open_while_the_site_shows_only_its_thumbnail",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 a hero row names its problems",
+        OWNER_FINAL,
+        """        lambda row, site: f"{', '.join(hero_problems(row, site))}: {row['reason']}",""",
+        """        lambda row, site: str(row["reason"]),  # mutant""",
+        "test_a_hero_row_names_its_problems",
+        OWNER_FINAL_TESTS,
+    ),
+    # The review of A5 (finding 6): the last hero plan states its read, production may have moved.
+    Case(
+        "d25-owner: a5 review a hero row a later lane answered is superseded",
+        OWNER_FINAL,
+        "        lambda row, site: bool(hero_problems(row, site)),",
+        "        lambda row, site: True,",
+        "test_a_hero_row_is_open_while_the_site_still_has_a_problem_it_names",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 review a hero row names only the problems still measured",
+        OWNER_FINAL,
+        '    return [problem for problem in row["problems"] if problem in now]',
+        '    return list(row["problems"])',
+        "test_a_hero_row_is_open_while_the_site_still_has_a_problem_it_names",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 only the last hero plan is read",
+        OWNER_FINAL,
+        "    return (found[-1:] if lane.latest_only else found), found",
+        "    return found, found",
+        "test_every_research_and_hotlink_run_is_read_and_only_the_last_hero_plan",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 an earlier hero plan is registered too",
+        OWNER_FINAL,
+        "        registered += [p.relative_to(root).as_posix() for p in found]",
+        "        registered += [p.relative_to(root).as_posix() for p in read_paths]",
+        "test_the_image_lanes_lists_are_sources_and_no_longer_unregistered",
+        OWNER_FINAL_TESTS,
+    ),
+    guard(
+        "d25-owner: a5 a lane without a run list is a missing source",
+        OWNER_FINAL,
+        "        if not found:",
+        "test_a_missing_run_list_is_named_and_refused_when_final",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 a research row is a site's reason",
+        OWNER_FINAL,
+        '        and str(s["site_id"]) not in reasoned\n',
+        "",
+        "test_a_site_without_a_picture_and_without_a_research_row_is_named",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 only a shown site needs a reason",
+        OWNER_FINAL,
+        '        if s["scope_status"] != RETIRED\n        and test(s) is not None',
+        "        if test(s) is not None",
+        "test_a_site_without_a_picture_and_without_a_research_row_is_named",
+        OWNER_FINAL_TESTS,
+    ),
+    Case(
+        "d25-owner: a5 final refuses a site without its research reason",
+        OWNER_FINAL,
+        "    if final and (missing or unregistered or pending or without_reason):",
+        "    if final and (missing or unregistered or pending):",
+        "test_a_site_without_a_picture_needs_its_research_reason_to_be_final",
+        OWNER_FINAL_TESTS,
+    ),
+    # Task A6 (images#3): D82's `small` is measured beside the hero's larger live row.
+    Case(
+        "d25-owner: a6 a small hero row is measured beside its larger row",
+        OWNER_FINAL,
+        '    live = [row for row in (hero, larger) if row] or [site] * int(site["images"])',
+        '    live = [hero] if hero else [site] * int(site["images"])',
+        "test_a_small_hero_row_is_open_while_a_larger_live_row_stands_beside_the_hero",
         OWNER_FINAL_TESTS,
     ),
 ]  # fmt: skip
@@ -14833,6 +15609,303 @@ D153_CASES: list[Case] = [
     ),
 ]
 CASES += D153_CASES
+
+
+# ---------------- D57 go-live (owner decision D143, orchestrator decision O12 of 2026-11-10)
+#: The un-retire class of the staged inserts (`scope_unretire.py`, `identity_lanes.py`) and
+#: IndexNow's removed pages, which leave out a site the insert created hidden. Every label starts
+#: with "d57 unretire" or "d57 indexnow" - `mutation_sweep.py "d57 unretire" "d57 indexnow"` runs
+#: exactly these (a bare "d57" also runs the image lanes' "wd2 d57" cases).
+INDEXNOW = REPO / "pipeline/indexnow.py"
+INDEXNOW_TESTS = "tests/pipeline/test_indexnow.py"
+INDEXNOW_HIDDEN = "test_ein_versteckt_angelegter_d57_ort_ist_keine_entfernte_seite"
+PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
+D57_SHOWN = "test_a_staged_site_with_its_text_and_its_picture_is_shown"
+D57_TEXT = "test_a_staged_site_waits_for_its_checked_description"
+D57_PICTURE = "test_a_staged_site_waits_for_its_confirmed_picture"
+D57_SQL = "test_a_staged_site_passes_with_its_checked_description_and_its_confirmed_picture"
+D57_TEXT_SQL = "test_a_staged_site_passes_only_with_a_checked_description"
+D57_PICTURE_SQL = "test_a_staged_site_passes_only_with_one_live_hero_its_thumbnail_names"
+D57_STAGED_SQL = "test_a_staged_site_passes_only_when_this_write_took_its_staged_reason_away"
+_LIVE_HERO = (
+    '    return f"w.site_id = {alias}.id AND w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE"\n'
+)
+_TEXT_CHECKED = (
+    "    return f\"(trim(coalesce({a}.description, '')) <> '' AND coalesce({recorded}, false))\"\n"
+)
+
+D57_GO_LIVE_CASES: list[Case] = [
+    # -- the planner
+    Case(
+        "d57 unretire plan: the staged reason is a class",
+        UNRETIRE,
+        "CLASS_PREFIXES = (DATE_RETIRED_PREFIX, MUSEUM_PREFIX, D57_STAGED_PREFIX)\n",
+        "CLASS_PREFIXES = (DATE_RETIRED_PREFIX, MUSEUM_PREFIX)\n",
+        D57_SHOWN,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire plan: a staged site has its own decision",
+        UNRETIRE,
+        "        elif reason_now.startswith(D57_STAGED_PREFIX):\n"
+        "            decided = _staged_decision(site, entry)\n",
+        "",
+        D57_SHOWN,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire plan: a shown site is no staged one",
+        UNRETIRE,
+        '        f"{D57_REASON_PREFIX}the staged insert holds a checked description and one hero '
+        'picture "\n',
+        '        f"{D57_STAGED_PREFIX} the staged insert holds a checked description and one hero '
+        'picture "\n',
+        D57_SHOWN,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: the staged retirement is journalled",
+        UNRETIRE,
+        "        if entry is None:",
+        "test_only_a_journalled_staged_retirement_is_taken_back",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: no text, no page",
+        UNRETIRE,
+        "    if text is not None:",
+        D57_TEXT,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: a blank text is none",
+        UNRETIRE,
+        '    if not site["has_description"]:',
+        D57_TEXT,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: the text is the checked one",
+        UNRETIRE,
+        '    if site["description_sha256"] not in recorded:',
+        D57_TEXT,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: no picture, no page",
+        UNRETIRE,
+        "    if picture is not None:",
+        D57_PICTURE,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: exactly one live hero",
+        UNRETIRE,
+        "    if len(heroes) != 1:",
+        D57_PICTURE,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: the thumbnail names the hero",
+        UNRETIRE,
+        '    if site["thumbnail_url"] != wanted:',
+        D57_PICTURE,
+        UNRETIRE_TESTS,
+    ),
+    # -- the invariant
+    Case(
+        "d57 unretire sql: a D50 site is shown by D50 alone",
+        IDENTITY_LANES,
+        "        f\"(u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')} AND NOT {d50} \"\n",
+        "        f\"(u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')} \"\n",
+        D57_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: this write took the staged reason",
+        IDENTITY_LANES,
+        "        f\"AND {staged_before_sql('u')} \"\n",
+        "",
+        D57_STAGED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the reason before was the staged one",
+        IDENTITY_LANES,
+        '        f"coalesce((SELECT r.new_value = {a}.scope_reason AND r.old_value LIKE "\n'
+        "        f\"{sql_literal(D57_STAGED_PREFIX + '%')} FROM remediation_change_log r \"\n",
+        '        f"coalesce((SELECT r.new_value = {a}.scope_reason FROM remediation_change_log r "\n',
+        D57_STAGED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the latest reason row decides",
+        IDENTITY_LANES,
+        '        f"AND r.row_pk = CAST({a}.id AS text) ORDER BY r.id DESC LIMIT 1), false)"\n',
+        '        f"AND r.row_pk = CAST({a}.id AS text) ORDER BY r.id LIMIT 1), false)"\n',
+        D57_STAGED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the invariant asks the text",
+        IDENTITY_LANES,
+        "        f\"AND {description_checked_sql('u')} \"\n",
+        "",
+        D57_TEXT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: a blank text is none",
+        IDENTITY_LANES,
+        _TEXT_CHECKED,
+        '    return f"(coalesce({recorded}, false))"\n',
+        D57_TEXT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: a record hashes the text",
+        IDENTITY_LANES,
+        _TEXT_CHECKED,
+        "    return f\"(trim(coalesce({a}.description, '')) <> '')\"\n",
+        D57_TEXT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the provenance hashes it too",
+        IDENTITY_LANES,
+        "        for key in (wc4.CHECK_KEY, wc4.M.PROVENANCE_KEY)\n",
+        "        for key in (wc4.CHECK_KEY,)\n",
+        D57_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the check record hashes it too",
+        IDENTITY_LANES,
+        "        for key in (wc4.CHECK_KEY, wc4.M.PROVENANCE_KEY)\n",
+        "        for key in (wc4.M.PROVENANCE_KEY,)\n",
+        D57_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the invariant asks the picture",
+        IDENTITY_LANES,
+        "        f\"AND {picture_confirmed_sql('u')})\"\n",
+        '        ")"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: exactly one live hero",
+        IDENTITY_LANES,
+        '        f"((SELECT count(*) {live}) = 1 "\n',
+        '        f"((SELECT count(*) {live}) >= 1 "\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the thumbnail names the hero",
+        IDENTITY_LANES,
+        '        f"AND EXISTS (SELECT 1 {live} AND {a}.thumbnail_url = {path}))"\n',
+        '        f"AND EXISTS (SELECT 1 {live}))"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: a hero row carries the flag",
+        IDENTITY_LANES,
+        _LIVE_HERO,
+        '    return f"w.site_id = {alias}.id AND w.is_excluded IS NOT TRUE"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: an excluded row is no hero",
+        IDENTITY_LANES,
+        _LIVE_HERO,
+        '    return f"w.site_id = {alias}.id AND w.is_hero IS TRUE"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the hero is the site's own",
+        IDENTITY_LANES,
+        _LIVE_HERO,
+        '    return f"w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    # -- the lane
+    Case(
+        "d57 unretire lane: the premise holds the picture",
+        IDENTITY_LANES,
+        "        premise_sql=SCOPE_UNRETIRE_PREMISE_SQL if d57 else _PREMISE_BEFORE_D57,\n",
+        "        premise_sql=_PREMISE_BEFORE_D57,\n",
+        "test_the_premise_holds_the_picture_a_staged_site_is_shown_with",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire lane: the delivered wave keeps its text",
+        IDENTITY_LANES,
+        "    d57 = wave not in WAVES_BEFORE_D57\n",
+        "    d57 = True\n",
+        "test_the_delivered_wave_keeps_the_text_it_was_applied_with",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire lane: the export reads the live heroes",
+        UNRETIRE,
+        "    f\"WHERE {live_hero_sql('u')}) AS hero_files, \"\n",
+        '    "WHERE w.site_id = u.id) AS hero_files, "\n',
+        "test_the_export_is_one_read_only_snapshot_of_the_retired_and_their_journal",
+        UNRETIRE_TESTS,
+    ),
+    # -- IndexNow's removed pages
+    Case(
+        "d57 indexnow: a site created hidden is no removed page",
+        INDEXNOW,
+        '    + " AND NOT (l.old_value IS NULL AND ("\n'
+        '    + d57_staged("u")\n'
+        '    + " OR "\n'
+        '    + d57_undone("u")\n'
+        '    + "))"\n',
+        "",
+        INDEXNOW_HIDDEN,
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: a staged site is left out",
+        INDEXNOW,
+        '    + d57_staged("u")\n    + " OR "\n',
+        "",
+        INDEXNOW_HIDDEN,
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: an undone insert is left out",
+        INDEXNOW,
+        '    + " OR "\n    + d57_undone("u")\n',
+        "",
+        INDEXNOW_HIDDEN,
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: only the creating row is left out",
+        INDEXNOW,
+        '    + " AND NOT (l.old_value IS NULL AND ("\n',
+        '    + " AND NOT (("\n',
+        "test_ein_gezeigter_und_wieder_versteckter_d57_ort_wird_gemeldet",
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: the undone predicate reads the undo's reason",
+        PUBLIC_SITES,
+        "    return _retired_as(alias, D57_UNDONE_PREFIX)\n",
+        "    return _retired_as(alias, D57_STAGED_PREFIX)\n",
+        "test_d57_undone_is_a_retired_row_with_the_undos_reason",
+        "tests/pipeline/test_public_sites.py",
+    ),
+]
+CASES += D57_GO_LIVE_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

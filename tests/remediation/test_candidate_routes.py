@@ -495,6 +495,29 @@ class TestThePopulation:
         assert f"AND u.id IN ('{SITE}'::uuid)" in PP.population_sql([SITE])
         assert "u.id IN" not in PP.population_sql()
 
+    SHOWN = "   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'\n"
+
+    def test_the_research_reads_a_staged_d57_site_that_its_site_list_names(self) -> None:
+        """O12 (2026-11-10): a site the insert lane created hidden needs its picture before the
+        scope lane shows it; the retired sites of every other reason stay out."""
+        from mechanical.lane import d57_staged_sql
+
+        named = PP.population_sql([SITE])
+        assert (
+            "   WHERE u.source_id = 'ancient_nerds' "
+            f"AND (u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})\n"
+        ) in named
+        assert self.SHOWN not in named
+
+    def test_a_population_without_a_site_list_never_reads_a_staged_site(self) -> None:
+        plain = PP.population_sql()
+        assert self.SHOWN in plain and "D57 staged" not in plain
+
+    def test_the_credit_lane_never_reads_a_staged_site(self) -> None:
+        for sites in (None, [SITE]):
+            credit = PP.population_sql(sites, kind=PP.COMMONS_THUMBNAIL)
+            assert self.SHOWN in credit and "D57 staged" not in credit
+
     def test_the_single_item_and_title_come_from_the_external_ids(self) -> None:
         record = PP.site_record(read_line())
         assert (record["qid"], record["qid_conflict"], record["enwiki_title"]) == (
@@ -730,7 +753,7 @@ class TestThePool:
                 "meta": {"site_id": "a", "file": "s.jpg"},
             }
         ]
-        got = PL.denied_pairs(self._old(), pre, dep, rck, {"a"})
+        got = PL.denied_pairs(self._old(), pre, dep, rck, {"a"}, {})
         assert [(d["file"], d["verdict"]) for d in got] == [
             ("p.jpg", "not usable (map_or_document)"),
             ("q.jpg", "other_site"),
@@ -738,19 +761,27 @@ class TestThePool:
         ]
         assert got[2]["shows"] == "a wall of another town"
 
-    def test_a_pair_claude_has_not_judged_yet_is_an_error(self) -> None:
-        with pytest.raises(PL.PoolError, match="Claude has not judged it"):
-            PL.denied_pairs(self._old()[:1], [], [], [], {"a"})
+    def test_a_live_hero_claude_has_not_judged_is_an_error(self) -> None:
+        with pytest.raises(PL.PoolError, match="is a live hero and Claude has not judged it"):
+            PL.denied_pairs(self._old()[:1], [], [], [], {"a"}, {"a": {"P.jpg"}})
+
+    def test_an_old_depicts_no_page_serves_needs_no_judgement(self) -> None:
+        """A D17 stage searches afresh: an old `depicts` file of one of its sites that the search
+        did not find again was judged by nobody - and is no page's picture, so it is no pair to
+        deny and no error (the site's hero, if it has one by now, is another file)."""
+        assert PL.denied_pairs(self._old()[:1], [], [], [], {"a"}, {}) == []
+        assert PL.denied_pairs(self._old()[:1], [], [], [], {"a"}, {"a": {"Q.jpg"}}) == []
 
     def test_only_a_pair_minimax_called_depicts_can_be_denied(self) -> None:
         old = [{"site_id": "a", "file": "p.jpg", "verdict": "other_site"}]
-        assert PL.denied_pairs(old, [], [], [], {"a"}) == []
+        assert PL.denied_pairs(old, [], [], [], {"a"}, {"a": {"P.jpg"}}) == []
 
     def test_a_written_hero_outside_the_pool_is_judged_by_its_recheck_alone(self) -> None:
         """The 178 written heroes sit at sites that serve a picture now: no prefilter row, no depicts
         row, and not an error - the re-check is their only judge."""
         old = [{"site_id": "a", "file": f, "verdict": "depicts"} for f in ("w.jpg", "x.jpg")]
-        # a depicts pair outside the pool that nobody re-checked is no pair to deny and no error
+        # a depicts pair outside the pool that nobody re-checked is no pair to deny and no error,
+        # even where it is a live hero (`flow.denied` refuses an unchecked old target by name)
         old.append({"site_id": "z", "file": "z.jpg", "verdict": "depicts"})
         rck = [
             {
@@ -761,14 +792,14 @@ class TestThePool:
             }
             for file, verdict in (("w.jpg", "other_site"), ("x.jpg", "depicts"))
         ]
-        got = PL.denied_pairs(old, [], [], rck, set())
+        got = PL.denied_pairs(old, [], [], rck, set(), {"z": {"Z.jpg"}})
         assert [(d["file"], d["verdict"]) for d in got] == [("w.jpg", "rejected by the re-check")]
 
     def test_a_depicts_the_claude_role_confirmed_needs_no_recheck_to_stay_undenied(self) -> None:
         dep = [
             {"site_id": "a", "file": "p.jpg", "verdict": "depicts", "note": "n", "answered_by": "d"}
         ]
-        assert PL.denied_pairs(self._old()[:1], [], dep, [], {"a"}) == []
+        assert PL.denied_pairs(self._old()[:1], [], dep, [], {"a"}, {"a": {"P.jpg"}}) == []
 
     def test_a_denied_pair_is_a_hero_only_where_the_page_serves_it(self, tmp_path: Path) -> None:
         run = tmp_path / "run"

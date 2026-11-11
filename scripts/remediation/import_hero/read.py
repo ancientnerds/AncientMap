@@ -10,11 +10,23 @@ Two reasons it cannot reuse WD2's read (`served_image.state.IMAGES_SQL`):
 
 Three read-only statements, the same transport as the rest of the remediation
 (`persist_verdicts.read_rows`). Nothing is written to production.
+
+**A staged D57 site** (orchestrator decision O12, 2026-11-10: inserted hidden, retired with a reason
+beginning `D57 staged:`, `mechanical.lane.d57_staged_sql`) gets its first picture before the scope
+lane shows it, so the read holds it and its rows with the shown sites and not among the retired
+ones (`IN_THE_READ`), and every site row says which of the two it is (`staged`, the column
+`SITES_SQL` reads). A staged site gets a row only from a claim of the picture research
+(`candidate_search.judge.insert_claims`, whose population names a staged site only from its
+`--sites` list): the 2025 import's join leaves it out (`plan.join_import`, `staged`), because the
+owner's decision that the import's picture is the hero was made for the sites the platform shows
+and no image role judged that picture. A read that cannot say which of its sites is staged is
+refused where the join asks.
 """
 
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -25,17 +37,22 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
         sys.path.insert(0, str(_path))
 
 from gallery_audit import chunk_writer as CW  # noqa: E402
+from mechanical.lane import d57_staged_sql  # noqa: E402
 from served_image.state import StateError, json_text, sha256_text, write_text_once  # noqa: E402
 
 READ = "READ.json"
 
-#: The curated sites the platform shows, with the two keys the join needs: `source_url` and the
-#: name the folded-title fallback compares.
-SITES_SQL = """SELECT row_to_json(t) FROM (
+#: The sites the lane reads: every curated site the platform shows, and the staged D57 inserts.
+IN_THE_READ = f"(u.scope_status IS DISTINCT FROM 'retired' OR {d57_staged_sql('u')})"
+
+#: The curated sites the platform shows (and the staged ones), with the two keys the join needs:
+#: `source_url` and the name the folded-title fallback compares. `staged` is the read's scope
+#: column: true for a staged D57 insert, false for a site the platform shows.
+SITES_SQL = f"""SELECT row_to_json(t) FROM (
   SELECT u.id::text AS id, u.name, u.country, u.site_type, u.lat, u.lon,
-         u.thumbnail_url, u.source_url
+         u.thumbnail_url, u.source_url, {d57_staged_sql("u")} AS staged
     FROM unified_sites u
-   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'
+   WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}
    ORDER BY u.id
 ) t;"""
 
@@ -45,20 +62,21 @@ SITES_SQL = """SELECT row_to_json(t) FROM (
 #: `license` and `license_url` are what a fetch overwrites, so the read has to hold their old
 #: values too - the writer's guard 3 refuses a write whose planned old value differs from
 #: production, and a lane may not skip a column it cannot state.
-IMAGES_SQL = """SELECT row_to_json(t) FROM (
+IMAGES_SQL = f"""SELECT row_to_json(t) FROM (
   SELECT w.id, w.site_id::text AS site_id, w.filename, w.title, w.commons_page_url,
          w.original_url, w.author, w.author_url, w.license, w.license_url,
          w.is_hero, w.is_lead, w.is_excluded, w.sort_order, w.file_size_bytes,
          w.width, w.height
     FROM wiki_images w JOIN unified_sites u ON u.id = w.site_id
-   WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'
+   WHERE u.source_id = 'ancient_nerds' AND {IN_THE_READ}
    ORDER BY w.site_id, w.id
 ) t;"""
 
 #: The curated sites that are retired: the platform does not show them, so the lane has no say.
-RETIRED_SQL = """SELECT row_to_json(t) FROM (
+#: A staged D57 site is not one of them (`state.load_read` refuses a site both read and retired).
+RETIRED_SQL = f"""SELECT row_to_json(t) FROM (
   SELECT u.id::text AS id FROM unified_sites u
-   WHERE u.source_id = 'ancient_nerds' AND u.scope_status = 'retired'
+   WHERE u.source_id = 'ancient_nerds' AND NOT {IN_THE_READ}
    ORDER BY u.id
 ) t;"""
 
@@ -71,7 +89,8 @@ READ_AT_SQL = """SELECT row_to_json(t) FROM (
 
 
 def read_production() -> dict[str, Any]:
-    """Production as the plan needs it: the shown sites, their rows, the retired ids."""
+    """Production as the plan needs it: the shown sites (and the staged ones), their rows, the
+    retired ids."""
     sites = CW.pv.read_rows(SITES_SQL)
     if not sites:
         raise StateError("the read holds no curated site: the scope guard is in the statement")
@@ -81,6 +100,22 @@ def read_production() -> dict[str, Any]:
         "images": CW.pv.read_rows(IMAGES_SQL),
         "retired": [row["id"] for row in CW.pv.read_rows(RETIRED_SQL)],
     }
+
+
+def staged(data: Mapping[str, Any]) -> frozenset[str]:
+    """The ids of the staged D57 sites among the read's sites, from each row's `staged` column.
+
+    A read whose rows carry no such column was made by code that does not read it. Its sites may
+    be the shown ones alone or may hold staged ones unmarked, and the read cannot say which: it is
+    refused by name, not taken as holding none."""
+    unmarked = [str(site["id"]) for site in data["sites"] if "staged" not in site]
+    if unmarked:
+        raise StateError(
+            f"{len(unmarked)} site(s) of the read carry no `staged` column (first {unmarked[0]}): "
+            "the read was made by code that does not read it and cannot say which of its sites is "
+            "a staged D57 insert - read again into a new run directory"
+        )
+    return frozenset(str(site["id"]) for site in data["sites"] if site["staged"])
 
 
 def write_read(path: Path, data: dict[str, Any]) -> str:
