@@ -610,6 +610,172 @@ class TestTheUndo:
             W.close_reverted(1, read=lambda _sql: export_for(lives, journal), root=root)
 
 
+# ------------------------------------------------------------------------------ the D50 clear
+YONAGUNI = "01296632-a2a1-4610-a4a9-d0c3be77b788"
+RICHAT = "84b456ff-0b44-4d75-92a4-5cbe22026b95"
+BALTIC = "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded"
+D50_RUN = "d50-card-clear-2026-11-12"
+D50_TEXT = "A rock formation off Yonaguni; Kimura reads it as a monument, geologists do not."
+D50_CARD = "Still fiercely contested: natural geology or submerged ruins?"
+D50_SITES = L.D50_DISPUTED_SITES
+
+
+def d50_live(site_id: str, **over: Any) -> W.Live:
+    """A D50 site as production holds it today: retired, a card no teaser run wrote."""
+    base = W.Live(
+        site_id=site_id,
+        name=D50_SITES[site_id],
+        description=D50_TEXT,
+        scope_status="retired",
+        raw_data=json.dumps({"description_citations": []}),
+        has_card_row=True,
+        card=D50_CARD,
+    )
+    return replace(base, **over)
+
+
+def d50_lives(**per_site: dict[str, Any]) -> dict[str, W.Live]:
+    """The six D50 sites; `per_site` changes one by its id."""
+    return {site_id: d50_live(site_id, **per_site.get(site_id, {})) for site_id in D50_SITES}
+
+
+def d50_outcome(site_id: str = YONAGUNI, **per_site: dict[str, Any]) -> dict[str, Any]:
+    outcomes, _without_card = W.d50_clear_outcomes(d50_lives(**per_site))
+    return next(o for o in outcomes if o["site_id"] == site_id)
+
+
+class TestTheD50Clear:
+    """Orchestrator decision O17 (2026-11-10): the cards of the six retired D50 sites are cleared
+    the D47 way - an owner run of `cleared` outcomes, planned as a step - so the un-retire needs
+    no new card. No other outcome of a retired site is planned."""
+
+    def test_the_run_holds_one_cleared_outcome_per_card_in_the_shape_of_the_d47_run(self) -> None:
+        teaser_raw = json.dumps({"_card_provenance": T.teaser(T.SKARA)}, ensure_ascii=False)
+        lives = d50_lives(**{RICHAT: {"raw_data": teaser_raw}, BALTIC: {"card": None}})
+        outcomes, without_card = W.d50_clear_outcomes(lives)
+        assert without_card == [BALTIC]
+        assert [o["site_id"] for o in outcomes] == sorted(set(D50_SITES) - {BALTIC})
+        by_site = {o["site_id"]: o for o in outcomes}
+        assert by_site[YONAGUNI] == {
+            "attempts": 0,
+            "card": None,
+            "desc_sha256": T.sha(D50_TEXT),
+            "findings": [{"card": D50_CARD, "reasons": [W.D50_CLEAR_FINDING]}],
+            "name": "Yonaguni Monument",
+            "provenance": None,
+            "reason": "owner-o17-d50-disputed",
+            "seeded_card_sha256": T.sha(D50_CARD),
+            "seeded_run": None,
+            "site_id": YONAGUNI,
+            "status": W.CLEARED,
+            "verification": None,
+            "verifications": [],
+            "writer": None,
+        }
+        assert by_site[RICHAT]["seeded_run"] == "wb-test", "the run of its teaser provenance"
+        assert "O17" in W.D50_CLEAR_FINDING and "D50" in W.D50_CLEAR_FINDING
+
+    def test_a_read_that_lost_a_d50_site_stops_the_run(self) -> None:
+        lives = d50_lives()
+        del lives[RICHAT]
+        with pytest.raises(MP.PlanError, match=f"no curated row of the D50 site.s. {RICHAT}"):
+            W.d50_clear_outcomes(lives)
+
+    def test_a_retired_d50_site_is_planned_for_its_clear(self) -> None:
+        prov, card = W.classify(d50_outcome(), d50_live(YONAGUNI), {}, D50_RUN)
+        assert prov is None, "no teaser provenance and no Phase-5 key: nothing to remove"
+        assert (card.old_value, card.new_value) == (D50_CARD, None)
+        assert card.rule == "card-clear-owner-o17-d50-disputed"
+        assert card.premise == f"||{T.sha(D50_TEXT)}"
+        assert card.evidence == (
+            {
+                "source": f"lane WB run {D50_RUN}: owner-o17-d50-disputed",
+                "url": f"output/remediation/teaser/runs/{D50_RUN}/OUTCOMES.jsonl",
+                "quote": W.D50_CLEAR_FINDING,
+            },
+        )
+
+    def test_its_teaser_provenance_goes_with_the_card(self) -> None:
+        raw = json.dumps({"_card_provenance": T.teaser(T.SKARA), "k": 1}, ensure_ascii=False)
+        per_site = {RICHAT: {"raw_data": raw}}
+        cleared = d50_outcome(RICHAT, **per_site)
+        prov, card = W.classify(cleared, d50_lives(**per_site)[RICHAT], {}, D50_RUN)
+        assert json.loads(prov.new_value) == {"k": 1} and card.new_value is None
+
+    def test_no_other_outcome_of_a_retired_site_is_planned(self) -> None:
+        """The exception is the D50 reason on a D50 site: another clear of the same retired site,
+        and an accepted card or a clear of any other retired site, stay listed `retired`."""
+        other_reason = {**d50_outcome(), "reason": "recheck-contradicted"}
+        assert W.classify(other_reason, d50_live(YONAGUNI), {}, D50_RUN).reason == W.SITE_RETIRED
+        retired = live(scope_status="retired")
+        assert W.classify(outcome(), retired, {}, "wb-test").reason == W.SITE_RETIRED
+        plain = outcome(status=W.CLEARED)
+        assert W.classify(plain, retired, {}, "wb-test").reason == W.SITE_RETIRED
+
+    def test_the_d50_reason_clears_a_d50_site_s_named_card_and_nothing_else(self) -> None:
+        cleared = d50_outcome()
+        elsewhere = {**cleared, "site_id": T.SKARA, "name": "Skara Brae"}
+        with pytest.raises(MP.PlanError, match="clears the card of a D50 site"):
+            W.classify(elsewhere, live(scope_status="retired"), {}, D50_RUN)
+        unnamed = {k: v for k, v in cleared.items() if k != "seeded_card_sha256"}
+        with pytest.raises(MP.PlanError, match="names the card it"):
+            W.classify(unnamed, d50_live(YONAGUNI), {}, D50_RUN)
+        rewritten = d50_live(YONAGUNI, card="A card written since the run was built.")
+        assert W.classify(cleared, rewritten, {}, D50_RUN).reason == W.CARD_CHANGED
+        moved = d50_live(YONAGUNI, description="A dispute text lane E wrote since.")
+        assert W.classify(cleared, moved, {}, D50_RUN).reason == W.STALE_DESCRIPTION
+
+    def test_the_run_is_written_once_from_one_read_and_planned_as_a_step(
+        self, tmp_path: Path
+    ) -> None:
+        lives = list(d50_lives().values())
+        sent: list[str] = []
+
+        def read(sql: str) -> str:
+            sent.append(sql)
+            return export_for(lives)
+
+        runs = tmp_path / "runs"
+        result = W.write_d50_clear(D50_RUN, read=read, runs=runs)
+        assert result["cleared"] == dict(sorted(D50_SITES.items()))
+        assert result["without_card"] == [] and result["dir"] == str(runs / D50_RUN)
+        assert "REPEATABLE READ READ ONLY" in sent[0]
+        assert all(f"'{site_id}'" in sent[0] for site_id in D50_SITES)
+        assert (runs / D50_RUN / "EXPORT.jsonl").read_text(encoding="utf-8") == export_for(lives)
+        outcomes = W.read_jsonl(runs / D50_RUN / "OUTCOMES.jsonl")
+        assert outcomes == W.d50_clear_outcomes(d50_lives())[0]
+        with pytest.raises(MP.PlanError, match="a run is written once"):
+            W.write_d50_clear(D50_RUN, read=read, runs=runs)
+        assert len(sent) == 1, "an existing run is refused before production is read"
+        root = tmp_path / "mechanical_teaser"
+        step = W.plan_step(D50_RUN, 1, read=read, root=root, outcomes=outcomes)
+        assert step["skipped"] == {} and step["card"]["cells"] == 6 and step["prov"]["cells"] == 0
+        rows = A.load_records(root / "s001" / W.CARD / "PLAN.jsonl")
+        A.validate_records(rows, lane=CARD)
+        assert {r.new_value for r in rows} == {None}
+        undo = (root / "s001" / W.CARD / "ROLLBACK.sql").read_text(encoding="utf-8")
+        assert "wb-teaser-card-s001-rollback" in undo
+
+    def test_a_run_with_nothing_to_clear_or_another_name_is_not_written(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        bare = [replace(site, card=None) for site in d50_lives().values()]
+        with pytest.raises(MP.PlanError, match="nothing to clear"):
+            W.write_d50_clear(D50_RUN, read=lambda _sql: export_for(bare), runs=tmp_path)
+        assert not (tmp_path / D50_RUN).exists()
+
+        def never(_sql: str) -> str:
+            raise AssertionError("a refused name must not read production")
+
+        for name in ("owner-d50-2026-11-12", "d50-card-clear", "wb-shorts-wave-a5-2026-11-12"):
+            with pytest.raises(MP.PlanError, match="is not a run name like"):
+                W.write_d50_clear(name, read=never, runs=tmp_path)
+        assert W.main(["d50-clear", "--run", "soon"]) == 1
+        printed = capsys.readouterr()
+        assert "REFUSED: 'soon' is not a run name like" in printed.err
+        assert "WRITE_EXIT=1" in printed.out
+
+
 # ------------------------------------------------------------------------------ no card file
 class TestNoCardFile:
     """D25: the database is the one copy of a card text. `card_stats.card_description` is written by

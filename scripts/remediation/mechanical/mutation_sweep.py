@@ -4936,7 +4936,7 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "a site retired since the run",
-                "    if live.scope_status == RETIRED:",
+                "    if live.scope_status == RETIRED and not d50_clear:",
                 _TEASER_CHANGED,
             ),
             ("a site without a card row", "    if not live.has_card_row:", _TEASER_CHANGED),
@@ -15025,6 +15025,195 @@ D20_START_CASES: list[Case] = [
     ),
 ]
 CASES += D20_START_CASES
+
+
+# ------------------------------- the un-retire of the D50 sites: O17 and D84/D149 (2026-11-11)
+#: What the six D50 sites need to be shown again (code gaps wn-and-disputes#4 and #5). O17: their
+#: cards are cleared the D47 way - the owner run `teaser.py d50-clear` builds, and the one outcome
+#: of a retired site the card planner plans (`teaser.classify`). D84 and D149: the Baltic Sea
+#: Anomaly holds no country - the `country-d84` lane (`lane.COUNTRY_D84`, `country_d84.py`), and
+#: the un-retire's gate for it (`identity_lanes.unretire_violation_sql`, `scope_unretire.py`).
+#: Every label starts with "d50 clear" or "d84": `mutation_sweep.py "d50 clear" d84` runs exactly
+#: these.
+COUNTRY_D84_PY = MECHANICAL / "country_d84.py"
+D84_TESTS = "tests/remediation/test_mechanical_country_d84.py"
+_D50_CLEAR_RUN_SHAPE = "test_the_run_holds_one_cleared_outcome_per_card_in_the_shape_of_the_d47_run"
+_D50_CLEAR_NAMED = "test_the_d50_reason_clears_a_d50_site_s_named_card_and_nothing_else"
+_D50_CLEAR_WRITTEN = "test_the_run_is_written_once_from_one_read_and_planned_as_a_step"
+_D50_CLEAR_REFUSED = "test_a_run_with_nothing_to_clear_or_another_name_is_not_written"
+_D84_WAITS = "test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied"
+_D84_INVARIANT = "test_a_planned_site_holds_no_country_and_is_one_d84_names"
+_D84_REFUSED = "test_each_check_refuses_on_its_own"
+_D84_STOPPED = "test_a_row_the_read_lost_and_a_lane_that_has_written_stop_the_plan"
+
+D50_UNRETIRE_CASES: list[Case] = [
+    # -- O17: the card planner
+    Case(
+        "d50 clear: only the D50 reason plans a retired site",
+        TEASER,
+        '    d50_clear = outcome["status"] == CLEARED and outcome["reason"] == D50_CLEAR_REASON\n',
+        '    d50_clear = outcome["status"] == CLEARED\n',
+        "test_no_other_outcome_of_a_retired_site_is_planned",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: a retired D50 site is planned for its clear",
+        TEASER,
+        "    if live.scope_status == RETIRED and not d50_clear:",
+        "    if live.scope_status == RETIRED:",
+        "test_a_retired_d50_site_is_planned_for_its_clear",
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: the reason is a D50 site's alone",
+        TEASER,
+        '    if d50_clear and (site_id not in D50_DISPUTED_SITES or "seeded_card_sha256" not in outcome):',
+        '    if d50_clear and "seeded_card_sha256" not in outcome:',
+        _D50_CLEAR_NAMED,
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: the clear names the card it clears",
+        TEASER,
+        '    if d50_clear and (site_id not in D50_DISPUTED_SITES or "seeded_card_sha256" not in outcome):',
+        "    if d50_clear and site_id not in D50_DISPUTED_SITES:",
+        _D50_CLEAR_NAMED,
+        TEASER_WRITE_TESTS,
+    ),
+    # -- O17: the owner run
+    Case(
+        "d50 clear: the outcome pins the card that was read",
+        TEASER,
+        '                "seeded_card_sha256": CP.text_sha256(site.card),\n',
+        '                "seeded_card_sha256": CP.text_sha256(site.name),\n',
+        _D50_CLEAR_RUN_SHAPE,
+        TEASER_WRITE_TESTS,
+    ),
+    Case(
+        "d50 clear: the outcome names the run of the teaser provenance",
+        TEASER,
+        '                "seeded_run": None if teaser is None else teaser["run"],\n',
+        '                "seeded_run": None,\n',
+        _D50_CLEAR_RUN_SHAPE,
+        TEASER_WRITE_TESTS,
+    ),
+    *(
+        guard(f"d50 clear: {label}", TEASER, needle, test, TEASER_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a site without a card text gets no outcome",
+                "        if site.card is None:",
+                _D50_CLEAR_RUN_SHAPE,
+            ),
+            (
+                "a read without a D50 site stops the run",
+                "    if missing:",
+                "test_a_read_that_lost_a_d50_site_stops_the_run",
+            ),
+            ("a run is written once", "    if target.exists():", _D50_CLEAR_WRITTEN),
+            (
+                "the run is named as a D50 clear",
+                "    if D50_CLEAR_RUN.match(run) is None:",
+                _D50_CLEAR_REFUSED,
+            ),
+            ("nothing to clear writes no run", "    if not outcomes:", _D50_CLEAR_REFUSED),
+        )
+    ),
+    # -- D84, D149: the un-retire's gate
+    Case(
+        "d84 gate: the invariant shows a D84 site only without a country",
+        IDENTITY_LANES,
+        "        f\"AND (u.country IS NULL OR NOT {d84_site_sql('u')}) \"\n",
+        "",
+        "test_a_site_d84_leaves_without_a_country_passes_only_without_one",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d84 gate: the plan waits for the emptied country",
+        UNRETIRE,
+        "    if country is not None:",
+        _D84_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d84 gate: only a D84 site is asked for no country",
+        UNRETIRE,
+        '    if str(site["id"]) not in D84_NO_COUNTRY_SITES or site["country"] is None:',
+        '    if site["country"] is None:',
+        _D84_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    # -- D84: the lane
+    Case(
+        "d84 lane: a planned site holds no country",
+        LANE,
+        "            predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
+        "            predicate=f\"NOT {d84_site_sql('u')}\",\n",
+        _D84_INVARIANT,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: only a site D84 names is planned",
+        LANE,
+        "            predicate=f\"u.country IS NOT NULL OR NOT {d84_site_sql('u')}\",\n",
+        '            predicate="u.country IS NOT NULL",\n',
+        _D84_INVARIANT,
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: the cell is emptied and never filled",
+        LANE,
+        '    cells=(Column("country", "character varying", max_chars=100, clears=True),),\n',
+        '    cells=(Column("country", "character varying", max_chars=100, clears=True, '
+        "fills_null=True),),\n",
+        "test_the_clear_and_its_reversal_are_valid_and_nothing_fills_a_null",
+        D84_TESTS,
+    ),
+    Case(
+        "d84 lane: the residual is a D84 site that holds a country",
+        LANE,
+        "    f\"({d84_site_sql('unified_sites')} AND country IS NOT NULL)\",\n",
+        "    f\"({d84_site_sql('unified_sites')})\",\n",
+        "test_the_residual_counts_a_d84_site_that_still_holds_a_country",
+        D84_TESTS,
+    ),
+    # -- D84: the planner
+    Case(
+        "d84 plan: what is written is no country",
+        COUNTRY_D84_PY,
+        "            new_value=None,\n",
+        '            new_value="International waters",\n',
+        "test_the_retired_row_is_emptied_on_its_name_and_point",
+        D84_TESTS,
+    ),
+    *(
+        guard(f"d84 plan: {label}", COUNTRY_D84_PY, needle, test, D84_TESTS)
+        for label, needle, test in (
+            ("a curated row only", '    if row["source_id"] != P.CURATED_SOURCE:', _D84_REFUSED),
+            ("the row is still the site D84 names", '    if row["name"] != name:', _D84_REFUSED),
+            ("a row without a country is listed", '    if row["country"] is None:', _D84_REFUSED),
+            ("the row holds the country D84 empties", '    if row["country"] != held:', _D84_REFUSED),
+            (
+                "a journal that does not end at the live value",
+                "    if broken is not None:",
+                "test_a_journal_that_does_not_end_at_the_live_value_refuses",
+            ),
+            ("a lane that has written is not re-planned", "    if written:", _D84_STOPPED),
+            ("a row the read lost stops the plan", "        if site_id not in sites:", _D84_STOPPED),
+            (
+                "a delivered plan is never replaced",
+                '    if (out / "PLAN.jsonl").exists():',
+                "test_write_keeps_the_read_and_delivers_the_plan_with_its_undo",
+            ),
+            (
+                "an empty plan is not delivered",
+                "    if not plan.changes:",
+                "test_a_read_that_leaves_nothing_to_write_delivers_no_plan",
+            ),
+        )
+    ),
+]
+CASES += D50_UNRETIRE_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

@@ -45,10 +45,16 @@ site (`wc.enrich.dispute_record_problems`), and the record that run left on the 
 (`raw_data._description_enrichment`) kept a sentence of each position (`dispute_a`, `dispute_b`) -
 kept after the verification, not merely written: a text that names one position is none D21
 allows. Until then each is skipped `d50-no-dispute-text`, with what is missing. Its card
-must not assert the claim either: a D50 site with a card text comes back only once the latest
-journal row of its `card_stats.card_description` is later than the one of its dispute text (the
-card lane wrote the card in the knowledge of the dispute, D21); until then it is skipped
-`d50-card-not-cleared`. Premise and invariant hold the card's md5 and the same test.
+must not assert the claim either: a D50 site comes back without a card text (orchestrator decision
+O17 of 2026-11-10: the six cards are cleared the D47 way, `mechanical/teaser.py d50-clear`, and
+the un-retire needs no new card), or with one whose latest journal row is later than the one of
+its dispute text (the card lane wrote the card in the knowledge of the dispute, D21); until then
+it is skipped `d50-card-not-cleared`. Premise and invariant hold the card's md5 and the same test.
+And a site D84 leaves without a country (`lane.D84_NO_COUNTRY_SITES`: the Baltic Sea Anomaly,
+international waters) comes back only once its `country` is NULL (`country_d84.py`, the
+`country-d84` lane): shown with a country it would get a country page and a `/sites/` route,
+which D149 rules out ("globe only"). Until then it is skipped `d84-country-not-cleared`; the
+premise holds the country and the invariant the same test.
 
 **Waves.** A write lands at most `MAX_SITES` sites and a run stamp is applied once: `write --wave
 <label>` plans the first `MAX_SITES` sites (by id) of a fresh export into
@@ -96,6 +102,7 @@ from mechanical.identity_lanes import (  # noqa: E402
 )
 from mechanical.lane import (  # noqa: E402
     D50_DISPUTED_SITES,
+    D84_NO_COUNTRY_SITES,
     NON_SITE_TYPES,
     NOT_A_SITE_PREFIX,
     Lane,
@@ -287,7 +294,20 @@ def card_problem(site: Mapping[str, Any], written_id: int) -> str | None:
     )
     return (
         f"its card was written {when} the dispute text (remediation_change_log:{written_id}): D50 "
-        "shows it only once no card asserts the claim - the card lane (D21) rewrites the card first"
+        "shows it only once no card asserts the claim - the card is cleared first (O17: "
+        "`mechanical/teaser.py d50-clear`)"
+    )
+
+
+def country_problem(site: Mapping[str, Any]) -> str | None:
+    """Why a site D84 leaves without a country may not be shown yet, or None: it still holds one
+    (`identity_lanes.unretire_violation_sql`, the invariant's form of the same test)."""
+    if str(site["id"]) not in D84_NO_COUNTRY_SITES or site["country"] is None:
+        return None
+    return (
+        f"it holds the country {site['country']!r}: D84 leaves it without one and D149 shows it on "
+        "the globe only - the `country-d84` lane (`mechanical/country_d84.py`) empties the cell "
+        "first"
     )
 
 
@@ -478,6 +498,9 @@ def _dispute_decision(
     card = card_problem(site, int(written["id"]))
     if card is not None:
         return _skip(site, "d50-card-not-cleared", card)
+    country = country_problem(site)
+    if country is not None:
+        return _skip(site, "d84-country-not-cleared", country)
     brief = written["dispute"]
     reason = (
         f"{D50_REASON_PREFIX}shown as disputed; its description states the scholarly position "

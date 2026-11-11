@@ -1436,13 +1436,18 @@ NEW_LANES = [
 #: L5 name lane (`scripts/remediation/l5/plan.py`, HUMAN_ONLY B1-N and Nr. 7, 2026-09-26). Its
 #: statements are tested on a fabricated plan (`name_l5_plan`).
 AWAITING_ANSWERS = frozenset({"name-l5"})
+#: A lane whose plan its driver writes from a fresh production read, so none is delivered yet: the
+#: D84 country lane (`mechanical/country_d84.py --write`, after lane E wrote the D50 texts and before
+#: the D50 un-retire wave). Its statements are tested on a fabricated plan (`country_d84_plan`).
+AWAITING_ITS_WRITE = frozenset({"country-d84"})
 
 
 class TestTheDeliveredLanes:
     """The committed statements of the lanes not yet applied are exactly what `--emit` renders."""
 
     def test_every_new_lane_has_a_delivered_plan(self) -> None:
-        assert set(NEW_LANES) | AWAITING_ANSWERS == {n for n in L.LANES if n != L.T05.name}
+        awaited = AWAITING_ANSWERS | AWAITING_ITS_WRITE
+        assert set(NEW_LANES) | awaited == {n for n in L.LANES if n != L.T05.name}
 
     @pytest.mark.parametrize("name", NEW_LANES)
     def test_the_committed_statements_are_the_plan_s_own(self, name: str) -> None:
@@ -1520,6 +1525,8 @@ def lane_plan(directory: Path, lane: L.Lane) -> tuple[list[A.ChangeRecord], Path
         return card_stats_plan(directory, lane)
     if lane is L.NAME_L5:
         return name_l5_plan(directory)
+    if lane is L.COUNTRY_D84:
+        return country_d84_plan(directory)
     if L.SCOPE_REVIEW_LANE.match(lane.name):
         return scope_review_plan(directory, lane)
     plan_path = directory / "PLAN.jsonl"
@@ -1601,6 +1608,40 @@ def name_l5_plan(directory: Path) -> tuple[list[A.ChangeRecord], Path]:
         for site, column, old, new in cells
     )
     plan = P.Plan(changes=changes, skipped=(), built_at="2026-09-26T00:00:00+00:00", lane=L.NAME_L5)
+    plan_path = directory / "PLAN.jsonl"
+    P.write_plan_jsonl(plan, plan_path)
+    P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)
+    return A.load_records(plan_path), plan_path
+
+
+def country_d84_plan(directory: Path) -> tuple[list[A.ChangeRecord], Path]:
+    """The D84 country lane's plan, fabricated: its driver writes it from a fresh production read
+    (`country_d84.py --write`), so no plan is delivered yet. The cell that planner writes - the
+    Baltic Sea Anomaly's country emptied, on its name and point - and a second cell of the same
+    shape, which the real plan never holds (D84 names one site, and the lane's invariant refuses
+    any other): the commit-state tests need a plan whose journal can be partial."""
+    (site_id, (name, held)) = next(iter(L.D84_NO_COUNTRY_SITES.items()))
+    changes = tuple(
+        P.Verdict(
+            site_id=site,
+            site_name=name,
+            ok=True,
+            old_value=held,
+            new_value=None,
+            rule="d84-no-country",
+            reason="",
+            note=f"country {held!r} -> NULL",
+            phase3=False,
+            finding_test_id="D84/country",
+            evidence=({"source": "test", "quote": "x"},),
+            premise=f"{name} | 61.37676947509479 | 18.448311841356542",
+            column="country",
+        )
+        for site in (site_id, SITE_BOA)
+    )
+    plan = P.Plan(
+        changes=changes, skipped=(), built_at="2026-11-11T00:00:00+00:00", lane=L.COUNTRY_D84
+    )
     plan_path = directory / "PLAN.jsonl"
     P.write_plan_jsonl(plan, plan_path)
     P.write_rollback_sql(plan, directory / "ROLLBACK.sql", plan_path=plan_path)

@@ -45,6 +45,7 @@ NORSE = "c0000000-0000-4000-8000-00000000000c"
 DUPLICATE = "d0000000-0000-4000-8000-00000000000d"
 YONAGUNI = "01296632-a2a1-4610-a4a9-d0c3be77b788"
 RICHAT = "84b456ff-0b44-4d75-92a4-5cbe22026b95"
+BALTIC = "c8d2c13e-fd9a-466c-9fdc-fc26ee798ded"
 SOURCE_A = {
     "url": "https://example.org/geology",
     "title": "Geology",
@@ -340,6 +341,7 @@ class TestTheLane:
             "curated D50 sites shown",
             "curated D50 sites shown without a dispute-enriched description",
             "curated D50 sites shown with a card not written after their dispute text",
+            "curated sites D84 leaves without a country shown with one",
             "curated rows outside the D58 label window with no scope decision",
             "journal rows for this run that write a status other than in_scope",
             "curated rows with scope_status retired",
@@ -539,6 +541,34 @@ class TestTheInvariantInSql:
         assert self.violators(rows, good, cards=card, card_rows=((400, YONAGUNI),)) == {YONAGUNI}
         assert self.violators(rows, good, cards=card, card_rows=((600, YONAGUNI),)) == set()
         assert self.violators(rows, good, cards=((YONAGUNI, None),)) == set(), "a NULL card"
+
+    def test_a_site_d84_leaves_without_a_country_passes_only_without_one(self) -> None:
+        """D84 and D149: the Baltic Sea Anomaly lies in international waters and is shown on the
+        globe only. Shown with a country it would get a country page and a `/sites/` route, so the
+        wave that shows it is refused while it holds one; every other D50 site keeps its country."""
+        d50 = IL.D50_REASON_PREFIX + "shown as disputed ..."
+        text = "A text with both positions."
+
+        def violators(sid: str, country: str | None) -> set[str]:
+            row = self.site(sid, d50, description=text, country=country, raw_data=_enriched())
+            return self.violators([row], [(500, sid, text, _evidence())])
+
+        assert violators(BALTIC, None) == set()
+        assert violators(BALTIC, "Baltic Sea") == {BALTIC}
+        assert violators(BALTIC, "") == {BALTIC}, "an empty string is not no country"
+        assert violators(YONAGUNI, "Japan") == set()
+        assert violators(YONAGUNI, None) == set(), "D84 names one site"
+        counted = (
+            "SELECT count(*) FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND "
+            f"{L.d84_site_sql('u')} AND u.scope_status IS DISTINCT FROM 'retired' "
+            "AND u.country IS NOT NULL"
+        )
+        assert counted.split("FROM unified_sites u WHERE ", 1)[1] in IL.scope_unretire_readback(
+            IL.scope_unretire_lane(WAVE)
+        )
+        for country, shown_with_one in (("Baltic Sea", 1), (None, 0)):
+            db = _sites_db([self.site(BALTIC, d50, country=country)])
+            assert db.execute(counted).fetchone() == (shown_with_one,), country
 
     def test_the_d50_readback_counts_a_shown_site_without_its_text(self) -> None:
         sql = (
@@ -867,7 +897,40 @@ class TestThePlanner:
             assert bool(plan.changes) is cleared, card
             if not cleared:
                 assert skipped(plan) == {YONAGUNI: "d50-card-not-cleared"}
-                assert "the card lane (D21) rewrites the card first" in plan.skipped[0].note
+                assert "the card is cleared first (O17: " in plan.skipped[0].note
+
+    def test_the_baltic_sea_anomaly_waits_until_its_country_is_emptied(self) -> None:
+        """D84 and D149: no country, no country page, no `/sites/` route - globe only. The
+        un-retire shows the site only once the `country-d84` lane has emptied its country; its
+        dispute text and its card come first, as for every D50 site."""
+        rows = [journal(BALTIC, 129663, stamp="2026-09-30_mechanical-scope-review")]
+        text = [dispute_row(BALTIC)]
+
+        def baltic(**over: Any) -> dict[str, Any]:
+            site: dict[str, Any] = {
+                "name": "Baltic Sea Anomaly", "country": "Baltic Sea", "lat": 61.38, "lon": 18.45,
+                "period_start": None, "site_type": "Natural feature",
+                "scope_reason": D50_REASON_NOW,
+            }  # fmt: skip
+            return site_row(BALTIC, **{**site, **over})
+
+        plan = build(export([baltic()], rows, text))
+        assert plan.changes == () and skipped(plan) == {BALTIC: "d84-country-not-cleared"}
+        assert "it holds the country 'Baltic Sea'" in plan.skipped[0].note
+        assert "the `country-d84` lane" in plan.skipped[0].note
+        assert plan.counters["skipped_d84-country-not-cleared"] == 1
+        emptied = build(export([baltic(country=None)], rows, text))
+        assert emptied.counters["d50_disputed"] == 1 and emptied.skipped == ()
+        assert {c.new_value for c in emptied.changes if c.column == "scope_status"} == {"in_scope"}
+        # its text and its card are asked first; an emptied country does not stand in for them
+        assert skipped(build(export([baltic(country=None)], rows))) == {
+            BALTIC: "d50-no-dispute-text"
+        }
+        with_card = baltic(has_card=True, card_journal_id=None)
+        assert skipped(build(export([with_card], rows, text))) == {BALTIC: "d50-card-not-cleared"}
+        assert U.country_problem(baltic(country=None)) is None
+        yonaguni = site_row(YONAGUNI, country="Japan", scope_reason=D50_REASON_NOW)
+        assert U.country_problem(yonaguni) is None, "every other D50 site keeps its country"
 
     def test_a_d50_site_retired_for_another_reason_is_not_its_lane_s(self) -> None:
         richat = site_row(RICHAT, scope_reason="E3: period_start 1200 is past")

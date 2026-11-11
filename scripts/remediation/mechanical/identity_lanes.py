@@ -52,6 +52,7 @@ from mechanical.lane import (
     SiteInvariant,
     _window_date_sql,
     d50_site_sql,
+    d84_site_sql,
     journal_readback,
     label_borderline_sql,
     label_cutoff_sql,
@@ -395,7 +396,9 @@ def unretire_violation_sql() -> str:
       region has the 1500 AD cutoff (Oceania, the Americas or a recognised country of the rest of
       the world - never the medieval Old World or a country no list recognises);
     * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment and whose card
-      was written after it (`card_cleared_sql`)."""
+      was written after it or holds no text (`card_cleared_sql`) - and, for a site D84 leaves
+      without a country (`lane.D84_NO_COUNTRY_SITES`, the Baltic Sea Anomaly), no country: shown
+      with one it would get a country page and a `/sites/` route, which D149 rules out."""
     d50 = d50_site_sql("u")
     non_site = ", ".join(sql_literal(kind) for kind in sorted(NON_SITE_TYPES))
     date_kept = (
@@ -412,6 +415,7 @@ def unretire_violation_sql() -> str:
     )
     disputed = (
         f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "
+        f"AND (u.country IS NULL OR NOT {d84_site_sql('u')}) "
         f"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})"
     )
     return f"NOT ({date_kept} OR {museum_kept} OR {disputed})"
@@ -466,7 +470,8 @@ def scope_unretire_readback(lane: Lane) -> str:
     """The read-only verification of an un-retire wave, before and after its write: the scope
     counts, the D58 residual, the date retirements the label window keeps (the wave's own
     population, borderline ones apart), the D50 sites shown and those shown without their dispute
-    text (0, always), and the statuses the run wrote."""
+    text, with a card not cleared or with a country D84 takes from them (0, always), and the
+    statuses the run wrote."""
     stamp = sql_literal(lane.run_stamp)
     d50 = d50_site_sql("u")
     return journal_readback(
@@ -498,6 +503,11 @@ def scope_unretire_readback(lane: Lane) -> str:
             (
                 "curated D50 sites shown with a card not written after their dispute text",
                 _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {card_cleared_sql('u')}",
+            ),
+            (
+                "curated sites D84 leaves without a country shown with one",
+                _CURATED_U
+                + f"{d84_site_sql('u')} AND {not_retired('u')} AND u.country IS NOT NULL",
             ),
             _STATUS_WITHOUT_REASON,
             (
