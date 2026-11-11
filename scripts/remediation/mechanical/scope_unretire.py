@@ -175,14 +175,15 @@ _D50_IDS = ", ".join(sql_literal(site_id) for site_id in sorted(D50_DISPUTED_SIT
 #: The journal rows that wrote the description a D50 site holds now, with what their evidence says
 #: of a dispute (`wc4`'s enrichment block: the brief, and the run that wrote) and the enrichment
 #: record the site carries (`raw_data._description_enrichment`: every appended sentence's class and
-#: verdict, so what was kept): the D50 gate's input.
+#: verdict, so what was kept): the D50 gate's input. Written as `identity_lanes.dispute_enriched_sql`
+#: is (`CAST`, `->`/`->>`), so the tests run this very text in SQLite and hand its rows to the planner.
 EXPORT_DISPUTE_SQL = (
     "SELECT l.id, l.row_pk, l.run_stamp, l.evidence->>'decision' AS decision, "
     f"l.evidence->{sql_literal(wc4.ENRICH_EVIDENCE_KEY)}->'dispute' AS dispute, "
     f"l.evidence->>'run' AS run, u.raw_data->{sql_literal(wc4.ENRICH_KEY)} AS record "
-    "FROM remediation_change_log l JOIN unified_sites u ON u.id::text = l.row_pk "
+    "FROM remediation_change_log l JOIN unified_sites u ON CAST(u.id AS text) = l.row_pk "
     "WHERE l.table_name = 'unified_sites' AND l.column_name = 'description' "
-    f"AND l.new_value = u.description AND u.id::text IN ({_D50_IDS}) ORDER BY l.id"
+    f"AND l.new_value = u.description AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"
 )
 EXPORT_PARTS = (
     ("site", EXPORT_SITES_SQL),

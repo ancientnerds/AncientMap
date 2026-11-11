@@ -508,7 +508,8 @@ sites, a stamp applied once):
   and a `dispute_b` sentence. Kept after the verification, not merely appended (since 2026-11-11,
   owner decision D21: both positions are named): a position the writer gave and a verifier dropped
   is not in the text, and a site whose text kept one position, or neither, waits (`kept no
-  dispute_a sentence` in SKIPPED.jsonl). The export reads the record for the plan
+  dispute_a sentence` in SKIPPED.jsonl; lane E's build writes no such text, SENTENCE_CHECK.md 14.3,
+  the gate holds it whatever wrote it). The export reads the record for the plan
   (`EXPORT_DISPUTE_SQL`: run `export` again before a wave, an export of older code has no `record`).
   Until then each is skipped `d50-no-dispute-text`. D50 also says "no card or page asserts the claim":
   a D50 site with a card text comes back only once the latest journal row of its

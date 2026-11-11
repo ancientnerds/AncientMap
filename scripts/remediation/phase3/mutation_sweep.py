@@ -25991,8 +25991,8 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "enrich cli: a text that kept one position of a dispute is planned",
         ENRICH_CLI,
-        '    if kind == KIND_ENRICH and len(E.positions_kept(entry, decisions)) == 1:\n        return "dispute-one-position"',
-        '    if False:  # mutant\n        return "dispute-one-position"',
+        "        if positions == 1:\n            return DISPUTE_ONE_POSITION\n",
+        "        if False:  # mutant\n            return DISPUTE_ONE_POSITION\n",
         ENRICH_CLI_TEST,
         "test_a_text_that_keeps_one_position_of_a_dispute_is_not_written",
     ),
@@ -26004,13 +26004,48 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         ENRICH_CLI_TEST,
         "test_a_text_that_keeps_one_position_of_a_dispute_is_not_written",
     ),
+    # ── review of B4 (2026-11-11): neither position kept is not written either (a write would lock
+    #    the site out of its dispute text, `enriched-before`), and the pilot's judge is not asked
+    #    about a site the plan does not write ───────────────────────────────────────────────────────
     (
-        "enrich cli: a text that kept neither position of a dispute is not written",
+        "enrich cli: a dispute site that kept neither position is written with its other sentences",
         ENRICH_CLI,
-        '    if kind == KIND_ENRICH and len(E.positions_kept(entry, decisions)) == 1:\n        return "dispute-one-position"',
-        '    if kind == KIND_ENRICH and len(E.positions_kept(entry, decisions)) != 2 and entry["dispute"]:  # mutant\n        return "dispute-one-position"',
+        "        if positions == 0:\n            return DISPUTE_NO_POSITION\n",
+        "        if False:  # mutant\n            return DISPUTE_NO_POSITION\n",
         ENRICH_CLI_TEST,
-        "test_neither_position_kept_is_written_without_them_and_is_no_dispute_text",
+        "test_a_dispute_site_that_kept_neither_position_is_not_written_either",
+    ),
+    (
+        "enrich cli: a site without a dispute brief is held to the positions of one",
+        ENRICH_CLI,
+        '    if kind == KIND_ENRICH and entry["dispute"] is not None:\n',
+        "    if kind == KIND_ENRICH:  # mutant\n",
+        ENRICH_CLI_TEST,
+        "test_the_build_plans_the_sites_that_got_sentences_and_leaves_the_others_as_they_are",
+    ),
+    (
+        "enrich cli: the pilot's judge is asked about a dispute site that is not written",
+        ENRICH_CLI,
+        "        labels = [label for label in labels if label not in unwritten]\n",
+        "        pass  # mutant\n",
+        ENRICH_CLI_TEST,
+        "test_the_pilot_s_judge_is_not_asked_about_a_dispute_site_that_is_not_written",
+    ),
+    (
+        "enrich cli: the judge leaves out only the site that kept one position",
+        ENRICH_CLI,
+        "        unwritten = {label for why in DISPUTE_UNWRITTEN for label in not_planned.get(why, ())}\n",
+        "        unwritten = {label for why in DISPUTE_UNWRITTEN[:1] for label in not_planned.get(why, ())}  # mutant\n",
+        ENRICH_CLI_TEST,
+        "test_the_pilot_s_judge_is_not_asked_about_a_dispute_site_that_is_not_written",
+    ),
+    (
+        "enrich cli: a judge round without a question is recorded",
+        ENRICH_CLI,
+        "    if not labels:\n        raise WcRunError(\n",
+        "    if False:  # mutant\n        raise WcRunError(\n",
+        ENRICH_CLI_TEST,
+        "test_a_pilot_with_no_site_to_judge_is_refused_at_the_judge_export",
     ),
     # ── the write path: the transaction's invariants, the plan, the gate, the card basis, the API ──
     (
@@ -26162,10 +26197,26 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "enrich disputes: the subset is decided as a check run would ask",
         ENRICH_DISPUTES,
-        "        rows, excluded=set(), earlier=earlier, kind=cli.KIND_ENRICH, only=seen\n",
-        "        rows, excluded=set(), earlier=earlier, kind=cli.KIND_LIST, only=seen  # mutant\n",
+        "        rows, excluded=excluded, earlier=earlier, kind=cli.KIND_ENRICH, only=seen\n",
+        "        rows, excluded=excluded, earlier=earlier, kind=cli.KIND_LIST, only=seen  # mutant\n",
         ENRICH_DISPUTE_TEST,
         "test_the_briefs_a_run_can_take_are_written_and_the_others_are_held_with_their_reason",
+    ),
+    (
+        "enrich disputes: the subset takes a site the export is told to exclude",
+        ENRICH_DISPUTES,
+        "    excluded = cli._ids(exclude) if exclude is not None else set()\n",
+        "    excluded = set()  # mutant\n",
+        ENRICH_DISPUTE_TEST,
+        "test_the_briefs_leave_out_the_sites_the_export_is_told_to_exclude",
+    ),
+    (
+        "enrich disputes: the command line drops the exclude file",
+        ENRICH_DISPUTES,
+        "                run, for_run=args.for_run, out=args.out, after=args.after, exclude=args.exclude\n",
+        "                run, for_run=args.for_run, out=args.out, after=args.after  # mutant\n",
+        ENRICH_DISPUTE_TEST,
+        "test_the_briefs_leave_out_the_sites_the_export_is_told_to_exclude",
     ),
     (
         "enrich disputes: two briefs of one site reach the subset",

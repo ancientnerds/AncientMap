@@ -13198,6 +13198,10 @@ UNRETIRE_D50_SQL = "test_a_d50_site_passes_only_with_its_dispute_text"
 #: D21 in the D50 gate (code gap wn-and-disputes#3, 2026-11-11): both positions kept, not written.
 UNRETIRE_D50_KEPT_SQL = "test_a_d50_site_passes_only_with_both_positions_kept"
 UNRETIRE_D50_KEPT = "test_a_d50_site_whose_text_kept_one_position_waits"
+#: The export's own SQL, run in SQLite and handed to the planner (review of B4, 2026-11-11).
+UNRETIRE_D50_EXPORT = (
+    "test_the_dispute_export_hands_the_gate_the_run_and_the_record_it_decides_on"
+)
 UNRETIRE_DATE_SQL = "test_a_label_un_retirement_inside_the_window_passes_and_every_other_fails"
 UNRETIRE_MUSEUM_SQL = "test_a_museum_un_retirement_needs_a_museum_outside_the_medieval_old_world"
 UNRETIRE_JOURNAL = "test_only_a_journalled_retirement_is_taken_back"
@@ -13731,6 +13735,38 @@ D58_CASES: list[Case] = [
         UNRETIRE,
         '    if record is None or record["run"] != row["run"]:',
         UNRETIRE_D50_WAITS,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: the run is the one the evidence names, not the stamp",
+        UNRETIRE,
+        "    f\"l.evidence->>'run' AS run, u.raw_data->",
+        "    f\"l.run_stamp AS run, u.raw_data->",
+        UNRETIRE_D50_EXPORT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: the record is the enrichment's, not the check's",
+        UNRETIRE,
+        "u.raw_data->{sql_literal(wc4.ENRICH_KEY)} AS record ",
+        "u.raw_data->{sql_literal(wc4.CHECK_KEY)} AS record ",
+        UNRETIRE_D50_EXPORT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: only the row that wrote the description as it stands",
+        UNRETIRE,
+        '    f"AND l.new_value = u.description AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"',
+        '    f"AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"',
+        UNRETIRE_D50_EXPORT,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d50 export: only the D50 sites",
+        UNRETIRE,
+        '    f"AND l.new_value = u.description AND CAST(u.id AS text) IN ({_D50_IDS}) ORDER BY l.id"',
+        '    "AND l.new_value = u.description ORDER BY l.id"',
+        UNRETIRE_D50_EXPORT,
         UNRETIRE_TESTS,
     ),
     Case(

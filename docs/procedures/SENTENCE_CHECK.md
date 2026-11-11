@@ -1190,13 +1190,16 @@ measured on no corpus: the pilot is where they are measured.
 * `build --first-batch N`: the composition is `wc4.compose(decisions, quotes, base=)`: the stored text stays byte for
   byte with its `[n]`, the citation list keeps the stored entries verbatim, a page the base already cites keeps its number,
   every other page is numbered from N+1 by first appearance. A site that got no sentence is `not_planned.unchanged`
-  (`FINAL.jsonl` `planned: false`, `cleared: false`): nothing is written for it. **A site that kept one position of
-  its dispute without the other is `not_planned.dispute-one-position`** (owner decision D21: both positions are named; a
-  text that keeps only one is not written; `enrich.positions_kept`, since 2026-11-11): the writer gives both or none, but
-  the import's quote check and each verifier drop sentence by sentence. Nothing of that site is written, its facts and its
-  open question included (the verified text is the one with the single position in it); a pilot's judge still judges its
-  sentences. A site that kept neither position is written with its other sentences and is no dispute text (the scope
-  lane's D50 gate reads the kept classes, WD2 section 4). The check record is replaced by
+  (`FINAL.jsonl` `planned: false`, `cleared: false`): nothing is written for it. **A site with a dispute brief is
+  written only with both positions kept** (owner decision D21: the description names both positions;
+  `enrich.positions_kept`, since 2026-11-11): the writer gives both or none, but the import's quote check and each
+  verifier drop sentence by sentence. One position kept without the other is `not_planned.dispute-one-position`,
+  neither kept beside another new sentence `not_planned.dispute-no-position`. Nothing of such a site is written, its
+  facts and its open question included: the verified text is the one with the single position in it, and any write
+  would make the text an enriched one, which no later run asks (`enriched-before`, 14.1) - the site could never take
+  its dispute text, and a D50 site would stay retired for good. Unwritten, the site stays as the read holds it and a
+  new run asks it again. **The pilot's judge is not asked about such a site** (`cli.DISPUTE_UNWRITTEN`, 14.5). The
+  scope lane's D50 gate reads the kept classes all the same (WD2 section 4). The check record is replaced by
   `raw_data._description_enrichment` (14.4); the journal evidence's `decision` is `wc4.EVIDENCE_DECISION_ENRICH` and its
   `enrichment` block holds the base (text and citations as stored), the old check record, each new sentence's class, the
   dispute brief and the thin flag - the database alone composes the text again (`wc4.enrichment_evidence_problems`).
@@ -1239,8 +1242,11 @@ measured on no corpus: the pilot is where they are measured.
 
 `export --enrich --sites F --pilot 20 --seed S` (exactly 20 sites, or the whole population when it is smaller; the same
 minimum sample as WN: at least half of the drawn sites ended with a text the judge judged, and as many kept sentences).
-`judge-export` asks every site that has at least one written sentence; `JUDGE_QUESTION_ENRICH` shows the old text as
-context. The judge (a fresh **Opus** agent, role `pilot_judge`, xhigh) answers SUPPORTED / UNSUPPORTED / WRONG per kept new
+`judge-export` asks every site that has at least one written sentence, **except a dispute site the build does not write**
+(`not_planned.dispute-one-position`, `dispute-no-position`, 14.3; since 2026-11-11): the verdict approves the plan, so
+sentences no one writes neither count toward the minimum sample nor fail the pilot. A pilot that leaves the judge no site
+at all is refused at `judge-export` ("the pilot measured nothing"): it approves no plan, run a new pilot.
+`JUDGE_QUESTION_ENRICH` shows the old text as context. The judge (a fresh **Opus** agent, role `pilot_judge`, xhigh) answers SUPPORTED / UNSUPPORTED / WRONG per kept new
 sentence - and **INVENTED** for an open question that may be true but that no reputable source calls open (`parse_judge(...,
 hooks=)` allows it for the hook only). Thresholds `cli.ENRICH_THRESHOLDS`: 0 WRONG with a found quote, at most 5 %
 UNSUPPORTED, 0 incoherent texts, **0 hook invented**. `RESULT.json` records `measured.hook_invented`; `pilot_approval`
@@ -1277,7 +1283,7 @@ the verifiers and the judge are different agents (compared without the role). A 
     $D adjudicate-export --run-dir $RUNS/$R --handoff $H/dispute-$R-a            # Opus high, role adversarial
     $D adjudicate-brief ... ; $OH validate ... ; $D adjudicate-import --run-dir $RUNS/$R --handoff $H/dispute-$R-a
     $D outputs --run-dir $RUNS/$R             # DISPUTES.jsonl, DISPUTE_DEFECTS.jsonl, SUMMARY.json
-    $D briefs --run-dir $RUNS/$R --for-run $RUNS/$E [--after $RUNS/$P] --out B   # B, B.sites.txt, B.held.json
+    $D briefs --run-dir $RUNS/$R --for-run $RUNS/$E [--after $RUNS/$P] [--exclude X] --out B   # B, B.sites.txt, B.held.json
 
 *Named sites* (`candidates --include F`, since 2026-11-11): `F` holds site ids, one per line; each is a candidate whatever
 it carries, with the signal `named` beside its own (`by_signal.named`, and `include` with the file's sha256 in the printed
@@ -1290,11 +1296,13 @@ a candidate by name alone stays in `missed` and is listed under `named`, so a li
 *The briefs of one enrichment run* (`briefs`, since 2026-11-11): `DISPUTES.jsonl` holds every confirmed dispute, an
 enrichment run asks only some of their sites, and `export --enrich --disputes` refuses a file whole when one brief's site
 is not asked. `briefs --for-run E` reads run `E`'s own read (`cli.py read`, made after the repair pass wrote) and decides
-as `E`'s export will: the site is one a lane-E run asks (`cli.population`; `--after P` leaves out the sites of run `P`, as
-`export --after` does) and none of the brief's asserting sentences stands in the text (`cli.asserting_standing`). `B` gets
+as `E`'s export will: the site is one a lane-E run asks (`cli.population`; `--after P` leaves out the sites of run `P` and
+`--exclude X` the sites the file `X` names, as `export --after` and `export --exclude` do - **give `briefs` the same
+`--after` and `--exclude` as the export**, or the export refuses the subset for the site it leaves out; held `earlier-run`
+and `excluded`) and none of the brief's asserting sentences stands in the text (`cli.asserting_standing`). `B` gets
 those briefs, unchanged and in the file's order (the export's `--disputes`), `B.sites.txt` their site ids (its `--sites`),
 `B.held.json` every other brief with its reason: the population's own (`retired`, `no-description`, `unchecked-text`,
-`no-provenance`, `enriched-before`, `earlier-run`, `base-not-enrichable`, ...), `no-curated-row`, or `asserting-in-text`
+`no-provenance`, `enriched-before`, `excluded`, `earlier-run`, `base-not-enrichable`, ...), `no-curated-row`, or `asserting-in-text`
 with the sentence numbers. It prints `usable` and the `pilot_size` a pilot of them draws. `DISPUTES.jsonl` is never cut by
 hand.
 
@@ -1318,7 +1326,7 @@ reading as fact); (2) after that write and a fresh `read` of the enrichment run,
 `export --enrich --sites B.sites.txt --disputes B`: each listed site gets the dispute block and must name both positions
 (`dispute_a`, `dispute_b`) or none. The export refuses a brief whose asserting sentence is still in the text and a brief
 of a site it does not ask (`cli._read_disputes`); the subset holds neither. The build writes a dispute site only with
-both positions kept or with neither (14.3). The card then asserts neither: the card contract allows "debated" only when
+both positions kept (14.3). The card then asserts neither: the card contract allows "debated" only when
 the description says so.
 
 ### 14.8 The runbook

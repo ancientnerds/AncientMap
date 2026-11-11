@@ -964,6 +964,72 @@ class TestTheExport:
         for sid in L.D50_DISPUTED_SITES:
             assert f"'{sid}'" in U.EXPORT_DISPUTE_SQL
 
+    def dispute_rows(
+        self, raw_data: dict[str, Any] | None, *, text: str = "A text with both positions."
+    ) -> list[dict[str, Any]]:
+        """What `EXPORT_DISPUTE_SQL` itself reads (run in SQLite, as the invariant's SQL is) of
+        Yonaguni holding `text` and `raw_data`, and of a site that is no D50 site: journal row 400
+        wrote an older text, 500 the text of the lane-E run `ENRICH_RUN` under another stamp, 600
+        the other site's. `dispute` and `record` are JSON, as `row_to_json` hands them over."""
+        both = "A text with both positions."
+        place = {"country": "Japan", "lat": 24.4, "lon": 123.0, "period_start": None}
+        rows = [
+            {"id": YONAGUNI, "description": text, "raw_data": raw_data, **place},
+            {"id": PRAMBANAN, "description": both, "raw_data": _enriched(), **place},
+        ]
+        db = _sites_db(rows)
+        db.executemany(
+            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value, "
+            "evidence, run_stamp) VALUES (?, 'unified_sites', 'description', ?, ?, ?, ?)",
+            [
+                (400, YONAGUNI, "An older text.", _evidence(run="an-older-run"), "s-400"),
+                (500, YONAGUNI, both, _evidence(dispute=brief()), "2026-11-12_p4-wc"),
+                (600, PRAMBANAN, both, _evidence(dispute=brief(PRAMBANAN)), "2026-11-12_p4-wc"),
+            ],
+        )
+        cursor = db.execute(U.EXPORT_DISPUTE_SQL)
+        names = [column[0] for column in cursor.description]
+        found = [dict(zip(names, values, strict=True)) for values in cursor]
+        for row in found:
+            for key in ("dispute", "record"):
+                row[key] = None if row[key] is None else json.loads(row[key])
+        return found
+
+    def test_the_dispute_export_hands_the_gate_the_run_and_the_record_it_decides_on(self) -> None:
+        """The planner reads the positions kept from the export's `run` and `record` alone: the run
+        the journal row's evidence names (not its stamp) and the site's enrichment record (not its
+        check record). The SQL is run as it is and its rows go to the planner."""
+        decoy = {wc4.CHECK_KEY: enrichment_record(run="2026-11-12_p4-wc")}
+        (row,) = self.dispute_rows({**_enriched(), **decoy})
+        assert row == {
+            "id": 500,
+            "row_pk": YONAGUNI,
+            "run_stamp": "2026-11-12_p4-wc",
+            "decision": wc4.EVIDENCE_DECISION_ENRICH,
+            "dispute": brief(),
+            "run": ENRICH_RUN,
+            "record": enrichment_record(),
+        }
+        assert U.dispute_text_problems(YONAGUNI, [row]) == []
+        yonaguni = site_row(YONAGUNI, name="Yonaguni Monument", country="Japan", lat=24.4,
+                            lon=123.0, period_start=None, scope_reason=D50_REASON_NOW)  # fmt: skip
+        retired = [journal(YONAGUNI, 2, old="pending")]
+        assert build(export([yonaguni], retired, [row])).counters["d50_disputed"] == 1
+        one = ((wc4.DISPUTE_A, KEEP), (wc4.DISPUTE_B, DROP))
+        for raw_data, says in (
+            ({**_enriched(one), **decoy}, "kept no dispute_b"),
+            (decoy, "carries no enrichment record of the run"),
+            (None, "carries no enrichment record of the run"),
+            (_enriched(run="another-run"), "carries no enrichment record of the run"),
+        ):
+            (row,) = self.dispute_rows(raw_data)
+            plan = build(export([yonaguni], retired, [row]))
+            assert plan.changes == () and says in plan.skipped[0].note, says
+        # only the row that wrote the description the site holds now is read
+        (row,) = self.dispute_rows(_enriched(run="an-older-run"), text="An older text.")
+        assert (row["id"], row["run"]) == (400, "an-older-run")
+        assert self.dispute_rows(_enriched(), text="A text no journal row wrote.") == []
+
     def test_the_export_parses_into_its_three_parts(self) -> None:
         text = _export_text([site_row(PRAMBANAN)], [journal(PRAMBANAN, 1)], [dispute_row()])
         ex = U.parse_export(text)

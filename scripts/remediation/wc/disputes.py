@@ -34,7 +34,9 @@ checks:
                       kind `wn-enrich`) and none of its asserting sentences stands in the text any
                       more. Writes the subset, its site list and the held briefs with their
                       reasons. `export --enrich --disputes` refuses a file whole when one brief's
-                      site is not asked, and `DISPUTES.jsonl` is never cut by hand.
+                      site is not asked, and `DISPUTES.jsonl` is never cut by hand. `--after` and
+                      `--exclude` are the export's own: a run exported with either is given the
+                      briefs decided with the same.
 
     PY=.venv/Scripts/python.exe ; D="$PY scripts/remediation/wc/disputes.py" ; C="$PY scripts/remediation/wc/cli.py"
     $C read --run-dir R                                   # the run's one read (ROWS.jsonl)
@@ -48,8 +50,8 @@ checks:
     $D adjudicate-brief ... ; $D adjudicate-import --run-dir R --handoff H2
     $D outputs --run-dir R                                # DISPUTES.jsonl, DISPUTE_DEFECTS.jsonl, SUMMARY.json
     $C read --run-dir E                                   # the enrichment run's read, after the repair
-    $D briefs --run-dir R --for-run E [--after P] --out B # B, B.sites.txt, B.held.json
-    $C export --run-dir E --handoff H3 --enrich --sites B.sites.txt --disputes B [--after P] ...
+    $D briefs --run-dir R --for-run E [--after P] [--exclude X] --out B   # B, B.sites.txt, B.held.json
+    $C export --run-dir E --handoff H3 --enrich --sites B.sites.txt --disputes B [--after P] [--exclude X] ...
 
 The screen is calibrated before its first answer (`recall`): it must flag at least 90 % of the known
 positives of `KNOWN_POSITIVES` (the shown ones of the descriptions map plus the six D50 sites, by
@@ -1088,16 +1090,23 @@ def cmd_outputs(run: Path) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------ the briefs of one run
 def cmd_briefs(
-    run: Path, *, for_run: Path, out: Path, after: Sequence[Path] = ()
+    run: Path,
+    *,
+    for_run: Path,
+    out: Path,
+    after: Sequence[Path] = (),
+    exclude: Path | None = None,
 ) -> dict[str, Any]:
     """The briefs of `DISPUTES.jsonl` the enrichment run `for_run` can take, decided on that run's
     own read (`cli.py read`, after the repair pass wrote) exactly as its export will decide: the
     site is one a lane-E run asks (`cli.population`, kind `wn-enrich`; `after` names the runs whose
-    sites are not asked again, as `export --after` does) and none of the brief's asserting sentences
-    stands in the text (`cli.asserting_standing`). `out` gets those briefs, unchanged and in the
-    file's order - what `export --enrich --disputes` takes; `out.sites.txt` their site ids, the
-    export's `--sites`; `out.held.json` every other brief with the reason it is held (the
-    population's own reason, `HELD_NO_ROW` or `HELD_ASSERTING` with the sentence numbers)."""
+    sites are not asked again and `exclude` the file of the sites the run leaves out, as `export
+    --after` and `export --exclude` do: the export is given the same two) and none of the brief's
+    asserting sentences stands in the text (`cli.asserting_standing`). `out` gets those briefs,
+    unchanged and in the file's order - what `export --enrich --disputes` takes; `out.sites.txt`
+    their site ids, the export's `--sites`; `out.held.json` every other brief with the reason it is
+    held (the population's own reason, `HELD_NO_ROW` or `HELD_ASSERTING` with the sentence
+    numbers)."""
     path = run / DISPUTES_FILE
     if not path.exists():
         raise DisputeError(f"{run}: no {DISPUTES_FILE} - the outputs were not written")
@@ -1117,8 +1126,9 @@ def cmd_briefs(
     earlier: set[str] = set()
     for other in after:
         earlier |= set(cli.read_sites(other))
+    excluded = cli._ids(exclude) if exclude is not None else set()
     _, listed = cli.population(
-        rows, excluded=set(), earlier=earlier, kind=cli.KIND_ENRICH, only=seen
+        rows, excluded=excluded, earlier=earlier, kind=cli.KIND_ENRICH, only=seen
     )
     not_asked = {site_id: reason for reason, sites in listed.items() for site_id in sites}
     usable: list[dict[str, Any]] = []
@@ -1157,6 +1167,9 @@ def cmd_briefs(
         "held": dict(sorted(Counter(entry["reason"] for entry in held).items())),
         "read": json.loads((for_run / cli.READ_FILE).read_text(encoding="utf-8"))["read_at"],
         "after": [cli._shown(other) for other in after],
+        "exclude": None
+        if exclude is None
+        else {"path": cli._shown(exclude), "sha256": cli._sha256(exclude)},
         "out": {"path": cli._shown(out), "sha256": cli._sha256(out)},
         "sites": cli._shown(sites),
         "held_file": cli._shown(held_path),
@@ -1194,6 +1207,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "briefs":
             command.add_argument("--for-run", required=True, type=Path)
             command.add_argument("--after", type=Path, action="append", default=[])
+            command.add_argument("--exclude", type=Path, default=None)
             command.add_argument("--out", required=True, type=Path)
     return parser
 
@@ -1243,7 +1257,11 @@ def run_command(args: argparse.Namespace) -> int:
     elif command == "outputs":
         _print(cmd_outputs(run))
     elif command == "briefs":
-        _print(cmd_briefs(run, for_run=args.for_run, out=args.out, after=args.after))
+        _print(
+            cmd_briefs(
+                run, for_run=args.for_run, out=args.out, after=args.after, exclude=args.exclude
+            )
+        )
     return 0
 
 

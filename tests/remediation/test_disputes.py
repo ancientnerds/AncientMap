@@ -852,6 +852,46 @@ def test_the_briefs_of_a_run_without_an_earlier_one_take_the_pilot_s_site_too(
     assert [b["site_id"] for b in read_jsonl(out)] == [EF.SITE_W, EF.SITE_N, EF.SITE_L]
 
 
+def test_the_briefs_leave_out_the_sites_the_export_is_told_to_exclude(
+    confirmed: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A run exported with `--exclude` is given the briefs decided with the same file: the brief of
+    a site the run leaves out is held `excluded`. The subset decided without the file is refused
+    whole by that export, as the full `DISPUTES.jsonl` is."""
+    disputes, run, pilot = confirmed["disputes"], confirmed["run"], confirmed["pilot"]
+    exclude = tmp_path / "exclude.txt"
+    exclude.write_text(f"{EF.SITE_L}\n", encoding="utf-8")
+    without = tmp_path / "without.briefs.jsonl"
+    assert D.cmd_briefs(disputes, for_run=run, out=without, after=[pilot])["exclude"] is None
+    out = tmp_path / "b.jsonl"
+    summary = D.cmd_briefs(disputes, for_run=run, out=out, after=[pilot], exclude=exclude)
+    assert summary["usable"] == 1 and summary["held"]["excluded"] == 1
+    assert summary["exclude"] == {"path": cli._shown(exclude), "sha256": cli._sha256(exclude)}
+    assert [b["site_id"] for b in read_jsonl(out)] == [EF.SITE_W]
+    held = json.loads(out.with_name(out.name + D.BRIEFS_HELD_SUFFIX).read_text(encoding="utf-8"))
+    assert {h["site_id"]: h["reason"] for h in held}[EF.SITE_L] == "excluded"
+
+    def export(handoff: str, briefs: Path) -> dict[str, Any]:
+        return cli.cmd_export(
+            run, tmp_path / handoff, batch_size=5, exclude=exclude, after=[pilot], pilot=1, seed=1,
+            sites=briefs.with_name(briefs.name + D.BRIEF_SITES_SUFFIX), enrich=True,
+            disputes=briefs,
+        )  # fmt: skip
+
+    with pytest.raises(cli.WcRunError, match=f"{EF.SITE_L} is no site this run asks"):
+        export("h-without", without)
+    assert export("h", out)["questions"] == 1
+    # the command line takes the file as the export does, and refuses one that names no site id
+    argv = ["briefs", "--run-dir", str(disputes), "--for-run", str(run), "--after", str(pilot),
+            "--exclude", str(exclude), "--out", str(tmp_path / "c.jsonl")]  # fmt: skip
+    assert D.main(argv) == 0
+    assert '"excluded": 1' in capsys.readouterr().out
+    assert read_jsonl(tmp_path / "c.jsonl") == read_jsonl(out)
+    exclude.write_text("Tarxien Temples\n", encoding="utf-8")
+    assert D.main(argv) == 1
+    assert "REFUSED" in capsys.readouterr().err
+
+
 def test_the_briefs_command_refuses_what_it_cannot_decide(
     confirmed: dict[str, Any], tmp_path: Path
 ) -> None:
