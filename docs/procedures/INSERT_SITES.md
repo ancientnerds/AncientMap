@@ -302,7 +302,8 @@ code each step still waits for are in the lane's playbook
    item and article in `site_external_ids` and a sourced point (their `_coord_provenance`), so the
    geotag route searches around them. The rows go in through the INSERT waves of
    `WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.7 (`judge_run.py insert-claims`, `import_hero/run.py
-   read`, `fetch --target insert`, `insert-plan`, the writer's five steps, `insert-accept`).
+   read`, `fetch --target insert`, `insert-plan`, `transfer` - the files onto the VPS with sha256
+   on both ends, before the first `--apply` -, the writer's five steps, `insert-accept`, `served`).
 6. **Go live**: the scope lane's journalled un-retire, class "D57 staged"
    (`WD2_SERVED_IMAGE_AND_SCOPE.md` section 2.2): `mechanical/scope_unretire.py export`, then
    `write --wave <label>`, then `apply.py --lane scope-unretire-<label>` through its steps. A

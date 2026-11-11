@@ -7049,6 +7049,344 @@ WD2_CASES: list[Case] = [
 ]
 CASES += WD2_CASES
 
+# --------------------- the INSERT wave's files on the VPS, and the offsite copy's stray fetches
+#                       (import_hero/transfer.py, 2026-11-11: code gaps images#6/#7, d57-insert#6)
+TRANSFER = REPO / "scripts/remediation/import_hero/transfer.py"
+IMPORT_HERO_RUN = REPO / "scripts/remediation/import_hero/run.py"
+TRANSFER_TESTS = "tests/remediation/test_import_hero_transfer.py"
+_SERVED_IF = (
+    '        if status != 200 or content_type != "image/webp" or sha256 != entry["sha256"]:'
+)
+_TO_SEND = (
+    "        to_send = list(files) if rehearse else "
+    "[file for file in files if file.rel not in before]"
+)
+WD2_TRANSFER_CASES: list[Case] = [
+    guard(
+        "wd2 transfer: a name with a separator travels",
+        TRANSFER,
+        "        if illegal:",
+        "test_a_name_that_cannot_travel_as_one_line_and_one_member_is_refused",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: a name a row already holds is sent",
+        TRANSFER,
+        "    if held:",
+        "test_a_name_a_row_of_the_site_already_holds_is_refused_before_anything_is_sent",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a row of another site holds the name",
+        TRANSFER,
+        "        for row in state.rows.get(file.site_id, ())",
+        "        for rows in state.rows.values()\n        for row in rows",
+        "test_a_row_of_another_site_with_the_same_name_does_not_refuse",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a file at another size is sent",
+        TRANSFER,
+        "        elif hit[1] != file.size:",
+        "        elif False:",
+        "test_a_file_at_another_byte_count_than_its_row_is_refused",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: an unfit offsite file is sent",
+        TRANSFER,
+        "    if unfit:",
+        "test_a_file_in_another_case_is_not_the_rows_file",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: other bytes on the VPS pass",
+        TRANSFER,
+        "        if other:",
+        "test_a_name_production_holds_with_other_bytes_refuses_the_wave_and_is_never_overwritten",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a file that arrived is sent twice",
+        TRANSFER,
+        _TO_SEND,
+        "        to_send = list(files)",
+        "test_a_file_that_arrived_whole_on_an_earlier_call_is_not_sent_twice",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal sends only what is missing",
+        TRANSFER,
+        _TO_SEND,
+        "        to_send = [file for file in files if file.rel not in before]",
+        "test_a_rehearsal_sends_the_whole_wave_into_a_scratch_directory_and_removes_it",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal unpacks into the tree",
+        TRANSFER,
+        "        vps.unpack(remote_tar, scratch)",
+        "        vps.unpack(remote_tar, vps.tree)",
+        "test_a_rehearsal_sends_the_whole_wave_into_a_scratch_directory_and_removes_it",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal leaves its scratch directory",
+        TRANSFER,
+        "        vps.remove(scratch)\n        vps.remove(remote_tar)",
+        "        vps.remove(remote_tar)",
+        "test_a_rehearsal_is_verified_in_its_scratch_directory",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: a file that arrived wrong passes",
+        TRANSFER,
+        "    if wrong:",
+        "test_a_file_that_does_not_arrive_as_it_left_fails_the_transfer",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the tree is not asked after the unpack",
+        TRANSFER,
+        "        after = landed if rehearse else vps.in_production(rels)",
+        "        after = landed if rehearse else local",
+        "test_a_file_that_does_not_arrive_as_it_left_fails_the_transfer",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the scratch directory is not asked",
+        TRANSFER,
+        "        after = landed if rehearse else vps.in_production(rels)",
+        "        after = local if rehearse else vps.in_production(rels)",
+        "test_a_rehearsal_is_verified_in_its_scratch_directory",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the unpack replaces an existing file",
+        TRANSFER,
+        "-xkf {shlex.quote(remote_tar)}",
+        "-xf {shlex.quote(remote_tar)}",
+        "test_the_unpack_never_replaces_a_file_and_keeps_the_trees_modes",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the unpack runs under the login umask",
+        TRANSFER,
+        '    return f"umask 000 && tar -C',
+        '    return f"tar -C',
+        "test_the_unpack_never_replaces_a_file_and_keeps_the_trees_modes",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the tar's sha256 is not compared",
+        TRANSFER,
+        "        O.require_same_hash(name, sha256, O.remote_sha256(self.host, REMOTE_TMP, name))",
+        "        O.remote_sha256(self.host, REMOTE_TMP, name)",
+        "test_the_tar_is_unpacked_only_after_its_sha256_matched_on_the_vps",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: any path is removed",
+        TRANSFER,
+        '        if not path.startswith(REMOTE_PREFIX) or "/" in path[len(REMOTE_PREFIX) :]:',
+        "test_only_a_scratch_path_of_the_transfer_is_ever_removed",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a path that climbs out of /tmp is removed",
+        TRANSFER,
+        '        if not path.startswith(REMOTE_PREFIX) or "/" in path[len(REMOTE_PREFIX) :]:',
+        "        if not path.startswith(REMOTE_PREFIX):",
+        "test_only_a_scratch_path_of_the_transfer_is_ever_removed",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: an answer nobody asked for is taken",
+        TRANSFER,
+        "    if unasked:",
+        "test_an_answer_for_a_file_nobody_asked_about_is_refused",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: production is asked on the host, not in the container",
+        TRANSFER,
+        "        return self._hashes(container_command(self.container, self.container_tree), rels)",
+        "        return self._hashes(hash_script(self.tree), rels)",
+        "test_production_is_asked_inside_the_api_container_with_the_names_on_stdin",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: the hash script answers for a name that is no file",
+        TRANSFER,
+        'if [ -f "$f" ]; then sha256sum -- "$f"; fi;',
+        'sha256sum -- "$f";',
+        "test_the_hash_script_answers_for_the_files_that_exist_and_only_those",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: the record is written twice",
+        IMPORT_HERO_RUN,
+        "    if not rehearse and path.is_file():",
+        "test_the_command_writes_the_record_once",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: a rehearsal writes the transfer's record",
+        IMPORT_HERO_RUN,
+        "    path = run / (TR.REHEARSAL if rehearse else TR.RECORD)",
+        "    path = run / TR.RECORD",
+        "test_a_rehearsal_writes_its_own_record_and_never_the_transfers",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer: a fetch into the offsite root",
+        IMPORT_HERO_RUN,
+        '    if (root / "images" / "wiki").is_dir():',
+        "test_a_fetch_into_the_offsite_root_is_refused",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer: stdin goes through a text pipe",
+        REPO / "scripts/remediation/offsite_sync.py",
+        "    proc = subprocess.run(argv, input=stdin, capture_output=True",
+        '    proc = subprocess.run(argv, input=stdin and stdin.replace(b"\\n", b"\\r\\n"), '
+        "capture_output=True",
+        "test_stdin_reaches_the_far_side_byte_for_byte",
+        TRANSFER_TESTS,
+    ),
+    # -- served: each of the three conditions
+    Case(
+        "wd2 transfer served: any status passes",
+        TRANSFER,
+        _SERVED_IF,
+        '        if content_type != "image/webp" or sha256 != entry["sha256"]:',
+        "test_a_file_that_is_not_served_as_it_was_sent_is_a_problem",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer served: any content type passes",
+        TRANSFER,
+        _SERVED_IF,
+        '        if status != 200 or sha256 != entry["sha256"]:',
+        "test_a_file_that_is_not_served_as_it_was_sent_is_a_problem",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer served: any bytes pass",
+        TRANSFER,
+        _SERVED_IF,
+        '        if status != 200 or content_type != "image/webp":',
+        "test_a_file_that_is_not_served_as_it_was_sent_is_a_problem",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer served: a rehearsal's record is asked",
+        TRANSFER,
+        '    if record.get("mode") != "transfer":',
+        "test_a_rehearsals_record_is_no_proof_of_a_served_file",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer served: a run without a transfer is asked",
+        IMPORT_HERO_RUN,
+        "    if not path.is_file():\n        raise IH.ImportHeroError(\n"
+        '            f"{path} does not exist - `transfer --run-dir {run}` writes it, and only a "',
+        "test_served_before_a_transfer_is_refused_by_name",
+        TRANSFER_TESTS,
+    ),
+    # -- the offsite merge
+    guard(
+        "wd2 transfer merge: a file the tree holds is planned",
+        TRANSFER,
+        "    if tree == stray:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: a file the VPS lacks enters the tree",
+        TRANSFER,
+        "    if production is None:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: bytes production does not serve enter the tree",
+        TRANSFER,
+        "    if production == stray:",
+        "    if production is not None:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: a stale stray file is not told from a foreign one",
+        TRANSFER,
+        "    if production == tree:",
+        "test_only_the_bytes_production_serves_enter_the_tree",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: a name in another case is written over",
+        TRANSFER,
+        "            elif name.casefold() in other_case:",
+        "            elif False:",
+        "test_a_name_the_tree_holds_in_another_case_is_left_alone",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: every folder beside the tree is a site's",
+        TRANSFER,
+        "for s, names in pilot.build_tree(stray).items() if SHARD.fullmatch(s)}",
+        "for s, names in pilot.build_tree(stray).items()}",
+        "test_the_merge_plan_reads_the_site_folders_beside_the_tree_and_asks_production",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: production is asked about every stray file",
+        TRANSFER,
+        'if "outcome" not in row and row["tree_sha256"] != row["sha256"]',
+        'if "outcome" not in row',
+        "test_production_is_not_asked_about_a_file_the_tree_already_holds",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: every stray file is copied",
+        TRANSFER,
+        '        if row["outcome"] not in (COPY, REPLACE):',
+        "test_the_merge_copies_what_production_serves_and_leaves_everything_else",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: a copy that differs from the plan is swapped in",
+        TRANSFER,
+        '        if copied != row["sha256"]:',
+        "test_a_stray_file_that_changed_since_the_plan_is_not_merged",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: the tree is merged into itself",
+        TRANSFER,
+        "    if stray.resolve() == root.resolve():",
+        "test_the_tree_is_not_merged_into_itself",
+        TRANSFER_TESTS,
+    ),
+    guard(
+        "wd2 transfer merge: an applied merge is recorded twice",
+        IMPORT_HERO_RUN,
+        "    if apply and path.is_file():",
+        "test_the_merge_command_plans_without_apply_and_records_an_apply_once",
+        TRANSFER_TESTS,
+    ),
+    Case(
+        "wd2 transfer merge: a plan is applied",
+        IMPORT_HERO_RUN,
+        "    merged = TR.merge_apply(stray, root, rows) if apply else 0",
+        "    merged = TR.merge_apply(stray, root, rows)",
+        "test_the_merge_command_plans_without_apply_and_records_an_apply_once",
+        TRANSFER_TESTS,
+    ),
+]
+CASES += WD2_TRANSFER_CASES
+
 # ------------------------------------------------------ the WD1 structured-field lane (2026-09-26)
 FIELDS = REPO / "scripts/remediation/fields"
 FIELDS_LANE_TESTS = "tests/remediation/test_mechanical_fields_lane.py"

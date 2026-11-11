@@ -1109,6 +1109,62 @@ untouched, and their refusal keeps the old wording and its date.
 used to print all five on one line - a command that cannot run (`error: argument --rehearse: not allowed
 with argument --check`, exit 2). They are five calls, in that order, each one green before the next.
 
+**The files go to the VPS before the rows: `transfer` (2026-11-11, `import_hero/transfer.py`).** A
+row that names a missing file shows a broken picture at once; a file without a row is shown
+nowhere. Until this command the step was typed by hand (October's waves left only
+`FETCHED_PACKED.json` of a lost scratch script). `run.py transfer --run-dir $I --root $OFFSITE`,
+once for all chunks, after `insert-plan` and before the first `--apply`:
+
+* The wave is the file of every planned row (`chunk-0*/INSERT.jsonl`), `<id8>/<filename>`. Each must
+  lie under `--root` at its exact-case name and at the byte count its row will hold, and no row of
+  the site in the run's `READ.json` may already carry that filename (`insert-plan` refuses a site
+  that holds the same `original_url`, but `X.jpg` and `X.png` are both `X.webp`: the row would
+  credit one picture and show another). Either one refuses the wave by name before anything is sent.
+* sha256 on both ends. The API container is asked, read-only, what production holds of the wave's
+  names (the names go over stdin, never onto a command line). A file there with **other bytes**
+  refuses the wave and is never overwritten; a file with the **same bytes** arrived on an earlier
+  call and is not sent again. The rest is packed (`tar`, uncompressed), copied to
+  `/tmp/import-hero-transfer-<sha>.tar` on the VPS, its sha256 compared there, and only then
+  unpacked with `umask 000 && tar -C /var/www/ancientnerds/public/data/images/wiki -xkf` (`-k`: an
+  existing file is an error; the umask keeps the tree's own modes, files 666 and folders 777,
+  measured 2026-11-11). Then every file of the wave is hashed inside `ancient_nerds_api`
+  (`/app/public/data/images/wiki`) and compared with the offsite file.
+* `TRANSFER.json` is written once, only after that comparison: per file its site, path, bytes,
+  sha256 and whether this call sent it. Any failure exits 1 with `REFUSED:` and writes no record;
+  the same command is then simply run again (a file that arrived whole is found and skipped). There
+  is no rollback of files: a chunk abandoned after the transfer leaves them on the VPS, unshown,
+  and the record names them.
+* `--rehearse` sends the whole wave the same way into a scratch directory under `/tmp` on the VPS,
+  compares the hashes there and removes it (`TRANSFER_REHEARSAL.json`, repeatable). Nothing lands
+  in the tree; the question to production is asked too, so it also says what is already there.
+* After `insert-accept`: `run.py served --run-dir $I` asks the site for every file of
+  `TRANSFER.json` - 200, `image/webp`, and the sha256 the transfer recorded
+  (`TRANSFER_HTTP.json`, exit 1 with the files that fail).
+
+`$OFFSITE` is the offsite copy of the image tree, `C:/PythonProjects/AncientMap-Offsite/images/wiki`
+- the tree `gallery_audit.vision.Images` reads. The waves of 2026-10 passed the offsite root
+instead, so 920 files lie in `AncientMap-Offsite/<id8>/` where no lane finds them; `fetch` now
+refuses a `--root` that holds `images/wiki`. **`run.py offsite-merge --run-dir <record dir> --stray
+C:/PythonProjects/AncientMap-Offsite --root $OFFSITE`** measures them against production (sha256
+inside the API container, read-only) and writes `OFFSITE_MERGE_PLAN.json`; with `--apply` it copies
+into the tree what production serves (`copy`; `replace` where the tree holds a stale file of that
+name) and writes `OFFSITE_MERGE.json` once. Everything else is named and left: `not_on_the_vps` (a
+fetch whose row was never written), `tree_is_production` (the stray file is the stale one),
+`not_production`, `case_collision`. The stray files are never moved or deleted. Measured read-only
+2026-11-11: 920 stray files (404 MB), 378 `same`, 331 `copy`, 2 `replace`, 16
+`tree_is_production`, 193 `not_on_the_vps` (no `wiki_images` row names one of those 193; rows name
+274 of the 331, all 16 and both `replace` files).
+
+Measured 2026-11-11 against the VPS, nothing written into the tree: a rehearsal of six copies of
+offsite files under site ids production does not hold (names with `ä`, `å`, CJK, `'`, `&`, `;`,
+parentheses and commas) - packed, sent, sha256 equal in the scratch directory, `/tmp` empty
+afterwards - once with Git's ssh and once with Windows OpenSSH; the same pieces by hand in a
+scratch directory (Git's ssh): files 666 and folders 777, a second unpack refused by `tar`
+(`Cannot open: File exists`, exit 2), a truncated and a removed file both seen by the comparison;
+and on a copy of run `insert-2026-10-07-011`, whose 7 files production holds: `transfer` found all
+7 with the offsite sha256 and sent nothing, `served` answered 7 of 7. **Not measured: an unpack
+into the served tree itself** - the first real wave is that proof, and its rehearsal comes first.
+
 ```bash
 $PY scripts/remediation/candidate_search/judge_run.py judge-export   --run-dir <run>          # images + questions
 $PY scripts/remediation/candidate_search/judge_run.py judge-import   --run-dir <run>          # answers -> VERDICTS
@@ -1117,10 +1173,13 @@ $PY scripts/remediation/candidate_search/judge_run.py insert-claims  --run-dir <
 $PY $IH/run.py read          --run-dir $I
 $PY $IH/run.py fetch         --run-dir $I --root $OFFSITE --target insert
 $PY $IH/run.py insert-plan   --run-dir $I
+$PY $IH/run.py transfer      --run-dir $I --root $OFFSITE --rehearse   # optional: into /tmp on the VPS, removed
+$PY $IH/run.py transfer      --run-dir $I --root $OFFSITE              # the files, before the first --apply
 for step in --check --rehearse --apply --readback --rehearse-rollback; do
     $PY $IH/insert_writer.py $I/chunk-001 $step        # one at a time, they exclude each other
 done
 $PY $IH/run.py insert-accept --run-dir $I
+$PY $IH/run.py served        --run-dir $I                              # every file over HTTPS
 ```
 
 **A wave whose file is the 2025 import's, not the judge's**, adds one step in front:
@@ -1589,7 +1648,8 @@ $PY scripts/remediation/candidate_search/judge_run.py insert-claims --run-dir $C
 $PY scripts/remediation/import_hero/run.py read --run-dir $I
 $PY scripts/remediation/import_hero/run.py fetch --run-dir $I --root $OFFSITE --target insert --min-width 800 --min-height 300
 $PY scripts/remediation/import_hero/run.py insert-plan --run-dir $I
-#   insert_writer.py's five steps per chunk, then insert-accept (section 3.7, "The INSERT waves")
+$PY scripts/remediation/import_hero/run.py transfer --run-dir $I --root $OFFSITE   # the files, before the first --apply
+#   insert_writer.py's five steps per chunk, then insert-accept and `served` (section 3.7, "The INSERT waves")
 $PY $D59 outcomes --run-dir $C --insert-run $I                    # the per-site outcome + owner list
 # the third-party ones, after the D17 research run(s) wrote their targets and their INSERT waves ran:
 N=output/remediation/d59/d59-thumb-<date>
@@ -1876,6 +1936,18 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   (the join, `plan`, `fetch` over a read without claims, `fetch --start`, and the refusal of a read
   without the `staged` column); `mechanical/mutation_sweep.py "wd2 d57"`: 16 cases, 16 fired
   (2026-11-11).
+* The files of an INSERT wave (2026-11-11): `tests/remediation/test_import_hero_transfer.py` - the
+  wave's files and the three refusals before anything is sent (a name that cannot travel, a name a
+  row of the site holds, an offsite file missing, in another case or at another byte count), the
+  transfer against a VPS of two directories (other bytes never overwritten, a file that arrived not
+  sent twice, a file that arrives wrong, the rehearsal's scratch directory, the record written
+  once), the real transport's command lines (the container question with the names on stdin, the
+  tar's sha256 before the unpack, the one path prefix that is ever removed; the hash script and the
+  `tar -k` unpack are run through a local `sh` and GNU tar where they exist, skipped by name
+  otherwise), `served`, the merge's outcome table and its copy, and `fetch` refusing the offsite
+  root. `mechanical/mutation_sweep.py "wd2 transfer"`: 42 cases, 42 fired (2026-11-11). Not
+  covered offline: ssh and scp themselves - the section 3.7 measurement of 2026-11-11 is their
+  proof.
 
 ---
 
