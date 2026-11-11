@@ -13173,8 +13173,8 @@ INSERT_SITE_CASES: list[Case] = [
     Case(
         "insert-site: leaving the staged rows out keeps a retired row without a reason",
         REPO / "pipeline/utils/public_sites.py",
-        "f\"AND COALESCE({_column(alias, 'scope_reason')}, '') LIKE '{D57_STAGED_PREFIX}%')\"",
-        "f\"AND {_column(alias, 'scope_reason')} LIKE '{D57_STAGED_PREFIX}%')\"",
+        "f\"AND COALESCE({_column(alias, 'scope_reason')}, '') LIKE '{prefix}%')\"",
+        "f\"AND {_column(alias, 'scope_reason')} LIKE '{prefix}%')\"",
         "test_leaving_the_staged_rows_out_keeps_every_other_retired_row",
         "tests/pipeline/test_public_sites.py",
     ),
@@ -13296,6 +13296,31 @@ INSERT_SITE_CASES: list[Case] = [
         "and True",
         "test_a_site_the_insert_lane_created_after_the_horizon_was_not_there",
         CARD_TESTS,
+    ),
+    # the plan and the last exported round (G8); the undo's reason IndexNow reads (G7)
+    guard(
+        "insert-site: the last exported round is imported",
+        INSERT_PLAN,
+        "    if unimported:",
+        "test_the_plan_waits_for_the_import_of_the_last_exported_round",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the rounds after the import are the unimported ones",
+        INSERT_RESEARCH,
+        '    return [r["round"] for r in read_rounds(run) if r["round"] > imported]\n',
+        '    return [r["round"] for r in read_rounds(run) if r["round"] < imported]\n',
+        "test_the_plan_waits_for_the_import_of_the_last_exported_round",
+        INSERT_TESTS,
+    ),
+    Case(
+        "insert-site: the undo's reason begins with the undone prefix",
+        INSERT_WRITER,
+        '        f"{D57_UNDONE_PREFIX} ({step.rollback_stamp}): retired, never deleted - '
+        'ancient_nerds is "\n',
+        '        f"D57 undone ({step.rollback_stamp}): retired, never deleted - ancient_nerds is "\n',
+        "test_the_undo_moves_only_the_staged_reason",
+        INSERT_TESTS,
     ),
 ]
 CASES += INSERT_SITE_CASES
@@ -13817,7 +13842,7 @@ D58_CASES: list[Case] = [
     Case(
         "d58 lane: the invariant is the violation SQL",
         IDENTITY_LANES,
-        "                predicate=unretire_violation_sql(),\n",
+        "                predicate=unretire_violation_sql(d57=d57),\n",
         '                predicate="1 = 0",\n',
         "test_the_one_transition_is_a_guarded_un_retirement_and_its_rollback_retires",
         UNRETIRE_TESTS,
@@ -13898,7 +13923,7 @@ D58_CASES: list[Case] = [
     guard(
         "d58 plan: no decision names another retirement",
         UNRETIRE,
-        "        if not d50 and not reason_now.startswith((DATE_RETIRED_PREFIX, MUSEUM_PREFIX)):",
+        "        if not d50 and not reason_now.startswith(CLASS_PREFIXES):",
         "test_a_retirement_no_decision_names_is_left_alone_and_not_listed",
         UNRETIRE_TESTS,
     ),
@@ -15110,6 +15135,303 @@ D153_CASES: list[Case] = [
     ),
 ]
 CASES += D153_CASES
+
+
+# ---------------- D57 go-live (owner decision D143, orchestrator decision O12 of 2026-11-10)
+#: The un-retire class of the staged inserts (`scope_unretire.py`, `identity_lanes.py`) and
+#: IndexNow's removed pages, which leave out a site the insert created hidden. Every label starts
+#: with "d57 unretire" or "d57 indexnow" - `mutation_sweep.py "d57 unretire" "d57 indexnow"` runs
+#: exactly these (a bare "d57" also runs the image lanes' "wd2 d57" cases).
+INDEXNOW = REPO / "pipeline/indexnow.py"
+INDEXNOW_TESTS = "tests/pipeline/test_indexnow.py"
+INDEXNOW_HIDDEN = "test_ein_versteckt_angelegter_d57_ort_ist_keine_entfernte_seite"
+PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
+D57_SHOWN = "test_a_staged_site_with_its_text_and_its_picture_is_shown"
+D57_TEXT = "test_a_staged_site_waits_for_its_checked_description"
+D57_PICTURE = "test_a_staged_site_waits_for_its_confirmed_picture"
+D57_SQL = "test_a_staged_site_passes_with_its_checked_description_and_its_confirmed_picture"
+D57_TEXT_SQL = "test_a_staged_site_passes_only_with_a_checked_description"
+D57_PICTURE_SQL = "test_a_staged_site_passes_only_with_one_live_hero_its_thumbnail_names"
+D57_STAGED_SQL = "test_a_staged_site_passes_only_when_this_write_took_its_staged_reason_away"
+_LIVE_HERO = (
+    '    return f"w.site_id = {alias}.id AND w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE"\n'
+)
+_TEXT_CHECKED = (
+    "    return f\"(trim(coalesce({a}.description, '')) <> '' AND coalesce({recorded}, false))\"\n"
+)
+
+D57_GO_LIVE_CASES: list[Case] = [
+    # -- the planner
+    Case(
+        "d57 unretire plan: the staged reason is a class",
+        UNRETIRE,
+        "CLASS_PREFIXES = (DATE_RETIRED_PREFIX, MUSEUM_PREFIX, D57_STAGED_PREFIX)\n",
+        "CLASS_PREFIXES = (DATE_RETIRED_PREFIX, MUSEUM_PREFIX)\n",
+        D57_SHOWN,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire plan: a staged site has its own decision",
+        UNRETIRE,
+        "        elif reason_now.startswith(D57_STAGED_PREFIX):\n"
+        "            decided = _staged_decision(site, entry)\n",
+        "",
+        D57_SHOWN,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire plan: a shown site is no staged one",
+        UNRETIRE,
+        '        f"{D57_REASON_PREFIX}the staged insert holds a checked description and one hero '
+        'picture "\n',
+        '        f"{D57_STAGED_PREFIX} the staged insert holds a checked description and one hero '
+        'picture "\n',
+        D57_SHOWN,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: the staged retirement is journalled",
+        UNRETIRE,
+        "        if entry is None:",
+        "test_only_a_journalled_staged_retirement_is_taken_back",
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: no text, no page",
+        UNRETIRE,
+        "    if text is not None:",
+        D57_TEXT,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: a blank text is none",
+        UNRETIRE,
+        '    if not site["has_description"]:',
+        D57_TEXT,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: the text is the checked one",
+        UNRETIRE,
+        '    if site["description_sha256"] not in recorded:',
+        D57_TEXT,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: no picture, no page",
+        UNRETIRE,
+        "    if picture is not None:",
+        D57_PICTURE,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: exactly one live hero",
+        UNRETIRE,
+        "    if len(heroes) != 1:",
+        D57_PICTURE,
+        UNRETIRE_TESTS,
+    ),
+    guard(
+        "d57 unretire plan: the thumbnail names the hero",
+        UNRETIRE,
+        '    if site["thumbnail_url"] != wanted:',
+        D57_PICTURE,
+        UNRETIRE_TESTS,
+    ),
+    # -- the invariant
+    Case(
+        "d57 unretire sql: a D50 site is shown by D50 alone",
+        IDENTITY_LANES,
+        "        f\"(u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')} AND NOT {d50} \"\n",
+        "        f\"(u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')} \"\n",
+        D57_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: this write took the staged reason",
+        IDENTITY_LANES,
+        "        f\"AND {staged_before_sql('u')} \"\n",
+        "",
+        D57_STAGED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the reason before was the staged one",
+        IDENTITY_LANES,
+        '        f"coalesce((SELECT r.new_value = {a}.scope_reason AND r.old_value LIKE "\n'
+        "        f\"{sql_literal(D57_STAGED_PREFIX + '%')} FROM remediation_change_log r \"\n",
+        '        f"coalesce((SELECT r.new_value = {a}.scope_reason FROM remediation_change_log r "\n',
+        D57_STAGED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the latest reason row decides",
+        IDENTITY_LANES,
+        '        f"AND r.row_pk = CAST({a}.id AS text) ORDER BY r.id DESC LIMIT 1), false)"\n',
+        '        f"AND r.row_pk = CAST({a}.id AS text) ORDER BY r.id LIMIT 1), false)"\n',
+        D57_STAGED_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the invariant asks the text",
+        IDENTITY_LANES,
+        "        f\"AND {description_checked_sql('u')} \"\n",
+        "",
+        D57_TEXT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: a blank text is none",
+        IDENTITY_LANES,
+        _TEXT_CHECKED,
+        '    return f"(coalesce({recorded}, false))"\n',
+        D57_TEXT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: a record hashes the text",
+        IDENTITY_LANES,
+        _TEXT_CHECKED,
+        "    return f\"(trim(coalesce({a}.description, '')) <> '')\"\n",
+        D57_TEXT_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the provenance hashes it too",
+        IDENTITY_LANES,
+        "        for key in (wc4.CHECK_KEY, wc4.M.PROVENANCE_KEY)\n",
+        "        for key in (wc4.CHECK_KEY,)\n",
+        D57_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the check record hashes it too",
+        IDENTITY_LANES,
+        "        for key in (wc4.CHECK_KEY, wc4.M.PROVENANCE_KEY)\n",
+        "        for key in (wc4.M.PROVENANCE_KEY,)\n",
+        D57_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the invariant asks the picture",
+        IDENTITY_LANES,
+        "        f\"AND {picture_confirmed_sql('u')})\"\n",
+        '        ")"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: exactly one live hero",
+        IDENTITY_LANES,
+        '        f"((SELECT count(*) {live}) = 1 "\n',
+        '        f"((SELECT count(*) {live}) >= 1 "\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the thumbnail names the hero",
+        IDENTITY_LANES,
+        '        f"AND EXISTS (SELECT 1 {live} AND {a}.thumbnail_url = {path}))"\n',
+        '        f"AND EXISTS (SELECT 1 {live}))"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: a hero row carries the flag",
+        IDENTITY_LANES,
+        _LIVE_HERO,
+        '    return f"w.site_id = {alias}.id AND w.is_excluded IS NOT TRUE"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: an excluded row is no hero",
+        IDENTITY_LANES,
+        _LIVE_HERO,
+        '    return f"w.site_id = {alias}.id AND w.is_hero IS TRUE"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire sql: the hero is the site's own",
+        IDENTITY_LANES,
+        _LIVE_HERO,
+        '    return f"w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE"\n',
+        D57_PICTURE_SQL,
+        UNRETIRE_TESTS,
+    ),
+    # -- the lane
+    Case(
+        "d57 unretire lane: the premise holds the picture",
+        IDENTITY_LANES,
+        "        premise_sql=SCOPE_UNRETIRE_PREMISE_SQL if d57 else _PREMISE_BEFORE_D57,\n",
+        "        premise_sql=_PREMISE_BEFORE_D57,\n",
+        "test_the_premise_holds_the_picture_a_staged_site_is_shown_with",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire lane: the delivered wave keeps its text",
+        IDENTITY_LANES,
+        "    d57 = wave not in WAVES_BEFORE_D57\n",
+        "    d57 = True\n",
+        "test_the_delivered_wave_keeps_the_text_it_was_applied_with",
+        UNRETIRE_TESTS,
+    ),
+    Case(
+        "d57 unretire lane: the export reads the live heroes",
+        UNRETIRE,
+        "    f\"WHERE {live_hero_sql('u')}) AS hero_files, \"\n",
+        '    "WHERE w.site_id = u.id) AS hero_files, "\n',
+        "test_the_export_is_one_read_only_snapshot_of_the_retired_and_their_journal",
+        UNRETIRE_TESTS,
+    ),
+    # -- IndexNow's removed pages
+    Case(
+        "d57 indexnow: a site created hidden is no removed page",
+        INDEXNOW,
+        '    + " AND NOT (l.old_value IS NULL AND ("\n'
+        '    + d57_staged("u")\n'
+        '    + " OR "\n'
+        '    + d57_undone("u")\n'
+        '    + "))"\n',
+        "",
+        INDEXNOW_HIDDEN,
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: a staged site is left out",
+        INDEXNOW,
+        '    + d57_staged("u")\n    + " OR "\n',
+        "",
+        INDEXNOW_HIDDEN,
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: an undone insert is left out",
+        INDEXNOW,
+        '    + " OR "\n    + d57_undone("u")\n',
+        "",
+        INDEXNOW_HIDDEN,
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: only the creating row is left out",
+        INDEXNOW,
+        '    + " AND NOT (l.old_value IS NULL AND ("\n',
+        '    + " AND NOT (("\n',
+        "test_ein_gezeigter_und_wieder_versteckter_d57_ort_wird_gemeldet",
+        INDEXNOW_TESTS,
+    ),
+    Case(
+        "d57 indexnow: the undone predicate reads the undo's reason",
+        PUBLIC_SITES,
+        "    return _retired_as(alias, D57_UNDONE_PREFIX)\n",
+        "    return _retired_as(alias, D57_STAGED_PREFIX)\n",
+        "test_d57_undone_is_a_retired_row_with_the_undos_reason",
+        "tests/pipeline/test_public_sites.py",
+    ),
+]
+CASES += D57_GO_LIVE_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

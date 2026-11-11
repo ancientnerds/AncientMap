@@ -1,11 +1,12 @@
-"""The scope lane's un-retire (owner decisions D58 of 2026-10-24 and D50 of 2026-10-19).
+"""The scope lane's un-retire (owner decisions D58, D50 and D143 with orchestrator decision O12).
 
-Two decisions bring retired curated sites back, written as every scope lane writes - `scope_status`
-and `scope_reason` of one site in one transaction, journalled (`identity_lanes.scope_unretire_lane`,
-`apply.py --lane scope-unretire-<wave>`). The one transition is `retired` -> `in_scope` with a new
-reason, guarded by the old values, the entry's premise (name, type, point, country, dates and the
-md5 of the description) and an invariant inside the transaction; the rollback retires the site
-again with the reason it had.
+Three decisions bring retired curated sites back, written as every scope lane writes -
+`scope_status` and `scope_reason` of one site in one transaction, journalled
+(`identity_lanes.scope_unretire_lane`, `apply.py --lane scope-unretire-<wave>`). The one transition
+is `retired` -> `in_scope` with a new reason, guarded by the old values, the entry's premise (name,
+type, point, country, dates, the md5 of the description and of the card, the thumbnail and the hero
+file) and an invariant inside the transaction; the rollback retires the site again with the reason
+it had.
 
 **D58, the label rule.** "Only the medieval Old World of Europe, Byzantium and the Vikings is out;
 non-European sites of 500-1500 stay in; the sites retired under the numeric cut come back through
@@ -48,6 +49,24 @@ journal row of its `card_stats.card_description` is later than the one of its di
 card lane wrote the card in the knowledge of the dispute, D21); until then it is skipped
 `d50-card-not-cleared`. Premise and invariant hold the card's md5 and the same test.
 
+**D57, the staged inserts** (owner decision D143, orchestrator decision O12). "The 37 rows are
+inserted hidden (retired with a reason beginning `D57 staged:`), get description and pictures while
+hidden, and are un-retired only with a description and a confirmed picture." A retired curated site
+whose reason begins `D57_STAGED_PREFIX` and whose retirement the journal holds comes back when
+
+* its description is not blank and its check record or its provenance hashes it
+  (`raw_data._description_check` / `_description_provenance`, `desc_sha256`): the text a lane
+  wrote and checked, not one edited since - otherwise it is skipped `d57-no-description`;
+* it has exactly one live hero row (the hero flag on a row that is not excluded) and its
+  `thumbnail_url` names that row's file (`hero_repair.thumbnail.local_path`): the picture the image
+  INSERT lane wrote after the image roles judged it - otherwise it is skipped `d57-no-picture`.
+
+A site that ends without text or picture stays hidden and stays listed in SKIPPED.jsonl. Premise
+and invariant hold both: a description, a thumbnail or a hero row that moved after the plan is
+refused (`identity_lanes.description_checked_sql`, `picture_confirmed_sql`). The card follows on the
+shown site (O12), so no card is asked. A site whose un-retirement was rolled back holds the staged
+reason again and is planned again once it qualifies.
+
 **Waves.** A write lands at most `MAX_SITES` sites and a run stamp is applied once: `write --wave
 <label>` plans the first `MAX_SITES` sites (by id) of a fresh export into
 `mechanical_scope_unretire/<label>/`; a wave is refused when an earlier wave was planned from the
@@ -56,7 +75,7 @@ E wrote their texts.
 
 Files per wave: `PLAN.jsonl`, `SKIPPED.jsonl`, `PLAN.md`, `ROLLBACK.sql`, `SOURCE.json`; the export
 is `export/export.jsonl` (read-only, one repeatable-read snapshot). The runbook is
-`docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 4.
+`docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 2.2.
 """
 
 from __future__ import annotations
@@ -76,12 +95,14 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+from hero_repair.thumbnail import local_path  # noqa: E402
 from phase4 import wc4  # noqa: E402
 from served_image.state import StateError, json_text, sha256_text, write_text_once  # noqa: E402
 from wc import enrich as E  # noqa: E402
 
 from mechanical.identity_lanes import (  # noqa: E402
     D50_REASON_PREFIX,
+    D57_REASON_PREFIX,
     D58_MUSEUM_REASON_PREFIX,
     D58_REASON_PREFIX,
     DATE_RETIRED_PREFIX,
@@ -90,10 +111,12 @@ from mechanical.identity_lanes import (  # noqa: E402
     SCOPE_UNRETIRE_LANE,
     SCOPE_UNRETIRE_PREMISE_SQL,
     SCOPE_UNRETIRE_ROOT,
+    live_hero_sql,
     scope_unretire_lane,
 )
 from mechanical.lane import (  # noqa: E402
     D50_DISPUTED_SITES,
+    D57_STAGED_PREFIX,
     NON_SITE_TYPES,
     NOT_A_SITE_PREFIX,
     Lane,
@@ -129,6 +152,9 @@ DEFAULT_OUT = REPO / "output" / "remediation" / SCOPE_UNRETIRE_ROOT
 MAX_SITES = 100
 TEST_ID = "D58/scope-unretire"
 MUSEUM_PREFIX = "E3 museum rule"
+#: The reasons of the retirements a decision names, besides the pinned D50 sites: the numeric
+#: cut's date and museum retirements (D58) and the staged inserts (D57, O12).
+CLASS_PREFIXES = (DATE_RETIRED_PREFIX, MUSEUM_PREFIX, D57_STAGED_PREFIX)
 #: The museums scope-e4 retired by the museum rule (plan section 8.2: "the 3 Museum rows that
 #: leave") for exhibits dated past 500 AD, by id, with the exhibits their reason names (read on
 #: production 2026-10-24). A museum comes back when its stored reason still names these exhibits and
@@ -155,6 +181,14 @@ _SITE_COLUMNS = (
     "AND cs.card_description IS NOT NULL) AS has_card, "
     "(SELECT max(c.id) FROM remediation_change_log c WHERE c.table_name = 'card_stats' "
     "AND c.column_name = 'card_description' AND c.row_pk = u.id::text) AS card_journal_id, "
+    # what a staged D57 site is shown with: its text and the records that hash it, its picture
+    "(trim(coalesce(u.description, '')) <> '') AS has_description, "
+    "encode(sha256(convert_to(coalesce(u.description, ''), 'UTF8')), 'hex') AS description_sha256, "
+    f"u.raw_data -> {sql_literal(wc4.CHECK_KEY)} ->> 'desc_sha256' AS check_sha256, "
+    f"u.raw_data -> {sql_literal(wc4.M.PROVENANCE_KEY)} ->> 'desc_sha256' AS provenance_sha256, "
+    "u.thumbnail_url, "
+    "(SELECT coalesce(json_agg(w.filename ORDER BY w.filename), '[]'::json) FROM wiki_images w "
+    f"WHERE {live_hero_sql('u')}) AS hero_files, "
     f"{SCOPE_UNRETIRE_PREMISE_SQL} AS premise"
 )
 #: Every retired curated site: the population the planner decides over.
@@ -481,6 +515,70 @@ def _dispute_decision(
     return reason, "d50-disputed", evidence
 
 
+def description_problem(site: Mapping[str, Any]) -> str | None:
+    """Why a staged site holds no checked description, or None: the text is blank, or neither its
+    check record nor its provenance hashes it (`identity_lanes.description_checked_sql`, the
+    invariant's form of the same test)."""
+    if not site["has_description"]:
+        return "it holds no description"
+    recorded = (site["check_sha256"], site["provenance_sha256"])
+    if site["description_sha256"] not in recorded:
+        return (
+            f"its description (sha256 {site['description_sha256']}) is hashed by neither its "
+            f"check record ({recorded[0]}) nor its provenance ({recorded[1]}): no lane checked "
+            "the text it holds"
+        )
+    return None
+
+
+def picture_problem(site: Mapping[str, Any]) -> str | None:
+    """Why a staged site holds no confirmed picture, or None: it has not exactly one live hero row,
+    or its thumbnail does not name that row's file (`identity_lanes.picture_confirmed_sql`)."""
+    heroes = list(site["hero_files"])
+    if len(heroes) != 1:
+        return f"it has {len(heroes)} live hero row(s), not one"
+    wanted = local_path(str(site["id"]), str(heroes[0]))
+    if site["thumbnail_url"] != wanted:
+        return f"its thumbnail_url is {site['thumbnail_url']!r}, its hero file is {wanted}"
+    return None
+
+
+def _staged_decision(
+    site: Mapping[str, Any], entry: Mapping[str, Any]
+) -> tuple[str, str, list[dict[str, Any]]] | Verdict:
+    """A staged D57 insert: shown once it holds a checked description and a confirmed picture."""
+    text = description_problem(site)
+    if text is not None:
+        return _skip(
+            site,
+            "d57-no-description",
+            f"O12 shows a staged site only with a checked description: {text}",
+        )
+    picture = picture_problem(site)
+    if picture is not None:
+        return _skip(
+            site,
+            "d57-no-picture",
+            f"O12 shows a staged site only with a confirmed picture: {picture}",
+        )
+    sha = str(site["description_sha256"])
+    by = wc4.CHECK_KEY if site["check_sha256"] == sha else wc4.M.PROVENANCE_KEY
+    reason = (
+        f"{D57_REASON_PREFIX}the staged insert holds a checked description and one hero picture "
+        "its thumbnail names; shown by the scope lane"
+    )
+    evidence = [
+        _journal_evidence(entry),
+        {"source": f"unified_sites.raw_data.{by}", "url": "desc_sha256", "quote": sha},
+        {
+            "source": "wiki_images",
+            "url": str(site["thumbnail_url"]),
+            "quote": str(site["hero_files"][0]),
+        },
+    ]
+    return reason, "d57-staged", evidence
+
+
 def build_plan(export: Export, *, built_at: str, lane: Lane) -> Plan:
     """Every un-retirement the export allows, as the lane's cells - all of them; a wave is its
     first `MAX_SITES` sites (`first_wave`). A pure function of the export."""
@@ -493,8 +591,8 @@ def build_plan(export: Export, *, built_at: str, lane: Lane) -> Plan:
         if site["scope_status"] != RETIRED:
             raise UnretireError(f"{sid}: the export's site part holds a site that is not retired")
         entry = latest_retirement(sid, export.journal)
-        if not d50 and not reason_now.startswith((DATE_RETIRED_PREFIX, MUSEUM_PREFIX)):
-            # duplicates, non-sites and the rest: no decision of D58 or D50 names them. The
+        if not d50 and not reason_now.startswith(CLASS_PREFIXES):
+            # duplicates, non-sites and the rest: no decision of D58, D50 or D57 names them. The
             # numeric cut's own retirements of that kind (its duplicates, `duplicate_of:`, and
             # `E3: no date, and ...`: a natural or modern place without a date) are listed, so
             # every retirement of the numeric cut is in PLAN.jsonl or SKIPPED.jsonl.
@@ -516,6 +614,8 @@ def build_plan(export: Export, *, built_at: str, lane: Lane) -> Plan:
             continue
         if d50:
             decided = _dispute_decision(site, entry, export.disputes)
+        elif reason_now.startswith(D57_STAGED_PREFIX):
+            decided = _staged_decision(site, entry)
         elif entry["run_stamp"] not in NUMERIC_CUT_STAMPS:
             decided = _skip(
                 site,
@@ -540,6 +640,7 @@ def build_plan(export: Export, *, built_at: str, lane: Lane) -> Plan:
         "d58_date": rules.count("d58-label-rule"),
         "d58_museum": rules.count("d58-museum"),
         "d50_disputed": rules.count("d50-disputed"),
+        "d57_staged": rules.count("d57-staged"),
         "skipped": len(skipped),
     }
     for verdict in skipped:
@@ -589,7 +690,7 @@ def write_wave(out: Path, wave: str, *, built_at: str) -> dict[str, Any]:
     write_skipped_jsonl(plan, target / "SKIPPED.jsonl")
     write_rollback_sql(plan, target / "ROLLBACK.sql", plan_path=target / "PLAN.jsonl")
     lines = [
-        f"# Scope un-retire (D58, D50) - wave {wave}",
+        f"# Scope un-retire (D58, D50, D57) - wave {wave}",
         "",
         f"Built {plan.built_at} by `scripts/remediation/mechanical/scope_unretire.py` from the "
         f"export of {export.exported_at}. Lane `{lane.name}`, run stamp `{lane.run_stamp}`, test "

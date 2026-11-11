@@ -77,18 +77,34 @@ def is_retired(alias: str = "") -> str:
 #: public - no page, no dot, no card draw - and the scope lane shows it only once it holds a
 #: description and a picture. No ``%``, ``_`` or quote: the text stands in a LIKE pattern.
 D57_STAGED_PREFIX = "D57 staged:"
+#: The insert lane's undo keeps the row retired and moves its reason from the staged one to a
+#: text that begins with this (``insert_site/writer.py``): no lane works on the row any more.
+#: The same rule for a LIKE pattern.
+D57_UNDONE_PREFIX = "D57 insert undone"
+
+
+def _retired_as(alias: str, prefix: str) -> str:
+    """Two-valued on purpose (never NULL), so ``NOT (...)`` keeps a retired row whose reason is
+    NULL: a reader that leaves these rows out must not lose the others with them."""
+    return (
+        f"({_column(alias, 'scope_status')} IS NOT DISTINCT FROM '{RETIRED}' "
+        f"AND COALESCE({_column(alias, 'scope_reason')}, '') LIKE '{prefix}%')"
+    )
 
 
 def d57_staged(alias: str = "") -> str:
-    """SQL predicate: the row is a staged D57 insert - retired, never shown yet.
+    """SQL predicate: the row is a staged D57 insert - retired with the staged reason.
 
     Two-valued on purpose (never NULL), so ``NOT (d57_staged())`` keeps a retired row whose
     reason is NULL: a reader that leaves the staged rows out must not lose the others with them.
     """
-    return (
-        f"({_column(alias, 'scope_status')} IS NOT DISTINCT FROM '{RETIRED}' "
-        f"AND COALESCE({_column(alias, 'scope_reason')}, '') LIKE '{D57_STAGED_PREFIX}%')"
-    )
+    return _retired_as(alias, D57_STAGED_PREFIX)
+
+
+def d57_undone(alias: str = "") -> str:
+    """SQL predicate: the row is a D57 insert that was undone - retired with the undo's reason.
+    Two-valued like ``d57_staged()``."""
+    return _retired_as(alias, D57_UNDONE_PREFIX)
 
 
 def duplicate_survivor_id(scope_reason: str | None) -> str | None:

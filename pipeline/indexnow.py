@@ -19,7 +19,8 @@ Who calls submit():
   falls in the window (apply_remediation_change() does not touch updated_at);
   plus the curated sites RETIRED in the window (E4): their URL now answers 410,
   and the protocol asks for removed URLs as well as changed ones, so Bing drops
-  them without waiting for a recrawl;
+  them without waiting for a recrawl - but not a site the D57 insert created
+  hidden (O12) that is still staged or was undone: it never had a page;
 - the paper publish/unpublish routes and the worker's auto-publish, and the
   weekly journal generator, right after their commit (one URL each);
 - scripts/indexnow_submit.py for the one-off bulk submission and by hand.
@@ -43,7 +44,14 @@ from sqlalchemy.orm import Session
 from pipeline.database import NewsArticle, NewsItem, get_session
 from pipeline.news_visibility import public_story_criteria
 from pipeline.sites_html_renderer import encode_path, site_path
-from pipeline.utils.public_sites import curated_page, is_retired, journal_join, last_change
+from pipeline.utils.public_sites import (
+    curated_page,
+    d57_staged,
+    d57_undone,
+    is_retired,
+    journal_join,
+    last_change,
+)
 from pipeline.utils.slugs import BASE_URL, slugify, story_slug
 
 logger = logging.getLogger(__name__)
@@ -81,14 +89,25 @@ _CHANGED_SITES_SQL = text(
 # Joined on site_id_ref (a uuid, indexed): a CAST of row_pk would also be evaluated for the
 # wiki_images rows, whose row_pk is an integer, and fail. row_pk = id keeps it to writes of
 # the site row itself.
+# Left out: the row the D57 insert creates its site with (orchestrator decision O12,
+# 2026-11-10) - scope_status from nothing (old_value NULL) to 'retired' - while the site is
+# staged, or once the insert was undone (the undo moves only the reason). That site never had a
+# page, so there is no removed URL to announce. A staged site that was shown and is retired
+# again (the un-retire's rollback writes 'in_scope' -> 'retired' and the staged reason back)
+# did have one, and is announced by that row.
 _RETIRED_SITES_SQL = text(
     "SELECT DISTINCT u.country, u.name, u.id FROM remediation_change_log l "
-    "JOIN unified_sites u ON u.id = l.site_id_ref AND l.row_pk = u.id::text "
+    "JOIN unified_sites u ON u.id = l.site_id_ref AND l.row_pk = CAST(u.id AS text) "
     "WHERE l.table_name = 'unified_sites' AND l.column_name = 'scope_status' "
     "AND l.new_value = 'retired' AND l.applied_at >= :since AND "
     + _CURATED
     + " AND "
     + is_retired("u")
+    + " AND NOT (l.old_value IS NULL AND ("
+    + d57_staged("u")
+    + " OR "
+    + d57_undone("u")
+    + "))"
 )
 
 

@@ -1,4 +1,4 @@
-"""The label rule's SQL and the scope lane's un-retire (owner decisions D58 of 2026-10-24, D50 of 2026-10-19).
+"""The label rule's SQL and the scope lane's un-retire (owner decisions D58, D50 and D143 with O12).
 
 `mechanical.lane` renders the label rule (`pipeline/normalizers/dates.py`) into SQL; evaluated in
 SQLite over every kind of row the rule distinguishes it must answer exactly what Python answers.
@@ -10,6 +10,7 @@ the rows it must let through. Nothing here opens a socket or touches a database.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import sys
@@ -32,8 +33,20 @@ from phase4 import wc4  # noqa: E402
 
 from pipeline.normalizers import dates as D  # noqa: E402
 
-WAVE = "2026-10-24"
+WAVE = "2026-11-12"
+#: The wave applied before the D57 class existed: it keeps the text it was applied with.
+DELIVERED_WAVE = "2026-10-24"
 SCOPE_E4 = "2026-09-23_mechanical-scope-e4"
+INSERT_STAMP = "d57-2026-11-05_insert-site-s001"
+PELLA = "e0000000-0000-4000-8000-00000000000e"
+MERV = "f0000000-0000-4000-8000-00000000000f"
+STAGED_REASON = (
+    f"{L.D57_STAGED_PREFIX} inserted hidden as an Ancient Nerds Original by the insert lane, "
+    f"{INSERT_STAMP} (D57, in scope under D58); shown by the scope lane once it holds a "
+    "description and a picture (O12)"
+)
+STAGED_TEXT = "Pella was the capital of the ancient kingdom of Macedon [1]."
+HERO_FILE = "Pella_House_of_Dionysos.webp"
 PRAMBANAN = "21bd525e-fe10-40dd-96be-32d3c8d36d26"
 CHROBRY = "a26993c6-b562-4c28-a584-8de2c9312dad"
 NIHA = "a451f6be-a506-41f6-9bf7-85d8c7c7ac8e"
@@ -55,6 +68,15 @@ SOURCE_B = {
     "title": "Claim",
     "quote": "Kimura claims a monument.",
 }
+
+
+def sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def hashed_by(key: str, text: str = STAGED_TEXT) -> str:
+    """A `raw_data` whose record `key` hashes `text`."""
+    return json.dumps({key: {"desc_sha256": sha256(text)}})
 
 
 # ------------------------------------------------------------------------------ the label SQL
@@ -125,18 +147,30 @@ def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
     db.execute(
         "CREATE TABLE unified_sites (id TEXT, source_id TEXT, name TEXT, site_type TEXT, "
         "country TEXT, lat REAL, lon REAL, period_start INT, period_end INT, scope_status TEXT, "
-        "scope_reason TEXT, description TEXT)"
+        "scope_reason TEXT, description TEXT, raw_data TEXT, thumbnail_url TEXT)"
     )
     db.execute(
         "CREATE TABLE remediation_change_log (id INT, table_name TEXT, column_name TEXT, "
-        "row_pk TEXT, new_value TEXT, evidence TEXT, run_stamp TEXT)"
+        "row_pk TEXT, old_value TEXT, new_value TEXT, evidence TEXT, run_stamp TEXT)"
     )
     db.execute("CREATE TABLE card_stats (site_id TEXT, card_description TEXT)")
     db.execute("CREATE TABLE site_external_ids (site_id TEXT, kind TEXT, value TEXT)")
+    db.execute(
+        "CREATE TABLE wiki_images (site_id TEXT, filename TEXT, is_hero INT, is_excluded INT)"
+    )
+    # Postgres' `encode(sha256(convert_to(text, 'UTF8')), 'hex')`, piece by piece and strict as
+    # there: NULL in, NULL out
+    for name, args, call in (
+        ("convert_to", 2, lambda value, _encoding: value.encode("utf-8")),
+        ("sha256", 1, lambda data: hashlib.sha256(data).digest()),
+        ("encode", 2, lambda data, _format: data.hex()),
+    ):
+        db.create_function(name, args, lambda *a, call=call: None if a[0] is None else call(*a))
     for r in rows:
         db.execute(
             "INSERT INTO unified_sites VALUES (:id, 'ancient_nerds', :name, :site_type, :country, "
-            ":lat, :lon, :period_start, :period_end, :scope_status, :scope_reason, :description)",
+            ":lat, :lon, :period_start, :period_end, :scope_status, :scope_reason, :description, "
+            ":raw_data, :thumbnail_url)",
             {
                 "name": "a site",
                 "site_type": "Temple complex",
@@ -144,6 +178,8 @@ def _sites_db(rows: list[dict[str, Any]]) -> sqlite3.Connection:
                 "scope_status": "in_scope",
                 "scope_reason": None,
                 "description": "A text.",
+                "raw_data": None,
+                "thumbnail_url": None,
                 **r,
             },
         )
@@ -286,12 +322,46 @@ class TestTheLane:
         assert status.allowed_new_values == ("in_scope",) and not status.fills_null
         assert not self.lane.cell("scope_reason").fills_null
         assert ", md5(coalesce(u.description, '')), " in self.lane.premise_sql
+        assert (
+            ", md5(coalesce((SELECT cs.card_description FROM card_stats cs WHERE cs.site_id = "
+            "u.id), '')), "
+        ) in self.lane.premise_sql
+        assert self.lane.premise_sql.startswith(L.SCOPE_REVIEW_PREMISE_SQL.removesuffix(")"))
+        assert self.lane.post_commit_residual is L.UNDECIDED_OUTSIDE_LABEL_WINDOW
+
+    def test_the_premise_holds_the_picture_a_staged_site_is_shown_with(self) -> None:
+        assert self.lane.premise_sql == IL.SCOPE_UNRETIRE_PREMISE_SQL
         assert self.lane.premise_sql.endswith(
+            ", coalesce(u.thumbnail_url, 'NULL'), coalesce((SELECT string_agg(w.filename, ' ; ' "
+            "ORDER BY w.filename) FROM wiki_images w WHERE w.site_id = u.id AND w.is_hero IS TRUE "
+            "AND w.is_excluded IS NOT TRUE), 'NULL'))"
+        )
+
+    def test_the_delivered_wave_keeps_the_text_it_was_applied_with(self) -> None:
+        """The wave of 2026-10-24 is applied: `--rehearse-rollback` and the rollback itself verify
+        its committed ROLLBACK.sql against what the lane renders, so its premise (guard 5 of both
+        statements) and its invariant are the ones of before the D57 class."""
+        delivered = IL.scope_unretire_lane(DELIVERED_WAVE)
+        assert IL.WAVES_BEFORE_D57 == {DELIVERED_WAVE}
+        assert delivered.premise_sql.endswith(
             "md5(coalesce((SELECT cs.card_description FROM card_stats cs WHERE cs.site_id = u.id), "
             "'')))"
         )
-        assert self.lane.premise_sql.startswith(L.SCOPE_REVIEW_PREMISE_SQL.removesuffix(")"))
-        assert self.lane.post_commit_residual is L.UNDECIDED_OUTSIDE_LABEL_WINDOW
+        assert delivered.site_invariants[0].predicate == IL.unretire_violation_sql(d57=False)
+        assert "D57" not in delivered.site_invariants[0].predicate
+        assert "D57" not in delivered.site_invariants[0].says
+        assert "D57" in self.lane.site_invariants[0].says
+        directory = A.lane_dir(delivered)
+        records = A.load_records(directory / "PLAN.jsonl")
+        for name, statement in (
+            ("APPLY.sql", A.apply_statement),
+            ("ROLLBACK.sql", A.rollback_statement),
+        ):
+            MP.verify_pinned(
+                directory / name,
+                plan_path=directory / "PLAN.jsonl",
+                expected=statement(records, delivered),
+            )
 
     def test_resolve_lane_and_the_readback_reach_it(self) -> None:
         assert L.resolve_lane(f"scope-unretire-{WAVE}") == self.lane
@@ -338,6 +408,10 @@ class TestTheLane:
             "curated D50 sites shown",
             "curated D50 sites shown without a dispute-enriched description",
             "curated D50 sites shown with a card not written after their dispute text",
+            "curated D57 sites staged, not shown yet",
+            "curated D57 sites shown by the un-retire",
+            "curated D57 sites shown without a checked description",
+            "curated D57 sites shown without a confirmed picture",
             "curated rows outside the D58 label window with no scope decision",
             "journal rows for this run that write a status other than in_scope",
             "curated rows with scope_status retired",
@@ -372,11 +446,21 @@ class TestTheInvariantInSql:
         cards: tuple[tuple[str, str], ...] = (),
         card_rows: tuple[tuple[int, str], ...] = (),
         qids: tuple[tuple[str, str], ...] = (),
+        images: tuple[tuple[str, str, int, int], ...] = (),
+        reasons: tuple[tuple[int, str, str | None, str], ...] = (),
     ) -> set[str]:
         """The violators among `rows`, each retired by one journal row under `stamp` (ids below
         every other row), with the description rows `journal` (id, site, text, evidence), the card
-        texts `cards`, the card journal rows `card_rows` and the Wikidata items `qids`."""
+        texts `cards`, the card journal rows `card_rows`, the Wikidata items `qids`, the image rows
+        `images` (site, file, hero, excluded) and the `scope_reason` journal rows `reasons` (id,
+        site, old value, new value)."""
         db = _sites_db(rows)
+        db.executemany("INSERT INTO wiki_images VALUES (?, ?, ?, ?)", images)
+        db.executemany(
+            "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, old_value, "
+            "new_value) VALUES (?, 'unified_sites', 'scope_reason', ?, ?, ?)",
+            reasons,
+        )
         db.executemany(
             "INSERT INTO remediation_change_log (id, table_name, column_name, row_pk, new_value, "
             "run_stamp) VALUES (?, 'unified_sites', 'scope_status', ?, 'retired', ?)",
@@ -491,6 +575,97 @@ class TestTheInvariantInSql:
         assert self.violators(rows, good, cards=card, card_rows=((600, YONAGUNI),)) == set()
         assert self.violators(rows, good, cards=((YONAGUNI, None),)) == set(), "a NULL card"
 
+    # -- D57: a staged insert, shown with its checked description and its confirmed picture
+    shown_reason = IL.D57_REASON_PREFIX + "the staged insert holds ..."
+
+    def shown(self, sid: str = PELLA, **over: Any) -> dict[str, Any]:
+        """A site as the un-retirement leaves it: the D57 reason, a hashed text, its thumbnail."""
+        row = self.site(
+            sid,
+            self.shown_reason,
+            country="Greece",
+            lat=40.76,
+            lon=22.52,
+            period_start=-400,
+            description=STAGED_TEXT,
+            raw_data=hashed_by(wc4.M.PROVENANCE_KEY),
+            thumbnail_url=f"/data/images/wiki/{sid[:8]}/{HERO_FILE}",
+        )
+        return {**row, **over}
+
+    def staged_violators(self, row: dict[str, Any], **over: Any) -> set[str]:
+        """`row` after its un-retirement: one live hero row and the journal row that took its
+        staged reason away, unless `over` says otherwise."""
+        given: dict[str, Any] = {
+            "images": ((row["id"], HERO_FILE, 1, 0),),
+            "reasons": ((900, row["id"], STAGED_REASON, row["scope_reason"]),),
+            "stamp": INSERT_STAMP,
+            **over,
+        }
+        return self.violators([row], [], **given)
+
+    def test_a_staged_site_passes_with_its_checked_description_and_its_confirmed_picture(
+        self,
+    ) -> None:
+        assert self.staged_violators(self.shown()) == set()
+        by_check = self.shown(raw_data=hashed_by(wc4.CHECK_KEY))
+        assert self.staged_violators(by_check) == set(), "the check record hashes it as well"
+        d50 = self.shown(YONAGUNI)
+        assert self.staged_violators(d50) == {YONAGUNI}, "a D50 site is shown by D50 alone"
+
+    def test_a_staged_site_passes_only_with_a_checked_description(self) -> None:
+        for raw_data, text in (
+            (None, STAGED_TEXT),  # no record at all
+            (json.dumps({"description_citations": []}), STAGED_TEXT),  # neither record
+            (hashed_by(wc4.M.PROVENANCE_KEY, "An older text."), STAGED_TEXT),  # edited since
+            (hashed_by(wc4.CHECK_KEY, "An older text."), STAGED_TEXT),
+            (hashed_by(wc4.M.PROVENANCE_KEY, ""), ""),  # a blank text, even a hashed one
+            (hashed_by(wc4.M.PROVENANCE_KEY, "  "), "  "),
+            (hashed_by(wc4.M.PROVENANCE_KEY), None),
+        ):
+            row = self.shown(raw_data=raw_data, description=text)
+            assert self.staged_violators(row) == {PELLA}, (raw_data, text)
+
+    def test_a_staged_site_passes_only_with_one_live_hero_its_thumbnail_names(self) -> None:
+        row = self.shown()
+        for images in (
+            (),  # no image row
+            ((PELLA, HERO_FILE, 0, 0),),  # a row, but no hero
+            ((PELLA, HERO_FILE, 1, 1),),  # the hero row is excluded
+            ((PELLA, HERO_FILE, 1, 0), (PELLA, "Second.webp", 1, 0)),  # two live heroes
+            ((PELLA, "Other.webp", 1, 0),),  # the thumbnail names another file
+            ((PELLA, "Other.webp", 1, 0), (PELLA, HERO_FILE, 0, 0)),  # ... a row that is no hero
+            ((MERV, HERO_FILE, 1, 0),),  # another site's hero
+        ):
+            assert self.staged_violators(row, images=images) == {PELLA}, images
+        beside = ((PELLA, HERO_FILE, 1, 0), (PELLA, "Gallery.webp", 0, 0), (PELLA, "X.webp", 1, 1))
+        assert self.staged_violators(row, images=beside) == set(), "other rows are no heroes"
+        for thumb in (None, "", f"/data/images/wiki/{MERV[:8]}/{HERO_FILE}", HERO_FILE):
+            assert self.staged_violators(self.shown(thumbnail_url=thumb)) == {PELLA}, thumb
+
+    def test_a_staged_site_passes_only_when_this_write_took_its_staged_reason_away(self) -> None:
+        row = self.shown()
+        reason = row["scope_reason"]
+        for reasons in (
+            (),  # no journal row of its reason
+            ((900, PELLA, "D57 insert undone (x-rollback): retired", reason),),  # an undone insert
+            ((900, PELLA, None, reason),),
+            ((900, PELLA, STAGED_REASON, "another reason"),),  # not the reason it holds
+            ((900, PELLA, STAGED_REASON, reason), (901, PELLA, "x", reason)),  # the latest decides
+            ((900, MERV, STAGED_REASON, reason),),  # another site's row
+        ):
+            assert self.staged_violators(row, reasons=reasons) == {PELLA}, reasons
+        later = ((899, PELLA, None, STAGED_REASON), (900, PELLA, STAGED_REASON, reason))
+        assert self.staged_violators(row, reasons=later) == set()
+
+    def test_the_d57_readback_counts_a_shown_site_without_its_text_or_its_picture(self) -> None:
+        rows = [self.shown(), self.shown(MERV, description="Edited by hand.", thumbnail_url=None)]
+        db = _sites_db(rows)
+        db.execute("INSERT INTO wiki_images VALUES (?, ?, 1, 0)", (PELLA, HERO_FILE))
+        count = "SELECT count(*) FROM unified_sites u WHERE NOT "
+        assert db.execute(count + IL.description_checked_sql("u")).fetchone() == (1,)
+        assert db.execute(count + IL.picture_confirmed_sql("u")).fetchone() == (1,)
+
     def test_the_d50_readback_counts_a_shown_site_without_its_text(self) -> None:
         rows = [self.site(YONAGUNI, "x", description="t", country="Japan")]
         db = _sites_db(rows)
@@ -523,6 +698,25 @@ def site_row(sid: str, **over: Any) -> dict[str, Any]:
 def journal(sid: str, n: int, *, new: str = "retired", stamp: str = "2026-09-23_mechanical-scope-e4",
             old: str | None = None) -> dict[str, Any]:  # fmt: skip
     return {"id": n, "row_pk": sid, "old_value": old, "new_value": new, "run_stamp": stamp}
+
+
+def staged_row(sid: str = PELLA, **over: Any) -> dict[str, Any]:
+    """A staged D57 site as the export reads it, complete: a text its provenance hashes, one live
+    hero row and the thumbnail that names its file."""
+    row = site_row(
+        sid, name="Pella", country="Greece", site_type="Settlement", lat=40.76, lon=22.52,
+        period_start=-400, scope_reason=STAGED_REASON, has_description=True,
+        description_sha256=sha256(STAGED_TEXT), check_sha256=None,
+        provenance_sha256=sha256(STAGED_TEXT), hero_files=[HERO_FILE],
+        thumbnail_url=f"/data/images/wiki/{sid[:8]}/{HERO_FILE}",
+    )  # fmt: skip
+    row.update(over)
+    return row
+
+
+def created(sid: str = PELLA, n: int = 700) -> dict[str, Any]:
+    """The journal row of the staged insert: the site is created retired."""
+    return journal(sid, n, stamp=INSERT_STAMP)
 
 
 def brief(sid: str = YONAGUNI, **over: Any) -> dict[str, Any]:
@@ -789,6 +983,151 @@ class TestThePlanner:
         plan = build(export([richat], [journal(RICHAT, 1)], [dispute_row(RICHAT)]))
         assert skipped(plan) == {RICHAT: "d50-reason-moved"}
 
+    # -- D57: the staged inserts (D143, O12)
+    def test_a_staged_site_with_its_text_and_its_picture_is_shown(self) -> None:
+        plan = build(export([staged_row()], [created()]))
+        got = {c.column: c for c in plan.changes}
+        assert (got["scope_status"].old_value, got["scope_status"].new_value) == (
+            "retired",
+            "in_scope",
+        )
+        assert got["scope_reason"].old_value == STAGED_REASON
+        assert got["scope_reason"].new_value == (
+            "D57 new site (owner D143, O12 of 2026-11-10): the staged insert holds a checked "
+            "description and one hero picture its thumbnail names; shown by the scope lane"
+        )
+        assert not got["scope_reason"].new_value.startswith(L.D57_STAGED_PREFIX)
+        assert got["scope_status"].rule == "d57-staged"
+        assert got["scope_status"].premise == f"premise-{PELLA[:8]}"
+        assert [(e["source"], e["quote"]) for e in got["scope_reason"].evidence] == [
+            ("remediation_change_log:700", f"{INSERT_STAMP}: scope_status None -> retired"),
+            ("unified_sites.raw_data._description_provenance", sha256(STAGED_TEXT)),
+            ("wiki_images", HERO_FILE),
+        ]
+        assert plan.counters["d57_staged"] == 1 and plan.skipped == ()
+        A.validate_records(
+            [
+                A.ChangeRecord(
+                    site_id=c.site_id, site_name=c.site_name, rule=c.rule, condition="x",
+                    reason="scope-unretire: x", evidence=c.evidence, premise=c.premise,
+                    old_value=c.old_value, new_value=c.new_value, column=c.column,
+                )
+                for c in plan.changes
+            ],
+            lane=plan.lane,
+        )  # fmt: skip
+        by_check = staged_row(check_sha256=sha256(STAGED_TEXT), provenance_sha256=None)
+        checked = build(export([by_check], [created()]))
+        assert checked.counters["d57_staged"] == 1
+        assert checked.changes[0].evidence[1]["source"] == (
+            "unified_sites.raw_data._description_check"
+        )
+
+    def test_a_staged_site_rolled_back_is_planned_again(self) -> None:
+        """The un-retire's rollback retires the site with the reason it had: it is staged again,
+        for this lane as for every other."""
+        rows = [
+            created(),
+            journal(PELLA, 800, new="in_scope", old="retired", stamp=f"{WAVE}_mechanical-x"),
+            journal(PELLA, 801, old="in_scope", stamp=f"{WAVE}_mechanical-x-rollback"),
+        ]
+        assert build(export([staged_row()], rows)).counters["d57_staged"] == 1
+
+    @pytest.mark.parametrize(
+        ("over", "says"),
+        [
+            ({"has_description": False, "description_sha256": sha256("")}, "holds no description"),
+            ({"has_description": False, "description_sha256": sha256(""),
+              "provenance_sha256": sha256("")}, "holds no description"),
+            ({"provenance_sha256": None}, "hashed by neither"),
+            ({"provenance_sha256": sha256("An older text.")}, "hashed by neither"),
+            ({"provenance_sha256": None, "check_sha256": sha256("An older text.")},
+             "hashed by neither"),
+        ],
+    )  # fmt: skip
+    def test_a_staged_site_waits_for_its_checked_description(
+        self, over: dict[str, Any], says: str
+    ) -> None:
+        plan = build(export([staged_row(**over)], [created()]))
+        assert plan.changes == () and skipped(plan) == {PELLA: "d57-no-description"}
+        assert says in plan.skipped[0].note
+        assert plan.counters["skipped_d57-no-description"] == 1
+
+    @pytest.mark.parametrize(
+        ("over", "says"),
+        [
+            ({"hero_files": []}, "0 live hero row(s)"),
+            ({"hero_files": [HERO_FILE, "Second.webp"]}, "2 live hero row(s)"),
+            ({"thumbnail_url": None}, "its thumbnail_url is None"),
+            ({"thumbnail_url": f"/data/images/wiki/{PELLA[:8]}/Other.webp"}, "its hero file is"),
+            ({"thumbnail_url": f"/data/images/wiki/{MERV[:8]}/{HERO_FILE}"}, "its hero file is"),
+            ({"thumbnail_url": "https://upload.wikimedia.org/x.jpg"}, "its hero file is"),
+        ],
+    )
+    def test_a_staged_site_waits_for_its_confirmed_picture(
+        self, over: dict[str, Any], says: str
+    ) -> None:
+        plan = build(export([staged_row(**over)], [created()]))
+        assert plan.changes == () and skipped(plan) == {PELLA: "d57-no-picture"}
+        assert says in plan.skipped[0].note
+
+    def test_a_staged_site_without_text_and_picture_is_listed_for_its_text(self) -> None:
+        bare = staged_row(
+            has_description=False, description_sha256=sha256(""), provenance_sha256=None,
+            hero_files=[], thumbnail_url=None,
+        )  # fmt: skip
+        ready = staged_row(MERV, name="Merv")
+        plan = build(export([bare, ready], [created(), created(MERV, 701)]))
+        assert {c.site_id for c in plan.changes} == {MERV}
+        assert skipped(plan) == {PELLA: "d57-no-description"}
+
+    def test_only_a_journalled_staged_retirement_is_taken_back(self) -> None:
+        assert skipped(build(export([staged_row()], []))) == {PELLA: "retirement-not-journalled"}
+        undone = staged_row(scope_reason="D57 insert undone (x-rollback): retired, never deleted")
+        plan = build(export([undone], [created()]))
+        assert plan.changes == () and plan.skipped == (), "an undone insert is no staged site"
+
+    def test_the_planner_and_the_invariant_agree_on_text_and_picture(self) -> None:
+        """`description_problem` and `picture_problem` over the export's columns answer what
+        `description_checked_sql` and `picture_confirmed_sql` answer over the rows themselves."""
+        thumb = f"/data/images/wiki/{PELLA[:8]}/{HERO_FILE}"
+        cases: list[tuple[str | None, str | None, str | None, list[tuple[str, int, int]]]] = [
+            (STAGED_TEXT, hashed_by(wc4.M.PROVENANCE_KEY), thumb, [(HERO_FILE, 1, 0)]),
+            (STAGED_TEXT, hashed_by(wc4.CHECK_KEY), thumb, [(HERO_FILE, 1, 0), ("G.webp", 0, 0)]),
+            (STAGED_TEXT, hashed_by(wc4.CHECK_KEY, "Older."), thumb, [(HERO_FILE, 1, 0)]),
+            (STAGED_TEXT, hashed_by(wc4.M.PROVENANCE_KEY), thumb, [(HERO_FILE, 1, 1)]),
+            (STAGED_TEXT, None, None, []),
+            ("", hashed_by(wc4.M.PROVENANCE_KEY, ""), thumb, [(HERO_FILE, 1, 0), ("B.webp", 1, 0)]),
+            (None, hashed_by(wc4.M.PROVENANCE_KEY), thumb, [("Other.webp", 1, 0)]),
+            (" ", hashed_by(wc4.CHECK_KEY, " "), thumb + "x", [(HERO_FILE, 1, 0)]),
+        ]
+        seen = set()
+        for text, raw_data, thumbnail, images in cases:
+            db = _sites_db(
+                [{"id": PELLA, "country": "Greece", "lat": 40.76, "lon": 22.52, "period_start": -400,
+                  "description": text, "raw_data": raw_data, "thumbnail_url": thumbnail}]
+            )  # fmt: skip
+            db.executemany(
+                "INSERT INTO wiki_images VALUES (?, ?, ?, ?)", [(PELLA, *i) for i in images]
+            )
+            in_sql = db.execute(
+                f"SELECT {IL.description_checked_sql('u')}, {IL.picture_confirmed_sql('u')} "
+                "FROM unified_sites u"
+            ).fetchone()
+            record = json.loads(raw_data) if raw_data else {}
+            row = staged_row(
+                has_description=bool((text or "").strip(" ")),
+                description_sha256=sha256(text or ""),
+                check_sha256=record.get(wc4.CHECK_KEY, {}).get("desc_sha256"),
+                provenance_sha256=record.get(wc4.M.PROVENANCE_KEY, {}).get("desc_sha256"),
+                hero_files=sorted(name for name, hero, excluded in images if hero and not excluded),
+                thumbnail_url=thumbnail,
+            )
+            in_python = (U.description_problem(row) is None, U.picture_problem(row) is None)
+            assert tuple(bool(v) for v in in_sql) == in_python, (text, raw_data, thumbnail, images)
+            seen.add(in_python)
+        assert seen == {(True, True), (True, False), (False, False), (False, True)}
+
     def test_a_shown_site_in_the_export_stops_the_plan(self) -> None:
         with pytest.raises(U.UnretireError, match="not retired"):
             build(export([site_row(PRAMBANAN, scope_status=None)], []))
@@ -847,6 +1186,48 @@ class TestTheWaves:
         with pytest.raises(U.UnretireError, match="holds a plan already"):
             U.write_wave(tmp_path, WAVE, built_at="t")
 
+    def test_a_wave_of_staged_sites_shows_the_complete_ones_and_lists_the_others(
+        self, tmp_path: Path
+    ) -> None:
+        """O12 from the export to the statement `apply.py` sends: the site with text and picture is
+        written under the lane's premise and invariant, the others stay hidden and are listed."""
+        no_text = staged_row(MERV, name="Merv", provenance_sha256=None)
+        no_picture = staged_row(NIHA, name="Nan Madol", hero_files=[], thumbnail_url=None)
+        rows = [created(), created(MERV, 701), created(NIHA, 702)]
+        self.write_export(tmp_path, _export_text([staged_row(), no_text, no_picture], rows))
+        result = U.write_wave(tmp_path, WAVE, built_at="t")
+        assert (result["sites"], result["d57_staged"], result["cells"]) == (1, 1, 2)
+        assert result["skipped_d57-no-description"] == result["skipped_d57-no-picture"] == 1
+        listed = [
+            json.loads(line)
+            for line in (tmp_path / WAVE / "SKIPPED.jsonl").read_text("utf-8").splitlines()
+        ]
+        assert {(v["site_id"], v["reason"]) for v in listed} == {
+            (MERV, "d57-no-description"),
+            (NIHA, "d57-no-picture"),
+        }
+        text = (tmp_path / WAVE / "PLAN.md").read_text("utf-8")
+        assert "* **Merv**" in text and "`d57-no-picture`" in text
+        lane = IL.scope_unretire_lane(WAVE)
+        records = A.load_records(tmp_path / WAVE / "PLAN.jsonl")
+        A.validate_records(records, lane=lane)
+        assert {r.site_id for r in records} == {PELLA}
+        write = A.apply_statement(records, lane)
+        assert IL.unretire_violation_sql() in write and IL.SCOPE_UNRETIRE_PREMISE_SQL in write
+        for held in (
+            IL.staged_before_sql("u"),
+            IL.description_checked_sql("u"),
+            IL.picture_confirmed_sql("u"),
+        ):
+            assert held in IL.unretire_violation_sql(), held
+        MP.verify_pinned(
+            tmp_path / WAVE / "ROLLBACK.sql",
+            plan_path=tmp_path / WAVE / "PLAN.jsonl",
+            expected=A.rollback_statement(records, lane),
+        )
+        undo = (tmp_path / WAVE / "ROLLBACK.sql").read_text("utf-8")
+        assert STAGED_REASON in undo, "the rollback stages the site again"
+
     def test_a_wave_with_nothing_to_write_is_refused_and_says_why(self, tmp_path: Path) -> None:
         chrobry = site_row(CHROBRY, country="Poland", lat=51.56, lon=15.52, period_start=1000)
         self.write_export(tmp_path, _export_text([chrobry], [journal(CHROBRY, 1)]))
@@ -874,6 +1255,17 @@ class TestTheExport:
         assert f"{IL.SCOPE_UNRETIRE_PREMISE_SQL} AS premise" in U.EXPORT_SITES_SQL
         assert "e.kind = 'wikidata_qid'" in U.EXPORT_SITES_SQL
         assert "AS has_card" in U.EXPORT_SITES_SQL and "AS card_journal_id" in U.EXPORT_SITES_SQL
+        for column in (
+            "(trim(coalesce(u.description, '')) <> '') AS has_description",
+            "encode(sha256(convert_to(coalesce(u.description, ''), 'UTF8')), 'hex') "
+            "AS description_sha256",
+            "u.raw_data -> '_description_check' ->> 'desc_sha256' AS check_sha256",
+            "u.raw_data -> '_description_provenance' ->> 'desc_sha256' AS provenance_sha256",
+            "u.thumbnail_url, ",
+            "FROM wiki_images w WHERE w.site_id = u.id AND w.is_hero IS TRUE AND w.is_excluded IS "
+            "NOT TRUE) AS hero_files",
+        ):
+            assert column in U.EXPORT_SITES_SQL, column
         assert "l.column_name = 'scope_status'" in U.EXPORT_JOURNAL_SQL
         assert "l.new_value = u.description" in U.EXPORT_DISPUTE_SQL
         for sid in L.D50_DISPUTED_SITES:

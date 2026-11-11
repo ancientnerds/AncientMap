@@ -111,6 +111,7 @@ from insert_site import plan as P  # noqa: E402
 from pipeline.lyra.site_key import site_key_sql  # noqa: E402
 from pipeline.utils.public_sites import (  # noqa: E402
     D57_STAGED_PREFIX,
+    D57_UNDONE_PREFIX,
     RETIRED,
     curated_page,
     not_retired,
@@ -777,8 +778,8 @@ def check_staged(step: P.Step) -> None:
 
 def retire_reason(step: P.Step) -> str:
     return (
-        f"D57 insert undone ({step.rollback_stamp}): retired, never deleted - ancient_nerds is a "
-        "protected source"
+        f"{D57_UNDONE_PREFIX} ({step.rollback_stamp}): retired, never deleted - ancient_nerds is "
+        "a protected source"
     )
 
 

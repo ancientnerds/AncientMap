@@ -17,11 +17,12 @@ label like `2026-10-12` or `2026-10-12b`; a stamp is applied once):
 * `spoken-<wave>` (D23) - `unified_sites.spoken_name` (migration 0029), filled where it is NULL, on
   the premise of the name it was derived from. A spoken name is never blank and never longer than
   `SPOKEN_MAX_CHARS`;
-* `scope-unretire-<wave>` (D58 and D50) - `scope_status` and `scope_reason` of a retired site, back
-  to `in_scope` (`mechanical/scope_unretire.py` plans it): a date retirement the label rule no
-  longer carries, and a D50 mystery site once its description is a lane-E dispute enrichment. The
-  premise holds the description too, and an invariant checks in the transaction that every
-  un-retired site carries one of the two reasons and what that reason rests on.
+* `scope-unretire-<wave>` (D58, D50 and D57) - `scope_status` and `scope_reason` of a retired site,
+  back to `in_scope` (`mechanical/scope_unretire.py` plans it): a date retirement the label rule no
+  longer carries, a D50 mystery site once its description is a lane-E dispute enrichment, and a
+  staged D57 insert once it holds a checked description and a confirmed picture (O12). The premise
+  holds the description and the picture too, and an invariant checks in the transaction that every
+  un-retired site carries one of the reasons and what that reason rests on.
 
 `mechanical.lane.resolve_lane` reaches these lazily (`lane_of`), like the other wave families.
 """
@@ -37,6 +38,7 @@ from mechanical.lane import (
     _STATUS_WITHOUT_REASON,
     D50_NOT_RETIRED,
     D50_REASON_PREFIX,
+    D57_STAGED_PREFIX,
     LOCK_TIMEOUT,
     NAME_CELLS,
     NAME_FIX_PREMISE_SQL,
@@ -52,6 +54,7 @@ from mechanical.lane import (
     SiteInvariant,
     _window_date_sql,
     d50_site_sql,
+    d57_staged_sql,
     journal_readback,
     label_borderline_sql,
     label_cutoff_sql,
@@ -266,12 +269,21 @@ def spoken_readback(lane: Lane) -> str:
     )
 
 
-# ---------------------------------------------------------------- the un-retire (D58 and D50)
+# ---------------------------------------------------------- the un-retire (D58, D50 and D57)
 #: The reason prefixes of an un-retirement (`scope_unretire.py` writes the texts): a date
 #: retirement the label rule no longer carries, a museum whose exhibits the label rule keeps, a D50
-#: mystery site shown as disputed.
+#: mystery site shown as disputed, a staged D57 insert shown with its text and its picture.
 D58_REASON_PREFIX = "D58 label rule (owner, 2026-10-24): "
 D58_MUSEUM_REASON_PREFIX = "D58 label rule (owner, 2026-10-24), museum rule: "
+#: Owner decision D143 and orchestrator decision O12 (2026-11-10): a site of the D57 insert is
+#: created hidden and shown only with a description and a confirmed picture. It does not begin
+#: with `D57_STAGED_PREFIX`: a shown site is no staged one for any lane.
+D57_REASON_PREFIX = "D57 new site (owner D143, O12 of 2026-11-10): "
+#: The wave delivered before the D57 class existed (applied 2026-10-24). Its committed APPLY.sql
+#: and ROLLBACK.sql must stay what its plan renders - `apply.py --rehearse-rollback` and the
+#: rollback itself verify the file against the lane - so it keeps the premise and the invariant it
+#: was applied with (`scope_unretire_lane`).
+WAVES_BEFORE_D57 = frozenset({"2026-10-24"})
 #: The retirements "under the numeric cut" (D58): the stamps that retired a site by E3's 500 AD for
 #: the rest of the world - scope-e4 alone (read on production 2026-10-24: the only stamps that ever
 #: wrote `scope_status = retired` are scope-e4, chiapa-hide, scope-review and dup-retire). A D20
@@ -283,10 +295,27 @@ NUMERIC_CUT_STAMPS = ("2026-09-23_mechanical-scope-e4",)
 #: country and dates (`SCOPE_REVIEW_PREMISE_SQL`'s, which the label rule reads), the md5 of its
 #: description and the md5 of its card text - a D50 site is shown only with the dispute text and
 #: the card the plan checked, and a text rewritten between plan and apply is refused by guard 5.
-SCOPE_UNRETIRE_PREMISE_SQL = (
+#: This is the premise of the wave delivered before the D57 class (`WAVES_BEFORE_D57`).
+_PREMISE_BEFORE_D57 = (
     SCOPE_REVIEW_PREMISE_SQL.removesuffix(")")
     + ", md5(coalesce(u.description, '')), md5(coalesce((SELECT cs.card_description FROM "
     "card_stats cs WHERE cs.site_id = u.id), '')))"
+)
+
+
+def live_hero_sql(alias: str = "u") -> str:
+    """SQL condition on an image row `w`: it is a live hero row of the site - the hero flag on a
+    row that is not excluded (`import_hero.verify.live_heroes`)."""
+    return f"w.site_id = {alias}.id AND w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE"
+
+
+#: The premise in force: the same, and the picture a staged D57 site is shown with - its
+#: `thumbnail_url` and the files of its live hero rows. A picture moved between plan and apply is
+#: refused by guard 5 like a rewritten text (for a site of any class: a lane has one premise).
+SCOPE_UNRETIRE_PREMISE_SQL = (
+    _PREMISE_BEFORE_D57.removesuffix(")")
+    + ", coalesce(u.thumbnail_url, 'NULL'), coalesce((SELECT string_agg(w.filename, ' ; ' "
+    f"ORDER BY w.filename) FROM wiki_images w WHERE {live_hero_sql('u')}), 'NULL'))"
 )
 
 
@@ -361,9 +390,51 @@ def dispute_enriched_sql(alias: str = "u") -> str:
     )
 
 
-def unretire_violation_sql() -> str:
+def description_checked_sql(alias: str = "u") -> str:
+    """SQL: the site holds a description that is not blank and that its check record
+    (`wc4.CHECK_KEY`) or its provenance (`model4.PROVENANCE_KEY`) hashes - the text a lane wrote
+    and checked, not one edited since (`desc_sha256`, the sha256 of the UTF-8 text). `trim` and the
+    `->`/`->>` operators read the same in SQLite, where the tests evaluate it over JSON text."""
+    from phase4 import wc4
+
+    a = alias
+    sha = f"encode(sha256(convert_to({a}.description, 'UTF8')), 'hex')"
+    recorded = " OR ".join(
+        f"({a}.raw_data -> {sql_literal(key)} ->> 'desc_sha256') = {sha}"
+        for key in (wc4.CHECK_KEY, wc4.M.PROVENANCE_KEY)
+    )
+    return f"(trim(coalesce({a}.description, '')) <> '' AND coalesce({recorded}, false))"
+
+
+def picture_confirmed_sql(alias: str = "u") -> str:
+    """SQL: the site has exactly one live hero row (`live_hero_sql`) and its `thumbnail_url` names
+    that row's local file (`hero_repair.thumbnail.local_path`: the directory is the first eight
+    characters of the site id) - the picture the image lane wrote, on the page and on the globe."""
+    a = alias
+    live = f"FROM wiki_images w WHERE {live_hero_sql(a)}"
+    path = f"'/data/images/wiki/' || substr(CAST({a}.id AS text), 1, 8) || '/' || w.filename"
+    return (
+        f"((SELECT count(*) {live}) = 1 "
+        f"AND EXISTS (SELECT 1 {live} AND {a}.thumbnail_url = {path}))"
+    )
+
+
+def staged_before_sql(alias: str = "u") -> str:
+    """SQL: the reason the site holds was written over a staged one - the latest journal row of its
+    `scope_reason` wrote the reason it holds now and replaced one that begins `D57_STAGED_PREFIX`
+    (the un-retirement's own row: the invariant reads it inside the write's transaction)."""
+    a = alias
+    return (
+        f"coalesce((SELECT r.new_value = {a}.scope_reason AND r.old_value LIKE "
+        f"{sql_literal(D57_STAGED_PREFIX + '%')} FROM remediation_change_log r "
+        "WHERE r.table_name = 'unified_sites' AND r.column_name = 'scope_reason' "
+        f"AND r.row_pk = CAST({a}.id AS text) ORDER BY r.id DESC LIMIT 1), false)"
+    )
+
+
+def unretire_violation_sql(*, d57: bool = True) -> str:
     """SQL over the written site `u`, TRUE for an un-retired site that rests on nothing: every
-    planned site carries one of the three reasons, and what that reason says holds in the same
+    planned site carries one of the reasons, and what that reason says holds in the same
     transaction -
 
     * `D58_REASON_PREFIX`: no D50 site, retired by the numeric cut (`numeric_cut_sql`), placed and
@@ -373,7 +444,10 @@ def unretire_violation_sql() -> str:
       region has the 1500 AD cutoff (Oceania, the Americas or a recognised country of the rest of
       the world - never the medieval Old World or a country no list recognises);
     * `D50_REASON_PREFIX`: a D50 site whose description is a dispute enrichment and whose card
-      was written after it (`card_cleared_sql`)."""
+      was written after it (`card_cleared_sql`);
+    * `D57_REASON_PREFIX` (`d57`; not in the text of a wave of `WAVES_BEFORE_D57`): no D50 site,
+      staged until this write (`staged_before_sql`), with a checked description
+      (`description_checked_sql`) and a confirmed picture (`picture_confirmed_sql`)."""
     d50 = d50_site_sql("u")
     non_site = ", ".join(sql_literal(kind) for kind in sorted(NON_SITE_TYPES))
     date_kept = (
@@ -392,15 +466,25 @@ def unretire_violation_sql() -> str:
         f"(u.scope_reason LIKE {sql_literal(D50_REASON_PREFIX + '%')} AND {d50} "
         f"AND {dispute_enriched_sql('u')} AND {card_cleared_sql('u')})"
     )
-    return f"NOT ({date_kept} OR {museum_kept} OR {disputed})"
+    if not d57:
+        return f"NOT ({date_kept} OR {museum_kept} OR {disputed})"
+    shown = (
+        f"(u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')} AND NOT {d50} "
+        f"AND {staged_before_sql('u')} "
+        f"AND {description_checked_sql('u')} "
+        f"AND {picture_confirmed_sql('u')})"
+    )
+    return f"NOT ({date_kept} OR {museum_kept} OR {disputed} OR {shown})"
 
 
 def scope_unretire_lane(wave: str) -> Lane:
-    """The un-retire's write of one wave (D58, D50): its own stamp, key prefix and directory. The
-    one transition is `retired` -> `in_scope` with a new reason; its rollback retires the site
-    again with the reason it had."""
+    """The un-retire's write of one wave (D58, D50, D57): its own stamp, key prefix and directory.
+    The one transition is `retired` -> `in_scope` with a new reason; its rollback retires the site
+    again with the reason it had. A wave of `WAVES_BEFORE_D57` keeps the text it was applied
+    with."""
     if SCOPE_UNRETIRE_LANE.match(f"scope-unretire-{wave}") is None:
         raise ValueError(f"{wave!r} is not a wave label like 2026-10-24 or 2026-10-24b")
+    d57 = wave not in WAVES_BEFORE_D57
     return Lane(
         name=f"scope-unretire-{wave}",
         key_prefix=f"scope-unretire-{wave}",
@@ -412,7 +496,7 @@ def scope_unretire_lane(wave: str) -> Lane:
         out_dir_name=f"{SCOPE_UNRETIRE_ROOT}/{wave}",
         post_commit_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,
         rehearsal_residual=UNDECIDED_OUTSIDE_LABEL_WINDOW,
-        premise_sql=SCOPE_UNRETIRE_PREMISE_SQL,
+        premise_sql=SCOPE_UNRETIRE_PREMISE_SQL if d57 else _PREMISE_BEFORE_D57,
         lock_timeout=LOCK_TIMEOUT,
         statement_timeout=STATEMENT_TIMEOUT,
         target=UNIFIED_SITES,
@@ -422,8 +506,12 @@ def scope_unretire_lane(wave: str) -> Lane:
         ),
         site_invariants=(
             SiteInvariant(
-                says="planned site(s) leave retired without the reason D58 or D50 gives them",
-                predicate=unretire_violation_sql(),
+                says=(
+                    "planned site(s) leave retired without the reason D58, D50 or D57 gives them"
+                    if d57
+                    else "planned site(s) leave retired without the reason D58 or D50 gives them"
+                ),
+                predicate=unretire_violation_sql(d57=d57),
                 probe_column="scope_reason",
                 probe_values=(
                     "a reason that names no rule",
@@ -444,9 +532,11 @@ def scope_unretire_readback(lane: Lane) -> str:
     """The read-only verification of an un-retire wave, before and after its write: the scope
     counts, the D58 residual, the date retirements the label window keeps (the wave's own
     population, borderline ones apart), the D50 sites shown and those shown without their dispute
-    text (0, always), and the statuses the run wrote."""
+    text (0, always), the D57 sites still staged, those shown and those shown without a checked
+    description or a confirmed picture, and the statuses the run wrote."""
     stamp = sql_literal(lane.run_stamp)
     d50 = d50_site_sql("u")
+    d57_shown = f"{not_retired('u')} AND u.scope_reason LIKE {sql_literal(D57_REASON_PREFIX + '%')}"
     return journal_readback(
         lane,
         [
@@ -476,6 +566,16 @@ def scope_unretire_readback(lane: Lane) -> str:
             (
                 "curated D50 sites shown with a card not written after their dispute text",
                 _CURATED_U + f"{d50} AND {not_retired('u')} AND NOT {card_cleared_sql('u')}",
+            ),
+            ("curated D57 sites staged, not shown yet", _CURATED_U + d57_staged_sql("u")),
+            ("curated D57 sites shown by the un-retire", _CURATED_U + d57_shown),
+            (
+                "curated D57 sites shown without a checked description",
+                _CURATED_U + f"{d57_shown} AND NOT {description_checked_sql('u')}",
+            ),
+            (
+                "curated D57 sites shown without a confirmed picture",
+                _CURATED_U + f"{d57_shown} AND NOT {picture_confirmed_sql('u')}",
             ),
             _STATUS_WITHOUT_REASON,
             (

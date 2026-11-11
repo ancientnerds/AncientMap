@@ -357,9 +357,9 @@ next WF export (`public_sites.not_retired()`); IndexNow and a push as in WF. The
 **no card_stats recompute**: they write only `scope_status` and `scope_reason`, and neither is an
 input of a card (`mechanical/card_stats.py`, `INPUT_COLUMNS`).
 
-### 2.2 The un-retire (D58 and D50) - `mechanical/scope_unretire.py`, lane `scope-unretire-<wave>`
+### 2.2 The un-retire (D58, D50 and D57) - `mechanical/scope_unretire.py`, lane `scope-unretire-<wave>`
 
-Two decisions bring retired curated sites back (`retired` -> `in_scope`, a new reason), each wave a
+Three decisions bring retired curated sites back (`retired` -> `in_scope`, a new reason), each wave a
 lane of its own (`identity_lanes.scope_unretire_lane`: stamp `<wave>_mechanical-scope-unretire`, test
 id `D58/scope-unretire`, directory `output/remediation/mechanical_scope_unretire/<wave>/`, at most 100
 sites, a stamp applied once):
@@ -406,6 +406,25 @@ sites, a stamp applied once):
   site invariant `lane.D50_NOT_RETIRED`, which refuses a planned D50 site left `retired` (and any
   site those lanes give a D50 reason - the leg `--probe-guards` corrupts, since a probe cannot plant
   a D50 site into a plan).
+* **D57 - a staged insert goes live** (owner decision D143, orchestrator decision O12 of
+  2026-11-10; `INSERT_SITES.md` section 6): a curated row the insert lane created hidden - `retired`
+  with a reason beginning `D57 staged:` (`public_sites.D57_STAGED_PREFIX`), the retirement in the
+  journal - comes back when it holds both:
+  * **a checked description**: the text is not blank and its check record or its provenance
+    hashes it (`raw_data._description_check` / `_description_provenance`, `desc_sha256` = the
+    sha256 of the stored text) - the text a lane wrote and checked, not one edited since. Otherwise
+    it is skipped `d57-no-description`;
+  * **a confirmed picture**: exactly one live hero row (`is_hero`, not `is_excluded`) and a
+    `thumbnail_url` that names that row's file (`/data/images/wiki/<id8>/<filename>`) - what the
+    image INSERT lane writes for a picture the image roles judged. Otherwise it is skipped
+    `d57-no-picture` (a site that lacks both is listed for its text).
+
+  The new reason begins `D57 new site (owner D143, O12 of 2026-11-10): ` and never with the staged
+  prefix: a shown site is no staged one for any lane. No card is asked (O12: the card follows on
+  the shown site). A site that ends without text or picture stays hidden and stays in every wave's
+  SKIPPED.jsonl - that file is the list O12 asks for. An insert that was undone (`D57 insert undone
+  ...`) is no staged site: no class names it, it is not listed. A site whose un-retirement was
+  rolled back holds the staged reason again and is planned again once it qualifies.
 
 The guards: guard 3 (old values `retired` and the old reason), guard 5 (the premise: name, type,
 point, country, dates, **`md5(description)` and the md5 of the card text** - a D50 text or card
@@ -415,8 +434,22 @@ retired by the numeric cut (`numeric_cut_sql`), has a point and a date, lies ins
 window, is not borderline, holds no Viking item (`viking_subject_sql`) and is of no `NON_SITE_TYPES`
 type; or a D58 museum reason, retired by the numeric cut, and is a placed Museum whose region has
 the 1500 AD cutoff (`label_cutoff_sql`: an unrecognised country fails it); or a D50 reason and is a D50 site whose description is a dispute enrichment
-(`dispute_enriched_sql`) and whose card was written after it (`card_cleared_sql`). The rollback is
-the retirement again: `ROLLBACK.sql` restores `retired` and the old reason.
+(`dispute_enriched_sql`) and whose card was written after it (`card_cleared_sql`); or a D57 reason
+and is no D50 site, was staged until this write (`staged_before_sql`: the latest journal row of its
+`scope_reason` wrote the reason it holds over one beginning `D57 staged:`), holds a checked
+description (`description_checked_sql`) and a confirmed picture (`picture_confirmed_sql`). The
+rollback is the retirement again: `ROLLBACK.sql` restores `retired` and the old reason (for a D57
+site the staged one: the site is hidden and staged again).
+
+Since the D57 class the premise (guard 5, of the write and of its rollback) also holds **the
+picture**: `thumbnail_url` and the file names of the site's live hero rows, for a site of any class
+(`SCOPE_UNRETIRE_PREMISE_SQL`). A text, a card, a thumbnail or a hero row that moved after the
+export is refused: export and plan again (the next wave label). The same holds for the rollback:
+once lane WB has written the card of a shown D57 site, or an image lane has moved its hero, this
+wave's `ROLLBACK.sql` no longer applies to it (guard 5) and the site leaves through the scope lanes
+that retire. The wave applied before the class (`identity_lanes.WAVES_BEFORE_D57`: `2026-10-24`)
+keeps the premise and the invariant its committed `APPLY.sql` and `ROLLBACK.sql` were rendered with,
+so `--rehearse-rollback` and its rollback still verify.
 
 **The population measured on production (read-only export, 2026-10-24, dry plan
 `write --wave 2026-10-24 --out <scratch>`, after the review fixes):** 104 retired curated rows; **9
@@ -462,12 +495,21 @@ $PY $A --lane $L --verify              # after: the planned deltas, 0 deviations
 $PY $A --lane $L --rehearse-rollback
 # the D50 wave, once lane E wrote the six texts: a fresh export, the next label
 $PY $U export && $PY $U write --wave 2026-10-24b
+# a D57 wave, once lane WN and the image INSERT lane wrote text and picture of the staged sites:
+# a fresh export, a new label (a date, or a date and one letter), then the same nine steps
+$PY $U export && $PY $U write --wave 2026-11-12
 ```
+
+`write` prints the counters (`d57_staged`, `skipped_d57-no-description`, `skipped_d57-no-picture`
+beside the D58/D50 ones) and plans every class the export allows: read `PLAN.md` before `--emit`,
+a wave meant for the D57 sites must hold no site of another class.
 
 The read-back prints the scope counts, the D58 residual, the date retirements the label window keeps
 and the borderline ones, the D50 sites shown, those shown **without** a dispute text and those shown
-with a card **not written after** their dispute text (both always 0), statuses without a reason,
-and journal rows of the run that write another status. (The window metric counts every date
+with a card **not written after** their dispute text (both always 0), the D57 sites still staged,
+those shown by the un-retire and those shown **without** a checked description or a confirmed
+picture (both 0 after the wave; a later hand edit of a text or a moved hero shows up here),
+statuses without a reason, and journal rows of the run that write another status. (The window metric counts every date
 retirement the window keeps, D20's and the non-site types included: after the first wave it stays
 at 1, Mount Livadiyskaya.)
 **After a landed wave:** the sites are shown again at once (the site page, the sitemap and IndexNow's
@@ -475,7 +517,18 @@ at 1, Mount Livadiyskaya.)
 export (`rebuild_static`, `static_export_check.py`), IndexNow for the un-retired URLs and the Qdrant
 vector sync (`api/routes/vector_sync.py`, `not_retired`) bring the globe and the search along. No
 card_stats recompute (the lane writes no card input). An un-retired site has no D20 verdict: it is
-in the window, so D20 does not ask it.
+in the window, so D20 does not ask it. A D57 site is public for the first time: IndexNow's hourly
+cycle announces a shown site only when a page column was journalled in the last two hours
+(`last_change`), and the un-retire writes none, so announce the new URLs by hand when the image wave
+is older (`INSERT_SITES.md` section 6, step 6); the card_stats wave and lane WB follow on the shown
+site (steps 7 there).
+
+**IndexNow and a hidden site** (`pipeline/indexnow.py`, `_RETIRED_SITES_SQL`): the removed pages are
+the curated sites whose journal wrote `scope_status = 'retired'` in the last two hours and that are
+still retired - but not by the row the D57 insert created the site with (`old_value` NULL) while
+the site is staged or its insert was undone (`public_sites.d57_staged`, `d57_undone`): that site
+never had a page. A D57 site that was shown and is retired again (this lane's rollback: `in_scope`
+-> `retired`) is announced like every other removed page.
 
 ---
 
@@ -1782,6 +1835,9 @@ for w in a b; do $PY $CG label-export --dir $D3P --labeller $w --handoff output/
   `tests/remediation/test_disputes.py`, `test_wc.py`, `test_wc_list.py` - the D50 sites in the
   dispute screen and lane E.
 * `scripts/remediation/mechanical/mutation_sweep.py d58 d50` - the D58/D50 guards (`D58_CASES`);
+  `mutation_sweep.py "d57 unretire" "d57 indexnow"` - the D57 class of the un-retire (planner,
+  invariant, premise, the delivered wave's text) and IndexNow's removed pages
+  (`D57_GO_LIVE_CASES`, 33 cases; `tests/pipeline/test_indexnow.py` runs the statement in SQLite);
   `scripts/remediation/identity/mutation_sweep.py d58`, `mutation_sweep_b.py d58` - the D20
   window and question; `scripts/remediation/phase3/mutation_sweep.py` labels `wc cli`,
   `enrich disputes` - the D50 exemptions of lane WC/E.

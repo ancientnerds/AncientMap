@@ -576,7 +576,15 @@ def plan_step(
     new_id: Callable[[], str] = lambda: str(uuid.uuid4()),
 ) -> Step:
     """Plan step `number` of the run from its decisions and a fresh read-only production read:
-    refused while a re-ask waits, and when the step was planned already."""
+    refused while an exported round is not imported, while a re-ask waits, and when the step was
+    planned already."""
+    unimported = RS.unimported_rounds(run)
+    if unimported:
+        raise InsertPlanError(
+            f"round {unimported[-1]} was exported after the last import: {RS.REASK_FILE} and "
+            f"{RS.DECISIONS_FILE} hold the state of before it - answer, validate and import the "
+            "round (run.py research import), then plan"
+        )
     waiting = RS.waiting(run)
     if waiting:
         raise InsertPlanError(

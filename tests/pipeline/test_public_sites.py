@@ -17,10 +17,12 @@ import pytest
 
 from pipeline.utils.public_sites import (
     D57_STAGED_PREFIX,
+    D57_UNDONE_PREFIX,
     RETIRED,
     SCOPE_STATUSES,
     curated_page,
     d57_staged,
+    d57_undone,
     duplicate_survivor_id,
     is_retired,
     journal_join,
@@ -101,9 +103,20 @@ def test_leaving_the_staged_rows_out_keeps_every_other_retired_row(staged_engine
     assert _ids(staged_engine, f"NOT {d57_staged('u')}") == others | {"shown-again", "never"}
 
 
+def test_d57_undone_is_a_retired_row_with_the_undos_reason(staged_engine):
+    """The insert's undo keeps the row retired under its own reason: no staged row any more, and
+    a reader that leaves the undone rows out keeps the retired row without a reason too."""
+    assert _ids(staged_engine, d57_undone()) == {"retired-undone"}
+    assert _ids(staged_engine, d57_undone("u")) == {"retired-undone"}
+    others = _ids(staged_engine, f"{is_retired('u')} AND NOT {d57_undone('u')}")
+    assert others == {"staged", "retired-no-reason", "retired-window", "retired-other-case"}
+
+
 def test_the_staged_prefix_is_safe_in_a_like_pattern():
-    assert not set(D57_STAGED_PREFIX) & set("%_'\\")
-    assert f"LIKE '{D57_STAGED_PREFIX}%'" in d57_staged()
+    for prefix, predicate in ((D57_STAGED_PREFIX, d57_staged), (D57_UNDONE_PREFIX, d57_undone)):
+        assert not set(prefix) & set("%_'\\")
+        assert f"LIKE '{prefix}%'" in predicate()
+    assert not D57_UNDONE_PREFIX.startswith(D57_STAGED_PREFIX)
 
 
 @pytest.mark.parametrize("alias", ["us; DROP TABLE x", "u.id", "1us", "u s"])

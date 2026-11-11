@@ -1100,3 +1100,15 @@ def waiting(run: Path) -> dict[str, dict[str, str]]:
     if not path.is_file():
         raise ResearchError(f"{path} is missing - import first")
     return dict(json.loads(path.read_text(encoding="utf-8"))["fields"])
+
+
+def unimported_rounds(run: Path) -> list[int]:
+    """The rounds exported after the last import (`ROUNDS.jsonl` past `REASK.json`'s
+    `after_round`). `REASK.json` and `DECISIONS.jsonl` do not know their answers: "no field waits"
+    is then the state of the import before, and the plan would take the answer the round asks
+    again."""
+    path = run / REASK_FILE
+    if not path.is_file():
+        raise ResearchError(f"{path} is missing - import first")
+    imported = json.loads(path.read_text(encoding="utf-8"))["after_round"]
+    return [r["round"] for r in read_rounds(run) if r["round"] > imported]

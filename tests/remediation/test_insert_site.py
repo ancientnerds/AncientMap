@@ -1171,6 +1171,21 @@ class TestThePlanStep:
         with pytest.raises(P.InsertPlanError, match="re-ask"):
             P.plan_step(run, 1, export=fake_export(read_rows()), country_check=agrees)
 
+    def test_the_plan_waits_for_the_import_of_the_last_exported_round(self, run: Path) -> None:
+        """A re-ask round exported after the last import (D130's round 5 of Pella): REASK.json
+        names no waiting field, but it speaks for the round before."""
+        write_decisions(run, decided())
+        C.write_json(run / RS.REASK_FILE, {"after_round": 4, "fields": {}})
+        C.write_jsonl(run / RS.ROUNDS_FILE, [{"round": n} for n in range(6)])
+        assert RS.unimported_rounds(run) == [5]
+        with pytest.raises(P.InsertPlanError, match="round 5 was exported after the last import"):
+            P.plan_step(run, 1, export=fake_export(read_rows()), country_check=agrees)
+        assert not P.step_dir(run, 1).exists()
+        C.write_json(run / RS.REASK_FILE, {"after_round": 5, "fields": {}})
+        assert RS.unimported_rounds(run) == []
+        step = P.plan_step(run, 1, export=fake_export(read_rows()), country_check=agrees)
+        assert [i.qid for i in step.inserts] == [COLOSSEUM]
+
     def test_a_site_without_its_required_fields_is_refused_before_the_read(self, run) -> None:
         exhausted = {**decided()["coordinates"], "status": RS.EXHAUSTED, "decision": None}
         write_decisions(run, decided(coordinates=exhausted))
@@ -1473,6 +1488,8 @@ class TestTheStatements:
         [row] = step.inserts
         reason = W.retire_reason(step)
         assert not reason.startswith(D57_STAGED_PREFIX)
+        # the prefix IndexNow knows an undone insert by (`pipeline/indexnow.py`)
+        assert reason.startswith(f"{W.D57_UNDONE_PREFIX} ({step.rollback_stamp}): retired, ")
         assert f"{W._lit(row.scope_reason)}, {W._lit(reason)}, " in _values(sql, "_ins_undo")
         checks = W.undo_checks(step.rollback_stamp, 8)
         staged = (

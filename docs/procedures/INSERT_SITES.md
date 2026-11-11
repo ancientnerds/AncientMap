@@ -84,7 +84,8 @@ $I research brief  --run $R --handoff $H-r0 --batch-id ins-r0-b001     # one fie
 $PY scripts/remediation/opus_handoff.py validate --dir $H-r0
 $I research import --run $R                                            # fetches every quoted page once
 $I research export-reask --run $R --handoff $H-r1                      # while REASK.json names fields (at most 2 re-asks)
-#    answer, validate, import again; the plan refuses to run while a field waits
+#    answer, validate, import again; the plan refuses to run while a field waits, and while a round
+#    exported after the last import is not imported (`round N was exported after the last import`)
 $I research export-reask --run $R --handoff $H-r2 --review A           # D104: + the fields the D8 review A
 #    (the pilot_judge's answer file about step 1's PLAN.md) vetoed; their old answers stop counting.
 #    Move the reviewed step-001 aside first only after the export: the review is checked against its PLAN.md
@@ -239,7 +240,9 @@ $I readback --run $R --step 1 --rollback
 ```
 
 An undone insert never comes back by a second insert: the plan refuses an item a curated row holds,
-retired or not.
+retired or not. IndexNow announces neither the staged nor the undone rows as removed pages (they
+never had one): its statement knows both reasons by their prefix (`public_sites.D57_STAGED_PREFIX`,
+`D57_UNDONE_PREFIX`, which `writer.retire_reason` begins with).
 
 ## 6. After the accept: how the new sites reach every lane
 
@@ -254,9 +257,12 @@ code each step still waits for are in the lane's playbook
    a site whose link answers 410 until step 6: keep the time short. **IndexNow**: the hourly cycle
    announces every curated site whose journal wrote `scope_status = 'retired'` in the last two
    hours as a removed page (`pipeline/indexnow.py`, `_RETIRED_SITES_SQL`), and the insert journals
-   exactly that row. That statement must leave the staged rows out
-   (`NOT public_sites.d57_staged(...)`) **and be deployed in the Lyra image before `apply`** -
-   a separate change, not part of this lane's code.
+   exactly that row. The statement leaves it out - the row that created the site (`old_value`
+   NULL) while the site is staged or its insert was undone (`public_sites.d57_staged`,
+   `d57_undone`) - but only in an image that holds this code: `pipeline/` ships in the Lyra image,
+   so the change must be **pushed to `main` and deployed before `apply`**. The check (prints `1`):
+   `ssh ancientnerds "docker exec ancient_nerds_lyra python -c 'import pipeline.indexnow as i;
+   print(i._RETIRED_SITES_SQL)'" | grep -c "D57 staged"`.
 2. **Read the hidden rows.** Every lane's population read drops a retired site. The lanes of steps
    4 and 5 admit a staged one - by the predicate `mechanical.lane.d57_staged_sql(alias)` (SQL) and
    the prefix `D57_STAGED_PREFIX` - and only where a `--sites` list names it:
@@ -297,12 +303,18 @@ code each step still waits for are in the lane's playbook
    geotag route searches around them. The rows go in through the INSERT waves of
    `WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.7 (`judge_run.py insert-claims`, `import_hero/run.py
    read`, `fetch --target insert`, `insert-plan`, the writer's five steps, `insert-accept`).
-6. **Go live**: the scope lane's journalled un-retire (`mechanical/scope_unretire.py`), for each
-   staged site that holds a description and a hero picture - a class of its own that the lane has
-   to know (`retired`, the staged reason). A site that ends without text or picture stays hidden
-   and goes on the owner list. Then the static export (`docker exec ancient_nerds_api python -m
-   api.services.rebuild_static`, `scripts/remediation/static_export_check.py` in the API container;
-   PROJECT_LESSONS: never as root) and IndexNow.
+6. **Go live**: the scope lane's journalled un-retire, class "D57 staged"
+   (`WD2_SERVED_IMAGE_AND_SCOPE.md` section 2.2): `mechanical/scope_unretire.py export`, then
+   `write --wave <label>`, then `apply.py --lane scope-unretire-<label>` through its steps. A
+   staged site comes back when its description is not blank and hashed by its check record or its
+   provenance, and it has exactly one live hero row whose file its `thumbnail_url` names; premise
+   and invariant hold both. A site that ends without text or picture stays hidden, is listed in
+   the wave's `SKIPPED.jsonl` (`d57-no-description`, `d57-no-picture`) and goes on the owner list.
+   Then the static export (`docker exec ancient_nerds_api python -m api.services.rebuild_static`,
+   `scripts/remediation/static_export_check.py` in the API container; PROJECT_LESSONS: never as
+   root) and IndexNow: the hourly cycle announces a shown site only when one of its page columns
+   was journalled in the last two hours, and the un-retire writes none - submit the new URLs by
+   hand when the image wave is older (`pipeline.indexnow.paths_for`, `page_url`, `submit`).
 7. **Cards (WB, D53 judge)**: every new site has its `card_stats` row from the insert. A card_stats
    wave (`mechanical/card_stats.py --wave <label>`) computes the stats of each site with a
    description: its basis stays the last wave's (the creation's journal rows name none), its
