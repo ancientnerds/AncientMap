@@ -345,9 +345,38 @@ class TestTheRunLists:
 
     def test_a_hero_row_names_its_problems(self) -> None:
         listed = [{"site_id": SITE, "problems": ["strip", "no_author"], "reason": "no qualifying row"}]  # fmt: skip
-        rows, _ = F.run_list_rows(self.MOVES, "hero-moves-2026-11-06b", listed, {SITE: site()})
+        strip = site(hero=HERO | {"width": 700, "height": 200, "author": None})
+        rows, _ = F.run_list_rows(self.MOVES, "hero-moves-2026-11-06b", listed, {SITE: strip})
         assert rows[0]["reason"] == "strip, no_author: no qualifying row"
         assert rows[0]["topic"] == "hero-problem-kept" and rows[0]["decision"] == "D48/D49"
+
+    def test_a_hero_row_is_open_while_the_site_still_has_a_problem_it_names(self) -> None:
+        """The list is the last plan's read. A later lane may have answered a row since: a D15
+        swap of the strip, an INSERT wave, a credit repair, the flag, the thumbnail."""
+        run = "hero-moves-2026-11-06b"
+
+        def listed(*problems: str) -> list[dict[str, Any]]:
+            return [{"site_id": SITE, "problems": list(problems), "reason": "no qualifying row"}]
+
+        def reasons(problems: tuple[str, ...], now: dict[str, Any]) -> list[str]:
+            rows, aside = F.run_list_rows(self.MOVES, run, listed(*problems), {SITE: now})
+            assert bool(rows) != bool(aside.get("superseded"))
+            return [row["reason"] for row in rows]
+
+        no_author = site(hero=HERO | {"author": None})
+        # the strip was swapped for a larger row that still names no author: one problem is left
+        assert reasons(("strip", "no_author"), no_author) == ["no_author: no qualifying row"]
+        # every problem the row names is answered: the row is set aside, whatever else is open
+        assert reasons(("strip", "no_author"), site()) == []
+        assert reasons(("strip",), no_author) == []
+        # an unflagged site and a hotlinked globe picture are measured on today's row too
+        assert reasons(("unflagged",), site(hero=None)) == ["unflagged: no qualifying row"]
+        assert reasons(("unflagged",), site()) == []
+        remote = site(thumbnail_url="https://upload.wikimedia.org/x.jpg")
+        assert reasons(("hotlink",), remote) == ["hotlink: no qualifying row"]
+        assert reasons(("hotlink",), site()) == []
+        # a site that serves no live row any more has none of the planner's problems
+        assert reasons(("unflagged", "hotlink"), site(images=0, hero=None, thumbnail_url="")) == []
 
     def test_every_research_and_hotlink_run_is_read_and_only_the_last_hero_plan(
         self, tmp_path: Path
@@ -468,12 +497,17 @@ class TestTheBuild:
         write_list(
             root,
             RUN_DIRS["hero-moves"],
-            [{"site_id": THIRD, "problems": ["no_author"], "reason": "no qualifying row"}],
+            [
+                {"site_id": THIRD, "problems": ["no_author"], "reason": "no qualifying row"},
+                # a strip the plan read, at a site a later lane left without any live row
+                {"site_id": OTHER, "problems": ["strip"], "reason": "no qualifying row"},
+            ],
         )
         hotlink = site(OTHER, images=0, hero=None, thumbnail_url="https://upload.wikimedia.org/x")
+        uncredited = site(THIRD, hero=HERO | {"author": None})
         built = F.build(
             root=root,
-            read=lambda _sql: tagged([site(**bare), hotlink, site(THIRD)]),
+            read=lambda _sql: tagged([site(**bare), hotlink, uncredited]),
             field_run=self.field_run({}),
             final=True,
         )
@@ -484,6 +518,7 @@ class TestTheBuild:
             (THIRD, "hero-problem-kept"),
         }
         assert listed[(THIRD, "hero-problem-kept")]["reason"] == "no_author: no qualifying row"
+        assert built["set_aside"]["hero-moves:superseded"] == 1
         assert listed[(SITE, "image-research-none")]["source"] == "images-d17:d17-2026-11-11-s01"
         assert built["unregistered"] == [] and built["missing"] == []
         assert built["run_lists"]["hero-moves"] == [RUN_DIRS["hero-moves"]]  # the last plan only

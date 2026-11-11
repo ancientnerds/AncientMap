@@ -599,7 +599,8 @@ The image lanes' lists are sources too since 2026-11-11 (`RUN_LISTS`, found by g
 into its own run directory): each `candidate_search/*/D17_OWNER_LIST.jsonl` (`image_roles/d59.py research-outcomes`;
 topic `image-research-none`, the reason of a site without a picture), each `candidate_search/*/D59_OWNER_LIST.jsonl`
 (`image-hotlink-uncredited`) and the last `served_image/hero-moves-*/OWNER_LIST.jsonl` (`hero-problem-kept`); a row is
-set aside once production shows the picture. Every shown site without any picture has to carry a research row; the
+set aside once production shows the picture, a hero row once the site measures none of the problems it names any
+more (`hero_moves.problems_of` on today's row; it lists only the ones still measured). Every shown site without any picture has to carry a research row; the
 report names the ones without (`image_none_unresearched`) -
 `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.8.7.
 

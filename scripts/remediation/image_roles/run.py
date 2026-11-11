@@ -24,7 +24,9 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
      tried, before the pictures are pruned:
      run.py recheck-export --run-dir C --handoff H --insert-run I    the next round, those sites
      run.py write-targets  --run-dir C --insert-run I                C/TARGETS.jsonl, written again
-     then a new INSERT run for the new targets; from then on both commands name every INSERT run)
+     then a new INSERT run for the new targets; from then on both commands name every INSERT run,
+     in the order they ran: the runs that claim one file answer together, a fetch that got no
+     answer refuses no file - `d59.refused_files`)
     run.py prune-pictures  --run-dir C                           delete the pictures, keep their hashes
 
 The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run.
@@ -288,7 +290,8 @@ def build_parser() -> argparse.ArgumentParser:
             default=[],
             help="the INSERT run(s) of this run's targets: a confirmed pick one of them refused "
             "for a reason that lies in the file is passed over, and the site's next-ranked "
-            "depicts is tried (name every one of them, each time, from the first refusal on)",
+            "depicts is tried (name every one of them, each time, from the first refusal on, in "
+            "the order they ran: a file a later run plans is not refused)",
         )
     for name in (
         "identity-export",

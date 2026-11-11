@@ -30,8 +30,11 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
   (`served_image/hero-moves-*/OWNER_LIST.jsonl` - D48/D49) only the last plan's, because each plan
   lists the whole population from a fresh read. A row is open while production still says so: a
   research row while the site has no live image row, a hotlink row while it shows only its
-  thumbnail. **Every shown site without any picture has to carry a research row**: the ones
-  without are named (`image_none_unresearched`) and `--final` refuses them.
+  thumbnail, a hero row while the site still measures one of the problems it names
+  (`hero_moves.problems_of` on today's row - a later D15 swap or INSERT wave may have answered the
+  plan's read), and it names only those. **Every shown site without any picture has to carry a
+  research row**: the ones without are named (`image_none_unresearched`) and `--final` refuses
+  them.
 * **Production** (`TOPICS`): what stays empty on a shown curated site - no description, no card,
   an old card the shorts-v1 lane kept (D5), no picture, a thumbnail without any gallery row, a small
   hero a larger live row could replace (D48) or one without the credit its licence asks for, no type, no period, a rule-made period, an
@@ -96,6 +99,7 @@ from mechanical import site_type_merge as STM  # noqa: E402
 from mechanical.field_prov import read_production  # noqa: E402
 from mechanical.lane import FIELDS_ROOTS  # noqa: E402
 from mechanical.plan import parse_tagged_export, tagged_export_script  # noqa: E402
+from served_image import hero_moves as HM  # noqa: E402
 
 ROOT = REPO / "output" / "remediation"
 OUT_DIR = "final-2026-10-08"
@@ -158,23 +162,34 @@ LANE_LISTS: tuple[LaneList, ...] = (
 class RunList:
     """An owner list every run of a lane leaves in its own dated run directory: the glob that
     finds them (relative to output/remediation), the topic of their rows and the decision behind
-    it, how a row words its reason, and whether production still says a row is open (`still_open`,
-    asked of the site's production row; a row that fails it was answered by a later write).
-    `latest_only`: each run lists the lane's whole population from a fresh read, so only the last
-    run's list (by run-directory name) is read - the earlier ones are registered, not listed."""
+    it, how a row words its reason, and whether production still says a row is open (`still_open`;
+    a row that fails it was answered by a later write). Both are asked of the list's row and the
+    site's production row of today. `latest_only`: each run lists the lane's whole population from
+    a fresh read, so only the last run's list (by run-directory name) is read - the earlier ones
+    are registered, not listed."""
 
     name: str
     pattern: str
     topic: str
     title: str
     decision: str
-    reason: Callable[[Mapping[str, Any]], str]
-    still_open: Callable[[Mapping[str, Any]], bool]
+    reason: Callable[[Mapping[str, Any], Mapping[str, Any]], str]
+    still_open: Callable[[Mapping[str, Any], Mapping[str, Any]], bool]
     latest_only: bool = False
 
 
 def _blank(value: Any) -> bool:
     return value is None or not str(value).strip()
+
+
+def hero_problems(row: Mapping[str, Any], site: Mapping[str, Any]) -> list[str]:
+    """The problems of a hero-moves owner row that the site still measures today
+    (`hero_moves.problems_of`, the planner's own rule, over the production row). The list is the
+    last plan's and states its read: a later lane - the D15 swap of a strip, an INSERT wave, a
+    credit repair - may have answered a row since. The rule asks of the live rows only whether
+    the site serves any, which `images` counts."""
+    now = HM.problems_of(site, [site] * int(site["images"]), site["hero"])
+    return [problem for problem in row["problems"] if problem in now]
 
 
 #: The image lanes' lists (owner decisions D17/D82, D59, D48/D49). `image-research-none` is the
@@ -187,8 +202,8 @@ RUN_LISTS: tuple[RunList, ...] = (
         RESEARCH_TOPIC,
         "no usable Commons picture: why the picture research left the site without one",
         "D17/D82",
-        lambda row: str(row["reason"]),
-        lambda site: site["images"] == 0,
+        lambda row, site: str(row["reason"]),
+        lambda row, site: site["images"] == 0,
     ),
     RunList(
         "images-d59",
@@ -196,8 +211,8 @@ RUN_LISTS: tuple[RunList, ...] = (
         "image-hotlink-uncredited",
         "a hotlinked Commons thumbnail that keeps no stored credit",
         "D59",
-        lambda row: str(row["reason"]),
-        lambda site: site["images"] == 0 and not _blank(site["thumbnail_url"]),
+        lambda row, site: str(row["reason"]),
+        lambda row, site: site["images"] == 0 and not _blank(site["thumbnail_url"]),
     ),
     RunList(
         "hero-moves",
@@ -205,8 +220,8 @@ RUN_LISTS: tuple[RunList, ...] = (
         "hero-problem-kept",
         "a strip, uncredited, unflagged or hotlinked hero no checked row could replace",
         "D48/D49",
-        lambda row: f"{', '.join(row['problems'])}: {row['reason']}",
-        lambda site: True,
+        lambda row, site: f"{', '.join(hero_problems(row, site))}: {row['reason']}",
+        lambda row, site: bool(hero_problems(row, site)),
         latest_only=True,
     ),
 )
@@ -571,7 +586,7 @@ def run_list_rows(
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """A run list's rows that are still open: the site is shown and production still says what the
     list says (`still_open`: a D17 site still shows no picture, a D59 site still only its
-    thumbnail). The source names the run. Pure."""
+    thumbnail, a hero still has a problem its row names). The source names the run. Pure."""
     out: list[dict[str, Any]] = []
     aside: Counter[str] = Counter()
     for row in rows:
@@ -579,11 +594,11 @@ def run_list_rows(
         if site is None or site["scope_status"] == RETIRED:
             aside["retired-or-gone"] += 1
             continue
-        if not lane.still_open(site):
+        if not lane.still_open(row, site):
             aside["superseded"] += 1
             continue
         source = f"{lane.name}:{run_name}"
-        out.append(_row(site, lane.topic, source, "listed", lane.reason(row), lane.decision))
+        out.append(_row(site, lane.topic, source, "listed", lane.reason(row, site), lane.decision))
     return out, aside
 
 

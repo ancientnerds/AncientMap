@@ -1922,12 +1922,38 @@ $PY $RUN write-targets  --run-dir $C --insert-run $I    # TARGETS.jsonl again: t
 ```
 
 From the first retry on, every `recheck-export` and `write-targets` of the run names every INSERT
-run of it: `TARGETS.jsonl` is the list of picks the INSERT lane has still to try, written again by
-each call, and a call without the runs would name the refused file once more (the INSERT lane would
-refuse it again; `d59.insert_state` refuses the mixed state by name). A transient fetch failure is
-fetched again before `insert-plan`: every recorded `not_fetched` counts as final. `null-plan`
-empties no third-party thumbnail while a `depicts` of the site is untried
+run of it, **in the order they ran**: `TARGETS.jsonl` is the list of picks the INSERT lane has still
+to try, written again by each call, and a call without the runs would name the refused file once
+more (the INSERT lane would refuse it again; `d59.insert_state` refuses the mixed state by name).
+`null-plan` empties no third-party thumbnail while a `depicts` of the site is untried
 (`REFUSED: ... the site's next depicts '<file>' is not tried yet`).
+
+What the INSERT lane's records say about a pick is read by three rules (review of 2026-11-11,
+`d59.claim_state`, `claim_answer`, `refused_picks`):
+
+* **A `not_fetched` lies in the file only by the fetch's own word.** The fetch writes every failure
+  into `FETCH_FAILURES.jsonl` in one form - its refusals of the file and a download that got no
+  answer alike. `d59.FILE_FAILURES` lists the wordings that refuse the file (a credit the licence
+  demands, a size below the floor, an upscale, a file over the byte limit, a file type, a name the
+  file system refuses, a file Commons does not host; `test_d59_thumbnails.py` reads each out of
+  `fetch.py` and the downloader). Every other line (`Commons answered no imageinfo`, `no response`,
+  `HTTP <status>`, `not an image`, `exists and is never overwritten`, an OS error) is a claim the
+  run left open: its state is `not_planned` with `... fetch it again in a new INSERT run`, it
+  passes no pick over, and `null-plan` refuses the site by name. The retry is a new INSERT run
+  from the target check; the pick is still in `TARGETS.jsonl`.
+* **The runs that claim one file answer together.** A later run is the retry of an earlier one (a
+  new run after a refusal that speaks of the site, after a fetch that got no answer, or after a run
+  whose write stopped at a guard). A run that plans the row answers; otherwise the last run named
+  does. So a file one run refused and a later run wrote is live and is not passed over, and a
+  second wave that claims again a site the first refused as `d59_thumbnail_moved` or
+  `no_row_at_all` is no conflict.
+* **A target line that is gone proves nothing.** After `write-targets --insert-run` a refused site
+  has no line in `TARGETS.jsonl`; its outcome is `insert_refused`, not `none_confirmed`.
+  `null-plan`, `research-outcomes` and `outcomes` read the refusal of every such pick in the INSERT
+  runs they are given and refuse without it (`REFUSED: ... TARGETS.jsonl does not name '<file>', a
+  depicts of the site no INSERT run given refused for a reason that lies in the file`): name every
+  INSERT run of the stage. The NULL's journal row carries each refusal with the fetch's own line,
+  under `insert_refused:<reason>`.
 
 **The outcome list of a D17 run.** `d59.py research-outcomes` is `outcomes` for a D17 research run:
 
@@ -1935,20 +1961,29 @@ empties no third-party thumbnail while a `depicts` of the site is untried
 $PY $D59 research-outcomes --run-dir $C --insert-run $I [<I>b ...]    # after the stage's last INSERT wave
 ```
 
-It writes `D17_OUTCOMES.jsonl` (one line per site: `target`, `no_candidate` or `none_confirmed`, the
-counts, and for a target the INSERT's state) and `D17_OWNER_LIST.jsonl`: every site the run leaves
-without a picture, with the reason - the search's refusal, the counts of what was judged (a
-candidate left out of the depicts stage is counted as never judged), the INSERT lane's refusal with
-the fetch's own reason, or a confirmed file no run wrote. A site is off the list only when an INSERT
-run plans its row. Like `outcomes` it is rewritten by every call and refused while the targets are
-not written or a candidate still waits for an answer.
+It writes `D17_OUTCOMES.jsonl` (one line per site: `target`, `no_candidate`, `none_confirmed` or
+`insert_refused`, the counts, and for a target the INSERT's state) and `D17_OWNER_LIST.jsonl`: every
+site the run leaves without a picture, with the reason - the search's refusal, the counts of what
+was judged (a candidate left out of the depicts stage is counted as never judged), the INSERT
+lane's refusal with the fetch's own reason, or a confirmed file no run wrote. The INSERT lane's
+reason stays on the list after the targets were written again: an `insert_refused` site reads `the
+INSERT lane refused the confirmed file '<file>': <reason> (<the fetch's line>); no other candidate
+was confirmed (...)`, and a site whose next pick is not written names the picks refused before it
+(`...; before it the INSERT lane refused '<file>': ...`). A site is off the list only when an
+INSERT run plans its row. Like `outcomes` it is rewritten by every call and refused while the
+targets are not written, a candidate still waits for an answer, or a dropped pick's refusal is in
+no INSERT run named.
 
 `owner_list_final.py` reads the image lanes' lists by glob (`RUN_LISTS`): every
 `candidate_search/*/D17_OWNER_LIST.jsonl` (topic `image-research-none`, open while the site has no
 live image row), every `candidate_search/*/D59_OWNER_LIST.jsonl` (`image-hotlink-uncredited`, open
 while the site shows only its thumbnail) and the last `served_image/hero-moves-*/OWNER_LIST.jsonl`
 (`hero-problem-kept`; each plan lists the whole population, so earlier ones are registered and not
-read). Every shown site without any picture has to carry a research row: the report names the ones
+read). A hero row is open while the site still measures one of the problems it names
+(`hero_moves.problems_of` on today's production row) and names only those: the plan states its
+read, and a later D15 swap, INSERT wave or credit repair sets the row aside (`hero-moves:
+superseded`; measured 2026-11-11 on `hero-moves-2026-11-06b`: 72 rows, 68 open, 4 `no_author`
+answered since). Every shown site without any picture has to carry a research row: the report names the ones
 without (`image_none_unresearched`) and `build --final` refuses them, as it refuses a lane without
 any list.
 
@@ -2050,9 +2085,14 @@ any list.
   `test_image_roles_cli.py` (`pool-picks` and its two files), `test_d59_thumbnails.py` (the picks
   refused for the file, the run that claims the next pick, no NULL while a `depicts` is untried, the
   D17 outcomes and owner list) and `test_owner_list_final.py` (the run lists, the last hero plan, the
-  research reason `--final` asks for). `image_roles/mutation_sweep.py "img a5"`: 33 cases, and
-  `mechanical/mutation_sweep.py "d25-owner: a5"`: 10 cases (the numbers of the last run are in the
-  commit that added them).
+  research reason `--final` asks for). The review's rules: `test_d59_thumbnails.py` (the fetch's
+  wordings that refuse the file, read out of the code that records them, and the ones that do not;
+  a fetch that got no answer; the runs that claim one file; a site refused twice for its state; a
+  dropped pick emptied on the INSERT refusal alone, with every refusal in the evidence; the owner
+  list's reason after the targets were written again), `test_image_flow.py` (a pick a later run
+  wrote stays the target) and `test_owner_list_final.py` (a hero row a later lane answered).
+  `image_roles/mutation_sweep.py "img a5"`: 46 cases, and `mechanical/mutation_sweep.py
+  "d25-owner: a5"`: 12 cases (the numbers of the last run are in the commit that added them).
 
 ---
 

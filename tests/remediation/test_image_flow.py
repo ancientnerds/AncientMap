@@ -196,7 +196,8 @@ def insert_run(tmp_path: Path, name: str, refused: dict[str, tuple[str, str]]) -
         {
             "site_id": sid,
             "commons_file": file,
-            "why": "the fetch failed: the licence asks an author",
+            "why": f"the fetch failed: {sid}: the fetch of {file!r} names no author, which the "
+            "licence 'CC BY-SA 4.0' demands",
         }
         for sid, (file, why) in refused.items()
         if why == "not_fetched"
@@ -227,7 +228,8 @@ class TestTheNextCandidateAfterAnInsertRefusal:
         run = self._first_wave(tmp_path)
         insert = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "not_fetched")})
         refused = D59.refused_files([insert])
-        assert refused == {(C, "C-better.jpg"): "insert-1: not_fetched"}
+        assert list(refused) == [(C, "C-better.jpg")]
+        assert refused[(C, "C-better.jpg")]["insert_refusal"] == "not_fetched"
         # the targets are not written while the site's next candidate waits for its re-check
         with pytest.raises(SG.StageError, match="wait for a re-check round"):
             FL.write_targets(run, refused)
@@ -255,6 +257,39 @@ class TestTheNextCandidateAfterAnInsertRefusal:
         assert D59.refused_files([insert]) == {}
         with pytest.raises(FL.FlowError, match="no site waits"):
             FL.recheck_export(run, tmp_path / "h-x", read=lambda p: jpeg(), refused={})
+
+    def test_a_pick_a_later_run_wrote_or_whose_fetch_got_no_answer_stays_the_target(
+        self, tmp_path: Path, capsys: Any
+    ) -> None:
+        """The runs are read together and a refusal only by the fetch's own word: the pick the
+        retry run plans is live, and a download that got no answer says nothing about the file."""
+        from image_roles import run as CLI
+
+        run = self._first_wave(tmp_path)
+        refusing = insert_run(tmp_path, "insert-1", {C: ("C-better.jpg", "not_fetched")})
+        retry = insert_run(tmp_path, "insert-1b", {C: ("C-better.jpg", "not_fetched")})
+        (retry / D59.INSERT_REFUSALS).write_text("", encoding="utf-8")
+        (retry / "chunk-001").mkdir()
+        (retry / "chunk-001" / "INSERT.jsonl").write_text(
+            ST.jsonl_text([{"site_id": C}]), encoding="utf-8"
+        )
+        assert D59.refused_files([refusing, retry]) == {}
+        runs = ["--insert-run", str(refusing), str(retry)]
+        assert CLI.main(["write-targets", "--run-dir", str(run), *runs]) == 0
+        assert json.loads(capsys.readouterr().out)["insert_refused"] == 0
+        assert targets_of(run) == {A: "A-front.jpg", C: "C-better.jpg"}
+        throttled = insert_run(tmp_path, "insert-2", {C: ("C-better.jpg", "not_fetched")})
+        line = {
+            "site_id": C,
+            "commons_file": "C-better.jpg",
+            "why": "the fetch failed: HTTP 503: u",
+        }
+        (throttled / D59.FETCH_FAILURES).write_text(ST.jsonl_text([line]), encoding="utf-8")
+        assert D59.refused_files([throttled]) == {}
+        with pytest.raises(FL.FlowError, match="no site waits"):
+            FL.recheck_export(
+                run, tmp_path / "h-x", read=lambda p: jpeg(), refused=D59.refused_files([throttled])
+            )
 
     def test_the_command_line_names_the_insert_runs(self, tmp_path: Path, capsys: Any) -> None:
         from image_roles import run as CLI
