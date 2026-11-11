@@ -310,5 +310,11 @@ Raised by the lane scouts and their checkers (playbooks under `output/remediatio
 | O21 | Phase 8: the final error-rate measurement X7 (about 1,500 answers and a day of code); D133's five further pre-wave dumps of 2026-11-07; Theo (D85 names 14 campaign topics, 13 of whose rows are cancelled); four expired Windows tasks of the MiniMax run | X7 is dropped (D154: no measurement runs); the spot checks of each wave stand in its place and the final report says so. All eight pre-wave dumps of 2026-11-07 are deleted once the offsite copy is verified. Theo is not started: which topics run is the owner's call (final report). The Windows tasks are listed, not deleted. |
 | O22 | Google (D141), proposal `output/seo-audit-2026-11-10/PROPOSAL_D141.md` after its refutation pass | Implemented in one deploy: stage A of measure 1 (new stories noindex for Google only, no search-result excerpts under the sources), measure 3 (the 40 site pages without a text noindex for Google until lane WN has written it) and measure 5 (the legacy sitemap goes; the 18 country pages with at most four sites noindex for Google). Left to the owner: stage B (all stories, decided after the core update, early December), measure 2 (site-page layout: a design change, a draft first) and measure 4 (the "about and method" page: its text is the owner's voice, a draft is prepared). |
 
+### 2026-11-11
+
+| # | question | decision |
+| --- | --- | --- |
+| D157 | The Fable 5.2 quota is used up (the usage limit stopped every agent on 2026-11-11) | **Go on with Opus 5.5** (owner: "bitte weiter mit opus 5.5. Fable ist aufgebraucht."). Every role answers on `claude-opus-5-5` from now on, by an owner move like D153, with no calibration (D154 stands); answers recorded on Fable stay valid. No weekly cap (D155 stands). |
+
 Still the owner's own: reject the L'Anse aux Meadows proposal 01e29c6e in the Radar (D97; status `new` on 2026-11-10),
 the trademark ownership with Matt (D94), the GSC exports (D91), disk C: (23 GB free on 2026-11-10; D135).
