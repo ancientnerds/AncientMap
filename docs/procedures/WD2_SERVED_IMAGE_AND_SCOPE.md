@@ -1534,11 +1534,22 @@ row of a site to another and the globe's `thumbnail_url` follows it (rules `d48-
 hero is below 800x300), `hotlink` (live rows, but a remote or empty `thumbnail_url`) or `no_author`
 (the hero's licence asks for an author, `licenses.credit_columns`, and it has none).
 
+Since 2026-11-11 the planner knows a fifth problem, **`small`** (owner decision D82: the rest lists
+"stay live and are searched within D17"; rules `d82-hero`/`d82-align`): the site has none of the
+four problems above, its hero is below 1600x900 and it holds another live row of at least 1600x900
+(D48's small hero as the census defined it). D48 only listed these sites. Now they run through the
+same steps as the other rest lists: `check-pictures` offers the image roles the site's rows of at
+least 1600x900 that carry their credit and that no judgement chose, the confirmed pick comes back
+through `--check-run`, and the review decides. `small` is named only alone: a site that also
+measures one of the four problems is planned for that one, under its own rule and bounds, and a
+later fresh read names it `small` when it still is. No command changes.
+
 **The new hero is a qualifying row**: live, judged `depicts` by a Claude check of that very file (a
 served-image run's `CHECK.jsonl`/`REPLACE.jsonl`, or an image-roles check run's confirmed
 `TARGETS.jsonl` pick), at least 800x300, with every credit column its licence demands; for a strip
-larger than the hero, for any other move not below 1600x900 where the replaced hero is not (it would
-make a D48 small hero). **And a chosen row**: a served check's `depicts` includes a find from the site,
+larger than the hero, for a small hero at least 1600x900 (a row that is larger than the hero and
+still below that size is refused: the move has no other purpose), for any other move not below
+1600x900 where the replaced hero is not (it would make a D48 small hero). **And a chosen row**: a served check's `depicts` includes a find from the site,
 a drawing and a reconstruction, so it does not say "main picture". A row becomes the hero only as a
 confirmed check-run pick (the depicts role's quality, then the adversarial re-check), as the served-
 image replacement stage's own `pick` ("a clear photograph of its remains before a drawing, a plan or an
@@ -1559,6 +1570,14 @@ names another new hero or another site, and a plan changed since; it writes the 
 sites only - every journal row carries its review line as evidence - and `VETOED.jsonl`, the vetoed
 rows in the shape `--veto` reads, for the next plan in a new run directory.
 
+The Claude half of that review is `served_image/hero_review.py` (`export`, `check-answer`,
+`import`; one question per planned site with both pictures). The question of a `small` plan carries
+two passages no other plan has: what `small` means, and that the move gains only size, so the
+reviewer vetoes it when the current hero is the better main picture of the site. A plan of another
+kind is asked byte for byte what it was asked before (pinned by
+`test_a_plan_of_another_kind_is_asked_what_it_was_asked_before`), so a review exported before
+2026-11-11 is imported unchanged.
+
 Measured read-only 2026-10-24 (read `df451b59`, 4,900 shown sites, 48,846 rows; verdict run
 `served-image-2026-09-30`, no check run yet):
 
@@ -1573,7 +1592,29 @@ Measured read-only 2026-10-24 (read `df451b59`, 4,900 shown sites, 48,846 rows; 
 drawing (`Idolos de los ingas.jpg`) - the review decides it. `check-pictures` offers 549 rows of the 51
 unsettled sites (510 nobody judged, 39 judged `depicts` and never chosen) to the image roles; their
 confirmed picks feed a second plan through `--check-run`. `SMALL_HEROES.jsonl` reproduces D48's 433: a
-hero below 1600x900 at a site that holds another live row of at least 1600x900 - owner list only.
+hero below 1600x900 at a site that holds another live row of at least 1600x900. It states the read:
+it names every such hero, also the one whose site is planned for another problem or moved by the
+plan. What the plan did with the `small` sites is in `PLAN_SUMMARY.json` (`by_problem.small`), and
+the ones no checked row could replace are on `OWNER_LIST.jsonl` with what each row lacks.
+
+`small`, measured offline on 2026-11-11 with the planner on the read of 2026-11-06
+(`hero-moves-2026-11-06b/READ.json`, verdict run `served-image-2026-09-30`, the veto file of
+`hero-moves-2026-11-06`, no check run; nothing written):
+
+| | sites |
+|---|---:|
+| D48's census list (`SMALL_HEROES.jsonl`) | 433 |
+| of them planned for another problem (12 `strip`, 7 `no_author`, 1 both) | 20 |
+| problem `small` | 413 |
+| planned at once (a replacement pick of at least 1600x900) | 17 |
+| not settled before the image roles ran | 396 |
+| of them with a row to offer (`check-pictures`) | 373, with 2,711 rows (2,307 nobody judged, 404 `depicts` nobody chose) |
+| of them without any row to offer (owner list) | 23 |
+
+The other rest lists of that read stay as they were (75 sites: 44 `no_author` incl. 1 with `strip`,
+18 `strip`, 8 `unflagged`, 2 `hotlink`, 3 deferred to D15). 64 of the 413 small heroes are the
+replacement stage's own pick of 2026-09-30 and 231 were judged `depicts` by the served check: the
+planner does not hold such a hero back, the review sees both pictures and decides.
 
 Order: after the D15 chunk was accepted and, for D49, after the D18 author backfill (A5 may give a
 hero its author); always from a fresh read, with every served-image run as a verdict run, oldest
@@ -1983,7 +2024,8 @@ read). A hero row is open while the site still measures one of the problems it n
 (`hero_moves.problems_of` on today's production row) and names only those: the plan states its
 read, and a later D15 swap, INSERT wave or credit repair sets the row aside (`hero-moves:
 superseded`; measured 2026-11-11 on `hero-moves-2026-11-06b`: 72 rows, 68 open, 4 `no_author`
-answered since). Every shown site without any picture has to carry a research row: the report names the ones
+answered since). A `small` row (D82) is open while the hero is below 1600x900 beside a larger live
+row (`hero_larger` of the production read) and the site measures none of the four other problems. Every shown site without any picture has to carry a research row: the report names the ones
 without (`image_none_unresearched`) and `build --final` refuses them, as it refuses a lane without
 any list.
 
@@ -2031,7 +2073,12 @@ any list.
 * `tests/remediation/test_hero_moves.py` - D48/D49: the four problems, what qualifies a hero (never
   a new small hero), that a hero is a chosen row (never a `depicts` ranked by its pixels), the
   ranking, the D15 deferral, vetoes, the check population (unjudged and unchosen rows), the review
-  `emit` requires, the write order, the small heroes, the acceptance.
+  `emit` requires, the write order, the small heroes, the acceptance. D82: `small` as a problem of
+  its own, named only alone, replaced only by a chosen row of at least 1600x900 under `d82-hero`,
+  its check population; `tests/remediation/test_hero_review.py` - the question of a `small` plan
+  and the unchanged question of every other plan
+  (`scripts/remediation/image_roles/mutation_sweep.py "img a6"`,
+  `scripts/remediation/mechanical/mutation_sweep.py "d25-owner: a6"`).
 * `tests/remediation/test_d59_thumbnails.py` - D59: both populations, the one candidate and its
   refusals, the claims' wording and marker, the INSERT plan's lift, the NULL plan (a finished research
   or a final INSERT refusal, never a site whose INSERT has not ended), the D59 run's way past the

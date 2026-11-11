@@ -6,7 +6,8 @@ never a new small hero), that a hero is a chosen row (a confirmed check-run pick
 stage's pick, or the row an unflagged page shows - never a `depicts` ranked by its pixels), the
 ranking, the D15 deferral of an `other_site` hero, vetoes, the check population, the review that
 must accept a move before `emit` writes a chunk, the write order, the small-hero owner list, and the
-read-only acceptance.
+read-only acceptance. D82 (2026-11-05): the small hero as a problem of its own - named only alone,
+replaced only by a chosen row of at least 1600x900, under its own rule.
 """
 
 from __future__ import annotations
@@ -677,6 +678,150 @@ def test_small_heroes_follow_the_census_definition() -> None:
     ]
     small = HM.small_heroes(_read(sites, rows))
     assert [(s["site_id"], s["hero_id"], s["larger_rows"]) for s in small] == [(SITE, 1, [2])]
+
+
+# ------------------------------------------------------------------- D82: the small heroes
+def test_a_small_hero_beside_a_large_live_row_is_a_problem_of_its_own() -> None:
+    site = _site(thumb="/data/x")
+    hero = _row(1, "A.jpg", hero=True, size=(1200, 800))
+    large = _row(2, "B.jpg", size=(1600, 900))
+    assert HM.problems_of(site, [hero, large], hero) == [HM.SMALL]
+    # no other live row of at least 1600x900: there is nothing to move to
+    assert HM.problems_of(site, [hero, _row(2, "B.jpg", size=(1599, 900))], hero) == []
+    assert HM.problems_of(site, [hero], hero) == []
+    # a hero of the large size has no such problem, whatever stands beside it
+    big = _row(1, "A.jpg", hero=True, size=(1600, 900))
+    assert HM.problems_of(site, [big, _row(2, "B.jpg", size=(6000, 4000))], big) == []
+    # an excluded large row is no live row (`decide` measures the live ones)
+    rows = [hero, _row(2, "B.jpg", excluded=True)]
+    assert HM.decide(site, rows, {}, {}) is None
+
+
+def test_small_is_named_only_where_no_other_problem_is() -> None:
+    """A site with a D48/D49 problem is planned for that one, under its own rule and bounds."""
+    large = _row(3, "Large.jpg")
+    uncredited = _row(1, "A.jpg", hero=True, size=(1200, 800), author=None)
+    local = _site(thumb="/data/x")
+    assert HM.problems_of(local, [uncredited, large], uncredited) == [HM.NO_AUTHOR]
+    hero = _row(1, "A.jpg", hero=True, size=(1200, 800))
+    remote = _site(thumb="https://example.org/x.jpg")
+    assert HM.problems_of(remote, [hero, large], hero) == [HM.HOTLINK]
+    strip = _row(1, "A.jpg", hero=True, size=(700, 200))
+    assert HM.problems_of(local, [strip, large], strip) == [HM.STRIP]
+    # D49 still moves such a hero to a credited row below 1600x900: its bound is not D82's
+    credited = _row(2, "Mid.jpg", size=(1500, 1000))
+    served = {2: _check(SITE, "Mid.jpg", picked=True)}
+    decision = HM.decide(local, [uncredited, credited, large], served, {})
+    assert decision is not None and decision.plan is not None
+    assert decision.plan.served_image_id == 2
+    assert {c.rule for c in decision.plan.changes} == {HM.RULE_D49_HERO, HM.RULE_D49_ALIGN}
+
+
+def test_a_small_hero_moves_to_the_chosen_large_row_under_the_d82_rule() -> None:
+    site = _site(thumb="/data/images/wiki/11111111/A.webp")
+    rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg", size=(1600, 900))]
+    decision = HM.decide(site, rows, {2: _check(SITE, "B.jpg", picked=True)}, {})
+    assert decision is not None and decision.plan is not None
+    assert decision.problems == [HM.SMALL] and decision.plan.outcome == HM.MOVED
+    got = {(c.column, c.row_key): (c.old_value, c.new_value, c.rule) for c in decision.plan.changes}
+    assert got == {
+        ("is_hero", "1"): ("true", "false", HM.RULE_D82_HERO),
+        ("is_hero", "2"): ("false", "true", HM.RULE_D82_HERO),
+        ("thumbnail_url", SITE): (
+            "/data/images/wiki/11111111/A.webp",
+            "/data/images/wiki/11111111/B.webp",
+            HM.RULE_D82_ALIGN,
+        ),
+    }
+    assert "the hero 1 is 1200x800, below 1600x900" in decision.plan.changes[0].reason
+
+
+def test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size() -> None:
+    hero = _row(1, "A.jpg", hero=True, size=(1200, 800))
+    mid = _row(2, "Mid.jpg", size=(1500, 1000))  # larger than the hero, and still small
+    rows = [hero, mid, _row(3, "Large.jpg", size=(3000, 2000))]
+    check = _check(SITE, "Mid.jpg", picked=True)
+    assert HM.qualifies(mid, check, **HM.bounds_of(hero, [HM.SMALL])) == HM.NOT_LARGE
+    decision = HM.decide(_site(thumb="/data/x"), rows, {2: check}, {})
+    assert decision is not None and decision.plan is None
+    assert decision.rejected == {2: HM.NOT_LARGE, 3: HM.UNCHECKED}
+    assert decision.owner_reason is not None and "below 1600x900" in decision.owner_reason
+    # a large row judged depicts is still no hero before a judgement chose it
+    served = {3: _check(SITE, "Large.jpg")}
+    decision = HM.decide(_site(thumb="/data/x"), rows, served, {})
+    assert decision is not None and decision.plan is None
+    assert decision.rejected == {2: HM.UNCHECKED, 3: HM.NOT_CHOSEN}
+
+
+def test_a_small_hero_the_d15_recheck_owns_is_deferred() -> None:
+    rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg")]
+    served = {1: _check(SITE, "A.jpg", "other_site"), 2: _check(SITE, "B.jpg", picked=True)}
+    decision = HM.decide(_site(thumb="/data/x"), rows, served, {})
+    assert decision is not None and decision.problems == [HM.SMALL]
+    assert decision.plan is None and decision.deferred is not None
+
+
+def _small_site_run(tmp_path: Path) -> tuple[Path, Path]:
+    sites = [_site(thumb="/data/images/wiki/11111111/A.webp")]
+    rows = [
+        _row(1, "A.jpg", hero=True, size=(1200, 800)),
+        _row(2, "B.jpg"),
+        _row(3, "C.jpg", size=(1500, 1000)),  # larger than the hero, below 1600x900
+        _row(4, "D.jpg", author=None),  # no credit
+        _row(5, "E.jpg", size=(3000, 2000)),  # judged depicts, nobody chose it
+    ]
+    served = tmp_path / "served-image-2026-09-30"
+    _write_jsonl(
+        served / "CHECK.jsonl",
+        [
+            {
+                "site_id": SITE,
+                "verdict": "depicts",
+                "answered_by": "check-001",
+                "model": OH.SONNET_MODEL,
+                "served": {"image_id": 5, "file": "E.jpg"},
+            }
+        ],
+    )
+    return _hero_moves_run(tmp_path, sites, rows), served
+
+
+def test_the_image_roles_are_offered_only_the_large_rows_of_a_small_site(tmp_path: Path) -> None:
+    run, served = _small_site_run(tmp_path)
+    check_run = tmp_path / "candidates-check"
+    out = HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
+    assert out["sites"] == 1 and out["offered"] == {"unjudged": 1, "depicts_unchosen": 1}
+    [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
+    assert [c["image_id"] for c in line["candidates"]] == [2, 5]
+
+
+def test_the_plan_moves_a_small_hero_to_the_confirmed_pick_and_lists_the_rest(
+    tmp_path: Path,
+) -> None:
+    run, served = _small_site_run(tmp_path)
+    summary = HM.write_plan(run, [served], [_check_run(tmp_path, target="B.jpg")])
+    assert summary["by_problem"] == {HM.SMALL: {HM.MOVED: 1}}
+    assert summary["chosen_by"] == {HM.CONFIRMED_PICK: 1} and summary["owner_list"] == 0
+    [planned] = [json.loads(line) for line in (run / HM.PLANNED).read_text().splitlines()]
+    assert planned["problems"] == [HM.SMALL] and planned["new_image_id"] == 2
+    [plan] = [json.loads(line) for line in (run / HM.PLAN_SITES).read_text().splitlines()]
+    assert {c["rule"] for c in plan["changes"]} == {HM.RULE_D82_HERO, HM.RULE_D82_ALIGN}
+    # the census list states the read: the hero is on it although this plan moves it
+    assert summary["small_heroes"] == 1
+    # without a pick the site is on the owner list with what each row lacks
+    rest = tmp_path / "rest" / "hero-moves-2026-10-25"
+    rest.mkdir(parents=True)
+    (rest / "READ.json").write_text((run / "READ.json").read_text(), encoding="utf-8")
+    summary = HM.write_plan(rest, [served], [])
+    assert summary["by_problem"] == {HM.SMALL: {"owner_list": 1}}
+    [owner] = [json.loads(line) for line in (rest / HM.OWNER_LIST).read_text().splitlines()]
+    assert owner["problems"] == [HM.SMALL]
+    assert owner["rows"] == {
+        "2": HM.UNCHECKED,
+        "3": HM.UNCHECKED,
+        "4": HM.UNCHECKED,
+        "5": HM.NOT_CHOSEN,
+    }
 
 
 # ------------------------------------------------------------------------ the check population

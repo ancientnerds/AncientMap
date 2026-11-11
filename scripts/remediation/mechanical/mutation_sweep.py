@@ -15232,6 +15232,15 @@ D25_OWNER_CASES: list[Case] = [
         "test_a_site_without_a_picture_needs_its_research_reason_to_be_final",
         OWNER_FINAL_TESTS,
     ),
+    # Task A6 (images#3): D82's `small` is measured beside the hero's larger live row.
+    Case(
+        "d25-owner: a6 a small hero row is measured beside its larger row",
+        OWNER_FINAL,
+        '    live = [row for row in (hero, larger) if row] or [site] * int(site["images"])',
+        '    live = [hero] if hero else [site] * int(site["images"])',
+        "test_a_small_hero_row_is_open_while_a_larger_live_row_stands_beside_the_hero",
+        OWNER_FINAL_TESTS,
+    ),
 ]  # fmt: skip
 CASES += D25_OWNER_CASES
 

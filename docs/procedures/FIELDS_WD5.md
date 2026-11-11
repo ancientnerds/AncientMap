@@ -587,7 +587,10 @@ under `card-empty`); the report names the out-of-scope ones, and anything else i
 whose site holds another non-excluded row of at least 1600x900; each row names the largest such row and how many
 there are, because swapping is the owner's call. A small hero without a larger row has nothing to swap: the report
 counts it, the list does not carry it (2026-10-24: 809 small, 433 with a larger row - the census's figure - 376
-without). **Run it from the main checkout** (the waves name their run by the main checkout's path):
+without). Since D82 the hero-moves lane searches these sites (problem `small`,
+`docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.8.1): `hero-small` is measured on production, so it lists
+what is still small after that lane, and the last plan's `OWNER_LIST.jsonl` row of such a site (`hero-problem-kept`,
+problem `small`) says why no checked row replaced the hero. **Run it from the main checkout** (the waves name their run by the main checkout's path):
 
 ```bash
 cd C:/PythonProjects/AncientMap

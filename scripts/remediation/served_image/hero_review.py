@@ -1,4 +1,4 @@
-"""The review of a hero-moves plan (D48/D49), answered by Opus agents through the handoff.
+"""The review of a hero-moves plan (D48/D49/D82), answered by Opus agents through the handoff.
 
 `hero_moves.py plan` writes `PLANNED.jsonl`, and `hero_moves.py emit --review` writes chunks only for the
 sites a review accepted (one line per planned site: `accept` or `veto`, by the owner or a Claude answer
@@ -101,6 +101,19 @@ def _credit(row: Mapping[str, Any]) -> list[str]:
     ]
 
 
+#: What a `small` plan (owner decision D82) adds to the question; a plan of another kind is asked
+#: exactly what it was asked before, so a review exported earlier is imported unchanged.
+SMALL_WHY = (
+    "  small = the current hero is below 1600x900 and the site holds larger pictures (D82): the hero",
+    "          moves to a checked picture of at least 1600x900.",
+)
+SMALL_RULE = (
+    "This move is a small one (D82): its only gain is the size. Veto it when the current hero is",
+    "the better main picture of the site - it shows the site's remains more clearly or more",
+    "completely than the new picture - and say so in the reason.",
+)
+
+
 def prompt_for(line: Mapping[str, Any], read: HM.Read) -> str:
     """The exact question for one planned site; `import` rebuilds it byte for byte."""
     sid = str(line["site_id"])
@@ -111,6 +124,7 @@ def prompt_for(line: Mapping[str, Any], read: HM.Read) -> str:
     check = line["check"]
     said = check.get("shows") or check.get("answer_basis") or "(not recorded)"
     description = str(site.get("description") or "").strip() or "(none)"
+    small = HM.SMALL in line["problems"]
     parts = [
         "You review one planned hero-image change on the Ancient Nerds map (owner decisions D48/D49).",
         "The hero is the site page's main picture and the globe thumbnail. A planner chose the new",
@@ -126,6 +140,7 @@ def prompt_for(line: Mapping[str, Any], read: HM.Read) -> str:
         "  no_author = the current hero's licence demands an author it lacks (D49): the hero moves to",
         "              a fully credited row.",
         "  strip/hotlink = the hero is a thin strip or the globe thumbnail is an unchecked remote link.",
+        *(SMALL_WHY if small else ()),
         "",
         f"PLANNED NEW HERO: image {line['new_image_id']}, file {new_row['filename']!r}, "
         f"{new_row.get('width')}x{new_row.get('height')} px",
@@ -160,6 +175,7 @@ def prompt_for(line: Mapping[str, Any], read: HM.Read) -> str:
         "hero is the nicer picture: the move exists because the current hero lacks its credit.",
         "Veto a move whose new picture is a drawing, a plan or an object photo when the site has",
         "visible remains and the current picture shows them - say so in the reason.",
+        *(SMALL_RULE if small else ()),
         "",
         "Answer with exactly one JSON object and nothing else:",
         '{"decision": "accept" | "veto", "shows": "<one sentence: what the new picture shows>", '

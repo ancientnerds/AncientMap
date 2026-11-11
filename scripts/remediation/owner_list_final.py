@@ -27,8 +27,8 @@ lane resolved (`fields/owner_list.py`'s `_shown`), so a worktree would match no 
   (`candidate_search/*/D17_OWNER_LIST.jsonl`, `image_roles/d59.py research-outcomes`: why a site
   was left without a picture - D17/D82) and the hotlinked Commons thumbnails'
   (`.../D59_OWNER_LIST.jsonl`, `d59.py outcomes` - D59) are read from every run; of the hero moves'
-  (`served_image/hero-moves-*/OWNER_LIST.jsonl` - D48/D49) only the last plan's, because each plan
-  lists the whole population from a fresh read. A row is open while production still says so: a
+  (`served_image/hero-moves-*/OWNER_LIST.jsonl` - D48/D49/D82) only the last plan's, because each
+  plan lists the whole population from a fresh read. A row is open while production still says so: a
   research row while the site has no live image row, a hotlink row while it shows only its
   thumbnail, a hero row while the site still measures one of the problems it names
   (`hero_moves.problems_of` on today's row - a later D15 swap or INSERT wave may have answered the
@@ -52,6 +52,12 @@ row of at least 1600x900. That is the swap the owner decides, so `hero-small` li
 names the largest such row (and how many there are). A small hero without a larger row offers
 nothing to decide: the report counts it, the list does not carry it. Measured read-only on
 2026-10-24: 809 heroes below 1600x900, 433 of them with a larger live row - the census's figure.
+
+D82 (2026-11-05) has these sites searched: the hero-moves lane plans them as `small`
+(`served_image/hero_moves.py`) and moves the hero where the image roles confirm a large row and the
+review accepts it. `hero-small` is measured on production, so it lists what is still small after
+that; the last plan's `OWNER_LIST.jsonl` row of such a site (`hero-problem-kept`, problem `small`)
+says why no checked row replaced the hero.
 
 ## What is read, and what is named
 
@@ -186,9 +192,12 @@ def hero_problems(row: Mapping[str, Any], site: Mapping[str, Any]) -> list[str]:
     """The problems of a hero-moves owner row that the site still measures today
     (`hero_moves.problems_of`, the planner's own rule, over the production row). The list is the
     last plan's and states its read: a later lane - the D15 swap of a strip, an INSERT wave, a
-    credit repair - may have answered a row since. The rule asks of the live rows only whether
-    the site serves any, which `images` counts."""
-    now = HM.problems_of(site, [site] * int(site["images"]), site["hero"])
+    credit repair - may have answered a row since. The rule asks of the live rows whether the
+    site serves any, which `images` counts, and for `small` (D82) whether another one is at least
+    1600x900 beside the hero: `hero_larger`, the same measure in SQL (`_LARGER`)."""
+    hero, larger = site["hero"], site["hero_larger"]
+    live = [row for row in (hero, larger) if row] or [site] * int(site["images"])
+    now = HM.problems_of(site, live, hero)
     return [problem for problem in row["problems"] if problem in now]
 
 
@@ -218,8 +227,8 @@ RUN_LISTS: tuple[RunList, ...] = (
         "hero-moves",
         "served_image/hero-moves-*/OWNER_LIST.jsonl",
         "hero-problem-kept",
-        "a strip, uncredited, unflagged or hotlinked hero no checked row could replace",
-        "D48/D49",
+        "a strip, uncredited, unflagged, hotlinked or small hero no checked row could replace",
+        "D48/D49/D82",
         lambda row, site: f"{', '.join(hero_problems(row, site))}: {row['reason']}",
         lambda row, site: bool(hero_problems(row, site)),
         latest_only=True,

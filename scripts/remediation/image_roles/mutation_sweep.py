@@ -1,5 +1,5 @@
 """Mutation sweep for the image lanes' new guards (D15, D17, D18 of 2026-10-08; D48, D49, D59 and
-the close-out gaps of 2026-10-24).
+the close-out gaps of 2026-10-24; D82's small heroes of 2026-11-11).
 
 The machinery is `mechanical/mutation_sweep.py`'s (a case counts as FIRED only when its needle occurs
 exactly once, the mutant compiles, the named test passed on the unmutated file and is reported
@@ -2292,6 +2292,57 @@ A5_CASES: list[Case] = [
       "test_the_fetch_s_refusals_of_the_file_are_told_from_a_fetch_that_got_no_answer", T_D59),
 ]  # fmt: skip
 
+HERO_REVIEW = SERVED / "hero_review.py"
+T_HR = "tests/remediation/test_hero_review.py"
+#: Task A6 (2026-11-11), the code gap images#3 of the lane scouts: D82's small hero as a problem
+#: the hero-moves lane plans (`small`), named only alone, replaced only by a chosen row of at least
+#: 1600x900 under its own rule, and reviewed with the question D82's move needs. Every label holds
+#: "img a6".
+A6_CASES: list[Case] = [
+    g("a6 #3: only a hero below the large size is small", HERO_MOVES,
+      "    if not below(hero, LARGE):",
+      "test_a_small_hero_beside_a_large_live_row_is_a_problem_of_its_own", T_HM),
+    c("a6 #3: the row beside a small hero is of the large size", HERO_MOVES,
+      '    return [int(r["id"]) for r in live if int(r["id"]) != int(hero["id"]) and not below(r, LARGE)]',
+      '    return [int(r["id"]) for r in live if int(r["id"]) != int(hero["id"])]',
+      "test_a_small_hero_beside_a_large_live_row_is_a_problem_of_its_own", T_HM),
+    c("a6 #3: small is named only alone", HERO_MOVES,
+      "    if not found and hero is not None and larger_rows(hero, live):",
+      "    if hero is not None and larger_rows(hero, live):",
+      "test_small_is_named_only_where_no_other_problem_is", T_HM),
+    g("a6 #3: a small hero is replaced only by a large row", HERO_MOVES,
+      "    if large and below(row, LARGE):",
+      "test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size", T_HM),
+    c("a6 #3: a small site's bound is the large size", HERO_MOVES,
+      '    if SMALL in problems:\n        return {"larger_than": None, "keeps_large": None, "large": True}',
+      '    if False:\n        return {"larger_than": None, "keeps_large": None, "large": True}',
+      "test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size", T_HM),
+    c("a6 #3: the check of a row asks the large size too", HERO_MOVES,
+      "    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large, large=large)",
+      "    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large)",
+      "test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size", T_HM),
+    c("a6 #3: a small move is journalled under its own rule", HERO_MOVES,
+      "    if SMALL in problems:\n        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN",
+      "    if False:\n        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN",
+      "test_a_small_hero_moves_to_the_chosen_large_row_under_the_d82_rule", T_HM),
+    c("a6 #3: the journal says why a small hero moves", HERO_MOVES,
+      "        elif problem == SMALL and hero is not None:",
+      "        elif False:",
+      "test_a_small_hero_moves_to_the_chosen_large_row_under_the_d82_rule", T_HM),
+    g("a6 #3: the image roles see only the large rows of a small site", HERO_MOVES,
+      "            if why is None or size_and_credit(row, **bounds) is not None:",
+      "test_the_image_roles_are_offered_only_the_large_rows_of_a_small_site", T_HM),
+    c("a6 #3: the review of a small move asks for the better picture", HERO_REVIEW,
+      "        *(SMALL_RULE if small else ()),\n", "",
+      "test_a_small_plan_is_asked_whether_the_current_hero_is_the_better_picture", T_HR),
+    c("a6 #3: the review says what small means", HERO_REVIEW,
+      "        *(SMALL_WHY if small else ()),\n", "",
+      "test_a_small_plan_is_asked_whether_the_current_hero_is_the_better_picture", T_HR),
+    c("a6 #3: a plan of another kind is asked what it was asked before", HERO_REVIEW,
+      '    small = HM.SMALL in line["problems"]', "    small = True",
+      "test_a_plan_of_another_kind_is_asked_what_it_was_asked_before", T_HR),
+]  # fmt: skip
+
 CASES: list[Case] = [
     *D18_CASES,
     *D15_CASES,
@@ -2304,6 +2355,7 @@ CASES: list[Case] = [
     *D117_CASES,
     *D125_CASES,
     *A5_CASES,
+    *A6_CASES,
 ]
 
 

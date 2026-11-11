@@ -14,14 +14,23 @@ What a site can be planned for (`problems_of`), each measured on the read:
 * `hotlink` (D48) - the site serves live rows but its `thumbnail_url` is a remote address or the
   empty string, so the globe shows a picture nobody checked or credited;
 * `no_author` (D49) - the live hero's licence asks for an author (`licenses.credit_columns`) and the
-  row has none (50).
+  row has none (50);
+* `small` (D82, owner decision of 2026-11-05: "the D48/D49 rest lists (433 small heroes, ...) stay
+  live and are searched within D17") - the site has none of the problems above, its live hero is
+  below 1600x900 and it holds another live row of at least 1600x900 (`larger_rows`, the census
+  definition of D48's small hero). D48 only listed these sites; D82 has them searched like the other
+  rest lists: the image roles judge the site's own large rows (`check-pictures`), and their confirmed
+  pick becomes the hero after the review. A site with one of the four problems above is planned for
+  that one alone, under its own rule and bounds; the next fresh read names it `small` when it still
+  is.
 
 **The new hero is always a qualifying row** (`qualifies`), whatever the problem: live, judged
 `depicts` by a Claude check of that very file, at least 800x300, with every credit column its licence
-demands; for a strip larger than the hero it replaces, and for any other move not below 1600x900 where
-the hero it replaces is not (the move would otherwise make one of D48's small heroes). A qualifying row
-is never chosen because it is the only one: a site without one is not planned and goes on the owner
-list with the measured reason. "Checked" has two sources, never a guess:
+demands; for a strip larger than the hero it replaces, for a small hero at least 1600x900 (the move
+has no other purpose), and for any other move not below 1600x900 where the hero it replaces is not
+(the move would otherwise make one of D48's small heroes). A qualifying row is never chosen because
+it is the only one: a site without one is not planned and goes on the owner list with the measured
+reason. "Checked" has two sources, never a guess:
 
 1. the served-image runs (`--verdicts-run`, `CHECK.jsonl` and `REPLACE.jsonl`, in the order given;
    a later run's verdict on an image replaces an earlier one): Claude stamps only (D6/D10);
@@ -68,7 +77,10 @@ line of `PLANNED.jsonl`, `new_image_id` the planned new hero, `by` `owner` or a 
 
 `plan` also writes `OWNER_LIST.jsonl` (every site with a problem and no qualifying chosen row, with the
 reason) and `SMALL_HEROES.jsonl` (D48's 433: a live hero below 1600x900 at a site that holds another
-live row of at least 1600x900 - the census definition, reproduced on 2026-10-24 at 433).
+live row of at least 1600x900 - the census definition, reproduced on 2026-10-24 at 433). That list
+states the read: it holds every such hero, also the one whose site is planned for another problem
+or moved by this very plan. What the plan did with the `small` sites is in `PLAN_SUMMARY.json`
+(`by_problem.small`), and the ones no checked row could replace are on `OWNER_LIST.jsonl`.
 """
 
 from __future__ import annotations
@@ -109,10 +121,15 @@ RULE_D48_HERO = "d48-hero"
 RULE_D48_ALIGN = "d48-align"
 RULE_D49_HERO = "d49-hero"
 RULE_D49_ALIGN = "d49-align"
+RULE_D82_HERO = "d82-hero"
+RULE_D82_ALIGN = "d82-align"
 
 UNFLAGGED, STRIP, HOTLINK, NO_AUTHOR = "unflagged", "strip", "hotlink", "no_author"
-#: The order a site's problems are named in; the first one names the rule (D48 before D49).
-PROBLEMS = (UNFLAGGED, STRIP, HOTLINK, NO_AUTHOR)
+#: D82's rest list: a small hero beside a large live row, at a site with none of the four above.
+SMALL = "small"
+#: The order a site's problems are named in; the first one names the rule (D48 before D49). `small`
+#: is named only alone (`problems_of`), so it names its own rule (D82).
+PROBLEMS = (UNFLAGGED, STRIP, HOTLINK, NO_AUTHOR, SMALL)
 D48_PROBLEMS = frozenset({UNFLAGGED, STRIP, HOTLINK})
 
 FLAGGED, MOVED, ALIGNED = "hero flagged", "hero moved", "thumbnail aligned"
@@ -145,6 +162,10 @@ NOT_LARGER = "not larger than the hero it would replace"
 SMALLER = (
     f"below {LARGE[0]}x{LARGE[1]} while the hero it would replace is not: the move would make "
     "a D48 small hero"
+)
+NOT_LARGE = (
+    f"below {LARGE[0]}x{LARGE[1]}: the hero it would replace is moved only because it is below "
+    "that size"
 )
 CREDIT = "its licence demands a credit the row does not carry"
 NOT_CHOSEN = (
@@ -414,10 +435,18 @@ def is_local(thumbnail: str) -> bool:
     return thumbnail.startswith("/data/")
 
 
+def larger_rows(hero: Mapping[str, Any], live: Sequence[Mapping[str, Any]]) -> list[int]:
+    """The ids of the live rows of at least 1600x900 beside a hero below that size - the census
+    definition of D48's small hero. Empty for a hero that is not small or has no such row."""
+    if not below(hero, LARGE):
+        return []
+    return [int(r["id"]) for r in live if int(r["id"]) != int(hero["id"]) and not below(r, LARGE)]
+
+
 def problems_of(
     site: Mapping[str, Any], live: Sequence[Mapping[str, Any]], hero: Mapping[str, Any] | None
 ) -> list[str]:
-    """The D48/D49 problems of one site, in `PROBLEMS` order (see the module docstring)."""
+    """The D48/D49/D82 problems of one site, in `PROBLEMS` order (see the module docstring)."""
     if not live:
         return []
     found = []
@@ -430,6 +459,9 @@ def problems_of(
         found.append(HOTLINK)
     if hero is not None and "author" in missing_credit(hero):
         found.append(NO_AUTHOR)
+    # D82's small hero is named only alone: another problem is planned first, under its own bounds
+    if not found and hero is not None and larger_rows(hero, live):
+        found.append(SMALL)
     return found
 
 
@@ -438,9 +470,11 @@ def size_and_credit(
     *,
     larger_than: Mapping[str, Any] | None = None,
     keeps_large: Mapping[str, Any] | None = None,
+    large: bool = False,
 ) -> str | None:
     """What the row itself lacks as a hero, or None: the floor, larger than a strip it replaces
-    (`larger_than`), not small beside a large hero it replaces (`keeps_large`), its credit."""
+    (`larger_than`), not small beside a large hero it replaces (`keeps_large`), at least 1600x900
+    where it replaces a small hero (`large`), its credit."""
     if below(row, FLOOR):
         return BELOW_FLOOR
     if larger_than is not None:
@@ -450,6 +484,8 @@ def size_and_credit(
             return NOT_LARGER
     if keeps_large is not None and not below(keeps_large, LARGE) and below(row, LARGE):
         return SMALLER
+    if large and below(row, LARGE):
+        return NOT_LARGE
     missing = missing_credit(row)
     if missing:
         return f"{CREDIT}: {', '.join(missing)}"
@@ -462,6 +498,7 @@ def qualifies(
     *,
     larger_than: Mapping[str, Any] | None = None,
     keeps_large: Mapping[str, Any] | None = None,
+    large: bool = False,
 ) -> str | None:
     """Why `row` cannot be the site's hero, or None when it can (see the module docstring)."""
     if check is None:
@@ -470,7 +507,7 @@ def qualifies(
         return f"judged {check.verdict} ({check.source})"
     if ST.file_of_row(row) != check.file:
         return OTHER_FILE
-    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large)
+    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large, large=large)
 
 
 def chosen_by(
@@ -532,18 +569,24 @@ def _reason_text(problems: Sequence[str], hero: Mapping[str, Any] | None) -> str
             parts.append("the globe's thumbnail is no local file of the site")
         elif problem == NO_AUTHOR and hero is not None:
             parts.append(f"the hero {hero['id']}'s licence asks for an author and it has none")
+        elif problem == SMALL and hero is not None:
+            parts.append(
+                f"the hero {hero['id']} is {_size(hero)[0]}x{_size(hero)[1]}, below "
+                f"{LARGE[0]}x{LARGE[1]}, and the site holds a live row of at least that size"
+            )
     return "; ".join(parts)
 
 
-def bounds_of(
-    hero: Mapping[str, Any] | None, problems: Sequence[str]
-) -> dict[str, Mapping[str, Any] | None]:
+def bounds_of(hero: Mapping[str, Any] | None, problems: Sequence[str]) -> dict[str, Any]:
     """The size bounds a new hero of this site must keep (`size_and_credit`'s keywords): larger
-    than a strip, not small beside any other hero it replaces."""
+    than a strip, at least 1600x900 for a small hero, not small beside any other hero it
+    replaces."""
     if hero is None:
         return {"larger_than": None, "keeps_large": None}
     if STRIP in problems:
         return {"larger_than": hero, "keeps_large": None}
+    if SMALL in problems:
+        return {"larger_than": None, "keeps_large": None, "large": True}
     return {"larger_than": None, "keeps_large": hero}
 
 
@@ -554,7 +597,7 @@ def decide(
     picks: Mapping[str, Check],
     vetoes: Mapping[int, str] | None = None,
 ) -> Decision | None:
-    """One site's decision: None when it has no D48/D49 problem. `vetoes` are rows a reviewer
+    """One site's decision: None when it has no D48/D49/D82 problem. `vetoes` are rows a reviewer
     refused as the site's hero (`image id -> reason`); a vetoed row is never chosen."""
     sid = str(site["id"])
     live = ST.live_rows(rows)
@@ -576,6 +619,8 @@ def decide(
         if D48_PROBLEMS & set(problems)
         else (RULE_D49_HERO, RULE_D49_ALIGN)
     )
+    if SMALL in problems:
+        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN
     why = _reason_text(problems, hero)
     # the hero itself can stay when the only problem is the globe's thumbnail and it qualifies
     if (
@@ -702,18 +747,13 @@ def _owner_reason(rejected: Mapping[int, str]) -> str:
 
 def small_heroes(read: Read) -> list[dict[str, Any]]:
     """D48's small heroes: a live hero below 1600x900 at a site holding another live row of at least
-    1600x900 (the census definition; 433 on 2026-10-24). Owner list only, nothing moves."""
+    1600x900 (the census definition; 433 on 2026-10-24). The list of the read: it moves nothing and
+    names every such hero, whatever the plan does with its site (see the module docstring)."""
     out = []
     for sid, site in read.sites.items():
         live = ST.live_rows(read.rows.get(sid, ()))
         for hero in (r for r in live if r.get("is_hero")):
-            if not below(hero, LARGE):
-                continue
-            larger = [
-                int(r["id"])
-                for r in live
-                if int(r["id"]) != int(hero["id"]) and not below(r, LARGE)
-            ]
+            larger = larger_rows(hero, live)
             if larger:
                 out.append(
                     {
@@ -1067,9 +1107,9 @@ def check_pictures(
     run on them unchanged and their confirmed pick - the depicts role's best quality, confirmed by
     the adversarial re-check - comes back through `plan --check-run`. Offered is a live row other
     than the hero that `offer_reason` names and that keeps the site's bounds (`size_and_credit`:
-    the floor, the credit, larger than a strip, not small beside a large hero). `path_of(site_id,
-    filename)` is the offsite copy of a row; a row without one is refused by name in
-    `C/PICTURE_REFUSALS.jsonl`, never skipped."""
+    the floor, the credit, larger than a strip, at least 1600x900 for a small hero, not small
+    beside a large hero). `path_of(site_id, filename)` is the offsite copy of a row; a row without
+    one is refused by name in `C/PICTURE_REFUSALS.jsonl`, never skipped."""
     from candidate_search import population as PP
     from image_roles import flow as FL
 

@@ -348,7 +348,7 @@ class TestTheRunLists:
         strip = site(hero=HERO | {"width": 700, "height": 200, "author": None})
         rows, _ = F.run_list_rows(self.MOVES, "hero-moves-2026-11-06b", listed, {SITE: strip})
         assert rows[0]["reason"] == "strip, no_author: no qualifying row"
-        assert rows[0]["topic"] == "hero-problem-kept" and rows[0]["decision"] == "D48/D49"
+        assert rows[0]["topic"] == "hero-problem-kept" and rows[0]["decision"] == "D48/D49/D82"
 
     def test_a_hero_row_is_open_while_the_site_still_has_a_problem_it_names(self) -> None:
         """The list is the last plan's read. A later lane may have answered a row since: a D15
@@ -377,6 +377,21 @@ class TestTheRunLists:
         assert reasons(("hotlink",), site()) == []
         # a site that serves no live row any more has none of the planner's problems
         assert reasons(("unflagged", "hotlink"), site(images=0, hero=None, thumbnail_url="")) == []
+
+    def test_a_small_hero_row_is_open_while_a_larger_live_row_stands_beside_the_hero(self) -> None:
+        """D82: the planner's `small` asks for another live row of at least 1600x900, which the
+        production read holds as `hero_larger` (the same measure in SQL)."""
+        listed = [{"site_id": SITE, "problems": ["small"], "reason": "no qualifying row"}]
+        small = HERO | {"id": 7, "width": 1200, "height": 800}
+
+        def rows_of(now: dict[str, Any]) -> list[str]:
+            rows, _ = F.run_list_rows(self.MOVES, "hero-moves-2026-11-20", listed, {SITE: now})
+            return [row["reason"] for row in rows]
+
+        assert rows_of(site(hero=small, **LARGER)) == ["small: no qualifying row"]
+        # no larger row any more (excluded since), or the hero moved to a large row: answered
+        assert rows_of(site(hero=small)) == []
+        assert rows_of(site(hero=HERO | {"id": 58086}, **LARGER)) == []
 
     def test_every_research_and_hotlink_run_is_read_and_only_the_last_hero_plan(
         self, tmp_path: Path
