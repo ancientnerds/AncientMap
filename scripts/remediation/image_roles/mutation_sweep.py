@@ -2324,7 +2324,7 @@ A6_CASES: list[Case] = [
       "    return size_and_credit(row, larger_than=larger_than, keeps_large=keeps_large)",
       "test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size", T_HM),
     c("a6 #3: a small move is journalled under its own rule", HERO_MOVES,
-      "    if SMALL in problems:\n        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN",
+      "    if small:\n        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN",
       "    if False:\n        rule_hero, rule_align = RULE_D82_HERO, RULE_D82_ALIGN",
       "test_a_small_hero_moves_to_the_chosen_large_row_under_the_d82_rule", T_HM),
     c("a6 #3: the journal says why a small hero moves", HERO_MOVES,
