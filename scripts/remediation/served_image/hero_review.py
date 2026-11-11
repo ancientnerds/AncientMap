@@ -101,16 +101,27 @@ def _credit(row: Mapping[str, Any]) -> list[str]:
     ]
 
 
-#: What a `small` plan (owner decision D82) adds to the question; a plan of another kind is asked
-#: exactly what it was asked before, so a review exported earlier is imported unchanged.
+#: The decisions the question names, and its veto rule for a move. A D48/D49 plan is asked exactly
+#: what it was asked before the small heroes were planned, so a review exported earlier is imported
+#: unchanged (the import rebuilds the prompt byte for byte).
+DECISIONS_NAMED = "owner decisions D48/D49"
+MOVE_RULE = (
+    "veto otherwise, naming the reason. For a move (D49), do NOT veto only because the current",
+    "hero is the nicer picture: the move exists because the current hero lacks its credit.",
+)
+#: What a `small` plan (owner decision D82) is asked instead. D49's sentence is false for it - its
+#: hero lacks nothing but size - so the question does not carry it: a reviewer told not to veto for
+#: the nicer current picture would accept the very move this review exists to stop.
+SMALL_DECISIONS_NAMED = "owner decision D82"
 SMALL_WHY = (
     "  small = the current hero is below 1600x900 and the site holds larger pictures (D82): the hero",
     "          moves to a checked picture of at least 1600x900.",
 )
 SMALL_RULE = (
-    "This move is a small one (D82): its only gain is the size. Veto it when the current hero is",
-    "the better main picture of the site - it shows the site's remains more clearly or more",
-    "completely than the new picture - and say so in the reason.",
+    "veto otherwise, naming the reason. This move is a small one (D82): the current hero is",
+    "neither a strip nor without its author, and the only gain of the move is the size. Veto it",
+    "when the current hero is the better main picture of the site - it shows the site's remains",
+    "more clearly or more completely than the new picture - and say so in the reason.",
 )
 
 
@@ -125,8 +136,9 @@ def prompt_for(line: Mapping[str, Any], read: HM.Read) -> str:
     said = check.get("shows") or check.get("answer_basis") or "(not recorded)"
     description = str(site.get("description") or "").strip() or "(none)"
     small = HM.SMALL in line["problems"]
+    named = SMALL_DECISIONS_NAMED if small else DECISIONS_NAMED
     parts = [
-        "You review one planned hero-image change on the Ancient Nerds map (owner decisions D48/D49).",
+        f"You review one planned hero-image change on the Ancient Nerds map ({named}).",
         "The hero is the site page's main picture and the globe thumbnail. A planner chose the new",
         "hero from a Claude check; you decide whether the move may be written.",
         "",
@@ -171,11 +183,9 @@ def prompt_for(line: Mapping[str, Any], read: HM.Read) -> str:
         "  2. Its credit is complete per D18: every credit column the licence demands is present and",
         "     plausible (an author that names a person, an organisation or an account - not",
         "     'Unknown', 'Own work' or a URL fragment; a licence URL that matches the licence).",
-        "veto otherwise, naming the reason. For a move (D49), do NOT veto only because the current",
-        "hero is the nicer picture: the move exists because the current hero lacks its credit.",
+        *(SMALL_RULE if small else MOVE_RULE),
         "Veto a move whose new picture is a drawing, a plan or an object photo when the site has",
         "visible remains and the current picture shows them - say so in the reason.",
-        *(SMALL_RULE if small else ()),
         "",
         "Answer with exactly one JSON object and nothing else:",
         '{"decision": "accept" | "veto", "shows": "<one sentence: what the new picture shows>", '

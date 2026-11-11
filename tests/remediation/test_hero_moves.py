@@ -7,7 +7,8 @@ stage's pick, or the row an unflagged page shows - never a `depicts` ranked by i
 ranking, the D15 deferral of an `other_site` hero, vetoes, the check population, the review that
 must accept a move before `emit` writes a chunk, the write order, the small-hero owner list, and the
 read-only acceptance. D82 (2026-11-05): the small hero as a problem of its own - named only alone,
-replaced only by a chosen row of at least 1600x900, under its own rule.
+replaced only by a confirmed check-run pick of at least 1600x900 (never by an earlier replacement
+pick), under its own rule, and never where the hero is the picture the owner linked by hand.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ def _site(sid: str = SITE, thumb: str | None = None, **over: Any) -> dict[str, A
         "description": "A walled city.",
         "qid": "Q1",
         "enwiki_title": "Thasos",
+        "source_url": "https://example.org/thasos",
+        "owner_link": None,
     } | over
 
 
@@ -720,9 +723,10 @@ def test_small_is_named_only_where_no_other_problem_is() -> None:
 def test_a_small_hero_moves_to_the_chosen_large_row_under_the_d82_rule() -> None:
     site = _site(thumb="/data/images/wiki/11111111/A.webp")
     rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg", size=(1600, 900))]
-    decision = HM.decide(site, rows, {2: _check(SITE, "B.jpg", picked=True)}, {})
+    decision = HM.decide(site, rows, {}, {SITE: _check(SITE, "B.jpg", confirmed=True)})
     assert decision is not None and decision.plan is not None
     assert decision.problems == [HM.SMALL] and decision.plan.outcome == HM.MOVED
+    assert decision.choice == HM.CONFIRMED_PICK
     got = {(c.column, c.row_key): (c.old_value, c.new_value, c.rule) for c in decision.plan.changes}
     assert got == {
         ("is_hero", "1"): ("true", "false", HM.RULE_D82_HERO),
@@ -740,9 +744,9 @@ def test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size() -> None:
     hero = _row(1, "A.jpg", hero=True, size=(1200, 800))
     mid = _row(2, "Mid.jpg", size=(1500, 1000))  # larger than the hero, and still small
     rows = [hero, mid, _row(3, "Large.jpg", size=(3000, 2000))]
-    check = _check(SITE, "Mid.jpg", picked=True)
+    check = _check(SITE, "Mid.jpg", confirmed=True)
     assert HM.qualifies(mid, check, **HM.bounds_of(hero, [HM.SMALL])) == HM.NOT_LARGE
-    decision = HM.decide(_site(thumb="/data/x"), rows, {2: check}, {})
+    decision = HM.decide(_site(thumb="/data/x"), rows, {}, {SITE: check})
     assert decision is not None and decision.plan is None
     assert decision.rejected == {2: HM.NOT_LARGE, 3: HM.UNCHECKED}
     assert decision.owner_reason is not None and "below 1600x900" in decision.owner_reason
@@ -755,10 +759,78 @@ def test_a_small_hero_is_replaced_only_by_a_row_of_the_large_size() -> None:
 
 def test_a_small_hero_the_d15_recheck_owns_is_deferred() -> None:
     rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg")]
-    served = {1: _check(SITE, "A.jpg", "other_site"), 2: _check(SITE, "B.jpg", picked=True)}
-    decision = HM.decide(_site(thumb="/data/x"), rows, served, {})
+    served = {1: _check(SITE, "A.jpg", "other_site")}
+    picks = {SITE: _check(SITE, "B.jpg", confirmed=True)}
+    # also where the hero is the owner's own picture: the D15 re-check is given that link
+    for site in (_site(thumb="/data/x"), _site(thumb="/data/x", owner_link=UPLOAD + "A.jpg")):
+        decision = HM.decide(site, rows, served, picks)
+        assert decision is not None and decision.problems == [HM.SMALL]
+        assert decision.plan is None and decision.deferred is not None
+        assert decision.owner_reason is None
+
+
+def test_a_replacement_pick_is_no_choice_for_a_small_hero() -> None:
+    """The pick of 2026-09-30 was made against the hero of its day; where it is not the hero now
+    a later decision stands between (the journal: the owner's import-hero wave, 17 of 17)."""
+    site = _site(thumb="/data/x")
+    hero = _row(1, "A.jpg", hero=True, size=(1200, 800))
+    pick = _row(2, "B.jpg")
+    check = _check(SITE, "B.jpg", picked=True)
+    assert HM.chosen_by(pick, check, hero=hero, shown=hero, small=True) is None
+    assert HM.chosen_by(pick, check, hero=hero, shown=hero) == HM.REPLACEMENT_PICK
+    decision = HM.decide(site, [hero, pick], {2: check}, {})
     assert decision is not None and decision.problems == [HM.SMALL]
-    assert decision.plan is None and decision.deferred is not None
+    assert decision.plan is None and decision.rejected == {2: HM.EARLIER_PICK}
+    assert decision.owner_reason is not None and "pick of an earlier run" in decision.owner_reason
+    # the image roles judge it again, and their confirmed pick is the choice
+    assert HM.offer_reason(pick, check, hero=hero, shown=hero, small=True) == (
+        HM.OFFER_EARLIER_PICK
+    )
+    confirmed = {SITE: _check(SITE, "B.jpg", confirmed=True)}
+    decision = HM.decide(site, [hero, pick], {2: check}, confirmed)
+    assert decision is not None and decision.plan is not None
+    assert decision.choice == HM.CONFIRMED_PICK
+    # a hero with a D49 problem still moves to the replacement pick, as before
+    uncredited = _row(1, "A.jpg", hero=True, size=(1200, 800), author=None)
+    decision = HM.decide(site, [uncredited, pick], {2: check}, {})
+    assert decision is not None and decision.plan is not None
+    assert decision.choice == HM.REPLACEMENT_PICK
+
+
+def test_the_owners_own_picture_stays_the_hero_of_a_small_site() -> None:
+    """Owner decisions of 2026-10-05 and 2026-10-06: the import's hand-linked picture is the hero,
+    at a small size too. D82 names no move away from it, so the planner makes none."""
+    rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg")]
+    picks = {SITE: _check(SITE, "B.jpg", confirmed=True)}
+    linked = _site(thumb="/data/x", owner_link=UPLOAD + "A.jpg")
+    decision = HM.decide(linked, rows, {}, picks)
+    assert decision is not None and decision.problems == [HM.SMALL]
+    assert decision.plan is None and decision.owner_link_kept
+    assert decision.owner_reason == HM.OWNER_LINK_KEPT and decision.rejected == {}
+    assert "2026-10-05" in HM.OWNER_LINK_KEPT and "800x300" in HM.OWNER_LINK_KEPT
+    # the import links another file, a page that is no Commons file, or nothing: the hero is
+    # not the owner's picture and the confirmed pick moves it
+    for link in (UPLOAD + "B.jpg", UPLOAD + "Other.jpg", "https://example.org/", None):
+        decision = HM.decide(_site(thumb="/data/x", owner_link=link), rows, {}, picks)
+        assert decision is not None and decision.plan is not None, link
+        assert not decision.owner_link_kept
+    # only `small` holds it: a hero without its author moves away from the owner's link (D49)
+    uncredited = [_row(1, "A.jpg", hero=True, size=(1200, 800), author=None), _row(2, "B.jpg")]
+    decision = HM.decide(linked, uncredited, {}, picks)
+    assert decision is not None and decision.problems == [HM.NO_AUTHOR]
+    assert decision.plan is not None and not decision.owner_link_kept
+
+
+def test_a_small_hero_is_not_planned_on_a_read_without_the_owners_links() -> None:
+    rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg")]
+    site = _site(thumb="/data/x")
+    del site["owner_link"]
+    with pytest.raises(HM.HeroMovesError, match="--import"):
+        HM.decide(site, rows, {}, {SITE: _check(SITE, "B.jpg", confirmed=True)})
+    # the four other problems never ask: a read made before plans them as it did
+    uncredited = [_row(1, "A.jpg", hero=True, author=None), _row(2, "B.jpg")]
+    decision = HM.decide(site, uncredited, {2: _check(SITE, "B.jpg", picked=True)}, {})
+    assert decision is not None and decision.plan is not None
 
 
 def _small_site_run(tmp_path: Path) -> tuple[Path, Path]:
@@ -790,9 +862,71 @@ def test_the_image_roles_are_offered_only_the_large_rows_of_a_small_site(tmp_pat
     run, served = _small_site_run(tmp_path)
     check_run = tmp_path / "candidates-check"
     out = HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
-    assert out["sites"] == 1 and out["offered"] == {"unjudged": 1, "depicts_unchosen": 1}
+    assert out["sites"] == 1
+    assert out["offered"] == {"unjudged": 1, "depicts_unchosen": 1, "earlier_pick": 0}
     [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
     assert [c["image_id"] for c in line["candidates"]] == [2, 5]
+
+
+def test_a_small_site_with_an_earlier_pick_is_offered_to_the_image_roles(tmp_path: Path) -> None:
+    """No `small` site is settled before the image roles ran, so none is left out of their
+    population: the earlier pick and every other large credited row are judged."""
+    sites = [_site(thumb="/data/images/wiki/11111111/A.webp")]
+    rows = [
+        _row(1, "A.jpg", hero=True, size=(1200, 800)),
+        _row(2, "B.jpg"),  # judged depicts by the served check, nobody chose it
+        _row(3, "C.jpg", size=(3000, 2000)),  # the replacement stage's pick (`_served_run`)
+        _row(4, "D.jpg"),  # nobody judged it
+    ]
+    run, served = _hero_moves_run(tmp_path, sites, rows), _served_run(tmp_path)
+    check_run = tmp_path / "candidates-check"
+    out = HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
+    assert out["sites"] == 1
+    assert out["offered"] == {"unjudged": 1, "depicts_unchosen": 1, "earlier_pick": 1}
+    [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
+    assert [(c["image_id"], c["why"]) for c in line["candidates"]] == [
+        (2, HM.OFFER_UNCHOSEN),
+        (3, HM.OFFER_EARLIER_PICK),
+        (4, HM.OFFER_UNJUDGED),
+    ]
+    # and the plan without their pick moves nothing
+    summary = HM.write_plan(run, [served], [])
+    assert summary["planned_sites"] == 0
+    assert summary["by_problem"] == {HM.SMALL: {"owner_list": 1}}
+
+
+def test_no_row_is_offered_and_nothing_is_planned_where_the_owners_picture_is_the_hero(
+    tmp_path: Path,
+) -> None:
+    sites = [
+        _site(thumb="/data/images/wiki/11111111/A.webp", owner_link=UPLOAD + "A.jpg"),
+        _site(OTHER, thumb="/data/images/wiki/22222222/A.webp"),
+    ]
+    rows = [
+        _row(1, "A.jpg", hero=True, size=(1200, 800)),
+        _row(2, "B.jpg"),
+        _row(3, "A.jpg", sid=OTHER, hero=True, size=(1200, 800)),
+        _row(4, "B.jpg", sid=OTHER),
+    ]
+    run = _hero_moves_run(tmp_path, sites, rows)
+    served = tmp_path / "served-image-2026-09-30"
+    _write_jsonl(served / "CHECK.jsonl", [])
+    check_run = tmp_path / "candidates-check"
+    out = HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
+    assert (out["sites"], out["pictures"]) == (1, 1)
+    [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
+    assert line["site_id"] == OTHER
+    # a pick for the kept site changes nothing: it stays on the owner list with the reason
+    summary = HM.write_plan(run, [served], [_check_run(tmp_path, target="B.jpg")])
+    assert summary["planned_sites"] == 0
+    assert summary["by_problem"] == {HM.SMALL: {"owner_link_kept": 1, "owner_list": 1}}
+    owner = {
+        o["site_id"]: o
+        for o in (json.loads(x) for x in (run / HM.OWNER_LIST).read_text().splitlines())
+    }
+    assert owner[SITE]["reason"] == HM.OWNER_LINK_KEPT and owner[SITE]["rows"] == {}
+    assert owner[SITE]["problems"] == [HM.SMALL]
+    assert owner[OTHER]["rows"] == {"4": HM.UNCHECKED}
 
 
 def test_the_plan_moves_a_small_hero_to_the_confirmed_pick_and_lists_the_rest(
@@ -855,7 +989,7 @@ def test_check_pictures_offers_the_rows_nobody_judged_or_chose(tmp_path: Path) -
     assert out == {
         "sites": 1,
         "pictures": 2,
-        "offered": {"unjudged": 1, "depicts_unchosen": 1},
+        "offered": {"unjudged": 1, "depicts_unchosen": 1, "earlier_pick": 0},
         "refused": 0,
     }
     [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
@@ -867,6 +1001,32 @@ def test_check_pictures_offers_the_rows_nobody_judged_or_chose(tmp_path: Path) -
     assert pop["lat"] == 40.7 and pop["site_id"] == SITE
     with pytest.raises(HM.HeroMovesError, match="written once"):
         HM.check_pictures(run, check_run, [served], lambda sid, name: Path("C:/x") / name)
+
+
+def test_a_site_whose_chosen_row_was_vetoed_is_offered_without_that_row(tmp_path: Path) -> None:
+    """The plan will be given the veto, so the population has to know it too: else the step sees
+    the site as planned, the plan puts it on the owner list, and nobody searched it (D82)."""
+    run, served = _fixture(tmp_path)  # a strip; 2 judged depicts, 3 the replacement pick
+    path_of = lambda sid, name: Path("C:/x") / name  # noqa: E731
+    with pytest.raises(HM.HeroMovesError, match="no unsettled site has a row to offer"):
+        HM.check_pictures(run, tmp_path / "candidates-none", [served], path_of)
+    veto = tmp_path / "VETOED.jsonl"
+    _write_jsonl(veto, [{"site_id": SITE, "image_id": 3, "reason": "a plan", "by": HM.OWNER}])
+    check_run = tmp_path / "candidates-check"
+    out = HM.check_pictures(run, check_run, [served], path_of, veto)
+    assert (out["sites"], out["pictures"]) == (1, 1)
+    [line] = [json.loads(x) for x in (check_run / "PICTURES.jsonl").read_text().splitlines()]
+    assert [(c["image_id"], c["why"]) for c in line["candidates"]] == [(2, HM.OFFER_UNCHOSEN)]
+    source = json.loads((check_run / HM.CHECK_SOURCE).read_text(encoding="utf-8"))
+    assert source["veto"]["file"] == str(veto.resolve()) and len(source["veto"]["sha256"]) == 64
+    # a vetoed earlier pick of a small site is not offered again either
+    small = tmp_path / "small"
+    sites = [_site(thumb="/data/images/wiki/11111111/A.webp")]
+    rows = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg"), _row(3, "C.jpg")]
+    out = HM.check_pictures(
+        _hero_moves_run(small, sites, rows), small / "candidates-check", [served], path_of, veto
+    )
+    assert out["offered"] == {"unjudged": 0, "depicts_unchosen": 1, "earlier_pick": 0}
 
 
 def test_a_chosen_row_and_a_small_one_are_not_offered() -> None:
@@ -899,6 +1059,59 @@ def test_check_pictures_names_a_row_without_an_offsite_copy(tmp_path: Path) -> N
     assert (out["sites"], out["pictures"], out["refused"]) == (1, 1, 1)
     [refusal] = [json.loads(x) for x in (check_run / HM.CHECK_REFUSALS).read_text().splitlines()]
     assert refusal["file"] == "D.jpg"
+
+
+# --------------------------------------------------------------- the read's owner links
+def _import_file(tmp_path: Path, features: list[dict[str, Any]]) -> Path:
+    path = tmp_path / "ancient_nerds_original.geojson"
+    path.write_text(
+        json.dumps({"features": [{"properties": f} for f in features]}), encoding="utf-8"
+    )
+    return path
+
+
+def test_the_read_says_which_picture_the_owner_linked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`read --import` joins the 2025 import to the read as the import-hero lane does (the source
+    URL first, the folded title second), so the plan knows the owner's own picture."""
+    source = _import_file(
+        tmp_path,
+        [
+            {
+                "Title": "Limenas",
+                "Source": "https://example.org/thasos",
+                "Images": UPLOAD + "A.jpg",
+            },
+            {"Title": "Delos", "Source": "", "Images": ""},
+        ],
+    )
+    sites = [_site(), _site(OTHER, name="Delos", source_url=None)]
+    for site in sites:
+        del site["owner_link"]
+    assert "u.source_url" in HM.SITES_SQL
+    images = [_row(1, "A.jpg", hero=True, size=(1200, 800)), _row(2, "B.jpg")]
+    answers = iter([sites, images])
+    monkeypatch.setattr(CW.pv, "read_rows", lambda sql: next(answers))
+    run = tmp_path / "hero-moves-2026-11-11"
+    assert HM.main(["read", "--run-dir", str(run), "--import", str(source)]) == 0
+    assert json.loads(capsys.readouterr().out)["owner_links"] == 1
+    data = json.loads((run / "READ.json").read_text(encoding="utf-8"))
+    assert [s["owner_link"] for s in data["sites"]] == [UPLOAD + "A.jpg", None]
+    assert data["import"]["file"] == source.name and len(data["import"]["sha256"]) == 64
+    # the plan of that read keeps the owner's picture
+    read = HM.load_read(run)
+    [decision] = HM.build(read, {}, {SITE: _check(SITE, "B.jpg", confirmed=True)})
+    assert decision.owner_link_kept
+    # a read needs the import: without the flag or the file nothing is read
+    with pytest.raises(SystemExit):
+        HM.main(["read", "--run-dir", str(tmp_path / "hero-moves-2026-11-12")])
+    other = tmp_path / "hero-moves-2026-11-13"
+    answers = iter([])  # and production is not asked
+    missing = str(tmp_path / "nowhere.geojson")
+    assert HM.main(["read", "--run-dir", str(other), "--import", missing]) == 1
+    assert "the only surviving copy" in capsys.readouterr().err
+    assert not (other / "READ.json").exists()
 
 
 # ------------------------------------------------------------------------------ acceptance

@@ -590,7 +590,9 @@ counts it, the list does not carry it (2026-10-24: 809 small, 433 with a larger 
 without). Since D82 the hero-moves lane searches these sites (problem `small`,
 `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md` section 3.8.1): `hero-small` is measured on production, so it lists
 what is still small after that lane, and the last plan's `OWNER_LIST.jsonl` row of such a site (`hero-problem-kept`,
-problem `small`) says why no checked row replaced the hero. **Run it from the main checkout** (the waves name their run by the main checkout's path):
+problem `small`) says why the hero stayed: it is the picture the owner linked by hand (the lane never moves that
+one for its size), or what each other row of the site lacks. A site whose planned move the review vetoed has no
+such row: it is in that run's `VETOED.jsonl` with the reviewer's reason and on `hero-small` alone. **Run it from the main checkout** (the waves name their run by the main checkout's path):
 
 ```bash
 cd C:/PythonProjects/AncientMap

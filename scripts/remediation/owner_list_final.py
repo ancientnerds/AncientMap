@@ -55,9 +55,13 @@ nothing to decide: the report counts it, the list does not carry it. Measured re
 
 D82 (2026-11-05) has these sites searched: the hero-moves lane plans them as `small`
 (`served_image/hero_moves.py`) and moves the hero where the image roles confirm a large row and the
-review accepts it. `hero-small` is measured on production, so it lists what is still small after
-that; the last plan's `OWNER_LIST.jsonl` row of such a site (`hero-problem-kept`, problem `small`)
-says why no checked row replaced the hero.
+review accepts it - never where the hero is the picture the owner linked by hand (his decisions of
+2026-10-05 and 2026-10-06 made it the hero at that size; the move away from it is his to decide).
+`hero-small` is measured on production, so it lists what is still small after that; the last
+plan's `OWNER_LIST.jsonl` row of such a site (`hero-problem-kept`, problem `small`) says why the
+hero stayed: it is the owner's own picture, or what each other row of the site lacks. A site whose
+planned move the review vetoed has no such row - it is in that run's `VETOED.jsonl` with the
+reviewer's reason - and is on `hero-small` alone.
 
 ## What is read, and what is named
 
