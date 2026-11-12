@@ -1788,8 +1788,45 @@ judged whole (`--sample` is refused for one) and a sampled result approves no pl
 sample is a finding about the chunk: **the gate refuses to write it** (`pilot_approval`: a chunk whose `judge/ROUND.json`
 exists needs a `RESULT.json` that passed on exactly this plan - a judge exported and not imported, a failed one and a
 plan built again after its judge all stop the write). Fix the cause (`revert4` the stamp, or clear the sentences by a
-list run) and judge a rebuilt plan again. A chunk with no judge round at all is not asked by the gate: the sample is
-the operator's step.
+list run) and judge a rebuilt plan again, or - since 2026-11-12 - record decision O23 for the chunk and build it again
+(15.4a). A chunk with no judge round at all is not asked by the gate: the sample is the operator's step.
+
+### 15.4a Decision O23: a chunk whose sampled judge failed (2026-11-12)
+
+Orchestrator decision O23 (`output/remediation/OWNER_DECISIONS_2026-10-08.md`, under the owner's D158): a WC write
+only removes sentences, so a chunk left unwritten keeps every error the judge found live. Such a chunk is written as
+what is strictly better than the live text: the judge's WRONG and UNSUPPORTED kept sentences are dropped as well (a
+WRONG whether its quote was found or not, as the verdict counts it), a site the judge called incoherent is **not**
+written (listed), the rest of the chunk is written. A DROP_WRONG verdict adds nothing back. The same rule holds for
+mass-03, mass-04 and `defects-2026-10-02` (a list chunk has no judge; it is written on its verification as before).
+
+    $C judge-drops --run-dir $RUNS/<run>             # dry run: what O23 would record, nothing written
+    $C judge-drops --run-dir $RUNS/<run> --apply     # judge/O23.json, once (a second call is refused)
+    $C build --run-dir $RUNS/<run> --first-batch $NEXT    # the plan without the judge's drops; SUMMARY.json "o23"
+
+`judge-drops` reads the verdict as imported (`judge/RESULT.json`, `judge/JUDGED.jsonl`) over the plan the judge
+judged, and refuses: a pilot (judged whole), a judge that passed, a verdict with a dependent judge (repair it,
+section 10 of the playbook), and a plan built again after the judge (the judge's K numbers belong to the judged plan).
+`O23.json` records the decision's text, the sha256 of `RESULT.json` and of the judged plan, and per judged site the
+judge, its model stamp, the sha256 of the text it was shown and the sentence numbers it dropped (`judge-wrong`,
+`judge-unsupported`), and the sites left out. From then on `judge-import` is refused for the run.
+
+The rebuilt plan carries the decision in the evidence of **every** row of the run (`evidence.judge`: decision, the
+sha256 of `O23.json`, judge, judged text sha256 and drops; a site outside the sample names the decision with no
+judge and no drop). A text the drops shortened names them in its public check record (`_description_check.judged`:
+`{decision, dropped}`); its `verified_sha256` stays the sha256 of the text the verifier confirmed, which is then not
+the served text, and the drops say why. The judge's model joins the disclosure of such a text. A text whose kept
+sentences the drops took whole is cleared (WN's population). The pronoun rule runs after the drops.
+
+The gate (`pilot_approval`) writes a chunk whose sampled judge failed only when `O23.json` still names the verdict
+as imported and the plan was built on it: every outcome names the recorded decision and exactly its site's drops,
+and no left-out site is planned; `write_gate4.py` prints `sampled judge failed, written on decision O23: <run>`.
+Every other gate stands: a chunk without the record, and every other run, still needs a passed judge on exactly its
+plan. `wc4.verification_problems` re-derives the drops from the evidence (the judge was shown the verified text,
+the final decisions are the verified ones less the drops), `wc4.wc_problems` accepts a served text that is not the
+verified one only beside a `judged` record, and the transaction's invariant 5 exempts `verified_sha256` only where
+the check record's `judged` and the plan row's `evidence.judge` both name O23. Unsampled sites can still carry a wrong
+sentence the chain missed: the final report gives the judge's measured rate per chunk, not a claim that they are clean.
 
 ### 15.5 The defect sites (D25b): 160 on 2026-10-24
 
@@ -1933,6 +1970,10 @@ lane E's judge question not bound; a bound text read from the wrong module; prep
 copy; an unbuildable question passing). The test that `register_judge_pool` builds every question before it
 replaces the first (`test_the_copy_is_asked_its_new_questions_only_once_all_are_built`) has no single-anchor mutant:
 the build and the swap are two calls apart.
+Decision O23 (15.4a) adds sixteen cases, `mutation_sweep.py "o23"` (the record, the gate's plan check, the left-out
+sites, the decision's refusals, the drops in `wc4`, invariant 5's exemption), over `test_wc_roles.py` and the pinned
+statement in `test_phase4_wc_write.py`; the four anchors it moved (`"wc roles: a failed sampled judge"`, `"verify
+reason of a check decision"`, `"served text need not be the verified"`, `"invariant 5 skips the verified"`) match again.
 
 ### 15.10 Closed batches and stale reads (2026-10-24)
 

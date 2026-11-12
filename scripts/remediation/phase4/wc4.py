@@ -213,6 +213,11 @@ class DropReason(StrEnum):
     #: the verification cleared the site: an incoherent text whose broken sentence the verifier
     #: could not name, or a text a drop changed that the second verifier did not confirm
     VERIFY_CLEARED = "verify-cleared"
+    #: the chunk's sampled judge found it WRONG (decision O23: a chunk whose judge failed is
+    #: written without the judge's WRONG and UNSUPPORTED kept sentences, `apply_judge_drops`)
+    JUDGE_WRONG = "judge-wrong"
+    #: the chunk's sampled judge found it UNSUPPORTED (decision O23)
+    JUDGE_UNSUPPORTED = "judge-unsupported"
 
 
 AGENT_REASONS = frozenset({DropReason.CONTRADICTED, DropReason.UNSUPPORTED})
@@ -224,6 +229,7 @@ VERIFY_REASONS = frozenset(
         DropReason.VERIFY_CLEARED,
     }
 )
+JUDGE_REASONS = frozenset({DropReason.JUDGE_WRONG, DropReason.JUDGE_UNSUPPORTED})
 
 
 # ------------------------------------------------------------------------------ the sentences
@@ -821,6 +827,79 @@ def apply_verification(
     return current, record
 
 
+# ------------------------------------------------------------------------------ the O23 judge drops
+#: Orchestrator decision O23 of 2026-11-12 (under the owner's D158; `OWNER_DECISIONS_2026-10-08.md`):
+#: a chunk whose sampled judge failed is not left unwritten - a WC write only removes sentences, so
+#: the March text stays live with every error the judge found. It is written as what is strictly
+#: better than the live text: the judge's WRONG and UNSUPPORTED kept sentences are dropped too, a
+#: site the judge called incoherent is not written. The decision is recorded per run
+#: (`wc/cli.py judge-drops`, `judge/O23.json`) and named in the evidence of every journal row of
+#: such a run (`JUDGE_KEY`) and in the check record of every text it shortened (`JUDGED_KEY`).
+O23_DECISION = (
+    "O23 2026-11-12: a chunk whose sampled judge failed is written without the judge's WRONG and "
+    "UNSUPPORTED kept sentences; a site the judge called incoherent is not written"
+)
+#: The journal evidence's key of a run written under O23: `{decision, decision_sha256, judge,
+#: judged_sha256, drops}` - the decision file's sha256, the judge's `answered_by` and the sha256 of
+#: the text the judge was shown (both `None` for a site outside the sample, whose `drops` are empty),
+#: and the judge's drops by sentence number.
+JUDGE_KEY = "judge"
+_JUDGE_RECORD_KEYS = frozenset({"decision", "decision_sha256", "judge", "judged_sha256", "drops"})
+#: The check record's key of a text the judge's drops shortened: `{decision, dropped}`. Its
+#: `verified_sha256` stays the sha256 of the text the last verifier confirmed - which is then not
+#: the served text, and this key says why.
+JUDGED_KEY = "judged"
+_JUDGED_KEYS = frozenset({"decision", "dropped"})
+
+
+def judge_drops_of(record: Any) -> dict[int, DropReason]:
+    """The judge's drops an O23 evidence record names (`JUDGE_KEY`), read strictly."""
+    if not isinstance(record, Mapping) or set(record) != _JUDGE_RECORD_KEYS:
+        keys = sorted(record) if isinstance(record, Mapping) else record
+        raise WcError(f"the judge record carries {keys!r}, not {sorted(_JUDGE_RECORD_KEYS)}")
+    if record["decision"] != O23_DECISION:
+        raise WcError(f"the judge record names {record['decision']!r}, not decision O23")
+    M._need_hex(record["decision_sha256"], "judge.decision_sha256")
+    drops = record["drops"]
+    if not isinstance(drops, Mapping):
+        raise WcError("judge.drops is an object of sentence number -> reason")
+    if record["judged_sha256"] is None:
+        if record["judge"] is not None or drops:
+            raise WcError("a site outside the judge's sample names no judge and no drop")
+    else:
+        M._need_hex(record["judged_sha256"], "judge.judged_sha256")
+        M._need_text(record["judge"], "judge.judge")
+    out: dict[int, DropReason] = {}
+    for key, reason in drops.items():
+        if not isinstance(key, str) or not key.isdigit() or int(key) < 1:
+            raise WcError(f"judge.drops: {key!r} is not a sentence number")
+        if reason not in {r.value for r in JUDGE_REASONS}:
+            raise WcError(f"judge.drops: S{key} {reason!r} is not one of the judge's reasons")
+        out[int(key)] = DropReason(reason)
+    return dict(sorted(out.items()))
+
+
+def apply_judge_drops(decisions: Sequence[Decision], record: Mapping[str, Any]) -> list[Decision]:
+    """The verified decisions less the judge's WRONG and UNSUPPORTED kept sentences (decision O23),
+    then the pronoun rule (`follow_drops`): a kept sentence that leans on one the judge took goes
+    too. Only a kept sentence can be dropped; nothing is ever added back."""
+    drops = judge_drops_of(record)
+    kept = set(kept_numbers(decisions))
+    stray = sorted(set(drops) - kept)
+    if stray:
+        raise WcError(f"the judge drops {stray}, which the verified text does not keep")
+    if not drops:
+        return list(decisions)
+    return follow_drops(
+        [
+            dataclasses.replace(d, verdict=Verdict.DROP, remove=None, reason=drops[d.n])
+            if d.n in drops
+            else d
+            for d in decisions
+        ]
+    )
+
+
 # ------------------------------------------------------------------------------ the record
 _CHECK_KEYS = frozenset(
     {
@@ -913,6 +992,9 @@ class DescriptionCheck:
     verifiers: tuple[str, ...]  #: the agents that verified the text, one per round, in order
     verified_sha256: str  #: the recorded sha256 of the text the last verifier confirmed
     v: int = CHECK_VERSION
+    #: decision O23: the sentences the chunk's sampled judge dropped from the verified text
+    #: (`{decision, dropped}`, `JUDGED_KEY`); `None` for a text served as its verifier confirmed it
+    judged: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.v != CHECK_VERSION or isinstance(self.v, bool):
@@ -947,9 +1029,24 @@ class DescriptionCheck:
             )
         if not kept:
             raise ValueError("check: a record describes a kept text; nothing kept is a clear")
+        by_judge = [s.n for s in self.sentences if s.reason in JUDGE_REASONS]
+        if self.judged is None:
+            if by_judge:
+                raise ValueError(f"check: S{by_judge} dropped by the judge without the O23 record")
+            return
+        if not isinstance(self.judged, Mapping) or set(self.judged) != _JUDGED_KEYS:
+            raise ValueError(f"check.judged: {self.judged!r} is not {sorted(_JUDGED_KEYS)}")
+        if self.judged["decision"] != O23_DECISION:
+            raise ValueError(f"check.judged names {self.judged['decision']!r}, not decision O23")
+        if self.judged["dropped"] != by_judge or not by_judge:
+            raise ValueError(
+                f"check.judged: dropped {self.judged['dropped']!r}, the sentences say {by_judge}"
+            )
 
     def to_dict(self) -> dict[str, Any]:
+        judged = {} if self.judged is None else {JUDGED_KEY: dict(self.judged)}
         return {
+            **judged,
             "v": self.v,
             "run": self.run,
             "checker": self.checker,
@@ -965,7 +1062,8 @@ class DescriptionCheck:
 
     @classmethod
     def from_dict(cls, data: Any) -> DescriptionCheck:
-        d = M._obj(data, "check", _CHECK_KEYS)
+        judged = isinstance(data, dict) and JUDGED_KEY in data
+        d = M._obj(data, "check", _CHECK_KEYS | {JUDGED_KEY} if judged else _CHECK_KEYS)
         if not isinstance(d["sentences"], list) or not isinstance(d["verifiers"], list):
             raise ValueError("check.sentences and check.verifiers are lists")
         for key in ("kept", "of", "trimmed"):
@@ -982,6 +1080,7 @@ class DescriptionCheck:
             desc_sha256=d["desc_sha256"],
             verifiers=tuple(d["verifiers"]),
             verified_sha256=d["verified_sha256"],
+            judged=d[JUDGED_KEY] if judged else None,
         )
 
 
@@ -994,6 +1093,7 @@ def check_record(
     checked: str | None,
     verification: Mapping[str, Any],
     checker: str,
+    judge: Mapping[str, Any] | None = None,
 ) -> DescriptionCheck:
     """The public record of a kept text: every sentence's verdict, the numbers its markers carry
     and the sha256 of each verified quote; `checked` is the stored text that was asked, and
@@ -1003,7 +1103,8 @@ def check_record(
     asked about no stored text: `checked` is `None` and `checked_sha256` the sha256 of the empty
     text. `checker` is the disclosure the record names (one of `model4.AI_SYSTEMS`): a new write
     passes the disclosure `model4.ai_system_for` derives from the answering models; the acceptance passes the written record's own, because a text written
-    before 2026-10-01 truthfully names `AI_SYSTEM_OPUS` and must re-check as written."""
+    before 2026-10-01 truthfully names `AI_SYSTEM_OPUS` and must re-check as written. `judge` is
+    the evidence's O23 record (`JUDGE_KEY`): a text its drops shortened names them (`JUDGED_KEY`)."""
     if composed.description is None:
         raise WcError("a cleared site has no check record")
     if verification["status"] != VerifyStatus.VERIFIED.value:
@@ -1031,6 +1132,9 @@ def check_record(
         desc_sha256=M.text_sha256(composed.description),
         verifiers=tuple(r["answered_by"] for r in rounds),
         verified_sha256=rounds[-1]["text_sha256"],
+        judged=None
+        if judge is None or not judge_drops_of(judge)
+        else {"decision": O23_DECISION, "dropped": sorted(judge_drops_of(judge))},
     )
 
 
@@ -1339,7 +1443,14 @@ def wc_problems(
         return [f"the check record does not read: {exc}"]
     if check.desc_sha256 != digest:
         problems.append("the check record's desc_sha256 is not the sha256 of the description")
-    if check.verified_sha256 != digest:
+    if check.judged is not None:
+        # decision O23: the judge's drops shortened the verified text, so the served text cannot be
+        # the one the verifier confirmed - and must not be
+        if check.verified_sha256 == digest:
+            problems.append(
+                "the check record names the judge's drops (O23) beside the verified text unchanged"
+            )
+    elif check.verified_sha256 != digest:
         problems.append(
             "the check record's verified_sha256 is not the sha256 of the description: the served "
             "text is not the one its verifier confirmed"
@@ -1487,7 +1598,7 @@ def checked_of(evidence: Mapping[str, Any]) -> tuple[list[Decision], dict[int, l
         checked = entry["checked"]
         verdict = Verdict(checked["verdict"])
         reason = None if checked["reason"] is None else DropReason(checked["reason"])
-        if reason in VERIFY_REASONS:
+        if reason in VERIFY_REASONS or reason in JUDGE_REASONS:
             raise WcError(f"S{entry['n']}: a check decision carries the verification's {reason}")
         decisions.append(
             Decision(entry["n"], entry["sentence"], verdict, checked["remove"], reason)
@@ -1521,6 +1632,10 @@ def verification_problems(evidence: Mapping[str, Any], description: str | None) 
         given = [{key: r[key] for key in ROUND_KEYS} for r in record["rounds"]]
         final, expected = apply_verification(before, quotes, given, base=base_of(evidence))
         recorded, _ = decisions_of(evidence)
+        judge = evidence.get(JUDGE_KEY)
+        judge_drops = {} if judge is None else judge_drops_of(judge)
+        if judge is not None:
+            final = apply_judge_drops(final, judge)
     except (KeyError, TypeError, ValueError) as exc:
         return [f"the verification does not read: {exc}"]
     problems: list[str] = []
@@ -1529,12 +1644,25 @@ def verification_problems(evidence: Mapping[str, Any], description: str | None) 
     if final != recorded:
         problems.append("the evidence's decisions are not the verified ones")
     verified = expected["status"] == VerifyStatus.VERIFIED.value
-    if (description is not None) != verified:
+    if (
+        judge is not None
+        and judge["judged_sha256"] is not None
+        and (not verified or expected["rounds"][-1]["text_sha256"] != judge["judged_sha256"])
+    ):
+        problems.append("the judge was not shown the text the last verifier confirmed (O23)")
+    # a text the judge's drops took whole is cleared (O23); without them, verified is published
+    published = verified and bool(kept_numbers(final))
+    if (description is not None) != published:
         problems.append(
             f"a {'kept' if description is not None else 'cleared'} description beside a "
             f"verification that ended {expected['status']}"
+            + (f" and the judge's drops {sorted(judge_drops)}" if judge_drops else "")
         )
-    elif verified and expected["rounds"][-1]["text_sha256"] != M.text_sha256(str(description)):
+    elif (
+        published
+        and not judge_drops
+        and expected["rounds"][-1]["text_sha256"] != M.text_sha256(str(description))
+    ):
         problems.append("the description is not the text the last verifier confirmed")
     checkers = {agent_name(attempt["answered_by"]) for attempt in evidence["answers"]}
     names = [agent_name(r["answered_by"]) for r in expected["rounds"]]
@@ -1608,6 +1736,7 @@ def evidence_problems(
             checked=evidence["checked"],
             verification=evidence[VERIFICATION_KEY],
             checker=check.checker,
+            judge=evidence.get(JUDGE_KEY),
         )
     except (KeyError, TypeError, ValueError) as exc:
         return [*problems, f"the check record does not read: {exc}"]
@@ -1642,7 +1771,11 @@ ENRICH_EVIDENCE_KEYS = EVIDENCE_KEYS | {ENRICH_EVIDENCE_KEY}
 def evidence_keys(evidence: Any) -> frozenset[str]:
     """The keys the evidence must carry: an enrichment's have one more (`ENRICH_EVIDENCE_KEY`)."""
     enriched = isinstance(evidence, dict) and evidence.get("decision") == EVIDENCE_DECISION_ENRICH
-    return ENRICH_EVIDENCE_KEYS if enriched else EVIDENCE_KEYS
+    if enriched:
+        return ENRICH_EVIDENCE_KEYS
+    # a run written under decision O23 names it in every row's evidence (`JUDGE_KEY`)
+    judged = isinstance(evidence, dict) and JUDGE_KEY in evidence
+    return EVIDENCE_KEYS | {JUDGE_KEY} if judged else EVIDENCE_KEYS
 
 
 def base_problems(text: str, citations: Any) -> list[str]:

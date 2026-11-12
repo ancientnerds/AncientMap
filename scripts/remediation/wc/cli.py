@@ -217,6 +217,16 @@ FINAL_FILE = "FINAL.jsonl"
 SUMMARY_FILE = "SUMMARY.json"
 PLAN_FILE = "WC4.jsonl"
 JUDGE_DIR = "judge"
+#: Decision O23's record of a run whose sampled judge failed (`judge-drops`, under `JUDGE_DIR`): the
+#: judge's WRONG and UNSUPPORTED kept sentences the rebuild drops and the sites it leaves out.
+O23_FILE = "O23.json"
+#: Why a site of an O23 run is not planned: the judge called its kept text incoherent.
+O23_EXCLUDED = "o23-incoherent"
+#: The judge's kept verdicts O23 turns into drops, and the reason each becomes.
+O23_DROPS = {
+    "WRONG": wc4.DropReason.JUDGE_WRONG.value,
+    "UNSUPPORTED": wc4.DropReason.JUDGE_UNSUPPORTED.value,
+}
 #: The roles that answer lane WC (`roles.ROLES`, owner decision D6 of 2026-10-08): the check rounds
 #: and lane WN's write round are the fact checker's, the verification rounds lane WC's own web
 #: verifier's (`wc_web_verifier`, since the WC calibrations wc-wv-1/2 of 2026-10-24 failed the shared
@@ -1531,17 +1541,25 @@ def outcome_of(
     run_name: str,
     verifier_stamps: Iterable[str],
     kind: str = KIND_WC,
+    judge: Mapping[str, Any] | None = None,
 ) -> tuple[wc4.WcOutcome, list[wc4.Decision], dict[str, Any]]:
     """One site's outcome: its check decisions, the verification (`rounds`, the site's verification
     rounds as imported), the verified decisions, the composed text, the record, the raw_data and
-    the journal evidence; and the verification record."""
+    the journal evidence; and the verification record. `judge` (a run under decision O23,
+    `judge_record`) drops the sampled judge's WRONG and UNSUPPORTED kept sentences after the
+    verification and is named in the evidence (`wc4.JUDGE_KEY`) and, where it shortened the text,
+    in the check record."""
     entry, results = checked.entry, checked.results
     site = M.PlanSite.from_dict(entry["plan_site"])
     listed = kind != KIND_WC
     enriching = kind == KIND_ENRICH
+    if judge is not None and enriching:
+        raise WcRunError(f"{site.site_id}: decision O23 is no enrichment's")
     decisions, verification = wc4.apply_verification(
         checked.decisions, checked.quotes, rounds, base=checked.base
     )
+    if judge is not None:
+        decisions = wc4.apply_judge_drops(decisions, judge)
     composed = wc4.compose(decisions, checked.quotes, base=checked.base)
     ai_system = disclosure_of(checked, verifier_stamps, kind)
     check = (
@@ -1555,6 +1573,7 @@ def outcome_of(
             checked=site.description,
             verification=verification,
             checker=ai_system,
+            judge=judge,
         )
     )
     if enriching:  # nothing kept: the site is left as it is, there is no pair to write
@@ -1613,6 +1632,8 @@ def outcome_of(
     if enriching:
         evidence["marking"] = {**evidence["marking"], "enriched": True}
         evidence[wc4.ENRICH_EVIDENCE_KEY] = E.evidence_detail(entry)
+    if judge is not None:
+        evidence[wc4.JUDGE_KEY] = dict(judge)
     outcome = wc4.WcOutcome(
         site_id=site.site_id, description=composed.description, raw_data=raw, evidence=evidence
     )
@@ -1651,6 +1672,9 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
     if first_batch < wc4.FIRST_BATCH:
         raise WcRunError(f"--first-batch {first_batch}: the WC block starts at {wc4.FIRST_BATCH}")
     kind = run_kind(run)
+    o23 = load_o23(run)
+    if o23 is not None and kind not in (KIND_WC, KIND_LIST):
+        raise WcRunError(f"{run}: decision O23 is recorded for a {kind} run, which it never names")
     checked = checked_sites(run)
     inputs = _verification_inputs(run)
     stamps = _verification_stamps(run)
@@ -1674,12 +1698,15 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
     decisions_by: dict[str, Sequence[wc4.Decision]] = {}
     for label, site in checked.items():
         entry = site.entry
+        judge = None if o23 is None else judge_record(o23, label)
         outcome, decisions, record = outcome_of(
             site,
             inputs.get(label, []),
             run_name=run.name,
-            verifier_stamps=stamps.get(label, []),
+            # a judge whose drops shortened the text answered for it too: the disclosure names it
+            verifier_stamps=[*stamps.get(label, []), *o23_stamps(o23, label)],
             kind=kind,
+            judge=judge,
         )
         records[label] = record
         problems = wc4.wc_problems(
@@ -1688,6 +1715,8 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
         if problems:
             raise WcRunError(f"{label}: the outcome breaks the lane's invariants: {problems}")
         why_not = _not_planned(kind, entry, outcome, decisions)
+        if o23 is not None and label in o23["excluded"]:
+            why_not = O23_EXCLUDED  # the judge called the kept text incoherent: never written
         if why_not is None:
             outcomes.append(outcome)
         else:
@@ -1706,7 +1735,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
             "verification": verification_summary(record),
             "evidence": outcome.evidence,
         }
-        if kind != KIND_WC:
+        if kind != KIND_WC or o23 is not None:
             final["planned"] = why_not is None
         finals.append(final)
         decisions_by[label] = decisions
@@ -1741,6 +1770,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
             if kind != KIND_WC
             else {}
         ),
+        **({} if o23 is None else {"o23": o23_summary(o23, finals)}),
         "sites": len(finals),
         "cleared": sum(f["cleared"] for f in finals),
         "kept_whole": sum(f["kept"] == f["of"] for f in finals),
@@ -2353,6 +2383,11 @@ def cmd_judge_import(
         raise WcRunError(
             f"{run}: the judge round is a calibration round; a comparison is never imported"
         )
+    if (run / JUDGE_DIR / O23_FILE).exists():
+        raise WcRunError(
+            f"{run}: decision O23 turned this judge's verdict into drops ({O23_FILE}) and the run "
+            "was built on it: the judge is never imported again"
+        )
     check = OH.validate(handoff)
     if not check.ok:
         raise WcRunError(f"{handoff}: the judge round does not validate: {check.to_dict()}")
@@ -2517,15 +2552,220 @@ def _require_sampled_judge_passed(run: Path, plan: Path) -> None:
         )
     result = json.loads(path.read_text(encoding="utf-8"))
     if result["passed"] is not True:
-        raise WcRunError(
-            f"{run}: the sampled judge did not pass ({result['failures']}): the chunk is never "
-            "written - revert its stamp or clear the sentences by a list run"
-        )
+        o23 = load_o23(run)
+        if o23 is None:
+            raise WcRunError(
+                f"{run}: the sampled judge did not pass ({result['failures']}): the chunk is never "
+                "written - unless decision O23 is recorded for it (judge-drops --apply, then build "
+                "again), revert its stamp or clear the sentences by a list run"
+            )
+        _require_o23_plan(plan, o23)
+        return
     if result.get("plan_sha256") != _sha256(plan):
         raise WcRunError(
             f"{plan}: not the plan the sampled judge judged (RESULT.json plan_sha256 "
             f"{result.get('plan_sha256')!r}): a plan is written only as it was judged"
         )
+
+
+# ------------------------------------------------------------------------------ decision O23
+def _o23_independence(result: Mapping[str, Any]) -> None:
+    """A verdict with a judge that checked or verified the run is repaired, not decided around."""
+    if result["measured"]["independent"] != result["measured"]["sites"]:
+        raise WcRunError(
+            "the judge round holds a site judged by a checker or verifier of the run: repair those "
+            "answers and import again (section 10) - O23 decides only an independent verdict"
+        )
+
+
+def o23_decision(run: Path) -> dict[str, Any]:
+    """Decision O23 for a run whose **sampled** judge failed, computed from the verdict as imported
+    (`judge/RESULT.json`, `judge/JUDGED.jsonl`) over the plan it judged (`FINAL.jsonl`, `WC4.jsonl`
+    unchanged since: `plan_sha256`): per judged site the sentence numbers of its kept sentences the
+    judge called WRONG or UNSUPPORTED (a WRONG whether its quote was found or not, as the verdict
+    counts it), the judge and the sha256 of the text it was shown; and the sites whose kept text it
+    called incoherent, which are not written. A DROP_WRONG verdict adds nothing back: a WC write only
+    removes sentences. Refused for a pilot (judged whole: a failed pilot is never written), a judge
+    that passed, one with a dependent site, and a plan rebuilt after the judge."""
+    round_path, result_path = run / JUDGE_DIR / "ROUND.json", run / JUDGE_DIR / "RESULT.json"
+    if not result_path.exists():
+        raise WcRunError(f"{run}: no imported judge (judge-import writes {result_path.name})")
+    record = json.loads(round_path.read_text(encoding="utf-8"))
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    population = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))
+    kind = run_kind(run)
+    if kind not in (KIND_WC, KIND_LIST):
+        raise WcRunError(f"{run}: decision O23 names lane WC's chunks, not a {kind} run")
+    if population["pilot"] is not None or record.get("sample") is None:
+        raise WcRunError(f"{run}: a pilot is judged whole; O23 decides a chunk's sampled judge")
+    if result["passed"] is True:
+        raise WcRunError(f"{run}: the sampled judge passed - there is nothing for O23 to decide")
+    _o23_independence(result)
+    if result["plan_sha256"] != _sha256(run / PLAN_FILE):
+        raise WcRunError(
+            f"{run}: {PLAN_FILE} is not the plan the judge judged (RESULT.json plan_sha256): the "
+            "judge's sentence numbers belong to that plan"
+        )
+    finals = _finals(run)
+    sites: dict[str, dict[str, Any]] = {}
+    excluded: list[str] = []
+    for row in read_jsonl(run / JUDGE_DIR / "JUDGED.jsonl"):
+        label = row["site_id"]
+        final = finals[label]
+        decisions, _ = wc4.decisions_of(final["evidence"])
+        kept = wc4.kept_numbers(decisions)
+        drops: dict[str, str] = {}
+        for item in row["items"]:
+            if item["kind"] != "kept":
+                continue
+            if item["verdict"] in O23_DROPS:
+                drops[str(kept[item["number"] - 1])] = O23_DROPS[item["verdict"]]
+            elif item["verdict"] != wc4.SUPPORTED:
+                raise WcRunError(f"{label}: K{item['number']} {item['verdict']!r} is no O23 case")
+        if not row["coherent"]:
+            excluded.append(label)
+        text = final["description"]
+        if text is None and drops:
+            raise WcRunError(f"{label}: a cleared text with the judge's drops {drops}")
+        sites[label] = {
+            "name": final["name"],
+            "judge": row["answered_by"],
+            "model": answer_stamp(record["handoff"], row["batch_id"], JUDGE_STAGE, label),
+            # a cleared text was shown to the judge with nothing kept: nothing of it is judged
+            "judged_sha256": None if text is None else M.text_sha256(text),
+            "coherent": row["coherent"],
+            "drops": dict(sorted(drops.items(), key=lambda kv: int(kv[0]))),
+        }
+    return {
+        "decision": wc4.O23_DECISION,
+        "run": _shown(run),
+        "result_sha256": _sha256(result_path),
+        "judged_plan_sha256": result["plan_sha256"],
+        "judge_handoff": record["handoff"],
+        "failures": result["failures"],
+        "measured": result["measured"],
+        "sample": result["sample"],
+        "sites": dict(sorted(sites.items())),
+        "excluded": sorted(excluded),
+    }
+
+
+def cmd_judge_drops(run: Path, *, apply: bool) -> dict[str, Any]:
+    """`judge-drops`: decision O23 for this run (`o23_decision`) - a dry run prints it, `--apply`
+    records it once as `judge/O23.json`. Then `build` again: the plan it writes drops the judge's
+    WRONG and UNSUPPORTED kept sentences, leaves the incoherent sites out, and names O23 in the
+    evidence of every row; the gate writes that plan on the record instead of on a passed judge."""
+    path = run / JUDGE_DIR / O23_FILE
+    if path.exists():
+        raise WcRunError(
+            f"{path}: decision O23 is recorded for this run once (written {path.name})"
+        )
+    decision = o23_decision(run)
+    if apply:
+        RF.write_json(path, {**decision, "decided_at": RF.now()})
+    drops = Counter(r for site in decision["sites"].values() for r in site["drops"].values())
+    return {
+        "applied": apply,
+        "path": _shown(path),
+        "judged_sites": len(decision["sites"]),
+        "sites_with_drops": sum(bool(s["drops"]) for s in decision["sites"].values()),
+        "sentences_dropped": dict(sorted(drops.items())),
+        "excluded": [
+            {"site_id": label, "name": decision["sites"][label]["name"]}
+            for label in decision["excluded"]
+        ],
+        "failures": decision["failures"],
+    }
+
+
+def load_o23(run: Path) -> dict[str, Any] | None:
+    """The run's recorded decision O23 (`judge/O23.json`), or `None`; refused unless it still names
+    the verdict as imported (`result_sha256`), a verdict that failed, and the plan that was judged."""
+    path = run / JUDGE_DIR / O23_FILE
+    if not path.exists():
+        return None
+    record = json.loads(path.read_text(encoding="utf-8"))
+    result_path = run / JUDGE_DIR / "RESULT.json"
+    if record.get("decision") != wc4.O23_DECISION:
+        raise WcRunError(f"{path}: names {record.get('decision')!r}, not decision O23")
+    if not result_path.exists() or record["result_sha256"] != _sha256(result_path):
+        raise WcRunError(f"{path}: not the judge's verdict as imported (RESULT.json sha256)")
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    if result["passed"] is True or record["judged_plan_sha256"] != result["plan_sha256"]:
+        raise WcRunError(f"{path}: does not decide this run's failed judge")
+    _o23_independence(result)
+    return {**record, "sha256": _sha256(path)}
+
+
+def judge_record(o23: Mapping[str, Any], label: str) -> dict[str, Any]:
+    """The evidence's O23 record of one site (`wc4.JUDGE_KEY`): every site of the run names the
+    decision; a site the judge was shown also its judge, the text's sha256 and its drops."""
+    site = o23["sites"].get(label)
+    judged = site is not None and site["judged_sha256"] is not None
+    return {
+        "decision": o23["decision"],
+        "decision_sha256": o23["sha256"],
+        "judge": site["judge"] if judged else None,
+        "judged_sha256": site["judged_sha256"] if judged else None,
+        "drops": dict(site["drops"]) if judged else {},
+    }
+
+
+def o23_stamps(o23: Mapping[str, Any] | None, label: str) -> list[str]:
+    """The judge's model stamp where its drops shortened the site's text (the disclosure names it)."""
+    site = None if o23 is None else o23["sites"].get(label)
+    return [site["model"]] if site is not None and site["drops"] else []
+
+
+def o23_summary(o23: Mapping[str, Any], finals: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """What the build made of decision O23: the record, the sites it left out, the judge's drops."""
+    by = {final["site_id"]: final for final in finals}
+    drops = Counter(r for site in o23["sites"].values() for r in site["drops"].values())
+    return {
+        "decision": o23["decision"],
+        "decision_sha256": o23["sha256"],
+        "excluded": list(o23["excluded"]),
+        "sites_with_drops": sum(bool(s["drops"]) for s in o23["sites"].values()),
+        "sentences_dropped": dict(sorted(drops.items())),
+        "cleared_by_drops": sorted(
+            label
+            for label, site in o23["sites"].items()
+            if site["drops"] and label not in o23["excluded"] and by[label]["description"] is None
+        ),
+    }
+
+
+def _require_o23_plan(plan: Path, o23: Mapping[str, Any]) -> None:
+    """A chunk whose sampled judge failed is written on decision O23 only as built on it: every
+    outcome of the plan names the recorded decision and exactly its site's drops, and no site the
+    judge called incoherent is in it. Everything else the gate asks of the plan stands."""
+    for batch in read_jsonl(plan):
+        for outcome in batch["outcomes"]:
+            label = outcome["site_id"]
+            if label in o23["excluded"]:
+                raise WcRunError(f"{plan}: {label} is planned, decision O23 leaves it out")
+            if outcome["evidence"].get(wc4.JUDGE_KEY) != judge_record(o23, label):
+                raise WcRunError(
+                    f"{plan}: {label} was not built on the recorded decision O23 "
+                    f"({o23['run']}/{JUDGE_DIR}/{O23_FILE}): build again"
+                )
+
+
+def o23_approvals(plans: Sequence[Path]) -> list[dict[str, Any]]:
+    """The named plans the gate writes on a recorded decision O23 instead of a passed judge."""
+    out = []
+    for plan in plans:
+        o23 = load_o23(plan.parent)
+        if o23 is not None:
+            out.append(
+                {
+                    "run": _shown(plan.parent),
+                    "decision_sha256": o23["sha256"],
+                    "excluded": len(o23["excluded"]),
+                    "failures": o23["failures"],
+                }
+            )
+    return out
 
 
 def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
@@ -3222,6 +3462,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("judge-brief", "the instruction of one judge batch's Opus agent"),
         ("judge-check-answer", "one judge answer's shape"),
         ("judge-import", "the judge's answers, the measurement and its verdict"),
+        ("judge-drops", "decision O23: a failed sampled judge's drops (dry run unless --apply)"),
         ("defect-sites", "a site list from WB's DESCRIPTION_DEFECTS.jsonl files"),
         ("verify-void", "move the MiniMax verification answers aside (dry run unless --apply)"),
         ("defect-kept-sites", "a site list for the adversarial second check of standing claims"),
@@ -3234,6 +3475,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name not in (
             "read",
             "build",
+            "judge-drops",
             "defect-sites",
             "verify-void",
             "defect-kept-sites",
@@ -3286,8 +3528,9 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--no-fetch", action="store_true")
         if name == "build":
             command.add_argument("--first-batch", type=int, required=True)
-        if name == "verify-void":
+        if name in ("verify-void", "judge-drops"):
             command.add_argument("--apply", action="store_true")
+        if name == "verify-void":
             command.add_argument("--tag", default=None)
         if name in ("defect-kept-sites", "minimax-sites"):
             command.add_argument(
@@ -3389,6 +3632,8 @@ def run_command(args: argparse.Namespace) -> int:
         result = cmd_judge_import(run, args.handoff)
         _print(result)
         return 0 if result["passed"] else 1
+    elif command == "judge-drops":
+        _print(cmd_judge_drops(run, apply=args.apply))
     elif command == "defect-sites":
         _print(cmd_defect_sites(run, args.defects, args.out, proven_only=args.proven_only))
     elif command == "verify-void":

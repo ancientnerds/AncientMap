@@ -744,3 +744,225 @@ def test_lane_wcs_web_verifier_reads_the_verifier_rule() -> None:
 
     assert WR.rule_for_role(C.ROLE_VERIFY) == WR.VERIFIER_RULE
     assert WR.rule_for_role("web_verifier") == WR.VERIFIER_RULE
+
+
+# ------------------------------------- decision O23: a chunk whose sampled judge failed is written
+def _failed_chunk(tmp_path: Path) -> tuple[Path, Path, Path, dict[str, str]]:
+    """A chunk whose sampled judge (every site drawn) failed: the first site with a kept text has
+    its last two kept sentences UNSUPPORTED and WRONG (its first stays), the second one's kept text is
+    incoherent, and the cleared site is judged on its drops alone."""
+    pilot, run, plan = _approved_chunk(tmp_path)
+    finals = C._finals(run)
+    handoff = tmp_path / "handoff" / "o23"
+    C.cmd_judge_export(run, handoff, batch_size=5, sample=len(finals), seed=3)
+    counts = {label: C._judge_counts(final) for label, final in sorted(finals.items())}
+    with_text = [label for label, (kept, _) in counts.items() if kept]
+    assert len(with_text) == 2 and len(counts) == 3, counts
+    wrong, incoherent = with_text
+    answers = {}
+    for label, (kept, dropped) in counts.items():
+        verdicts = ["SUPPORTED"] * kept
+        if label == wrong:
+            verdicts[-2], verdicts[-1] = "UNSUPPORTED", "WRONG"
+        answers[label] = _judgement(
+            label, verdicts, ["DROP_OK"] * dropped, coherent=label != incoherent
+        )
+    FX.record_answers(handoff, answers, by="opus-judge")
+    result = C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    assert result["passed"] is False
+    return pilot, run, plan, {"wrong": wrong, "incoherent": incoherent}
+
+
+def test_o23_records_the_judges_drops_once_and_the_gate_writes_only_the_plan_built_on_them(
+    tmp_path: Path,
+) -> None:
+    from phase4 import wc4
+
+    pilot, run, plan, who = _failed_chunk(tmp_path)
+    with pytest.raises(C.WcRunError, match="unless decision O23 is recorded"):
+        C.pilot_approval([pilot, plan])
+    dry = C.cmd_judge_drops(run, apply=False)
+    assert dry["applied"] is False and not (run / "judge" / C.O23_FILE).exists()
+    assert dry["sentences_dropped"] == {"judge-unsupported": 1, "judge-wrong": 1}
+    assert [e["site_id"] for e in dry["excluded"]] == [who["incoherent"]]
+    assert C.cmd_judge_drops(run, apply=True)["applied"] is True
+    with pytest.raises(C.WcRunError, match="recorded for this run once"):
+        C.cmd_judge_drops(run, apply=True)
+    # the decision is recorded, the plan is still the judged one: not written
+    with pytest.raises(C.WcRunError, match="was not built on the recorded decision O23"):
+        C.pilot_approval([pilot, plan])
+    before = {o["site_id"]: o for b in read_jsonl(plan) for o in b["outcomes"]}
+    summary = C.cmd_build(run, first_batch=wc4.FIRST_BATCH)
+    assert summary["o23"]["excluded"] == [who["incoherent"]]
+    assert summary["o23"]["sentences_dropped"] == {"judge-unsupported": 1, "judge-wrong": 1}
+    assert len(C.pilot_approval([pilot, plan])) == 1
+    (decided,) = C.o23_approvals([pilot, plan])
+    assert decided["excluded"] == 1 and decided["run"].endswith("wc-test")
+    after = {o["site_id"]: o for b in read_jsonl(plan) for o in b["outcomes"]}
+    assert who["incoherent"] not in after and set(after) == set(before) - {who["incoherent"]}
+    record = json.loads((run / "judge" / C.O23_FILE).read_text(encoding="utf-8"))
+    for label, outcome in after.items():
+        evidence = outcome["evidence"]
+        assert evidence[wc4.JUDGE_KEY]["decision"] == wc4.O23_DECISION  # every row names O23
+        assert wc4.evidence_problems(evidence, outcome["description"], outcome["raw_data"]) == []
+        marking = evidence["marking"]["old"]
+        assert wc4.wc_problems(outcome["description"], outcome["raw_data"], marking=marking) == []
+        dropped = record["sites"][label]["drops"]
+        assert evidence[wc4.JUDGE_KEY]["drops"] == dropped
+        if not dropped:
+            assert outcome["description"] == before[label]["description"]
+            continue
+        assert label == who["wrong"] and sorted(dropped.values()) == [
+            "judge-unsupported",
+            "judge-wrong",
+        ]
+        for n, reason in dropped.items():
+            sentence = next(s for s in evidence["sentences"] if s["n"] == int(n))
+            assert sentence["verdict"] == "DROP" and sentence["reason"] == reason
+            assert sentence["checked"]["verdict"] != "DROP"  # the check and the verifier kept it
+        assert outcome["description"] not in (None, before[label]["description"])
+        if outcome["description"] is not None:
+            check = outcome["raw_data"][wc4.CHECK_KEY]
+            numbers = sorted(int(n) for n in dropped)
+            assert check[wc4.JUDGED_KEY] == {"decision": wc4.O23_DECISION, "dropped": numbers}
+            assert check["verified_sha256"] == evidence[wc4.JUDGE_KEY]["judged_sha256"]
+            assert check["verified_sha256"] != check["desc_sha256"]
+    with pytest.raises(C.WcRunError, match="never imported again"):
+        C.cmd_judge_import(run, tmp_path / "handoff" / "o23", client=FX.FakeClient(), pace=0.0)
+
+
+def test_an_edited_o23_record_or_a_plan_not_built_on_it_is_not_written(tmp_path: Path) -> None:
+    from phase4 import wc4
+
+    pilot, run, plan, _ = _failed_chunk(tmp_path)
+    C.cmd_judge_drops(run, apply=True)
+    C.cmd_build(run, first_batch=wc4.FIRST_BATCH)
+    assert len(C.pilot_approval([pilot, plan])) == 1
+    path = run / "judge" / C.O23_FILE
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "excluded": []}), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="was not built on the recorded decision O23"):
+        C.pilot_approval([pilot, plan])
+    path.write_text(json.dumps({**record, "result_sha256": "0" * 64}), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="not the judge's verdict as imported"):
+        C.pilot_approval([pilot, plan])
+
+
+def test_o23_decides_only_a_failed_independent_sampled_judge_of_the_judged_plan(
+    tmp_path: Path,
+) -> None:
+    from phase4 import wc4
+
+    # a passed sampled judge: nothing to decide
+    _, passed, _ = _approved_chunk(tmp_path / "passed")
+    C.cmd_judge_export(passed, tmp_path / "hp", batch_size=5, sample=2, seed=3)
+    answers = _sample_answers(passed, tmp_path / "hp", wrong=False)
+    FX.record_answers(tmp_path / "hp", answers, by="opus-judge")
+    C.cmd_judge_import(passed, tmp_path / "hp", client=FX.FakeClient(), pace=0.0)
+    with pytest.raises(C.WcRunError, match="the sampled judge passed"):
+        C.cmd_judge_drops(passed, apply=False)
+    # a pilot is judged whole: a failed pilot is never written
+    pilot = FX.build_run(tmp_path / "pilot", _rows(), _answers(), pilot=True, judged=False)[0]
+    C.cmd_judge_export(pilot, tmp_path / "hj", batch_size=5)
+    answers = _sample_answers(pilot, tmp_path / "hj", wrong=True)
+    FX.record_answers(tmp_path / "hj", answers, by="opus-judge")
+    C.cmd_judge_import(pilot, tmp_path / "hj", client=FX.FakeClient(), pace=0.0)
+    with pytest.raises(C.WcRunError, match="a pilot is judged whole"):
+        C.cmd_judge_drops(pilot, apply=False)
+    # a plan rebuilt after its judge is not the one whose sentence numbers the judge gave
+    _, run, _, _ = _failed_chunk(tmp_path / "rebuilt")
+    C.cmd_build(run, first_batch=wc4.FIRST_BATCH + 1)
+    with pytest.raises(C.WcRunError, match="is not the plan the judge judged"):
+        C.cmd_judge_drops(run, apply=False)
+    # a judge who checked or verified the run is repaired, not decided around
+    _, dependent, _, _ = _failed_chunk(tmp_path / "dependent")
+    result_path = dependent / "judge" / "RESULT.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["measured"]["independent"] -= 1
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="O23 decides only an independent verdict"):
+        C.cmd_judge_drops(dependent, apply=False)
+
+
+def test_the_command_line_takes_judge_drops() -> None:
+    parser = C.build_parser()
+    assert parser.parse_args(["judge-drops", "--run-dir", "r"]).apply is False
+    assert parser.parse_args(["judge-drops", "--run-dir", "r", "--apply"]).apply is True
+
+
+def test_the_o23_records_are_read_strictly() -> None:
+    from phase4 import wc4
+
+    good = {
+        "decision": wc4.O23_DECISION,
+        "decision_sha256": "a" * 64,
+        "judge": "pilot_judge:x",
+        "judged_sha256": "b" * 64,
+        "drops": {"2": "judge-wrong"},
+    }
+    assert wc4.judge_drops_of(good) == {2: wc4.DropReason.JUDGE_WRONG}
+    for broken, match in (
+        ({**good, "decision": "O16"}, "not decision O23"),
+        ({**good, "drops": {"2": "verify-wrong"}}, "not one of the judge's reasons"),
+        ({**good, "drops": {"S2": "judge-wrong"}}, "not a sentence number"),
+        ({**good, "judged_sha256": None}, "outside the judge's sample"),
+        ({k: v for k, v in good.items() if k != "judge"}, "the judge record carries"),
+    ):
+        with pytest.raises((wc4.WcError, ValueError), match=match):
+            wc4.judge_drops_of(broken)
+    kept = [
+        wc4.Decision(1, "One.", wc4.Verdict.KEEP, None, None),
+        wc4.Decision(2, "Two.", wc4.Verdict.DROP, None, wc4.DropReason.UNSUPPORTED),
+    ]
+    with pytest.raises(wc4.WcError, match=r"the judge drops \[2\], which the verified text"):
+        wc4.apply_judge_drops(kept, good)
+
+
+def test_a_check_record_names_the_judges_drops_or_carries_none() -> None:
+    from phase4 import wc4
+
+    sentences = (
+        wc4.CheckedSentence(1, wc4.Verdict.KEEP, None, (1,), ("c" * 64,)),
+        wc4.CheckedSentence(2, wc4.Verdict.DROP, wc4.DropReason.JUDGE_WRONG, (), ()),
+    )
+    base = {
+        "run": "r", "checker": next(iter(wc4.M.AI_SYSTEMS)), "checked_sha256": "d" * 64,
+        "kept": 1, "of": 2, "trimmed": 0, "sentences": sentences, "desc_sha256": "e" * 64,
+        "verifiers": ("v",), "verified_sha256": "f" * 64,
+    }  # fmt: skip
+    with pytest.raises(ValueError, match="dropped by the judge without the O23 record"):
+        wc4.DescriptionCheck(**base)
+    with pytest.raises(ValueError, match="the sentences say"):
+        wc4.DescriptionCheck(**base, judged={"decision": wc4.O23_DECISION, "dropped": [1]})
+    check = wc4.DescriptionCheck(**base, judged={"decision": wc4.O23_DECISION, "dropped": [2]})
+    assert wc4.DescriptionCheck.from_dict(check.to_dict()) == check
+    plain = wc4.DescriptionCheck(**{**base, "sentences": sentences[:1], "of": 1})
+    assert wc4.JUDGED_KEY not in plain.to_dict()
+    assert wc4.DescriptionCheck.from_dict(plain.to_dict()) == plain
+
+
+def test_a_planned_site_o23_leaves_out_and_a_record_beside_its_verified_text_are_refused(
+    tmp_path: Path,
+) -> None:
+    from phase4 import wc4
+
+    pilot, run, plan, who = _failed_chunk(tmp_path)
+    C.cmd_judge_drops(run, apply=True)
+    C.cmd_build(run, first_batch=wc4.FIRST_BATCH)
+    outcome = next(
+        o for b in read_jsonl(plan) for o in b["outcomes"] if o["site_id"] == who["wrong"]
+    )
+    raw, text = outcome["raw_data"], outcome["description"]
+    marking = outcome["evidence"]["marking"]["old"]
+    assert wc4.wc_problems(text, raw, marking=marking) == []
+    check = raw[wc4.CHECK_KEY]
+    beside = {**raw, wc4.CHECK_KEY: {**check, "verified_sha256": check["desc_sha256"]}}
+    assert any("beside the verified text unchanged" in p for p in wc4.wc_problems(text, beside))
+    unnamed = {**raw, wc4.CHECK_KEY: {k: v for k, v in check.items() if k != wc4.JUDGED_KEY}}
+    assert any("without the O23 record" in p for p in wc4.wc_problems(text, unnamed))
+    # a site O23 leaves out that a plan writes all the same
+    path = run / "judge" / C.O23_FILE
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "excluded": [who["wrong"]]}), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="is planned, decision O23 leaves it out"):
+        C.pilot_approval([pilot, plan])

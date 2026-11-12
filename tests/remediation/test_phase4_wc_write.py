@@ -501,9 +501,15 @@ def test_a_wc_plan_is_read_strictly(tmp_path: Path) -> None:
 #: enrichment record instead of the check record for a plan row whose evidence is an enrichment's, and
 #: invariant 6 maps a Phase-4 text of that kind to lane E; both cases are CASEs on `p.evidence`. Executed on
 #: a throwaway Postgres 16 on 2026-10-09 (`pg_throwaway_check.py`, `check_enrichment`: `ALL OK`).
+#: Re-pinned 2026-11-12 (decision O23): invariant 5 exempts verified_sha256 - and only it - for a
+#: check record that names the sampled judge's drops (`judged`) beside a plan row whose evidence
+#: names O23 (`judge`), both with the decision's own text (COALESCE: a missing key exempts nothing).
+#: The expression ran on Postgres in a read-only transaction over CTE rows (production's server,
+#: no table read): plain 0, O23 0, a judged record without O23 evidence 1, O23 evidence without a
+#: judged record 1, a desc_sha256 mismatch 1, another decision 1.
 WC_SQL_PINS = {
     "null_tests": "b9ac358501af4a6f50a803ac6d8f24565c5c1ebb85d4403bfdfc4975c8048ea3",
-    "invariants": "0aeea5d8cc2dac0b74c942c0e7b9d82996d9fa5140c0729fee96ce3ff64f8552",
+    "invariants": "d9658cba5a1499d286d1735ee1ee6ec7978203f911b380f6b0e3f57df07497f7",
 }
 
 
@@ -542,6 +548,49 @@ def test_a_wc_chunk_is_written_read_back_and_its_inverse_proven(tmp_path: Path) 
         assert (site.description, site.raw_data) == (result.description, result.raw_data)
         assert WC4.wc_problems(site.description, site.raw_data) == []
     assert {entry["run_stamp"] for entry in db.journal} == {"phase4wc:p4wc-4001:chunk-0001"}
+
+
+def test_a_chunk_written_on_decision_o23_lands_without_the_judges_sentences(
+    tmp_path: Path,
+) -> None:
+    """Decision O23: a chunk whose sampled judge failed is built again without the judge's WRONG
+    sentence and written through the gate's own plan, transaction and read-back."""
+    from wc import cli as C
+
+    from tests.remediation.test_wc import _judgement
+
+    run, plan_path = FX.build_run(tmp_path, _rows(), _answers(), pilot=False)
+    finals = C._finals(run)
+    handoff = tmp_path / "handoff" / "sample"
+    C.cmd_judge_export(run, handoff, batch_size=5, sample=len(finals), seed=1)
+    answers = {}
+    for label, final in finals.items():
+        kept, dropped = C._judge_counts(final)
+        verdicts = ["SUPPORTED"] * kept
+        if label == FX.SITE_A:
+            verdicts[-1] = "WRONG"
+        answers[label] = _judgement(label, verdicts, ["DROP_OK"] * dropped)
+    FX.record_answers(handoff, answers, by="opus-judge")
+    assert C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)["passed"] is False
+    C.cmd_judge_drops(run, apply=True)
+    C.cmd_build(run, first_batch=WC4.FIRST_BATCH)
+    (batch,), outcomes = W4.load_wc_plan([plan_path])
+    db = _db()
+    plan = W4.plan_wc(batch, outcomes=outcomes, live=_live(db))
+    assert not plan.refusals
+    chunk = W4.chunk_for(plan)
+    out = tmp_path / "apply" / plan.batch_id
+    W4.write_plan_files(out, plan, chunk)
+    assert W4.apply_chunk(chunk, out=out, rehearse=False, runner=db).ok
+    site = db.sites[FX.SITE_A]
+    check = site.raw_data[WC4.CHECK_KEY]
+    assert check[WC4.JUDGED_KEY] == {"decision": WC4.O23_DECISION, "dropped": [3]}
+    assert (
+        "Zammit" not in site.description and WC4.wc_problems(site.description, site.raw_data) == []
+    )
+    # the evidence of every journal row of the run names the decision
+    assert {row.evidence[WC4.JUDGE_KEY]["decision"] for row in plan.rows} == {WC4.O23_DECISION}
+    assert len(db.journal) == len(plan.rows)
 
 
 def test_the_transaction_refuses_a_check_record_that_names_another_verified_text(

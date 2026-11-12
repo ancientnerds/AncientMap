@@ -427,12 +427,21 @@ def wc_batches(
 
     try:
         approvals = wc_cli.pilot_approval(paths)
+        decided = wc_cli.o23_approvals(paths)
     except wc_cli.WcRunError as exc:
         raise SystemExit(str(exc)) from None
     print(
         "pilot passed: "
         + ", ".join(f"{a['run']} (RESULT.json sha256 {a['result_sha256']})" for a in approvals)
     )
+    # a chunk whose sampled judge failed, written on the recorded decision O23 (`wc/cli.py
+    # judge-drops`): the judge's WRONG and UNSUPPORTED kept sentences dropped, incoherent sites out
+    for a in decided:
+        print(
+            f"sampled judge failed, written on decision O23: {a['run']} (O23.json sha256 "
+            f"{a['decision_sha256']}, {a['excluded']} incoherent site(s) left out; "
+            f"failures {a['failures']})"
+        )
     whole, outcomes = W4.load_wc_plan(paths)
     ours = {W4.group_batch_id(batch.batch_id, W4.Group.WC) for batch in whole}
     prefix = W4.GROUP_PREFIX[W4.Group.WC]

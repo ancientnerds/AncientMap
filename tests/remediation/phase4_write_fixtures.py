@@ -634,7 +634,12 @@ class FakeDb:
             digest = _sha_or_null(site.description)
             enriched = row["evidence"]["decision"] == WC4.EVIDENCE_DECISION_ENRICH
             check = raw.get(WC4.ENRICH_KEY if enriched else WC4.CHECK_KEY) or {}
-            if check.get("desc_sha256") != digest or check.get("verified_sha256") != digest:
+            judged = (check.get(WC4.JUDGED_KEY) or {}).get("decision") == WC4.O23_DECISION and (
+                row["evidence"].get(WC4.JUDGE_KEY) or {}
+            ).get("decision") == WC4.O23_DECISION
+            if check.get("desc_sha256") != digest or (
+                check.get("verified_sha256") != digest and not judged
+            ):
                 raise PsqlError("invariant 5 (WC): the check record's desc_sha256")
             provenance = raw.get(M.PROVENANCE_KEY)
             # the lane the recorded marking calls for (write4._wc_invariants' CASE): N for a lane-WN

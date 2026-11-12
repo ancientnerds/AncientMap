@@ -1943,14 +1943,24 @@ def _wc_invariants(label: str) -> list[str]:
         f"(u.raw_data -> (CASE WHEN {enriched} THEN {W._sql_text(wc4.ENRICH_KEY)} "
         f"ELSE {W._sql_text(wc4.CHECK_KEY)} END))"
     )
+    # decision O23: a text the sampled judge's drops shortened is not the one its verifier confirmed;
+    # only a check record that names the O23 drops, beside a plan row whose evidence names O23, is
+    # served with a verified_sha256 of its own (COALESCE: a missing key is no exemption)
+    o23 = W._sql_text(wc4.O23_DECISION)
+    judged = (
+        f"COALESCE(({record} -> {W._sql_text(wc4.JUDGED_KEY)} ->> 'decision') = {o23} "
+        f"AND (p.evidence -> {W._sql_text(wc4.JUDGE_KEY)} ->> 'decision') = {o23}, false)"
+    )
     return [
         "    -- invariant 5 (WC): the check record's (an enrichment's: the enrichment record's)",
-        "    -- desc_sha256 and verified_sha256 are the sha256 of the description",
+        "    -- desc_sha256 and verified_sha256 are the sha256 of the description; a record that",
+        "    -- names the sampled judge's drops (decision O23) keeps the verified text's sha256",
         "    SELECT count(*) INTO bad",
         f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
         "     WHERE p.column_name = 'raw_data'",
         f"       AND (({record} ->> 'desc_sha256') IS DISTINCT FROM {digest}",
-        f"            OR ({record} ->> 'verified_sha256') IS DISTINCT FROM {digest});",
+        f"            OR (({record} ->> 'verified_sha256') IS DISTINCT FROM {digest}",
+        f"                AND NOT {judged}));",
         *_raise_if(f"{label}: % site(s) break the check record sha256 invariant"),
         "",
         "    -- invariant 6 (WC): a provenance beside a checked text hashes it and is the lane the",
