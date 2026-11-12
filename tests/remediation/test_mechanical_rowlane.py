@@ -591,7 +591,12 @@ FOREIGN = {
 
 class TestTheProbes:
     def cases(self, records: list[A.ChangeRecord] | None = None) -> dict[str, Any]:
-        return {c[0]: c for c in A.probe_cases(records or full_plan(), LANE, FOREIGN)}
+        """`foreign_row` answers with a row of a table of the plan: FOREIGN's own table when the
+        plan writes it, else the plan's first table."""
+        records = records or full_plan()
+        tables = R.plan_tables(records)
+        foreign = FOREIGN if FOREIGN["table"] in tables else {**FOREIGN, "table": tables[0]}
+        return {c[0]: c for c in A.probe_cases(records, LANE, foreign)}
 
     def test_every_guard_and_every_invariant_has_its_probe(self) -> None:
         assert list(self.cases()) == [
@@ -707,6 +712,22 @@ class TestTheProbes:
             "wiki_images",
         )
         assert mutated[0].premise == FOREIGN["premise"] and mutated[1:] == full_plan()[1:]
+
+    def test_the_foreign_row_replaces_a_cell_of_its_own_table(self) -> None:
+        """G4: a plan led by content links whose foreign row is an image corrupts the image cell."""
+        records = [cell("site_content_links", "7", "site_id"), *full_plan()[:2]]
+        mutated = self.cases(records)["guard1-other-source"][2]
+        assert mutated[0] == records[0] and mutated[2] == records[2]
+        assert (mutated[1].table, mutated[1].row_id, mutated[1].site_id) == (
+            "wiki_images",
+            "99",
+            FOREIGN_SITE,
+        )
+        assert mutated[1].condition == "id = 99"
+
+    def test_a_foreign_row_of_a_table_the_plan_never_writes_is_refused(self) -> None:
+        with pytest.raises(P.PlanError, match="no table of the plan"):
+            A.probe_cases([cell("site_content_links", "7", "site_id")], LANE, FOREIGN)
 
 
 # ------------------------------------------------------------------------------ the read-backs
@@ -902,21 +923,76 @@ class TestTheProbeRun:
         assert A.cmd_probe_guards(records, tmp_path, LANE) == 0
         assert "not probed: the plan writes no cell it could corrupt" in capsys.readouterr().out
 
-    def test_the_foreign_row_is_read_from_the_first_cell_s_table(
+    def test_the_foreign_row_is_read_from_the_first_table_that_has_one(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         asked: list[str] = []
         monkeypatch.setattr(
             R, "psql_json_reader", lambda: lambda sql: asked.append(sql) or [FOREIGN]
         )
-        assert R.foreign_row(LANE, "site_content_links") == FOREIGN
+        assert R.foreign_row(LANE, ["site_content_links", "wiki_images"]) == FOREIGN
+        assert len(asked) == 1
         assert "FROM site_content_links t JOIN unified_sites u ON u.id = t.site_id" in asked[0]
         assert "u.source_id <> 'ancient_nerds'" in asked[0] and LANE.premise_sql in asked[0]
+        assert "ORDER BY t.id LIMIT 1" in asked[0]
 
-    def test_no_foreign_row_is_a_refusal(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(R, "psql_json_reader", lambda: lambda sql: [])
-        with pytest.raises(P.PlanError, match="no site_content_links row of a non-curated site"):
-            R.foreign_row(LANE, "site_content_links")
+    def test_a_first_table_without_a_foreign_row_hands_over_to_the_next(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """G4 (O24): production has no site_content_links row of a non-curated site."""
+        asked: list[str] = []
+
+        def reader(sql: str) -> list[dict[str, Any]]:
+            asked.append(sql)
+            return [] if "FROM site_content_links t" in sql else [FOREIGN]
+
+        monkeypatch.setattr(R, "psql_json_reader", lambda: reader)
+        tables = R.plan_tables([cell("site_content_links", "7", "site_id"), *full_plan()])
+        assert tables == ["site_content_links", "wiki_images", "unified_site_names"]
+        assert R.foreign_row(LANE, tables) == FOREIGN
+        assert ["FROM site_content_links t" in s for s in asked] == [True, False]
+        assert "FROM wiki_images t" in asked[1]
+
+    def test_no_foreign_row_in_any_table_is_a_refusal(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        asked: list[str] = []
+        monkeypatch.setattr(R, "psql_json_reader", lambda: lambda sql: asked.append(sql) or [])
+        with pytest.raises(
+            P.PlanError,
+            match=r"no row of a non-curated site in any table of the plan "
+            r"\(site_content_links, wiki_images\)",
+        ):
+            R.foreign_row(LANE, ["site_content_links", "wiki_images"])
+        assert len(asked) == 2
+
+    def test_a_table_the_lane_does_not_write_is_refused_before_any_read(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def reader(sql: str) -> list[dict[str, Any]]:
+            raise AssertionError("no read for a table the lane does not write")
+
+        monkeypatch.setattr(R, "psql_json_reader", lambda: reader)
+        with pytest.raises(P.PlanError, match="unified_sites is no table this lane writes"):
+            R.foreign_row(LANE, ["wiki_images", "unified_sites"])
+        with pytest.raises(P.PlanError, match="at least one table"):
+            R.foreign_row(LANE, [])
+
+    def test_the_probe_run_proves_guard_1_with_a_later_table_s_row(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The real D14 B plan starts with content links: the run still proves every guard."""
+        records = [cell("site_content_links", "7", "site_id"), *full_plan()[:2], *full_plan()[3:]]
+        ProbeProduction(LANE, records, monkeypatch, foreign=FOREIGN)
+        monkeypatch.setattr(
+            R,
+            "psql_json_reader",
+            lambda: lambda sql: [] if "FROM site_content_links t" in sql else [FOREIGN],
+        )
+        assert A.cmd_probe_guards(records, tmp_path, LANE) == 0
+        out = capsys.readouterr().out
+        assert "[guard 1 - a wiki_images row of a site outside" in out
+        assert "refused by its own guard=False" not in out
 
     def test_the_interests_list_what_the_plan_touches(
         self, monkeypatch: pytest.MonkeyPatch

@@ -1899,8 +1899,9 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
     if lane.row_cells:
         from mechanical import rowlane
 
-        # the probe keeps the first cell's values and swaps in a row of a site of another source
-        foreign = [rowlane.foreign_row(lane, str(records[0].table))]
+        # the probe swaps a row of a site of another source into a cell of that row's table; the
+        # plan's tables are asked in plan order, the first with such a row answers (G4, O24)
+        foreign = [rowlane.foreign_row(lane, rowlane.plan_tables(records))]
     elif lane.cells:
         # the probe keeps the first cell's values and swaps in another source's site: guard 1
         # refuses it for its source (and, off unified_sites, for having no row there at all)

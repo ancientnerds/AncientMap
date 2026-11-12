@@ -764,12 +764,24 @@ def probe_cases(
                 A.refusal(A.GUARD2_SAYS),
             )
         )
+    # the foreign row replaces a cell of its own table (G4: it need not be the first cell's table)
+    own = [i for i, r in enumerate(records) if r.table == foreign["table"]]
+    if not own:
+        raise PlanError(f"the probe's foreign row is of {foreign['table']}, no table of the plan")
+    host = next(
+        (
+            i
+            for i in own
+            if lane.row_cell(records[i].table, records[i].column).column.sql_type != "boolean"
+        ),
+        own[0],
+    )
     probes.append(
         (
             "guard1-other-source",
-            f"guard 1 - a {first.table} row of a site outside source_id = 'ancient_nerds'",
+            f"guard 1 - a {foreign['table']} row of a site outside source_id = 'ancient_nerds'",
             corrupt(
-                start,
+                host,
                 site_id=str(foreign["site_id"]),
                 site_name=str(foreign["name"]),
                 table=str(foreign["table"]),
@@ -829,18 +841,38 @@ def unprobed_invariants(records: Sequence[A.ChangeRecord], lane: Lane) -> list[s
     return [i.says for i in lane.row_invariants if PROBES[i.probe](records, lane) is None]
 
 
-def foreign_row(lane: Lane, table: str) -> dict[str, Any]:
-    """A row of `table` that belongs to a site outside the curated source (read-only), with its
-    site's name and - for a lane with a premise - the premise the database prints for that site."""
+def plan_tables(records: Sequence[A.ChangeRecord]) -> list[str]:
+    """The tables the plan writes, in the order of their first cell (deterministic for a plan)."""
+    return list(dict.fromkeys(str(r.table) for r in records))
+
+
+def foreign_row(lane: Lane, tables: Sequence[str]) -> dict[str, Any]:
+    """A row of one of `tables` that belongs to a site outside the curated source (read-only), with
+    its site's name and - for a lane with a premise - the premise the database prints for that site.
+
+    The tables are asked in the order given and the first that has such a row answers (gap G4,
+    decision O24): a plan whose first table holds no row of a non-curated site - production has no
+    `site_content_links` row of one - still proves guard 1 with a row of another of its tables. A
+    plan none of whose tables has one is refused: guard 1 would stay unproven."""
+    if not tables:
+        raise PlanError("a probe needs at least one table of the plan to read a foreign row from")
+    owned = {cell.table for cell in lane.row_cells}
+    stray = [table for table in tables if table not in owned]
+    if stray:
+        raise PlanError(f"{lane.name}: {', '.join(stray)} is no table this lane writes")
     premise = f", {lane.premise_sql} AS premise" if lane.premise_sql is not None else ""
-    rows = psql_json_reader()(
-        f"SELECT '{table}' AS \"table\", t.id::text AS row_id, u.id::text AS site_id, u.name"
-        f"{premise} FROM {table} t JOIN unified_sites u ON u.id = t.site_id "
-        f"WHERE u.source_id <> {_literal(CURATED_SOURCE)} LIMIT 1"
+    for table in tables:
+        rows = psql_json_reader()(
+            f"SELECT '{table}' AS \"table\", t.id::text AS row_id, u.id::text AS site_id, u.name"
+            f"{premise} FROM {table} t JOIN unified_sites u ON u.id = t.site_id "
+            f"WHERE u.source_id <> {_literal(CURATED_SOURCE)} ORDER BY t.id LIMIT 1"
+        )
+        if rows:
+            return rows[0]
+    raise PlanError(
+        f"no row of a non-curated site in any table of the plan ({', '.join(tables)}) to probe "
+        "the source guard with"
     )
-    if not rows:
-        raise PlanError(f"no {table} row of a non-curated site to probe the source guard with")
-    return rows[0]
 
 
 # ------------------------------------------------------------------------------------ the plan
