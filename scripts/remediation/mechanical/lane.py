@@ -2680,14 +2680,17 @@ def _pair_case(subject: str, pairs: Sequence[MergePair], pick: str) -> str:
 #: reversal runs after it. The scope status and reason are there so that the move cannot be undone
 #: while the retirement stands: the retirement is rolled back first, then the move, and the move's
 #: reversal (guard 5) refuses a loser that is retired.
-def _move_premise_sql(pairs: Sequence[MergePair]) -> str:
+def _move_premise_sql(pairs: Sequence[MergePair], *, indexed: bool = True) -> str:
+    """`indexed=False` is the text of `WAVES_BEFORE_O27`: the survivor found by a text cast of
+    every `unified_sites.id`, one full scan per planned site."""
     survivor_of = _pair_case("CAST(u.id AS text)", pairs, "survivor")
+    survivor = f"s.id = ({survivor_of})::uuid" if indexed else f"CAST(s.id AS text) = {survivor_of}"
     return (
         f"u.name || ' | ' || {external_ids_sql('u')} || ' | ' || "
         "coalesce(u.scope_status, 'NULL') || ' | ' || coalesce(u.scope_reason, 'NULL') || "
         "' | survivor ' || coalesce((SELECT "
         f"s.name || ' | ' || {external_ids_sql('s')} FROM unified_sites s "
-        f"WHERE CAST(s.id AS text) = {survivor_of}), '')"
+        f"WHERE {survivor}), '')"
     )
 
 
@@ -2709,23 +2712,60 @@ MOVE_CELLS = (
         ),
     ),
 )
-_MOVED_TO = "CAST(s.id AS text) = q.new_value"
+#: The waves applied before O27 (2026-11-12): their committed APPLY.sql and ROLLBACK.sql must stay
+#: what their plan renders - `--rehearse-rollback` and the rollback itself verify the file against
+#: the lane - so they keep the premise and the invariants they were applied with, which compared
+#: `CAST(<id> AS text)` with a text and so read all 1.76 M sites (or names) once per planned cell.
+WAVES_BEFORE_O27 = frozenset({"2026-11-05"})
+#: The site a planned cell moves to, as a uuid, so that its comparison with `unified_sites.id` or a
+#: `site_id` is the index's (O27). The plan table holds every cell, and the new value of an
+#: `is_hero` or `name_type` cell is no uuid: Postgres does not promise to evaluate the
+#: `column_name` test of a WHERE before the cast, so the cast reads the new value only through
+#: this CASE, which is NULL (no site) for any other cell.
+MOVED_TO_SITE = "(CASE WHEN q.column_name = 'site_id' THEN q.new_value END)::uuid"
+#: How the move's invariants name a site, by `indexed`: uuid against uuid, which the primary key
+#: and the `site_id` indexes answer, or the text casts of `WAVES_BEFORE_O27`.
+_MOVE_IDS = {
+    True: {
+        "moved_to": f"s.id = {MOVED_TO_SITE}",
+        "plan_site": "q.site_id",
+        "moved_site": MOVED_TO_SITE,
+        "image_of": "w.site_id = t.sid",
+        "loser_row": "l.id = t.sid",
+        "name_of": "n.site_id = ({survivor})::uuid",
+    },
+    False: {
+        "moved_to": "CAST(s.id AS text) = q.new_value",
+        "plan_site": "CAST(q.site_id AS text)",
+        "moved_site": "q.new_value",
+        "image_of": "CAST(w.site_id AS text) = t.sid",
+        "loser_row": "CAST(l.id AS text) = t.sid",
+        "name_of": "CAST(n.site_id AS text) = {survivor}",
+    },
+}
 
 
-def move_invariants(pairs: Sequence[MergePair]) -> tuple[RowInvariant, ...]:
+def move_invariants(
+    pairs: Sequence[MergePair], *, indexed: bool = True
+) -> tuple[RowInvariant, ...]:
     """What the move leaves true, five checks after the write, each with its own probe
     (`rowlane.PROBES`): every moved cell lands on a shown curated site, on the survivor the lane
     names for its site and within that pair's distance, no touched site ends with two live heroes,
-    and every loser's name is a name of its survivor."""
+    and every loser's name is a name of its survivor. `indexed=False` renders the text the waves of
+    `WAVES_BEFORE_O27` were applied with."""
+    ids = _MOVE_IDS[indexed]
+    moved_to, plan_site, moved_site = ids["moved_to"], ids["plan_site"], ids["moved_site"]
+    image_of, loser_row = ids["image_of"], ids["loser_row"]
     survivor_q = _pair_case("CAST(q.site_id AS text)", pairs, "survivor")
     limit_q = _pair_case("CAST(q.site_id AS text)", pairs, "limit")
     survivor_t = _pair_case("CAST(t.sid AS text)", pairs, "survivor")
+    name_of = ids["name_of"].format(survivor=survivor_t)
     return (
         RowInvariant(
             says="planned cell(s) move to a site that is not a curated one",
             bad_sql=(
                 "FROM {plan} q WHERE q.column_name = 'site_id' AND NOT EXISTS (SELECT 1 FROM "
-                f"unified_sites s WHERE {_MOVED_TO} AND s.source_id = 'ancient_nerds')"
+                f"unified_sites s WHERE {moved_to} AND s.source_id = 'ancient_nerds')"
             ),
             probe="dest-curated",
         ),
@@ -2733,7 +2773,7 @@ def move_invariants(pairs: Sequence[MergePair]) -> tuple[RowInvariant, ...]:
             says="planned cell(s) move to a retired site",
             bad_sql=(
                 "FROM {plan} q WHERE q.column_name = 'site_id' AND EXISTS (SELECT 1 FROM "
-                f"unified_sites s WHERE {_MOVED_TO} AND s.source_id = 'ancient_nerds' AND "
+                f"unified_sites s WHERE {moved_to} AND s.source_id = 'ancient_nerds' AND "
                 f"{is_retired('s')})"
             ),
             probe="dest-shown",
@@ -2744,7 +2784,7 @@ def move_invariants(pairs: Sequence[MergePair]) -> tuple[RowInvariant, ...]:
             bad_sql=(
                 "FROM {plan} q JOIN unified_sites l ON l.id = q.site_id "
                 f"WHERE q.column_name = 'site_id' AND (q.new_value IS DISTINCT FROM {survivor_q} "
-                f"OR EXISTS (SELECT 1 FROM unified_sites s WHERE {_MOVED_TO} AND "
+                f"OR EXISTS (SELECT 1 FROM unified_sites s WHERE {moved_to} AND "
                 f"{sphere_metres('s', 'l')} > {limit_q}))"
             ),
             probe="dest-named-near",
@@ -2752,9 +2792,9 @@ def move_invariants(pairs: Sequence[MergePair]) -> tuple[RowInvariant, ...]:
         RowInvariant(
             says="touched site(s) end with more than one live hero",
             bad_sql=(
-                "FROM (SELECT CAST(q.site_id AS text) AS sid FROM {plan} q UNION SELECT "
-                "q.new_value FROM {plan} q WHERE q.column_name = 'site_id') t WHERE (SELECT "
-                "count(*) FROM wiki_images w WHERE CAST(w.site_id AS text) = t.sid AND "
+                f"FROM (SELECT {plan_site} AS sid FROM {{plan}} q UNION SELECT "
+                f"{moved_site} FROM {{plan}} q WHERE q.column_name = 'site_id') t WHERE (SELECT "
+                f"count(*) FROM wiki_images w WHERE {image_of} AND "
                 "w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE) > 1"
             ),
             probe="hero-cell",
@@ -2762,9 +2802,9 @@ def move_invariants(pairs: Sequence[MergePair]) -> tuple[RowInvariant, ...]:
         RowInvariant(
             says="planned site(s) end without their name among the names of their survivor",
             bad_sql=(
-                "FROM (SELECT DISTINCT CAST(q.site_id AS text) AS sid FROM {plan} q) t "
-                "JOIN unified_sites l ON CAST(l.id AS text) = t.sid WHERE NOT EXISTS (SELECT 1 "
-                f"FROM unified_site_names n WHERE CAST(n.site_id AS text) = {survivor_t} "
+                f"FROM (SELECT DISTINCT {plan_site} AS sid FROM {{plan}} q) t "
+                f"JOIN unified_sites l ON {loser_row} WHERE NOT EXISTS (SELECT 1 "
+                f"FROM unified_site_names n WHERE {name_of} "
                 f"AND n.name_normalized = {site_key_sql('l.name')})"
             ),
             probe="alias-cells",
@@ -2782,10 +2822,12 @@ def _retired_duplicates_holding() -> Residual:
 
 
 def dup_merge_move_lane(wave: str, pairs: Sequence[MergePair]) -> Lane:
-    """The row lane of one wave's moves (`dup-merge-move-<wave>`), for exactly `pairs`."""
+    """The row lane of one wave's moves (`dup-merge-move-<wave>`), for exactly `pairs`. A wave of
+    `WAVES_BEFORE_O27` keeps the premise and the invariants it was applied with."""
     check_wave(wave)
     check_pairs(pairs)
     residual = _retired_duplicates_holding()
+    indexed = wave not in WAVES_BEFORE_O27
     return Lane(
         name=f"dup-merge-move-{wave}",
         key_prefix=f"dup-merge-move-{wave}",
@@ -2797,25 +2839,27 @@ def dup_merge_move_lane(wave: str, pairs: Sequence[MergePair]) -> Lane:
         out_dir_name=f"{DUP_MERGE_ROOT}/{wave}/move",
         post_commit_residual=residual,
         rehearsal_residual=residual,
-        premise_sql=_move_premise_sql(pairs),
+        premise_sql=_move_premise_sql(pairs, indexed=indexed),
         lock_timeout=LOCK_TIMEOUT,
         statement_timeout=STATEMENT_TIMEOUT,
         row_cells=MOVE_CELLS,
-        row_invariants=move_invariants(pairs),
+        row_invariants=move_invariants(pairs, indexed=indexed),
     )
 
 
 def _retire_premise_sql(pairs: Sequence[MergePair]) -> str:
     """The retirement's premise: `DUP_RETIRE`'s - the loser's name, what it holds (after the move),
     its external ids and its survivor's name and ids - and how many live images the survivor has,
-    so a loser whose images are shown is never retired onto a survivor that shows none."""
+    so a loser whose images are shown is never retired onto a survivor that shows none. The
+    survivor is found by uuid, through the primary key (O27); no retirement of a wave was planned
+    before that, so this text has no older form to keep."""
     survivor_of = _pair_case("CAST(u.id AS text)", pairs, "survivor")
     loser = " || ' | ' || ".join(("u.name", EMPTY_ROW_PREMISE_SQL, NAME_FIX_PREMISE_SQL))
     return (
         loser + " || ' | survivor ' || coalesce((SELECT s.name || ' | ' || "
         f"{external_ids_sql('s')} || ' | live images ' || CAST((SELECT count(*) FROM wiki_images "
         "w WHERE w.site_id = s.id AND w.is_excluded IS NOT TRUE) AS text) "
-        f"FROM unified_sites s WHERE CAST(s.id AS text) = {survivor_of}), '')"
+        f"FROM unified_sites s WHERE s.id = ({survivor_of})::uuid), '')"
     )
 
 

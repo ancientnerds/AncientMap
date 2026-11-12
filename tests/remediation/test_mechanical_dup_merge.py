@@ -447,6 +447,43 @@ class TestTheLaneFamily:
         assert rows == {LOSER: 0, LOSER2: 1, THIRD: 0}
 
 
+DELIVERED_MOVE_WAVE = "2026-11-05"
+
+
+class TestTheMoveWaveAppliedBeforeO27:
+    """The move of 2026-11-05 (D14 part A) is applied: `--rehearse-rollback` and the rollback itself
+    verify its committed ROLLBACK.sql against what the lane renders, so it keeps the premise and the
+    invariants it was applied with; a wave planned since compares uuid with uuid (O27)."""
+
+    def test_the_delivered_wave_keeps_the_text_it_was_applied_with(self) -> None:
+        assert L.WAVES_BEFORE_O27 == {DELIVERED_MOVE_WAVE}
+        delivered = L.resolve_lane(f"dup-merge-move-{DELIVERED_MOVE_WAVE}")
+        pairs = L.load_pairs(DELIVERED_MOVE_WAVE)
+        assert delivered.row_invariants == L.move_invariants(pairs, indexed=False)
+        assert delivered.premise_sql == L._move_premise_sql(pairs, indexed=False)
+        dest = next(i for i in delivered.row_invariants if i.probe == "dest-curated")
+        assert "WHERE CAST(s.id AS text) = q.new_value AND" in dest.bad_sql
+        directory = A.lane_dir(delivered)
+        records = A.load_records(directory / "PLAN.jsonl")
+        for name, statement in (
+            ("APPLY.sql", A.apply_statement),
+            ("ROLLBACK.sql", A.rollback_statement),
+        ):
+            P.verify_pinned(
+                directory / name,
+                plan_path=directory / "PLAN.jsonl",
+                expected=statement(records, delivered),
+            )
+
+    def test_a_later_wave_reads_the_indexes(self) -> None:
+        move, _ = lanes([pair()])
+        assert move.row_invariants == L.move_invariants(
+            [L.MergePair(LOSER, SURVIVOR)], indexed=True
+        )
+        assert "CAST(s.id AS text)" not in str(move.premise_sql)
+        assert all("CAST(s.id AS text)" not in i.bad_sql for i in move.row_invariants)
+
+
 class TestTheDecidedSurvivorInvariant:
     """The retirement lands on the survivor the wave decided, not on another curated site near the
     loser (the move lane's `dest-named-near`, for the retire lane)."""
@@ -1305,6 +1342,9 @@ class TestThePremisesInSQL:
         return db
 
     def printed(self, db: Any, sql: str) -> str:
+        """What the premise prints; SQLite keeps a uuid as its text, so the Postgres cast `::uuid`
+        (O27: the survivor found through the primary key) is left out."""
+        sql = sql.replace("::uuid", "")
         return db.execute(f"SELECT {sql} FROM unified_sites u WHERE u.id = ?", (LOSER,)).fetchone()[
             0
         ]
@@ -1367,6 +1407,21 @@ class TestThePremisesInSQL:
         read = after_the_move()
         move, _ = lanes([pair(OTHER, SURVIVOR)])
         assert self.printed(self.database(read), move.premise_sql).endswith("| survivor ")
+
+    def test_the_premise_of_before_o27_prints_the_same_text(self) -> None:
+        """O27 changed how the premise finds the survivor (uuid against the primary key instead of
+        a text cast of every id), not what it prints: a plan read before it still holds."""
+        read = after_the_move()
+        db = self.database(read)
+        merged = [L.MergePair(LOSER, SURVIVOR)]
+        indexed = L._move_premise_sql(merged)
+        before = L._move_premise_sql(merged, indexed=False)
+        assert "WHERE s.id = (CASE CAST(u.id AS text) WHEN '" in indexed
+        assert "WHERE CAST(s.id AS text) = CASE CAST(u.id AS text) WHEN '" in before
+        assert self.printed(db, indexed) == self.printed(db, before)
+        assert self.printed(db, indexed) == D.move_premise(
+            read, read.sites[LOSER], read.sites[SURVIVOR]
+        )
 
     def test_the_parent_premise_is_the_name_the_country_and_the_point(self) -> None:
         import sqlite3

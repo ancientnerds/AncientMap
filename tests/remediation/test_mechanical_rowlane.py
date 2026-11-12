@@ -463,10 +463,15 @@ def plan(db: sqlite3.Connection, *cells: tuple[str, str, str, str, str, str]) ->
     db.executemany("INSERT INTO _dup_merge_move_plan VALUES (?, ?, ?, ?, ?, ?)", list(cells))
 
 
+def in_sqlite(bad_sql: str) -> str:
+    """An invariant's count as SQLite reads it: SQLite keeps a uuid as its text, so the Postgres
+    cast `::uuid` (O27: uuid against uuid, so the indexes answer) is left out."""
+    return "SELECT count(*) " + bad_sql.replace("{plan}", LANE.plan_table).replace("::uuid", "")
+
+
 def bad(db: sqlite3.Connection, probe: str) -> int:
     invariant = next(i for i in LANE.row_invariants if i.probe == probe)
-    sql = "SELECT count(*) " + invariant.bad_sql.replace("{plan}", LANE.plan_table)
-    return int(db.execute(sql).fetchone()[0])
+    return int(db.execute(in_sqlite(invariant.bad_sql)).fetchone()[0])
 
 
 BANIAS = (33.2486, 35.6944)
@@ -536,8 +541,7 @@ class TestTheInvariantsInSQL:
             LANE, row_invariants=L.move_invariants([L.MergePair(OTHER_LOSER, OTHER_SURVIVOR)])
         )
         invariant = next(i for i in far.row_invariants if i.probe == "dest-named-near")
-        sql = "SELECT count(*) " + invariant.bad_sql.replace("{plan}", LANE.plan_table)
-        assert db.execute(sql).fetchone()[0] == 1
+        assert db.execute(in_sqlite(invariant.bad_sql)).fetchone()[0] == 1
 
     def test_two_live_heroes_on_a_touched_site_are_counted_and_an_excluded_one_is_not(self) -> None:
         db = world()
@@ -577,6 +581,53 @@ class TestTheInvariantsInSQL:
             "INSERT INTO unified_site_names VALUES (5, ?, 'Banias', 'banias', 'alias')", (SURVIVOR,)
         )
         assert bad(db2, "alias-cells") == 0
+
+    def test_the_cells_that_move_no_site_are_not_counted(self) -> None:
+        """The plan table holds the hero and name-type cells too: their new values ('false',
+        'alias') are no sites, and no destination check reads them as one."""
+        db = world()
+        db.execute("UPDATE wiki_images SET site_id = ?", (SURVIVOR,))
+        db.execute("INSERT INTO wiki_images VALUES (11, ?, 0, 0)", (SURVIVOR,))
+        db.execute(
+            "INSERT INTO unified_site_names VALUES (5, ?, 'Banias', 'banias', 'alias')", (SURVIVOR,)
+        )
+        plan(
+            db,
+            (LOSER, "wiki_images", "12", "is_hero", "true", "false"),
+            (LOSER, "unified_site_names", "5", "name_type", "label", "alias"),
+        )
+        for invariant in LANE.row_invariants:
+            assert bad(db, invariant.probe) == 0, invariant.says
+
+
+class TestTheInvariantsReadTheIndexes:
+    """O27: a text cast of `unified_sites.id` (or of a `site_id`) defeats its index - one full read
+    of 1.76 M rows per planned cell, which ran the rehearsal of 2026-11-12 into its 120 s statement
+    timeout. Every id is compared as a uuid, and a new value is cast only on a `site_id` cell."""
+
+    def test_no_id_of_a_table_is_cast_to_text(self) -> None:
+        retire = L.dup_merge_retire_lane(WAVE, PAIRS)
+        texts = [i.bad_sql for i in LANE.row_invariants] + [LANE.premise_sql, retire.premise_sql]
+        for text in texts:
+            for cast in ("CAST(s.id AS", "CAST(l.id AS", "CAST(w.site_id AS", "CAST(n.site_id AS"):
+                assert cast not in str(text)
+        assert "WHERE s.id = (CASE CAST(u.id AS text) WHEN '" in str(LANE.premise_sql)
+        assert "WHERE s.id = (CASE CAST(u.id AS text) WHEN '" in str(retire.premise_sql)
+
+    def test_a_new_value_is_cast_only_on_a_site_id_cell(self) -> None:
+        assert L.MOVED_TO_SITE == "(CASE WHEN q.column_name = 'site_id' THEN q.new_value END)::uuid"
+        by_probe = {i.probe: i.bad_sql for i in LANE.row_invariants}
+        for probe in ("dest-curated", "dest-shown", "dest-named-near"):
+            assert f"s.id = {L.MOVED_TO_SITE}" in by_probe[probe]
+        assert f"UNION SELECT {L.MOVED_TO_SITE} FROM" in by_probe["hero-cell"]
+        assert "w.site_id = t.sid" in by_probe["hero-cell"]
+        assert "JOIN unified_sites l ON l.id = t.sid" in by_probe["alias-cells"]
+        assert "n.site_id = (CASE CAST(t.sid AS text) WHEN '" in by_probe["alias-cells"]
+        for text in by_probe.values():
+            # the cast of a new value is the guarded one; the alias check casts a survivor literal
+            assert "q.new_value::uuid" not in text and "q.new_value)::uuid" not in text
+            rest = text.replace(L.MOVED_TO_SITE, "")
+            assert "q.new_value END" not in rest
 
 
 # ------------------------------------------------------------------------------------- probes
