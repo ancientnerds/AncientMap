@@ -262,6 +262,10 @@ def accept4(
     #: A reverted round's own plan rows (`write_gate4.ROUND_STAMP`), by (that round's stamp, key):
     #: they judge that round's reverted journal rows only - never a planned row still to write.
     archived: dict[tuple[str, Key], Mapping[str, Any]] = {}
+    #: plan rows (index into `plan[key]`) whose old value is not the new value of the row before:
+    #: PLANNED TWICE unless allowed later stamps bridge the gap in the journal (O29, 2026-11-13: a
+    #: lane-WB card write between two WC writes of one site's raw_data)
+    gaps: dict[Key, list[int]] = collections.defaultdict(list)
     for row in planned:
         key = (row["table"], row["column"], row["pk"])
         if (key[0], key[1]) not in columns:
@@ -274,9 +278,11 @@ def accept4(
             archived[(row[write_gate4.ROUND_STAMP], key)] = row
         else:
             rows_here = plan.setdefault(key, [])
-            twice = bool(rows_here) and canonical(
+            if bool(rows_here) and canonical(
                 key[0], key[1], rows_here[-1]["new_value"]
-            ) != canonical(key[0], key[1], row["old_value"])
+            ) != canonical(key[0], key[1], row["old_value"]):
+                gaps[key].append(len(rows_here))
+            twice = False
             rows_here.append(row)
         if twice:  # never the last one silently (audit 2026-09-25 m15)
             result.deviations.append(
@@ -293,6 +299,46 @@ def accept4(
         lane_by_key[link.key].append(link)
     lane_stamps = {link.stamp for links in lane_by_key.values() for link in links}
     own_stamps = lane_stamps | {stamp + ROLLBACK_SUFFIX for stamp in lane_stamps}
+
+    for key, indexes in sorted(gaps.items()):
+        chain = chains.get(key, [])
+        ids_in_chain = [link.id for link in chain]
+        rows = plan[key]
+
+        def written_as(row: Mapping[str, Any], key: Key = key) -> VW.Link | None:
+            transition = (
+                canonical(key[0], key[1], row["old_value"]),
+                canonical(key[0], key[1], row["new_value"]),
+            )
+            return next(
+                (
+                    link
+                    for link in lane_by_key.get(key, [])
+                    if (link.old, link.new) == transition and link.id in ids_in_chain
+                ),
+                None,
+            )
+
+        for index in indexes:
+            before, after = written_as(rows[index - 1]), written_as(rows[index])
+            bridged = (
+                before is not None
+                and after is not None
+                and ids_in_chain.index(before.id) < ids_in_chain.index(after.id)
+                and superseding(
+                    key,
+                    chain[ids_in_chain.index(before.id) + 1 : ids_in_chain.index(after.id)],
+                    start=before.new,
+                    live=after.old,
+                    allowed=allowed,
+                    own_stamps=own_stamps,
+                )
+                is not None
+            )
+            if not bridged:
+                result.deviations.append(
+                    f"PLANNED TWICE {key[2]} {key[0]}.{key[1]}: the lane plan names the row twice"
+                )
 
     #: the planned rows of each cell no standing lane write accounts for, in plan order
     unwritten: dict[Key, list[Mapping[str, Any]]] = {key: list(rows) for key, rows in plan.items()}
@@ -359,15 +405,30 @@ def accept4(
                 later = chain[ids_in_chain.index(link.id) + 1 : nxt]
             # the lane's own reverted writes and their reversals net to nothing
             later = [other for other in later if other.id not in net]
-            if later:
-                sound = False
-                if following:
+            if later and following:
+                # O29: allowed later stamps may write between two of the lane's own writes when
+                # they form a continuous run from the earlier write's new value to the next one's
+                # old value; the lane's next write then supersedes them, so nothing is counted
+                if (
+                    superseding(
+                        key,
+                        later,
+                        start=link.new,
+                        live=following[0].old,
+                        allowed=allowed,
+                        own_stamps=own_stamps,
+                    )
+                    is None
+                ):
+                    sound = False
                     stamps = list(dict.fromkeys(other.stamp for other in later))
                     result.deviations.append(
                         f"CHANGED LATER {where}: {stamps} wrote between {link.id} and "
                         f"{following[0].id}"
                     )
-                    continue
+                continue
+            if later:
+                sound = False
                 pattern = superseding(
                     key,
                     later,

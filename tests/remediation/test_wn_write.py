@@ -566,6 +566,57 @@ def test_the_acceptance_of_a_chained_cell_still_counts_every_deviation(
     assert any(d.startswith("PLANNED TWICE") for d in again.deviations)
 
 
+def test_an_allowed_stamp_between_two_own_writes_of_a_cell_is_bridged(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """O29 (2026-11-13, WC step 32): a lane-WB card write landed between an earlier WC write and a
+    later WC write of the same cell, and the later plan row was planned from the value it left. An
+    allowed stamp whose links chain from the first own write's new value to the second one's old
+    value is no deviation; the same write by a stamp nobody allowed still is (CHANGED LATER and
+    PLANNED TWICE)."""
+    db, args = _cleared_then_written(tmp_path, capsys, monkeypatch)
+    assert _gate([*args, "--apply", "--step", "100"], runner=db) == 0
+    capsys.readouterr()
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    production = _production(db, lane_plan)
+    plan = lanes.read_jsonl(lane_plan)
+    rows = [r for r in plan if r["site_id"] == FX.SITE_C and r["column"] == "description"]
+    assert len(rows) == 2
+    text = next(
+        e for e in production.journal
+        if e["row_pk"] == FX.SITE_C and ":p4wc-4002:" in e["run_stamp"]
+        and e["column_name"] == "description"
+    )  # fmt: skip
+    at = text["id"]
+    for entry in production.journal:
+        if entry["id"] >= at:
+            entry["id"] += 1
+    production.journal.append(
+        {**text, "id": at, "run_stamp": "wb-other-s001", "old_value": rows[0]["new_value"],
+         "new_value": "Between.", "change_key": "y"}
+    )  # fmt: skip
+    text["old_value"] = "Between."
+    rows[1]["old_value"] = "Between."
+
+    def result(allowed):
+        read = A.read_production(
+            sorted({r["pk"] for r in plan}), stamp_like="phase4wc:%",
+            columns=A.LANE_COLUMNS["p4wc"], run=production,
+        )  # fmt: skip
+        return A.accept4(
+            planned=plan, lane_links=read.lane_links, chains=read.chains, live=read.live,
+            present=read.present, columns=A.LANE_COLUMNS["p4wc"], complete=False,
+            change_keys=read.change_keys, allowed=allowed,
+        )  # fmt: skip
+
+    bridged = result(("wb-other-s%",))
+    assert bridged.deviations == []
+    assert ("unified_sites", "description", FX.SITE_C) in bridged.carried
+    foreign = result(()).deviations
+    assert any(d.startswith("CHANGED LATER") and "wrote between" in d for d in foreign)
+    assert any(d.startswith("PLANNED TWICE") for d in foreign)
+
+
 def test_taking_the_wn_text_back_leaves_the_clear_standing_and_the_acceptance_clean(
     tmp_path, capsys, monkeypatch
 ) -> None:
