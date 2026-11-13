@@ -25839,10 +25839,18 @@ WN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc wn verify_writes4: a foreign write between two own writes passes",
         "output/remediation/tools/verify_writes4.py",
-        "            if later:\n                sound = False\n                if following:\n",
-        "            if later:\n                sound = False\n                if False:  # mutant\n",
+        "            if later and following:\n",
+        "            if False:  # mutant\n",
         "tests/remediation/test_wn_write.py",
         "test_the_acceptance_of_a_chained_cell_still_counts_every_deviation",
+    ),
+    (
+        "wc wn verify_writes4 (O29): a plan gap no allowed stamp bridges passes",
+        "output/remediation/tools/verify_writes4.py",
+        "            if not bridged:\n",
+        "            if False:  # mutant\n",
+        "tests/remediation/test_wn_write.py",
+        "test_an_allowed_stamp_between_two_own_writes_of_a_cell_is_bridged",
     ),
     (
         "wc wn write_gate4: the gate writes lane N before the API carries it",
