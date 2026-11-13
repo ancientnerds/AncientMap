@@ -16,13 +16,13 @@ Zustände: `offen`, `läuft`, `done`, `blocked` (mit Grund).
 | 7 | Bilder (D17, D15, D59) | gestrichen (D158) | – |
 | 8 | Duplikate Teil B (D144) | done | 12.11.: 29 Duplikate stillgelegt, Bilder/Namen/Links auf 7 Hauptstätten umgezogen (u. a. Tarxien, Dodona je 20 Bilder), Kartenwerte neu, Export geprüft, 0 Abweichungen |
 | 9 | Zeitrahmen-Prüfung (D20) | done | 12.11.: 47 Stätten entschieden (12 stillgelegt, 35 bestätigt, die 5 wartenden erledigt), 22 Anfangsjahre korrigiert, Kartenwerte neu, Export geprüft, 0 Abweichungen; 11 Fälle auf der Owner-Liste |
-| 10 | Textprüfung beenden + 141 Fehler | läuft | 13.11.: mass-05 (143), mass-04 (489) und mass-03 (487) geschrieben, je 0 Abweichungen; läuft: Fehlerliste defects-2026-10-02 (91 Prüfungen), danach 9 ungeprüfte Alttexte (O28) |
-| 11 | 40 Stätten ohne Text (WN) | offen | Streitfälle gestrichen (D158) |
+| 10 | Textprüfung beenden + 141 Fehler | done | 13.11. (Schritte 15-33): mass-05/04/03, Fehlerlisten, 21 Alttexte (O28), 68 MiniMax-Texte (O29), Gegenprüfung; je 0 Abweichungen, Export geprüft; 274 Texte geleert (gehen an WN) |
+| 11 | Stätten ohne Text (WN) | angehalten 13.11. (Owner) | 321 Stätten (O30: alle, auch die 38 aus D13), Pilot 20, dann in Schritten zu 100 |
 | 12 | Dünne Texte anreichern | gestrichen (D158) | – |
 | 13 | Namen + „gehört zu“ | gestrichen (D158) | – |
 | 14 | Moderne Stadt statt Stätte (D13) | gestrichen (D158) | – |
 | 15 | Google: Messung und Vorschlag (D141) | done (Teil O22) | Live seit 11.11. (7e4bee2), nachgeprüft: Mini-Länderseiten, Ortsseiten ohne Text und neue Stories tragen ein noindex nur für Google; Story-Quellen ohne Suchtreffer-Auszüge; alte Sitemap entfernt. Beim Owner: alle Stories (1B, Anfang Dezember), Ortsseiten-Aufbau (2), Über-uns-Seite (4). Vorschlag: `output/seo-audit-2026-11-10/PROPOSAL_D141.md` |
-| 16 | Abschluss (Phase 8), Aufräumen, Schlussbericht | offen | nach den Blöcken |
+| 16 | Abschluss (Phase 8), Aufräumen, Schlussbericht | offen | Wiederaufnahme: `drivers/RESUME_2026-11-13.md` |
 
 ## Code, der parallel gebaut wird
 
