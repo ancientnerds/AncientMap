@@ -1,0 +1,21 @@
+[32m2026-11-12 13:28:56[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+                                    metric                                    | value 
+------------------------------------------------------------------------------+-------
+ curated rows retired as a duplicate                                          | 54
+ curated rows with a scope_status but no scope_reason                         | 0
+ curated rows with scope_status in_scope                                      | 61
+ curated rows with scope_status NULL                                          | 4805
+ curated rows with scope_status pending                                       | 0
+ curated rows with scope_status retired                                       | 138
+ curated sites                                                                | 5004
+ journal rows for the rollback stamp                                          | 0
+ journal rows for this run on non-curated rows                                | 0
+ journal rows for this run outside unified_sites.(scope_status, scope_reason) | 0
+ journal rows for this run stamp                                              | 58
+ journal rows for this run with a site_id_ref of another site                 | 0
+ journal rows for this test id                                                | 58
+ retired duplicates whose survivor is retired or not curated                  | 0
+ retired duplicates with a live image whose survivor shows none               | 0
+
+
+EXIT=0

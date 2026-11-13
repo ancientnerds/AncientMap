@@ -1,0 +1,1138 @@
+{
+ "pairs": [
+  {
+   "already_retired": false,
+   "cluster_id": "dup-007ad0f3af",
+   "limit_evidence": [],
+   "loser": "ddc0a0bf-1313-499a-8ec6-77839727afe1",
+   "loser_name": "Killarumiyuq",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Hispanicized and mixed spellings Killarumiyoc, Quillarumiyoc, Quillarumiyoq, also Killarumiyoq) is an archaeological park in Peru",
+     "source": "https://en.wikipedia.org/wiki/Killarumiyuq"
+    },
+    {
+     "quote": "Hispanicized and mixed spellings Killarumiyoc, Quillarumiyoc, Quillarumiyoq, also Killarumiyoq) is an archaeological park in Peru",
+     "source": "https://en.wikipedia.org/wiki/Killarumiyuq"
+    }
+   ],
+   "survivor": "69aaac26-9f4a-47da-beb4-d31ef8d4301f",
+   "survivor_name": "Killarumiyoq",
+   "why": "Same archaeological park: Killarumiyuq and Killarumiyoq are spellings of one Quechua name (the article lists 'also Killarumiyoq'), same Wikidata item Q17074808, points 92 m apart around the item's coordinate. This record has no description lane and only 1 content link, so it merges into 69aaac26."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-15dce37aae",
+   "limit_evidence": [],
+   "loser": "37008e3f-056c-43dc-81c2-74904cacdb4e",
+   "loser_name": "Obelisk of Ark",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "It is ornamented with two false doors at the base and features decorations resembling windows on all sides.",
+     "source": "https://en.wikipedia.org/wiki/Obelisk_of_Axum"
+    },
+    {
+     "quote": "The obelisk ends in a semi-circular top, which used to be enclosed by metal frames.",
+     "source": "https://en.wikipedia.org/wiki/Obelisk_of_Axum"
+    },
+    {
+     "quote": "It is ornamented with two false doors at the base and features decorations resembling windows on all sides.",
+     "source": "https://en.wikipedia.org/wiki/Obelisk_of_Axum"
+    },
+    {
+     "quote": "The obelisk ends in a semi-circular top, which used to be enclosed by metal frames.",
+     "source": "https://en.wikipedia.org/wiki/Obelisk_of_Axum"
+    }
+   ],
+   "survivor": "a50cf939-77f1-489c-82f7-93b07b2bc5ae",
+   "survivor_name": "Obelisk of Axum",
+   "why": "'Obelisk of Ark' is no attested name of any monument (a web search finds none); the record carries the same Wikidata item Q2308606 and article, its English names are 'Obelisk of Axum', 'Axum Stele', 'Stele of Axum', and its description (24 m, 160 tonnes, phonolite, two false doors, window decorations, semi-circular top once enclosed by metal frames) is the Obelisk of Axum's. Its point lies 222 m from the survivor's, in the same city centre of Axum near the church of St Mary of Zion (where the Ark is said to be kept, the likely source of the garbled name). One monument kept twice; the survivor has the common English name and 5 content links (this one has 0)."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-1e90192edd",
+   "limit_evidence": [],
+   "loser": "63d4e2b3-4dad-438d-be14-34bd79cf9842",
+   "loser_name": "Roman City Ruins of Salona",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The ruins of Salona are located in the modern town of Solin, around six kilometres from the major city of Split",
+     "source": "https://en.wikipedia.org/wiki/Salona"
+    },
+    {
+     "quote": "The ruins of Salona are located in the modern town of Solin, around six kilometres from the major city of Split, in Croatia.",
+     "source": "https://en.wikipedia.org/wiki/Salona"
+    },
+    {
+     "quote": "Salona is the largest archaeological park in Croatia.",
+     "source": "https://en.wikipedia.org/wiki/Salona"
+    },
+    {
+     "quote": "ancient Roman city on the Dalmatian coast, in present Croatia",
+     "source": "https://www.wikidata.org/wiki/Q1258998"
+    }
+   ],
+   "survivor": "bf0d9250-fe2f-4f04-9dc7-28bcbfd6da20",
+   "survivor_name": "Salona",
+   "why": "'Roman City Ruins of Salona' and 'Salona' are the same ancient city: both records carry Q1258998 and the article Salona, and their points lie 101 m apart inside the ruins at Solin. The ruins of Salona ARE the site of the city of Salona, so the two records are not a ruin and a city. Survivor 'Salona': it is the common English name and the article's title, and it has the Wikipedia-based lane S text (this record has the legacy lane L). Both have 18 images and both have a card. This record's 5 content links move to the survivor."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-27cc777193",
+   "limit_evidence": [],
+   "loser": "1758f6e8-4518-43fb-a14a-1ce52caca683",
+   "loser_name": "Dolmen del prado de Lácara",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "El dolmen del prado de Lácara es un monumento megalítico del tipo sepulcro de corredor.",
+     "source": "https://extremadurarural.es/recurso/10862/"
+    },
+    {
+     "quote": "a día de hoy el dolmen de Lácara es el más grande de la Península",
+     "source": "https://extremadurarural.es/recurso/10862/"
+    },
+    {
+     "quote": "El Dolmen de Lácara es un sepulcro megalítico, tumular, de corredor",
+     "source": "https://arqueogestion.com/2018/06/21/dolmen-de-lacara-merida/"
+    },
+    {
+     "quote": "El dolmen del prado de Lácara es un monumento megalítico del tipo sepulcro de corredor.",
+     "source": "https://extremadurarural.es/recurso/10862/"
+    },
+    {
+     "quote": "a día de hoy el dolmen de Lácara es el más grande de la Península",
+     "source": "https://extremadurarural.es/recurso/10862/"
+    },
+    {
+     "quote": "the closest dolmens, such as Carmonita or Cueva del Monje, are between 13 and 15 km away",
+     "source": "https://en.wikipedia.org/wiki/Dolmen_del_prado_de_L%C3%A1cara"
+    }
+   ],
+   "survivor": "4200b0d7-2aae-4e07-acf3-a342b0c468ac",
+   "survivor_name": "Dolmen de Lácara",
+   "why": "'Dolmen del prado de Lácara' and 'Dolmen de Lácara' are two names of one passage tomb beside the EX-214. The two records lie 38 m apart, carry the same item Q5289390, and the Extremadura tourism register (REDEX) and Arqueogestión use both names for the same monument. Survivor 'Dolmen de Lácara': it is the short name in common use (the register's 'Nombre' field, the 2025 regional news) and it has a card, which this record lacks. Both texts are legacy lane L, and both records have 20 images and 5 content links."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-2f265039a2",
+   "limit_evidence": [],
+   "loser": "0abaf157-35d2-478f-8b19-c142f67aa8c7",
+   "loser_name": "Kenko",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Q'enqo, Qenko, Kenko, or Quenco (all from Quechua for",
+     "source": "https://en.wikipedia.org/wiki/Qenko"
+    },
+    {
+     "quote": "also spelled Qenko, Kenko, or Quenco, is an Inca archaeological site",
+     "source": "https://megalithicbuilders.com/south-america/peru/cusco-qenqo"
+    },
+    {
+     "quote": "The site is divided into two sectors: Q'enqo Grande",
+     "source": "https://megalithicbuilders.com/south-america/peru/cusco-qenqo"
+    },
+    {
+     "quote": "Q'enqo, Qenko, Kenko, or Quenco (all from Quechua for",
+     "source": "https://en.wikipedia.org/wiki/Qenko"
+    },
+    {
+     "quote": "also spelled Qenko, Kenko, or Quenco, is an Inca archaeological site",
+     "source": "https://megalithicbuilders.com/south-america/peru/cusco-qenqo"
+    },
+    {
+     "quote": "Está integrado por dos lugares: El Grande, que se encuentra al pie del camino que va desde Sacsayhuamán hasta Písac",
+     "source": "https://es.wikipedia.org/wiki/Kenko"
+    }
+   ],
+   "survivor": "1c93058e-d647-4f04-8aba-297c20ad41f2",
+   "survivor_name": "Qenko",
+   "why": "Kenko and Qenko are transliterations of one Quechua name for the one Inca huaca Q'enqo near Cusco (same Wikidata item Q2351926, same article). Both descriptions describe the same monument (amphitheatre, tunnel, sacrificial room); 291 m apart, which is within the site: per megalithicbuilders.com's coordinates the Kenko point lies near Q'enqo Grande and the Qenko point near Q'enqo Chico, the two sectors of the one site. Survivor Qenko: the enwiki article title, the Wikipedia-based lane W text, and 20 images against 0. The survivor's point may need moving toward Q'enqo Grande."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-327c998f04",
+   "limit_evidence": [],
+   "loser": "a2ddd76f-1c37-4ac9-971b-d9682384141d",
+   "loser_name": "Xunantunich Mayan Ruins",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "is an ancient Maya archaeological site in western Belize, about 70 miles (110 km) west of Belize City",
+     "source": "https://en.wikipedia.org/wiki/Xunantunich"
+    },
+    {
+     "quote": "The core of the city Xunantunich occupies about one square mile",
+     "source": "https://en.wikipedia.org/wiki/Xunantunich"
+    },
+    {
+     "quote": "Xunantunich Maya Ruins is the Most Visited Maya Site in Belize.",
+     "source": "https://xunantunichbelize.com/"
+    },
+    {
+     "quote": "The core of the city Xunantunich occupies about one square mile",
+     "source": "https://en.wikipedia.org/wiki/Xunantunich"
+    },
+    {
+     "quote": "Xunantunich Maya Ruins is the Most Visited Maya Site in Belize.",
+     "source": "https://xunantunichbelize.com/"
+    }
+   ],
+   "survivor": "03d63367-fb7a-4014-b1db-a704e99a10f3",
+   "survivor_name": "Xunantunich",
+   "why": "'Xunantunich Mayan Ruins' is the same Maya site as Xunantunich: the name plus a descriptor, the same Wikidata item Q1646630 and article. Its description is the same site's lead (ridge above the Mopan River, Cayo District, 70 miles west of Belize City). The two points are 117 m apart, inside a city core of about one square mile, and both are within about 120 m of Wikidata's coordinate. Survivor Xunantunich: the common English name, the Wikipedia-based lane S text against legacy L, the same 20 images, and 5 content links against 4."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-3939b40c88",
+   "limit_evidence": [],
+   "loser": "0d7c325a-5370-4a95-b048-8e599f69892c",
+   "loser_name": "Archaeological Site of Olympia",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "famous for the nearby archaeological site of the same name",
+     "source": "https://en.wikipedia.org/wiki/Olympia,_Greece"
+    },
+    {
+     "quote": "The site was a major Panhellenic religious sanctuary of ancient Greece",
+     "source": "https://en.wikipedia.org/wiki/Olympia,_Greece"
+    },
+    {
+     "quote": "site of the ancient Olympic Games",
+     "source": "https://www.wikidata.org/wiki/Q38888"
+    },
+    {
+     "quote": "famous for the nearby archaeological site of the same name",
+     "source": "https://en.wikipedia.org/wiki/Olympia,_Greece"
+    },
+    {
+     "quote": "The site was a major Panhellenic religious sanctuary of ancient Greece",
+     "source": "https://en.wikipedia.org/wiki/Olympia,_Greece"
+    },
+    {
+     "quote": "site of the ancient Olympic Games",
+     "source": "https://www.wikidata.org/wiki/Q38888"
+    }
+   ],
+   "survivor": "9ba7c034-6aec-492e-b66e-4541ce3c987c",
+   "survivor_name": "Olympia, Greece",
+   "why": "The Archaeological Site of Olympia (UNESCO's name for the property) is the sanctuary the article and Q38888 call Olympia: same Wikidata item (WHS ID 517), points 33 m apart at the Altis. One site under two records; its 5 content links and 16 images move to the survivor 'Olympia, Greece', which has the better (W) text and the common English name."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-4bdc54b172",
+   "limit_evidence": [],
+   "loser": "7814f888-d384-442b-8b6b-72c1b209d1d5",
+   "loser_name": "Apollo Temple, Delphi",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "the visible ruins seen in modernity are those of the temple built in the 4th century B.C.E.",
+     "source": "https://en.wikipedia.org/wiki/Temple_of_Apollo_(Delphi)"
+    },
+    {
+     "quote": "The Temple of Apollo, also known as Apollonion,",
+     "source": "https://en.wikipedia.org/wiki/Temple_of_Apollo_(Delphi)"
+    },
+    {
+     "quote": "The Temple of Apollo, also known as Apollonion,",
+     "source": "https://en.wikipedia.org/wiki/Temple_of_Apollo_(Delphi)"
+    },
+    {
+     "quote": "the visible ruins seen in modernity are those of the temple built in the 4th century B.C.E.",
+     "source": "https://en.wikipedia.org/wiki/Temple_of_Apollo_(Delphi)"
+    }
+   ],
+   "survivor": "56836aa2-1680-43fb-aeef-1edcc33e2c91",
+   "survivor_name": "Temple of Apollo, Delphi",
+   "why": "Same monument: 'Apollo Temple, Delphi' is a word-order variant of 'Temple of Apollo, Delphi'. Both records carry the same item Q10751359, the same article and the same English names. Both descriptions describe the one 4th-century BC temple of the Pythia, and the two points are 90 m apart, both on the temple and its forecourt in the sanctuary. Its longer legacy text does not outweigh the common name and the closer point of [1]."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-4d4a6eecf7",
+   "limit_evidence": [],
+   "loser": "1a76bfc9-7056-4848-ac12-d24016a923bb",
+   "loser_name": "Khuntichi Vaat Hadsar Fort",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The Hadsar trek is moderate, with a 2.5-km ascent featuring forest trails, steep steps, and a short rock climb (Khuntichi Vaat).",
+     "source": "https://mumbaitreks.com/hadsar-fort-trek/"
+    },
+    {
+     "quote": "As threre are three routes Rajmarg, Knuntichi waat and Nalichi waat.",
+     "source": "https://www.tripoto.com/maharashtra/trips/hadsar-fort-trek-604b1e4813e96"
+    },
+    {
+     "quote": "From the village, there are two paths to reach the fort top.",
+     "source": "https://en.wikipedia.org/wiki/Hadsar"
+    },
+    {
+     "quote": "The Hadsar trek is moderate, with a 2.5-km ascent featuring forest trails, steep steps, and a short rock climb (Khuntichi Vaat).",
+     "source": "https://mumbaitreks.com/hadsar-fort-trek/"
+    },
+    {
+     "quote": "From the village, there are two paths to reach the fort top.",
+     "source": "https://en.wikipedia.org/wiki/Hadsar"
+    }
+   ],
+   "survivor": "fe61c9c4-97dc-4478-93f8-5cd4a44d8ec2",
+   "survivor_name": "Hadsar Fort",
+   "why": "'Khuntichi Vaat' is not a separate site but the name of the hard northern climbing route (rock-cut pegs/holds) up Hadsar Fort; the record carries the same Wikidata item and article, its description describes Hadsar Fort itself, and its point lies 464 m from the other record on the same hill. One fort kept twice. Survivor is 'Hadsar Fort', the name the site is commonly called in English (rule 3a); this record's richer description (lane N) and 4 content links move with the merge."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-5d8fe31f56",
+   "limit_evidence": [],
+   "loser": "3bb2d9e1-7e77-4582-8b28-92ab27133a9a",
+   "loser_name": "Wandlebury Hill",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Wandlebury Hill Fort, also known as the Wandlebury Ring, is an Iron Age hillfort located on Wandlebury Hill",
+     "source": "https://en.wikipedia.org/wiki/Wandlebury_Hill_Fort"
+    },
+    {
+     "quote": "2500 years ago there was an Iron Age hill fort here known as Wandlebury Ring",
+     "source": "https://en.wikipedia.org/wiki/Wandlebury_Hill"
+    },
+    {
+     "quote": "Wandlebury Hill Fort, also known as the Wandlebury Ring, is an Iron Age hillfort located on Wandlebury Hill",
+     "source": "https://en.wikipedia.org/wiki/Wandlebury_Hill_Fort"
+    },
+    {
+     "quote": "2500 years ago there was an Iron Age hill fort here known as Wandlebury Ring",
+     "source": "https://en.wikipedia.org/wiki/Wandlebury_Hill"
+    }
+   ],
+   "survivor": "b319970d-efcd-4f5c-9d9b-55535771676b",
+   "survivor_name": "Wandlebury Hill Fort",
+   "why": "This record is typed Fort and its description is about the Iron Age hill fort 'Wandlebury Ring' on the hill; the hill itself is a natural chalk peak whose only ancient monument is that same fort. Both articles name the fort 'Wandlebury Ring' and put it on Wandlebury Hill, and the two points are 165 m apart, so the map holds one hillfort twice. Survivor: 'Wandlebury Hill Fort', the fort's own item Q7967271 and article, 7 images against 0, longer W text; this record's item Q7967272 is the peak, not the fort."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-5fecb70447",
+   "limit_evidence": [],
+   "loser": "434c9060-4b58-46a0-94f4-63a85b7133b9",
+   "loser_name": "Archaeological Dolmens of Antequera",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Conjunto Arqueológico Dólmenes de Antequera, Archeological Ensemble Dolmens of Antequera",
+     "source": "https://en.wikipedia.org/wiki/Antequera_Dolmens_Site"
+    },
+    {
+     "quote": "comprising three cultural monuments (the Dolmen of Menga, Dolmen of Viera and Tholos of El Romeral)",
+     "source": "https://en.wikipedia.org/wiki/Antequera_Dolmens_Site"
+    },
+    {
+     "quote": "formado por tres bienes culturales (los dólmenes de Menga y de Viera y el tholos de El Romeral)",
+     "source": "https://www.juntadeandalucia.es/organismos/culturaydeporte/areas/cultura/bienes-culturales/patrimonio-mundial/paginas/dolmenes-antequera.html"
+    },
+    {
+     "quote": "Conjunto Arqueológico Dólmenes de Antequera, Archeological Ensemble Dolmens of Antequera",
+     "source": "https://en.wikipedia.org/wiki/Antequera_Dolmens_Site"
+    },
+    {
+     "quote": "comprising three cultural monuments (the Dolmen of Menga, Dolmen of Viera and Tholos of El Romeral)",
+     "source": "https://en.wikipedia.org/wiki/Antequera_Dolmens_Site"
+    }
+   ],
+   "survivor": "efe2bc83-83cc-4393-b725-a18543dc9d5f",
+   "survivor_name": "Antequera Dolmens Site",
+   "why": "'Archaeological Dolmens of Antequera' is the Archaeological Ensemble Dolmens of Antequera (CADA), i.e. the three megalithic monuments Menga, Viera and El Romeral, which is exactly what the UNESCO-listed Antequera Dolmens Site is made of as its cultural part; record 1's own description (three monuments Menga, Viera, El Romeral, Neolithic and Bronze Age, lintelled roofs or false cupolas) is the World Heritage Site's description, both records carry the site's own item Q97633694 and their points lie 184 m apart beside Menga and Viera. Survivor efe2bc83: the common English name 'Antequera Dolmens Site' (UNESCO and enwiki title), a Wikipedia-based description (lane W) instead of the legacy one, 20 images and 5 content links against 1 and 3."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-65ffa1fc80",
+   "limit_evidence": [],
+   "loser": "5d8a914c-d69d-409c-9713-588113811da5",
+   "loser_name": "Kalkrieser Berg",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The Kalkrieser Berg or Schmittenhöhe, a hill with a height of 157 m (515 ft), is considered by archaeologists to be the likely site of the Battle of the Teutoburg Forest",
+     "source": "https://en.wikipedia.org/wiki/Kalkriese"
+    },
+    {
+     "quote": "In the area of  Kalkriese artifacts believed to be from the battle have been recovered",
+     "source": "https://en.wikipedia.org/wiki/Kalkrieser_Berg"
+    },
+    {
+     "quote": "The Romans' saltus Teutoburgiensis (Teutoburg Pass) is taken to refer to the strip of cultivated land with a width of 220 m",
+     "source": "https://en.wikipedia.org/wiki/Kalkriese"
+    },
+    {
+     "quote": "In the area of  Kalkriese artifacts believed to be from the battle have been recovered",
+     "source": "https://en.wikipedia.org/wiki/Kalkrieser_Berg"
+    },
+    {
+     "quote": "Engpass zwischen dem Großen Moor im Norden und dem Kalkrieser Berg",
+     "source": "https://de.wikipedia.org/wiki/Fundregion_Kalkriese"
+    }
+   ],
+   "survivor": "3911fbf9-3c1c-4620-a197-10ccbb9e20f7",
+   "survivor_name": "Kalkriese",
+   "why": "Both records stand on one point (7 m apart, both at the Kalkriese find site, Wikidata P625 of Kalkriese 52.408056, 8.129444) and both describe one archaeological site: the Roman battlefield at Kalkriese below the Kalkrieser Berg, identified as the likely site of the Battle of the Teutoburg Forest. The Kalkriese article names the Kalkrieser Berg as that site, and Wikidata labels the hill item Q767809 in English simply 'Kalkriese'. Neither item is the find site's own (Q60176450 is the village, Q767809 the hill; de article 'Fundregion Kalkriese' covers the find region), so that link is a matter for the link repair, not for this verdict. Survivor 3911fbf9: 'Kalkriese' is the name the battlefield is commonly called in English, its Wikipedia-based text covers the excavations and finds, 16 images against 1; content links are equal (5 and 5)."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-6c9ff401d3",
+   "limit_evidence": [],
+   "loser": "58d2d752-30cc-4f22-b2d5-ff27a4b395d1",
+   "loser_name": "Hipogeo de Biniai nou",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Los hipogeos de Biniai Nou (Mahón) son un yacimiento arqueológico construido durante el Calcolítico",
+     "source": "https://es.wikipedia.org/wiki/Hipogeos_de_Biniai_Nou"
+    },
+    {
+     "quote": "There are two funerary hypogea in Biniai Nou (Mahón), which were built in the Chalcolithic period",
+     "source": "https://en.wikipedia.org/wiki/Biniai_Nou_hypogea"
+    },
+    {
+     "quote": "There are two funerary hypogea in Biniai Nou (Mahón), which were built in the Chalcolithic period",
+     "source": "https://en.wikipedia.org/wiki/Biniai_Nou_hypogea"
+    },
+    {
+     "quote": "Estos dos sepulcros, el Monumento 1 y el Monumento 2, fueron excavados hace unos años",
+     "source": "https://es.wikipedia.org/wiki/Hipogeos_de_Biniai_Nou"
+    }
+   ],
+   "survivor": "13bdea38-cb6c-4c6b-85cb-402a31427819",
+   "survivor_name": "Biniai Nou Hypogea",
+   "why": "One site under its Spanish and its English name: 'Hipogeo de Biniai nou' is the Spanish name (es.wikipedia 'Hipogeos de Biniai Nou') of the Biniai Nou hypogea near Mahon, Menorca. Both records carry the site's own Wikidata item Q27987850 ('hypogeum in Mao-Mahon, Spain'; es label 'Hipogeos de Biniai Nou', enwiki 'Biniai Nou hypogea') and lie 16 m apart, both within metres of the item's coordinate 39.905751, 4.212348. Survivor 13bdea38: the English name, the fuller text (the dating and the finds), images equal (2 and 2); the 5 against 4 content links do not outweigh name and text."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-755d15be2b",
+   "limit_evidence": [],
+   "loser": "2048dfe4-9b29-494f-8807-881c71023f22",
+   "loser_name": "Banna, Birdoswald",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Birdoswald Roman Fort, known to the Romans as Banna, was one of the 16 forts on Hadrian's Wall.",
+     "source": "https://en.wikipedia.org/wiki/Banna_(Birdoswald)"
+    },
+    {
+     "quote": "Birdoswald Roman Fort, known to the Romans as Banna, was one of the 16 forts on Hadrian's Wall.",
+     "source": "https://en.wikipedia.org/wiki/Banna_(Birdoswald)"
+    },
+    {
+     "quote": "fort of Birdoswald (Banna), Cumbria",
+     "source": "https://www.english-heritage.org.uk/visit/places/birdoswald-roman-fort-hadrians-wall/history-and-stories/history/"
+    }
+   ],
+   "survivor": "b9fdfd6f-b222-4c64-9953-b04fef1f55aa",
+   "survivor_name": "Birdoswald Roman Fort",
+   "why": "Banna is the Roman name of Birdoswald Roman Fort: the same fort on Hadrian's Wall, kept twice 2 m apart with the same item Q2061016. Survivor is 'Birdoswald Roman Fort', the name the site is commonly called in English (English Heritage's name and the article's opening words). Both texts are lane L, but the survivor's text is fuller and it has more images (20 vs 19, links 4 each)."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-78079218a1",
+   "limit_evidence": [],
+   "loser": "3b7fc9a8-a685-4e5b-9ae7-df7a0d530d2e",
+   "loser_name": "Mycenaean Acropolis of Midea",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The acropolis of Midea and its important Late Bronze Age citadel is located on a 270 m tall conical hill in the Argolid",
+     "source": "https://www.sia.gr/en/articles.php?tid=339&page=1"
+    },
+    {
+     "quote": "concluded that Midea was a fortified Mycanean citadel",
+     "source": "https://www.sia.gr/en/articles.php?tid=339&page=1"
+    },
+    {
+     "quote": "The remains of Midea, that of a Bronze Age citadel, stand above the village of the same name in the Argolid.",
+     "source": "https://en.wikipedia.org/wiki/Midea_(Argolid)"
+    },
+    {
+     "quote": "The acropolis of Midea and its important Late Bronze Age citadel is located on a 270 m tall conical hill in the Argolid",
+     "source": "https://www.sia.gr/en/articles.php?tid=339&page=1"
+    },
+    {
+     "quote": "While not yet securely identified, a large terrace wall and other structural remains suggest that it was located to the north-west.",
+     "source": "https://www.sia.gr/en/articles.php?tid=339&page=1"
+    },
+    {
+     "quote": "The remains of Midea, that of a Bronze Age citadel, stand above the village of the same name in the Argolid.",
+     "source": "https://en.wikipedia.org/wiki/Midea_(Argolid)"
+    }
+   ],
+   "survivor": "3c47ded2-01b0-4789-bf6e-defb171ddd43",
+   "survivor_name": "Midea, Argolid",
+   "why": "The Mycenaean acropolis (citadel) of Midea IS the archaeological site of Midea in the Argolid: the Swedish Institute at Athens, which excavates it, describes 'the acropolis of Midea and its important Late Bronze Age citadel' on the 270 m conical hill, and the remains of Midea are that citadel. Both records sit 12 m apart on that hill and carry the same item Q502897 and article Midea (Argolid). A possible lower town outside the walls is 'not yet securely identified' (SIA), so there is no second place for the city record. Survivor 'Midea, Argolid': the name the site is commonly called in English (Midea), and the fuller text (excavations, Linear B, destruction c. 1200 BC); images (15/15) and links (5/5) are equal, both texts lane L."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-8271722354",
+   "limit_evidence": [],
+   "loser": "ab077874-2a7f-4add-adec-8cb42e9e9561",
+   "loser_name": "Madain Saleh",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "also known as Mada'in Salih",
+     "source": "https://en.wikipedia.org/wiki/Hegra"
+    },
+    {
+     "quote": "is an archaeological site located in the area of Al-'Ula within Medina Province in the Hejaz region, Saudi Arabia.",
+     "source": "https://en.wikipedia.org/wiki/Hegra"
+    },
+    {
+     "quote": "also known as Mada'in Salih",
+     "source": "https://en.wikipedia.org/wiki/Hegra"
+    },
+    {
+     "quote": "is an archaeological site located in the area of Al-'Ula within Medina Province in the Hejaz region, Saudi Arabia.",
+     "source": "https://en.wikipedia.org/wiki/Hegra"
+    }
+   ],
+   "survivor": "47eb07cd-5c1c-4c0e-88c0-484d3b3411a1",
+   "survivor_name": "Hegra - Mada'in Salih",
+   "why": "Madain Saleh is a spelling of Mada'in Salih, the alternative name of Hegra; the two points are 16 m apart and both records carry Q27356. Same archaeological site kept twice; its 5 content links move to the survivor."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-8eb7ac7226",
+   "limit_evidence": [],
+   "loser": "0144891e-136b-40fb-87ec-26f618e36365",
+   "loser_name": "Archaeological Site of the Tombs of the Kings",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "is a large necropolis about 2 kilometres (1.2 mi) north of Paphos harbour in Cyprus",
+     "source": "https://en.wikipedia.org/wiki/Tombs_of_the_Kings_(Paphos)"
+    },
+    {
+     "quote": "is a large necropolis about 2 kilometres (1.2 mi) north of Paphos harbour in Cyprus",
+     "source": "https://en.wikipedia.org/wiki/Tombs_of_the_Kings_(Paphos)"
+    }
+   ],
+   "survivor": "15e95e05-6fb3-4779-bbcd-375cd2f031e0",
+   "survivor_name": "Tombs of the Kings, Paphos",
+   "why": "'Archaeological Site of the Tombs of the Kings' is the same Paphos necropolis kept twice: same Wikidata item Q1796353, same article, same English names, and the points are 25 m apart. The article describes a single necropolis at that place."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-9770866f32",
+   "limit_evidence": [],
+   "loser": "1706b1bf-6c89-4f31-a925-e5e679884794",
+   "loser_name": "Cholesbury",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "This name refers to the Iron Age hillfort known as Cholesbury Camp close to the centre of the village",
+     "source": "https://en.wikipedia.org/wiki/Cholesbury"
+    },
+    {
+     "quote": "Cholesbury Camp is a large and well-preserved Iron Age hill fort on the northern edge of the village of Cholesbury",
+     "source": "https://en.wikipedia.org/wiki/Cholesbury_Camp"
+    },
+    {
+     "quote": "This name refers to the Iron Age hillfort known as Cholesbury Camp close to the centre of the village",
+     "source": "https://en.wikipedia.org/wiki/Cholesbury"
+    },
+    {
+     "quote": "Cholesbury Camp is a large and well-preserved Iron Age hill fort on the northern edge of the village of Cholesbury",
+     "source": "https://en.wikipedia.org/wiki/Cholesbury_Camp"
+    }
+   ],
+   "survivor": "53a9ddce-054f-4471-94fd-6243611ae0a8",
+   "survivor_name": "Cholesbury Camp",
+   "why": "The record 'Cholesbury' is the same hillfort kept a second time under the village's name. Its whole description is about Cholesbury Camp: 310 m by 230 m, multivallate, Kimball's 1932 excavation. Its point is on Cholesbury Lane, 211 m from the fort, beside the fort's southern rampart. The village's own article says the fort lies close to the village centre. The modern village is not an ancient site of its own, and its item Q5104312 names the village, not the monument this record describes. The 13 images move to the survivor."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-9eea73199a",
+   "limit_evidence": [],
+   "loser": "774a99e0-e8f7-4881-aa6e-94462da0c52d",
+   "loser_name": "Großmugl",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "refers to a nearby tumulus (locally known as the Leeberg)",
+     "source": "https://en.wikipedia.org/wiki/Gro%C3%9Fmugl"
+    },
+    {
+     "quote": "Der Ortsname der Marktgemeinde Großmugl nimmt auf das weithin sichtbare Hügelgrab Bezug.",
+     "source": "https://de.wikipedia.org/wiki/Leeberg_(Gro%C3%9Fmugl)"
+    },
+    {
+     "quote": "refers to a nearby tumulus (locally known as the Leeberg)",
+     "source": "https://en.wikipedia.org/wiki/Gro%C3%9Fmugl"
+    },
+    {
+     "quote": "Der Ortsname der Marktgemeinde Großmugl nimmt auf das weithin sichtbare Hügelgrab Bezug.",
+     "source": "https://de.wikipedia.org/wiki/Leeberg_(Gro%C3%9Fmugl)"
+    }
+   ],
+   "survivor": "a07daa54-5e5d-48c7-a95f-097ce085c9fb",
+   "survivor_name": "The Giant Tumulus, Großmugl",
+   "why": "Both records are the Leeberg, the Hallstatt tumulus at Grossmugl: both are typed Mound/tumulus, sit on the identical point (0 m), and this record's text is about the tumulus, merely named after the village whose name refers to the mound. Survivor: 'The Giant Tumulus, Grossmugl' names the monument rather than the municipality and has the better introductory text; images are equal (19 each) and this record's 5 content links move with the merge. Note: both carry Q686289, which is the municipality of Grossmugl, not the tumulus (link to repair elsewhere; the tumulus is de:Leeberg (Grossmugl))."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-ab259d0b0b",
+   "limit_evidence": [],
+   "loser": "f5df832e-ab5e-4e9c-b6c9-037441011945",
+   "loser_name": "Twin Gates of Pula",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The Twin Gates, called Dvojna Vrata in Croatian and Porta Gemina in Latin, are a Roman city gate in Pula",
+     "source": "https://www.croatian-guide.com/attractions/twin-gates-dvojna-vrata"
+    },
+    {
+     "quote": "The Twin Gates also contain a plate inscribed with the name of Lucius Menacius Priscus",
+     "source": "https://en.wikipedia.org/wiki/Porta_Gemina"
+    },
+    {
+     "quote": "The Twin Gates, called Dvojna Vrata in Croatian and Porta Gemina in Latin, are a Roman city gate in Pula",
+     "source": "https://www.croatian-guide.com/attractions/twin-gates-dvojna-vrata"
+    },
+    {
+     "quote": "There were about ten city gates, of which the Porta Gemina and part of the walls connecting it to Giardin square are still visible today.",
+     "source": "https://en.wikipedia.org/wiki/Porta_Gemina"
+    }
+   ],
+   "survivor": "d4714397-6e73-432d-add3-c01e22cb055f",
+   "survivor_name": "Porta Gemina",
+   "why": "'Twin Gates' is the English translation of Porta Gemina / Dvojna vrata: one Roman city gate of Pula, recorded twice 30 m apart under the Latin and the English name, both with Wikidata Q12630293. An independent guide states the names are one gate; the Wikipedia article uses both names for the same monument."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-abbf41130b",
+   "limit_evidence": [],
+   "loser": "ca33a292-b102-4efe-b644-48959d8ff741",
+   "loser_name": "Nefertari Temple",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The temple of Hathor and Nefertari, also known as the Small Temple",
+     "source": "https://en.wikipedia.org/wiki/Abu_Simbel"
+    },
+    {
+     "quote": "Another rock-cut temple to the north, known as the Small Temple, is dedicated to the goddess Hathor",
+     "source": "https://egymonuments.gov.eg/archaeological-sites/abu-simbel/"
+    },
+    {
+     "quote": "Another rock-cut temple to the north, known as the Small Temple, is dedicated to the goddess Hathor",
+     "source": "https://egymonuments.gov.eg/archaeological-sites/abu-simbel/"
+    },
+    {
+     "quote": "The temple of Hathor and Nefertari, also known as the Small Temple",
+     "source": "https://en.wikipedia.org/wiki/Abu_Simbel"
+    }
+   ],
+   "survivor": "9031494a-4710-430f-975c-18c9a5990592",
+   "survivor_name": "Temple of Nefertari- Abu Simbel",
+   "why": "'Nefertari Temple' and 'Temple of Nefertari- Abu Simbel' are the same monument, the Small Temple of Abu Simbel dedicated to Hathor and Queen Nefertari (record ca33a292's own text says so); Abu Simbel has only one such temple, and the two points are 113 m apart. Survivor 9031494a has far more images and links."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-c76b2800a9",
+   "limit_evidence": [],
+   "loser": "c73b6ca5-aa7d-4737-af90-1e6cbab06ff5",
+   "loser_name": "Hatshepsut Temple",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Hatshepsut’s mortuary temple, where her cult was practiced after her death",
+     "source": "https://egymonuments.gov.eg/en/monuments/hatshepsut-temple/"
+    },
+    {
+     "quote": "built a magnificent temple at Deir al-Bahari, on the west back of Luxor",
+     "source": "https://egymonuments.gov.eg/en/monuments/hatshepsut-temple/"
+    },
+    {
+     "quote": "Hatshepsut’s mortuary temple, where her cult was practiced after her death",
+     "source": "https://egymonuments.gov.eg/en/monuments/hatshepsut-temple/"
+    },
+    {
+     "quote": "magnificent temple at Deir al-Bahari, on the west back of Luxor",
+     "source": "https://egymonuments.gov.eg/en/monuments/hatshepsut-temple/"
+    }
+   ],
+   "survivor": "3f27e34a-1817-4b2b-bc19-c3c17a7e6374",
+   "survivor_name": "Mortuary Temple of Hatshepsut",
+   "why": "'Hatshepsut Temple' is a second name for the same monument, Djeser-Djeseru at Deir el-Bahari. Egypt's Ministry of Tourism and Antiquities lists it as 'Hatshepsut Temple' and says it is her mortuary temple. Both records carry Wikidata Q660692 and the alias Djeser-Djeseru, their points are 68 m apart inside the one terraced temple, and both descriptions describe the same three-terrace building."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-d4508b9750",
+   "limit_evidence": [],
+   "loser": "9bf829da-096e-41c6-b175-f3436c1ce18c",
+   "loser_name": "Roman Ruins of Djemila",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "formerly Cuicul, is a small mountain village in Algeria, near the northern coast east of Algiers, where some of the best preserved Roman ruins in North Africa are found",
+     "source": "https://en.wikipedia.org/wiki/Dj%C3%A9mila"
+    },
+    {
+     "quote": "archaeological site of ancient Cuicul in Algeria",
+     "source": "https://www.wikidata.org/wiki/Q457362"
+    },
+    {
+     "quote": "archaeological site of ancient Cuicul in Algeria",
+     "source": "https://www.wikidata.org/wiki/Q457362"
+    },
+    {
+     "quote": "formerly Cuicul, is a small mountain village in Algeria, near the northern coast east of Algiers, where some of the best preserved Roman ruins in North Africa are found",
+     "source": "https://en.wikipedia.org/wiki/Dj%C3%A9mila"
+    }
+   ],
+   "survivor": "a5232aa9-627c-444a-8ac7-82c5b79c3f2d",
+   "survivor_name": "Djemila",
+   "why": "'Roman Ruins of Djemila' and 'Djemila' are the same archaeological site (ancient Cuicul, UNESCO site 1982): both records carry Wikidata Q457362 ('archaeological site of ancient Cuicul in Algeria') and the article Djemila, both descriptions describe the same Roman city of Cuicul, and the points are 120 m apart within the ruins. The survivor is 'Djemila', the name the site is commonly called in English (and the item's English label), with 13 images against 0; both texts are legacy lane L; this record's 5 content links move to the survivor."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-e8acc84bd8",
+   "limit_evidence": [],
+   "loser": "2fc65539-6b0f-4073-9db3-76dadc408cc8",
+   "loser_name": "Pyramid of Hetepheres I",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "It is also known as the Pyramid of Hetepheres I as discovered by Mark Lehner",
+     "source": "https://en.wikipedia.org/wiki/Pyramid_G1-a"
+    },
+    {
+     "quote": "It is also known as the Pyramid of Hetepheres I as discovered by Mark Lehner",
+     "source": "https://en.wikipedia.org/wiki/Pyramid_G1-a"
+    },
+    {
+     "quote": "her second tomb was the Pyramid G1-a",
+     "source": "https://en.wikipedia.org/wiki/Hetepheres_I"
+    }
+   ],
+   "survivor": "d47439dd-6349-4633-bf0b-eb97094ac743",
+   "survivor_name": "Pyramid G1-a",
+   "why": "'Pyramid of Hetepheres I' is another name of Pyramid G1-a (Lehner's attribution; Hawass also places Hetepheres' original burial at G1-a, while Reisner and Edwards held other views of her burial, so the owner attribution is debated but the name refers to G1-a). Both records carry the same item Q3411252 and article Pyramid G1-a and lie 25 m apart. Survivor G1-a: the article's own title and the common English designation, the longer text, 11 images against 0."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-f9ce366af1",
+   "limit_evidence": [],
+   "loser": "dcda1568-0730-4cba-a9ce-c50c80ed941d",
+   "loser_name": "Enkomi",
+   "metres_limit": 2058,
+   "quotes": [
+    {
+     "quote": "is a 2nd millennium BC archaeological site on the eastern coast of Cyprus a short distance from the village of Enkomi",
+     "source": "https://en.wikipedia.org/wiki/Enkomi_(archaeological_site)"
+    },
+    {
+     "quote": "Enkomi is a walled Late Bronze Age town near the mouth of the Pedieos river on the bay of Famagusta",
+     "source": "https://www.ancientcyprus.com/sites/enkomi"
+    },
+    {
+     "quote": "It is a short distance from a prominent 2nd millennium BC archaeological site also named Enkomi.",
+     "source": "https://en.wikipedia.org/wiki/Enkomi"
+    },
+    {
+     "quote": "is a 2nd millennium BC archaeological site on the eastern coast of Cyprus a short distance from the village of Enkomi",
+     "source": "https://en.wikipedia.org/wiki/Enkomi_(archaeological_site)"
+    }
+   ],
+   "survivor": "0999c397-1333-4ff3-aa26-fe854f46de9c",
+   "survivor_name": "Engomi Ancient City Ruins",
+   "why": "Same site: both records carry the site's own item Q22987223 and article 'Enkomi (archaeological site)', and both texts describe the one Late Bronze Age copper town near Famagusta. This record's point (35.15854, 33.89112) is about 2 km off the excavated town, towards the modern village of Enkomi, so the record with the correct point and the W text survives. The distance is 2,058 m (over 2,000 m), so the merge is held for the owner's decision: the second point is a misplacement, not a second site."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-fc96b1cb4b",
+   "limit_evidence": [],
+   "loser": "8107d407-8094-4f0b-b459-54b2a43e1864",
+   "loser_name": "Sanctuary of Artemis, Brauron",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "ancient Greek sanctuary of Artemis",
+     "source": "https://www.wikidata.org/wiki/Q475497"
+    },
+    {
+     "quote": "The sanctuary of Artemis at Brauron (Modern Greek: Βραυρώνα - Vravrona) is an early sacred site on the eastern coast of Attica",
+     "source": "https://en.wikipedia.org/wiki/Brauron"
+    },
+    {
+     "quote": "This is the exact center of the sanctuary.",
+     "source": "https://en.wikipedia.org/wiki/Brauron"
+    },
+    {
+     "quote": "ancient Greek sanctuary of Artemis",
+     "source": "https://www.wikidata.org/wiki/Q475497"
+    },
+    {
+     "quote": "This is the exact center of the sanctuary.",
+     "source": "https://en.wikipedia.org/wiki/Brauron"
+    },
+    {
+     "quote": "The ticket is valid exclusively for the Archaeological Site of Brauron",
+     "source": "http://odysseus.culture.gr/h/3/eh355.jsp?obj_id=2419"
+    }
+   ],
+   "survivor": "ced822e8-13cd-49db-9011-808dc23aac45",
+   "survivor_name": "Brauron",
+   "why": "The two records are one archaeological site kept twice: both carry Wikidata Q475497, which Wikidata itself defines as the sanctuary of Artemis, and both points lie 7 m apart at the centre of the sanctuary, which is where the Brauron article places its coordinates. The archaeological site of Brauron (Vravrona) is the sanctuary; the ancient settlement's acropolis hill lies 220 m away within the same site. The legacy lane L record merges into the Brauron record with the better text, links and card."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-fdaed40c6f",
+   "limit_evidence": [],
+   "loser": "5dd5ecd6-2cd4-4e37-ae35-51da8f716d07",
+   "loser_name": "Ancient Stadium of Nemea",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "The ancient stadium at Nemea was constructed around 330 B.C. when the games returned from Argos.",
+     "source": "https://nemeangames.org/en/track/"
+    },
+    {
+     "quote": "The Stadium at Nemea (Greek: Νεμέα στάδιον) sits on the ancient site of Nemea in the modern day region of Corinthia.",
+     "source": "https://en.wikipedia.org/wiki/Stadium_at_Nemea"
+    },
+    {
+     "quote": "The ancient stadium at Nemea was constructed around 330 B.C. when the games returned from Argos.",
+     "source": "https://nemeangames.org/en/track/"
+    },
+    {
+     "quote": "Ancient Greek stadium in Nemea, Corinthia",
+     "source": "https://www.wikidata.org/wiki/Q27779883"
+    },
+    {
+     "quote": "The Stadium at Nemea (Greek: Νεμέα στάδιον) sits on the ancient site of Nemea in the modern day region of Corinthia.",
+     "source": "https://en.wikipedia.org/wiki/Stadium_at_Nemea"
+    }
+   ],
+   "survivor": "1bc57ad9-041a-42de-b0a1-c361a7beb531",
+   "survivor_name": "Stadium at Nemea",
+   "why": "'Ancient Stadium of Nemea' is a name of the same monument: ancient Nemea had one stadium, the one built around 330 BC (Society for the Revival of the Nemean Games), and both records carry its Wikidata item Q27779883 (Greek label 'Αρχαίο στάδιο Νεμέας', i.e. 'Ancient Stadium of Nemea') and its enwiki article, with points 24 m apart. Legacy text (lane L), 1 image; merge into the Stadium at Nemea record."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-fdfba53157",
+   "limit_evidence": [],
+   "loser": "41070db5-8f7c-4d69-8652-cc2d4bfb8bf4",
+   "loser_name": "Qasr Sagha Temple",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Just a few kilometers north of the picturesque Lake Qarun lies this significant archaeological temple",
+     "source": "https://qarounprotectorate.org/en/qasr-el-sagha-temple-secrets-on-the-walls-in-qarun-nature-reserve-fayoum/"
+    },
+    {
+     "quote": "the temple includes seven chambers spread over an area of approximately 180 square meters",
+     "source": "https://qarounprotectorate.org/en/qasr-el-sagha-temple-secrets-on-the-walls-in-qarun-nature-reserve-fayoum/"
+    },
+    {
+     "quote": "The temple of Qasr el-Sagha (‘Fortress of Gold’) stands in the desert north of Lake Qarun.",
+     "source": "https://the-past.com/review/travel/the-temple-of-qasr-el-sagha/"
+    },
+    {
+     "quote": "the temple includes seven chambers spread over an area of approximately 180 square meters",
+     "source": "https://qarounprotectorate.org/en/qasr-el-sagha-temple-secrets-on-the-walls-in-qarun-nature-reserve-fayoum/"
+    }
+   ],
+   "survivor": "5a2e082b-8ed8-4116-b5c3-5414826f0d92",
+   "survivor_name": "Qasr el-Sagha",
+   "why": "'Qasr Sagha Temple' is the same temple of Qasr el-Sagha (its own text calls it Qasr el-Sagha: seven chambers, 8 km north of Lake Qarun, Middle Kingdom cemetery to the south), 57 m from the survivor's point. There is only one temple of this name in the Faiyum."
+  },
+  {
+   "already_retired": false,
+   "cluster_id": "dup-fdfba53157",
+   "limit_evidence": [],
+   "loser": "9910d3da-4875-49eb-8da4-3f2db69a48a6",
+   "loser_name": "Qasr al-Sagha",
+   "metres_limit": 2000,
+   "quotes": [
+    {
+     "quote": "Qasr Al-Sagha is the temple built by the pharaohs",
+     "source": "https://qarounprotectorate.org/en/qasr-al-sagha/"
+    },
+    {
+     "quote": "Qasr El-Sagha Temple sits on a low ridge at the foot of Gabal Qatrani",
+     "source": "https://qarounprotectorate.org/en/qasr-el-sagha-temple-secrets-on-the-walls-in-qarun-nature-reserve-fayoum/"
+    },
+    {
+     "quote": "which lay by the ancient shore of Lake Moeris (present-day Lake Qarun)",
+     "source": "https://qarounprotectorate.org/en/qasr-al-sagha/"
+    },
+    {
+     "quote": "Qasr Al-Sagha is the temple built by the pharaohs",
+     "source": "https://qarounprotectorate.org/en/qasr-al-sagha/"
+    },
+    {
+     "quote": "Qasr El-Sagha Temple sits on a low ridge at the foot of Gabal Qatrani",
+     "source": "https://qarounprotectorate.org/en/qasr-el-sagha-temple-secrets-on-the-walls-in-qarun-nature-reserve-fayoum/"
+    }
+   ],
+   "survivor": "5a2e082b-8ed8-4116-b5c3-5414826f0d92",
+   "survivor_name": "Qasr el-Sagha",
+   "why": "Qasr al-Sagha is a transliteration of the same Arabic name (qasr as-saagha) as Qasr el-Sagha: one uninscribed Middle Kingdom temple of seven shrines north of Lake Qarun at the foot of Gebel Qatrani, 89 m from the survivor's point. The Qarun Protectorate, in which the temple lies, describes the one temple under both spellings, and its menu link 'Qasr El Sagha' opens its 'Qasr Al-Sagha' page."
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-04d8ce82",
+   "limit_evidence": [],
+   "loser": "04d8ce82-4fa3-4e48-88b7-bb41b354260c",
+   "loser_name": "Olympos Ruins",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "00f522ff-8e1b-4983-961c-ef6cb1ff27d1",
+   "survivor_name": "Olympos Antique City",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-07fb4e2f",
+   "limit_evidence": [],
+   "loser": "07fb4e2f-26e5-4720-a949-9c28d4712e11",
+   "loser_name": "Templo Romano Évora",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "9152beea-f7ab-40ef-a692-ef63ac8e9ca6",
+   "survivor_name": "Roman Temple of Évora",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-13c3f25f",
+   "limit_evidence": [],
+   "loser": "13c3f25f-3887-49c1-9492-cf7e512e5782",
+   "loser_name": "Area Archeologica di Alba Fucens",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "13120650-2e61-45af-976c-b2e0665c49af",
+   "survivor_name": "Alba Fucens",
+   "why": "already retired as duplicate_of its survivor; still on it: links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-24676ed3",
+   "limit_evidence": [],
+   "loser": "24676ed3-9308-42d4-bf35-1c739f0652e2",
+   "loser_name": "Archaeological Site, Heraion",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "9d9d94a0-f338-4392-860f-983c29fabb16",
+   "survivor_name": "Heraion of Perachora",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-3ebb514f",
+   "limit_evidence": [],
+   "loser": "3ebb514f-ac4a-4913-b54b-409bcc29eff4",
+   "loser_name": "Ancient Amathunta",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "51daf6c9-25d3-4818-8857-0543f1203c57",
+   "survivor_name": "Amathus",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-4687a49a",
+   "limit_evidence": [],
+   "loser": "4687a49a-c987-4c56-bc6e-5094aa57667d",
+   "loser_name": "The Aqueduct of Jerwan",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "c6d9487d-d138-4d73-beb1-5735e50da048",
+   "survivor_name": "Jerwan",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-4a5a324f",
+   "limit_evidence": [],
+   "loser": "4a5a324f-832f-4dca-b688-d4a006d297c7",
+   "loser_name": "Tarxien Temples",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "318414bc-098b-4459-95c0-41e1ec49c8a8",
+   "survivor_name": "Templos de Tarxien",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-4e6247b0",
+   "limit_evidence": [],
+   "loser": "4e6247b0-7416-413f-b7a3-b31890a45f3b",
+   "loser_name": "Coricancha",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "4a9b3802-1067-4f6b-a144-4c2ffe9619a4",
+   "survivor_name": "Qorikancha",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-55a670ec",
+   "limit_evidence": [],
+   "loser": "55a670ec-c7c5-4f52-98ea-b25211aedd4e",
+   "loser_name": "Archaeological Site of Kition",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "47c37ef9-98ee-41d8-879b-e78db06295da",
+   "survivor_name": "Kition",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-577b13cd",
+   "limit_evidence": [],
+   "loser": "577b13cd-242b-4951-a8c4-ab3ecde0e5b1",
+   "loser_name": "Augusta Bilbilis",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "23576019-c749-4ee9-95b1-cdae21f5ff06",
+   "survivor_name": "Bilbilis",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-5a04d6f3",
+   "limit_evidence": [],
+   "loser": "5a04d6f3-c82d-4c82-b1e9-3d70bff135ae",
+   "loser_name": "Dodona",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "56f594fc-6819-4d51-98a4-1cf5b4a265a6",
+   "survivor_name": "Archaeological Site of Dodoni",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-7e33b1ac",
+   "limit_evidence": [],
+   "loser": "7e33b1ac-bb32-4b6c-b070-2c4fdcaf19fb",
+   "loser_name": "Hattuşa Örenyeri",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "109fcdea-c114-4143-87ac-77c4c9c20f16",
+   "survivor_name": "Hattusas",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-8cecb38f",
+   "limit_evidence": [],
+   "loser": "8cecb38f-08cf-4a93-b350-9ccbb74109bb",
+   "loser_name": "Pinara Antique City",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "5025eee3-28ea-46d6-b2c3-dbb1f38a24d6",
+   "survivor_name": "Pinara",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-93391ee6",
+   "limit_evidence": [],
+   "loser": "93391ee6-8e80-42db-922c-11f64ea57db9",
+   "loser_name": "Termantia",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "84ef64f3-394a-4b35-ba4a-7e81b3b6a317",
+   "survivor_name": "Tiermes Archaeological Site",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-ab03fa75",
+   "limit_evidence": [],
+   "loser": "ab03fa75-bbdc-46a2-ba55-25e2f5edd5c4",
+   "loser_name": "Dolmen of Menga",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "485c3c0c-31f0-45a7-a06b-797c4c021466",
+   "survivor_name": "Dolmen de Menga",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-ae2ca7b1",
+   "limit_evidence": [],
+   "loser": "ae2ca7b1-89da-46cb-8924-f9d04dd5da2e",
+   "loser_name": "Banias",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "ce7db300-8777-425d-917a-2f6d9f325b58",
+   "survivor_name": "Caesarea Philippi",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-b46b6969",
+   "limit_evidence": [],
+   "loser": "b46b6969-3160-4cbd-a574-8727ee7c53c5",
+   "loser_name": "Bishop's Basilica of Philippopolis",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "891ad351-7985-4c16-b6a6-830c26bc268f",
+   "survivor_name": "Great Basilica, Plovdiv",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-cf49332c",
+   "limit_evidence": [],
+   "loser": "cf49332c-0a05-4ba7-bf4f-48a703ee7a1e",
+   "loser_name": "Ciudad Romana de Cáparra",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "577f2ec4-3dc0-4d10-9425-39f1cb654009",
+   "survivor_name": "Cáparra",
+   "why": "already retired as duplicate_of its survivor; still on it: name"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-d120ca9a",
+   "limit_evidence": [],
+   "loser": "d120ca9a-703b-49e2-b333-ad6dfe508953",
+   "loser_name": "Ancient Kourion",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "9983bdce-9f35-47a3-a570-4021cfa41b97",
+   "survivor_name": "Kourion",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-dafc7527",
+   "limit_evidence": [],
+   "loser": "dafc7527-c6c8-45c3-8c7d-4813d20a4dcf",
+   "loser_name": "Ñusta Hispana",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "d41368ba-6aa2-4b75-adf4-8f2cd3cc7e4d",
+   "survivor_name": "Conjunto Arqueologico de Ñustahispana",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-f23a31c3",
+   "limit_evidence": [],
+   "loser": "f23a31c3-6833-4df6-8583-3b3930b5a74f",
+   "loser_name": "Thirty-nine (39) Bridge Street, Chester",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "21ac323f-7214-4891-9499-74e55c3d7d56",
+   "survivor_name": "Bridge Street Number 39, Chester",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  }
+ ],
+ "wave": "2026-11-12"
+}

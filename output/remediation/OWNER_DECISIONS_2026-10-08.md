@@ -326,6 +326,7 @@ Orchestrator decisions under D158 (2026-11-12, owner away; the owner may overtur
 | O25 | Order of the rest | D14 B, then WC finish, then WN (WN after WC, because WC clears texts). |
 | O26 | WC plans hold sites that D14 B will retire as duplicate losers (mass-05: f5df832e Twin Gates of Pula; mass-04: 4, mass-03: 6, defects-2026-10-02: 1); no tool leaves one site out of a built plan | **WC may write them**: D14 B's retire writes only scope_status/scope_reason and its move only names, images and links, so there is no cell conflict; a retired loser's description is not shown (its page answers 301). No new exclusion code. |
 | O27 | D14 B's move rehearsal times out (three move invariants compare `CAST(s.id AS text) = q.new_value`, one full scan of 1.76 M rows per site_id cell; 151 cells exceed the 120 s statement timeout) | Fix the cause (an indexed uuid comparison), not the timeout and not a split of the wave. |
+| O28 | WC phase A4 `mass-2026-11-rest` (9 shown March texts that no run checked) is not named in the D158 note (2026-11-13) | **Run A4 after phase B**, the whole chain as the playbook gives it: an unchecked shown text is a possible error, which D158 keeps in scope (~30 answers). |
 
 Still the owner's own: reject the L'Anse aux Meadows proposal 01e29c6e in the Radar (D97; status `new` on 2026-11-10),
 the trademark ownership with Matt (D94), the GSC exports (D91), disk C: (23 GB free on 2026-11-10; D135).

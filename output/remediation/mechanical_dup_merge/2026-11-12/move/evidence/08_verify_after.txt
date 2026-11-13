@@ -1,0 +1,20 @@
+[32m2026-11-12 13:28:53[0m | [1mINFO    [0m | [36mpipeline.utils.logging[0m:[36msetup_logging[0m:[36m57[0m - [1mLogging configured: level=INFO[0m
+                                                                              metric                                                                              | value 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------
+ curated sites                                                                                                                                                    | 5004
+ curated sites with more than one live hero                                                                                                                       | 0
+ journal rows for the rollback stamp                                                                                                                              | 0
+ journal rows for this run on non-curated sites                                                                                                                   | 0
+ journal rows for this run outside wiki_images.site_id, wiki_images.is_hero, site_content_links.site_id, unified_site_names.site_id, unified_site_names.name_type | 0
+ journal rows for this run stamp                                                                                                                                  | 177
+ journal rows for this run with no site_id_ref                                                                                                                    | 0
+ journal rows for this test id                                                                                                                                    | 229
+ retired duplicates still holding an image or a content link                                                                                                      | 45
+ retired duplicates whose name is not among the names of their survivor                                                                                           | 0
+ retired duplicates whose survivor is retired or not curated                                                                                                      | 0
+ site_content_links rows of curated sites                                                                                                                         | 16029
+ unified_site_names rows of curated sites                                                                                                                         | 50961
+ wiki_images rows of curated sites                                                                                                                                | 49970
+
+
+EXIT=0

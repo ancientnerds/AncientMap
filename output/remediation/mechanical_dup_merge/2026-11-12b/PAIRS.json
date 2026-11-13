@@ -1,0 +1,41 @@
+{
+ "pairs": [
+  {
+   "already_retired": true,
+   "cluster_id": "retired-f3da4b6e",
+   "limit_evidence": [],
+   "loser": "f3da4b6e-c4a3-4416-9c28-93bf761119ad",
+   "loser_name": "Archaeological Park Carnuntum",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "1531d4a1-bb24-4727-9b25-f2089088acaf",
+   "survivor_name": "Carnuntum",
+   "why": "already retired as duplicate_of its survivor; still on it: images, links"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-f5ca382a",
+   "limit_evidence": [],
+   "loser": "f5ca382a-3725-4cbb-961a-6afbf5c21507",
+   "loser_name": "Dooey's Cairn",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "f6b6e039-36f1-4107-b730-dc2aa34b7a92",
+   "survivor_name": "Ballymacaldrack Court Tomb",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  },
+  {
+   "already_retired": true,
+   "cluster_id": "retired-f967e3c4",
+   "limit_evidence": [],
+   "loser": "f967e3c4-fc5b-4cd0-91d1-06030d51e31c",
+   "loser_name": "Shaduppum",
+   "metres_limit": 2000,
+   "quotes": [],
+   "survivor": "0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3",
+   "survivor_name": "Tel Hermal Fort",
+   "why": "already retired as duplicate_of its survivor; still on it: images"
+  }
+ ],
+ "wave": "2026-11-12b"
+}
